@@ -5,20 +5,24 @@ import type { LogEntry, LogLevel, LogTransport } from "../types.js";
  */
 const COLORS = {
   reset: "\x1b[0m",
+  gray: "\x1b[90m",
   cyan: "\x1b[36m",
   green: "\x1b[32m",
   yellow: "\x1b[33m",
   red: "\x1b[31m",
+  magenta: "\x1b[35m",
 } as const;
 
 /**
  * Color mapping for each log level.
  */
 const LEVEL_COLORS: Record<LogLevel, string> = {
+  trace: COLORS.gray,
   debug: COLORS.cyan,
   info: COLORS.green,
   warn: COLORS.yellow,
   error: COLORS.red,
+  fatal: COLORS.magenta,
 };
 
 /**

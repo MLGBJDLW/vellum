@@ -6,6 +6,7 @@
  */
 
 import type { Config, ConfigManager } from "../config/index.js";
+import type { CredentialManager } from "../credentials/index.js";
 import type { GlobalErrorHandler } from "../errors/index.js";
 import type { EventBus } from "../events/index.js";
 import type { Logger } from "../logger/index.js";
@@ -30,4 +31,7 @@ export const Tokens = {
 
   /** Global error handler */
   ErrorHandler: new Token<GlobalErrorHandler>("ErrorHandler"),
+
+  /** Credential manager for secure credential storage */
+  CredentialManager: new Token<CredentialManager>("CredentialManager"),
 } as const;

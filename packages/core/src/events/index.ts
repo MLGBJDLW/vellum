@@ -11,6 +11,11 @@ export {
 } from "./bus.js";
 
 export {
+  // Credential events (T034)
+  credentialNotFound,
+  credentialResolved,
+  credentialRotated,
+  credentialStored,
   type EventPayload,
   Events,
   errorEvent,

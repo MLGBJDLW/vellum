@@ -1,4 +1,5 @@
-import type { LogEntry, LoggerOptions, LogLevel, LogTransport } from "./types.js";
+import { context, trace } from "@opentelemetry/api";
+import type { LogEntry, LoggerOptions, LogLevel, LogTransport, TimerResult } from "./types.js";
 import { LOG_LEVEL_PRIORITY } from "./types.js";
 
 /**
@@ -23,6 +24,13 @@ export class Logger {
     this.level = options.level ?? "info";
     this.context = options.context ?? {};
     this.transports = options.transports ?? [];
+  }
+
+  /**
+   * Log a trace message (lowest severity).
+   */
+  trace(message: string, data?: unknown): void {
+    this.log("trace", message, data);
   }
 
   /**
@@ -51,6 +59,40 @@ export class Logger {
    */
   error(message: string, data?: unknown): void {
     this.log("error", message, data);
+  }
+
+  /**
+   * Log a fatal message (highest severity).
+   */
+  fatal(message: string, data?: unknown): void {
+    this.log("fatal", message, data);
+  }
+
+  /**
+   * Start a timer for measuring duration.
+   * @param label - Label for the timer (used in log output)
+   * @returns TimerResult with end() and stop() methods
+   */
+  time(label: string): TimerResult {
+    const start = performance.now();
+    let duration = 0;
+
+    const result: TimerResult = {
+      get duration() {
+        return duration;
+      },
+      end: (message?: string) => {
+        duration = performance.now() - start;
+        const msg = message ?? `${label} completed`;
+        this.log("debug", msg, { label, durationMs: duration });
+      },
+      stop: () => {
+        duration = performance.now() - start;
+        return duration;
+      },
+    };
+
+    return result;
   }
 
   /**
@@ -107,12 +149,14 @@ export class Logger {
   }
 
   /**
-   * Internal log method with level filtering.
+   * Internal log method with level filtering and trace context injection.
    */
   private log(level: LogLevel, message: string, data?: unknown): void {
     if (!this.shouldLog(level)) {
       return;
     }
+
+    const traceContext = this.getTraceContext();
 
     const entry: LogEntry = {
       level,
@@ -120,6 +164,7 @@ export class Logger {
       timestamp: new Date(),
       context: Object.keys(this.context).length > 0 ? this.context : undefined,
       data,
+      ...traceContext,
     };
 
     for (const transport of this.transports) {
@@ -132,5 +177,17 @@ export class Logger {
    */
   private shouldLog(level: LogLevel): boolean {
     return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.level];
+  }
+
+  /**
+   * Extract trace context from OpenTelemetry active span.
+   */
+  private getTraceContext(): { traceId?: string; spanId?: string } {
+    const span = trace.getSpan(context.active());
+    if (span) {
+      const ctx = span.spanContext();
+      return { traceId: ctx.traceId, spanId: ctx.spanId };
+    }
+    return {};
   }
 }

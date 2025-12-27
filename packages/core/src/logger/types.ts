@@ -1,16 +1,30 @@
 /**
  * Log severity levels in ascending order of importance.
  */
-export type LogLevel = "debug" | "info" | "warn" | "error";
+export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 
 /**
  * Numeric priority for log levels (higher = more severe).
  */
 export const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
+  trace: 0,
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4,
+  fatal: 5,
+};
+
+/**
+ * ANSI color codes for log levels.
+ */
+export const LOG_LEVEL_COLORS: Record<LogLevel, string> = {
+  trace: "\x1b[90m", // gray
+  debug: "\x1b[36m", // cyan
+  info: "\x1b[32m", // green
+  warn: "\x1b[33m", // yellow
+  error: "\x1b[31m", // red
+  fatal: "\x1b[35m", // magenta
 };
 
 /**
@@ -27,6 +41,22 @@ export interface LogEntry {
   context?: Record<string, unknown>;
   /** Additional payload data */
   data?: unknown;
+  /** OpenTelemetry trace ID (when within active span) */
+  traceId?: string;
+  /** OpenTelemetry span ID (when within active span) */
+  spanId?: string;
+}
+
+/**
+ * Result from Logger.time() for measuring durations.
+ */
+export interface TimerResult {
+  /** Duration in milliseconds (updated when end/stop called) */
+  duration: number;
+  /** Logs the duration with optional message */
+  end(message?: string): void;
+  /** Returns duration in ms without logging */
+  stop(): number;
 }
 
 /**

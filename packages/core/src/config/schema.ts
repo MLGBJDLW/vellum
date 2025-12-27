@@ -1,5 +1,119 @@
 import { z } from "zod";
 
+import {
+  CredentialMetadataSchema,
+  CredentialSourceSchema,
+  CredentialTypeSchema,
+} from "../credentials/types.js";
+
+// ============================================
+// Credential Configuration Schemas (T014)
+// ============================================
+
+/**
+ * Base credential config with common fields
+ */
+const BaseCredentialConfigSchema = z.object({
+  /** Source where credential is stored */
+  source: CredentialSourceSchema.optional(),
+  /** Additional metadata */
+  metadata: CredentialMetadataSchema.optional(),
+});
+
+/**
+ * API Key credential configuration
+ */
+export const ApiKeyCredentialSchema = BaseCredentialConfigSchema.extend({
+  type: z.literal("api_key"),
+  /** API key value or environment variable name */
+  value: z.string().optional(),
+  /** Environment variable name to read API key from */
+  envVar: z.string().optional(),
+});
+
+/**
+ * OAuth Token credential configuration
+ */
+export const OAuthTokenCredentialSchema = BaseCredentialConfigSchema.extend({
+  type: z.literal("oauth_token"),
+  /** Access token value */
+  accessToken: z.string().optional(),
+  /** Refresh token for token renewal */
+  refreshToken: z.string().optional(),
+  /** Token endpoint URL for refresh */
+  tokenEndpoint: z.string().optional(),
+  /** Client ID for OAuth flow */
+  clientId: z.string().optional(),
+  /** Client secret for OAuth flow */
+  clientSecret: z.string().optional(),
+});
+
+/**
+ * Bearer Token credential configuration
+ */
+export const BearerTokenCredentialSchema = BaseCredentialConfigSchema.extend({
+  type: z.literal("bearer_token"),
+  /** Bearer token value */
+  token: z.string().optional(),
+  /** Environment variable name to read token from */
+  envVar: z.string().optional(),
+});
+
+/**
+ * Service Account credential configuration (GCP/Azure)
+ */
+export const ServiceAccountCredentialSchema = BaseCredentialConfigSchema.extend({
+  type: z.literal("service_account"),
+  /** Path to service account JSON file */
+  keyFile: z.string().optional(),
+  /** Inline JSON credentials */
+  credentials: z.record(z.unknown()).optional(),
+  /** Project ID for GCP */
+  projectId: z.string().optional(),
+});
+
+/**
+ * Certificate credential configuration
+ */
+export const CertificateCredentialSchema = BaseCredentialConfigSchema.extend({
+  type: z.literal("certificate"),
+  /** Path to certificate file */
+  certFile: z.string().optional(),
+  /** Path to private key file */
+  keyFile: z.string().optional(),
+  /** Certificate passphrase */
+  passphrase: z.string().optional(),
+});
+
+/**
+ * T014 - Discriminated union of all credential types for config
+ *
+ * Uses 'type' field as discriminator to determine credential schema.
+ * Supports: api_key, oauth_token, bearer_token, service_account, certificate
+ */
+export const ConfigCredentialSchema = z.discriminatedUnion("type", [
+  ApiKeyCredentialSchema,
+  OAuthTokenCredentialSchema,
+  BearerTokenCredentialSchema,
+  ServiceAccountCredentialSchema,
+  CertificateCredentialSchema,
+]);
+
+export type ConfigCredential = z.infer<typeof ConfigCredentialSchema>;
+export type ApiKeyCredential = z.infer<typeof ApiKeyCredentialSchema>;
+export type OAuthTokenCredential = z.infer<typeof OAuthTokenCredentialSchema>;
+export type BearerTokenCredential = z.infer<typeof BearerTokenCredentialSchema>;
+export type ServiceAccountCredential = z.infer<typeof ServiceAccountCredentialSchema>;
+export type CertificateCredential = z.infer<typeof CertificateCredentialSchema>;
+
+// Re-export credential types from credentials module
+export { CredentialTypeSchema, CredentialSourceSchema, CredentialMetadataSchema };
+export type {
+  CredentialMetadata,
+  CredentialSource,
+  CredentialType,
+} from "../credentials/types.js";
+
 // ============================================
 // Provider Configuration Schemas
 // ============================================
@@ -33,11 +147,20 @@ export type ProviderName = z.infer<typeof ProviderNameSchema>;
 export const LLMProviderSchema = z.object({
   provider: ProviderNameSchema,
   model: z.string(),
+  /** @deprecated Use credential field instead */
   apiKey: z.string().optional(),
   baseUrl: z.string().optional(),
   maxTokens: z.number().optional().default(4096),
   temperature: z.number().min(0).max(2).optional().default(0.7),
   timeout: z.number().optional().default(60000),
+  /**
+   * T014 - Credential configuration for this provider
+   *
+   * Preferred over apiKey for more flexible credential management.
+   * Supports multiple credential types: api_key, oauth_token, bearer_token,
+   * service_account, certificate.
+   */
+  credential: ConfigCredentialSchema.optional(),
 });
 
 export type LLMProvider = z.infer<typeof LLMProviderSchema>;

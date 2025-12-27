@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Config, ConfigManager } from "../../config/index.js";
+import type { CredentialManager } from "../../credentials/index.js";
 import type { GlobalErrorHandler } from "../../errors/index.js";
 import type { EventBus } from "../../events/index.js";
 import type { Logger } from "../../logger/index.js";
@@ -31,6 +32,11 @@ describe("Tokens", () => {
     it("should define ErrorHandler token", () => {
       expect(Tokens.ErrorHandler).toBeDefined();
       expect(Tokens.ErrorHandler).toBeInstanceOf(Token);
+    });
+
+    it("should define CredentialManager token", () => {
+      expect(Tokens.CredentialManager).toBeDefined();
+      expect(Tokens.CredentialManager).toBeInstanceOf(Token);
     });
   });
 
@@ -70,6 +76,10 @@ describe("Tokens", () => {
     it("should have correct name for ErrorHandler token", () => {
       expect(Tokens.ErrorHandler.name).toBe("ErrorHandler");
     });
+
+    it("should have correct name for CredentialManager token", () => {
+      expect(Tokens.CredentialManager.name).toBe("CredentialManager");
+    });
   });
 
   describe("type safety (compile-time checks)", () => {
@@ -101,19 +111,25 @@ describe("Tokens", () => {
       const _token: Token<GlobalErrorHandler> = Tokens.ErrorHandler;
       expect(_token).toBe(Tokens.ErrorHandler);
     });
+
+    it("should have correct type for CredentialManager token", () => {
+      const _token: Token<CredentialManager> = Tokens.CredentialManager;
+      expect(_token).toBe(Tokens.CredentialManager);
+    });
   });
 
   describe("immutability", () => {
     it("should be frozen (readonly)", () => {
       // Tokens is declared as `as const`, making it readonly
       // This test verifies the object structure is as expected
-      expect(Object.keys(Tokens)).toHaveLength(5);
+      expect(Object.keys(Tokens)).toHaveLength(6);
       expect(Object.keys(Tokens)).toEqual([
         "Config",
         "ConfigManager",
         "Logger",
         "EventBus",
         "ErrorHandler",
+        "CredentialManager",
       ]);
     });
   });

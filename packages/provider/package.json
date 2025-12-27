@@ -16,11 +16,10 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@google/genai": "^1.34.0",
     "@vellum/shared": "workspace:*",
-    "ai": "^4.1.0",
-    "@ai-sdk/anthropic": "^1.1.0",
-    "@ai-sdk/openai": "^1.1.0",
-    "@ai-sdk/google": "^1.1.0"
+    "openai": "^6.15.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

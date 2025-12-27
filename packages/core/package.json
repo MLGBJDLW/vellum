@@ -17,13 +17,27 @@
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
+    "@opentelemetry/api": "^1.7.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.46.0",
+    "@opentelemetry/resources": "^1.18.0",
+    "@opentelemetry/sdk-node": "^0.46.0",
+    "@opentelemetry/sdk-trace-node": "^1.18.0",
+    "@opentelemetry/semantic-conventions": "^1.18.0",
     "@vellum/shared": "workspace:*",
+    "keytar": "^7.9.0",
     "zod": "^3.24.1"
   },
+  "optionalDependencies": {
+    "libsecret": "^0.1.0"
+  },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
     "@types/iarna__toml": "^2.0.5",
     "@types/node": "^22.10.1",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
+  },
+  "comments": {
+    "keytar-bun-compat": "keytar uses native Node-API bindings. For Bun: ensure node-gyp build tools are available. May require --backend=node flag in some Bun versions."
   }
 }

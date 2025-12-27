@@ -440,6 +440,11 @@ describe("Event Definitions", () => {
         "sessionStart",
         "sessionEnd",
         "error",
+        // T034 - Credential events
+        "credentialResolved",
+        "credentialStored",
+        "credentialRotated",
+        "credentialNotFound",
       ];
 
       for (const eventName of expectedEvents) {
@@ -447,8 +452,8 @@ describe("Event Definitions", () => {
       }
     });
 
-    it("should have exactly 10 events", () => {
-      expect(Object.keys(Events)).toHaveLength(10);
+    it("should have exactly 14 events", () => {
+      expect(Object.keys(Events)).toHaveLength(14);
     });
   });
 });

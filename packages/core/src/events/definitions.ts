@@ -158,6 +158,68 @@ export const errorEvent = defineEvent(
 );
 
 // ============================================
+// T034 - Credential Events
+// ============================================
+
+/**
+ * Emitted when a credential is successfully resolved.
+ */
+export const credentialResolved = defineEvent(
+  "credential:resolved",
+  z.object({
+    /** Provider name (e.g., 'anthropic', 'openai') */
+    provider: z.string(),
+    /** Optional key identifier */
+    key: z.string().optional(),
+    /** Source where the credential was resolved from */
+    source: z.enum(["env", "keychain", "encrypted_file", "config"]),
+  })
+);
+
+/**
+ * Emitted when a credential is stored.
+ */
+export const credentialStored = defineEvent(
+  "credential:stored",
+  z.object({
+    /** Provider name (e.g., 'anthropic', 'openai') */
+    provider: z.string(),
+    /** Store where the credential was saved */
+    store: z.enum(["env", "keychain", "encrypted_file", "config"]),
+  })
+);
+
+/**
+ * Emitted when a credential is rotated (old replaced with new).
+ */
+export const credentialRotated = defineEvent(
+  "credential:rotated",
+  z.object({
+    /** Provider name (e.g., 'anthropic', 'openai') */
+    provider: z.string(),
+    /** Optional key identifier */
+    key: z.string().optional(),
+    /** Store where the rotation occurred */
+    store: z.enum(["env", "keychain", "encrypted_file", "config"]),
+  })
+);
+
+/**
+ * Emitted when a credential lookup fails (not found in any store).
+ */
+export const credentialNotFound = defineEvent(
+  "credential:notFound",
+  z.object({
+    /** Provider name that was searched */
+    provider: z.string(),
+    /** Optional key identifier that was searched */
+    key: z.string().optional(),
+    /** List of stores that were searched */
+    searchedStores: z.array(z.enum(["env", "keychain", "encrypted_file", "config"])),
+  })
+);
+
+// ============================================
 // Events Object - Unified Export
 // ============================================
 
@@ -199,6 +261,12 @@ export const Events = {
 
   // Error events
   error: errorEvent,
+
+  // Credential events (T034)
+  credentialResolved,
+  credentialStored,
+  credentialRotated,
+  credentialNotFound,
 } as const;
 
 /** Type helper for accessing event payload types */

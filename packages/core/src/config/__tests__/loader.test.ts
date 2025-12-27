@@ -5,10 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type ConfigError,
   type ConfigErrorCode,
+  checkDeprecatedApiKeyUsage,
+  clearDeprecationWarningsCache,
   deepMerge,
   findProjectConfig,
+  getProviderDisplayName,
+  hasProviderCredentials,
   loadConfig,
+  loadConfigWithCredentials,
   parseEnvConfig,
+  promptForCredentials,
 } from "../loader.js";
 import type { PartialConfig } from "../schema.js";
 
@@ -764,5 +770,407 @@ temperature = 5.0
     if (!validationResult.ok) {
       expect(validCodes).toContain(validationResult.error.code);
     }
+  });
+});
+
+// ============================================
+// T024: Deprecation Warnings Tests
+// ============================================
+
+describe("checkDeprecatedApiKeyUsage", () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Clear the warning cache to allow repeated tests
+    clearDeprecationWarningsCache();
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
+    clearDeprecationWarningsCache();
+  });
+
+  it("emits warning when apiKey is present in config", () => {
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/path/to/config.toml");
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    expect(consoleSpy.mock.calls[0]?.[0]).toContain("DEPRECATION WARNING");
+    expect(consoleSpy.mock.calls[0]?.[0]).toContain("apiKey");
+    expect(consoleSpy.mock.calls[0]?.[0]).toContain("/path/to/config.toml");
+  });
+
+  it("does not emit warning when apiKey is not present", () => {
+    checkDeprecatedApiKeyUsage({ llm: { provider: "anthropic" } }, "/path/to/config.toml");
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it("includes migration instructions in warning", () => {
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/test.toml");
+
+    expect(consoleSpy.mock.calls[0]?.[0]).toContain("credential");
+    expect(consoleSpy.mock.calls[0]?.[0]).toContain("vellum credentials migrate");
+  });
+
+  it("only emits warning once per config path per session", () => {
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/same/path.toml");
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-other" } }, "/same/path.toml");
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("emits warning for different config paths", () => {
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/path/a.toml");
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/path/b.toml");
+
+    expect(consoleSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("handles undefined config path", () => {
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } });
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    // Should not include specific path when undefined
+    expect(consoleSpy.mock.calls[0]?.[0]).not.toContain("undefined");
+  });
+});
+
+describe("loadConfig deprecation warnings", () => {
+  let tempDir: string;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "vellum-deprecation-test-"));
+    consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    clearDeprecationWarningsCache();
+    vi.unstubAllEnvs();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    consoleSpy.mockRestore();
+    clearDeprecationWarningsCache();
+    vi.unstubAllEnvs();
+  });
+
+  it("emits deprecation warning when config file uses apiKey", () => {
+    fs.writeFileSync(
+      path.join(tempDir, "vellum.toml"),
+      `[llm]
+provider = "anthropic"
+model = "claude-3"
+apiKey = "sk-test-key"
+`
+    );
+
+    loadConfig({ cwd: tempDir, skipEnv: true });
+
+    expect(consoleSpy).toHaveBeenCalled();
+    expect(consoleSpy.mock.calls[0]?.[0]).toContain("DEPRECATION WARNING");
+  });
+
+  it("emits deprecation warning when env var uses apiKey", () => {
+    fs.writeFileSync(
+      path.join(tempDir, "vellum.toml"),
+      `[llm]
+provider = "anthropic"
+model = "claude-3"
+`
+    );
+    vi.stubEnv("VELLUM_LLM_API_KEY", "sk-env-key");
+
+    loadConfig({ cwd: tempDir });
+
+    expect(consoleSpy).toHaveBeenCalled();
+    expect(consoleSpy.mock.calls[0]?.[0]).toContain("VELLUM_LLM_API_KEY");
+  });
+
+  it("suppresses deprecation warnings when suppressDeprecationWarnings is true", () => {
+    fs.writeFileSync(
+      path.join(tempDir, "vellum.toml"),
+      `[llm]
+provider = "anthropic"
+model = "claude-3"
+apiKey = "sk-test-key"
+`
+    );
+
+    loadConfig({ cwd: tempDir, skipEnv: true, suppressDeprecationWarnings: true });
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not emit warning when credential field is used", () => {
+    fs.writeFileSync(
+      path.join(tempDir, "vellum.toml"),
+      `[llm]
+provider = "anthropic"
+model = "claude-3"
+
+[llm.credential]
+type = "api_key"
+`
+    );
+
+    loadConfig({ cwd: tempDir, skipEnv: true });
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================
+// T023/T025: Credential Resolution Tests
+// ============================================
+
+describe("getProviderDisplayName", () => {
+  it("returns friendly name for known providers", () => {
+    expect(getProviderDisplayName("anthropic")).toBe("Anthropic (Claude)");
+    expect(getProviderDisplayName("openai")).toBe("OpenAI (GPT)");
+    expect(getProviderDisplayName("google")).toBe("Google AI");
+    expect(getProviderDisplayName("azure-openai")).toBe("Azure OpenAI");
+  });
+
+  it("returns provider name as fallback for unknown providers", () => {
+    // This shouldn't happen with ProviderName type, but tests robustness
+    expect(getProviderDisplayName("anthropic")).toBe("Anthropic (Claude)");
+  });
+});
+
+describe("hasProviderCredentials", () => {
+  it("returns true when credential field is present", async () => {
+    const config = {
+      llm: {
+        provider: "anthropic" as const,
+        model: "claude-3",
+        credential: { type: "api_key" as const },
+      },
+    };
+
+    const result = await hasProviderCredentials("anthropic", config);
+    expect(result).toBe(true);
+  });
+
+  it("returns true when deprecated apiKey is present", async () => {
+    const config = {
+      llm: {
+        provider: "anthropic" as const,
+        model: "claude-3",
+        apiKey: "sk-test",
+      },
+    };
+
+    const result = await hasProviderCredentials("anthropic", config);
+    expect(result).toBe(true);
+  });
+
+  it("returns false when no credentials are configured", async () => {
+    const config = {
+      llm: {
+        provider: "anthropic" as const,
+        model: "claude-3",
+      },
+    };
+
+    const result = await hasProviderCredentials("anthropic", config);
+    expect(result).toBe(false);
+  });
+
+  it("checks environment variable as fallback", async () => {
+    const config = {
+      llm: {
+        provider: "anthropic" as const,
+        model: "claude-3",
+      },
+    };
+
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-env-test");
+    const result = await hasProviderCredentials("anthropic", config);
+    vi.unstubAllEnvs();
+
+    expect(result).toBe(true);
+  });
+});
+
+describe("loadConfigWithCredentials", () => {
+  let tempDir: string;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "vellum-cred-test-"));
+    consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    clearDeprecationWarningsCache();
+    vi.unstubAllEnvs();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    consoleSpy.mockRestore();
+    clearDeprecationWarningsCache();
+    vi.unstubAllEnvs();
+  });
+
+  it("returns usedDeprecatedApiKey=true when apiKey is used without CredentialManager", async () => {
+    fs.writeFileSync(
+      path.join(tempDir, "vellum.toml"),
+      `[llm]
+provider = "anthropic"
+model = "claude-3"
+apiKey = "sk-test-key"
+`
+    );
+
+    const result = await loadConfigWithCredentials({
+      cwd: tempDir,
+      skipEnv: true,
+      suppressDeprecationWarnings: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.usedDeprecatedApiKey).toBe(true);
+      expect(result.value.credentialResolved).toBe(false);
+      expect(result.value.credential).toBeNull();
+    }
+  });
+
+  it("returns credentialResolved=false when no credentials available", async () => {
+    fs.writeFileSync(
+      path.join(tempDir, "vellum.toml"),
+      `[llm]
+provider = "anthropic"
+model = "claude-3"
+`
+    );
+
+    const result = await loadConfigWithCredentials({
+      cwd: tempDir,
+      skipEnv: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.credentialResolved).toBe(false);
+      expect(result.value.usedDeprecatedApiKey).toBe(false);
+    }
+  });
+
+  it("preserves config validation on credential loading", async () => {
+    fs.writeFileSync(
+      path.join(tempDir, "vellum.toml"),
+      `[llm]
+provider = "invalid-provider"
+model = "test"
+`
+    );
+
+    const result = await loadConfigWithCredentials({
+      cwd: tempDir,
+      skipEnv: true,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("VALIDATION_ERROR");
+    }
+  });
+});
+
+// ============================================
+// T023: Credential Wizard Types Tests
+// ============================================
+
+describe("promptForCredentials", () => {
+  it("returns null when not in interactive mode", async () => {
+    const result = await promptForCredentials("anthropic", {
+      interactive: false,
+      promptCredential: async () => ({ provider: "anthropic", type: "api_key", value: "test" }),
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when promptCredential callback is not provided", async () => {
+    const result = await promptForCredentials("anthropic", {
+      interactive: true,
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it("calls promptCredential with correct options in interactive mode", async () => {
+    const mockPrompt = vi.fn().mockResolvedValue({
+      provider: "anthropic",
+      type: "api_key",
+      value: "sk-prompted",
+    });
+
+    const result = await promptForCredentials("anthropic", {
+      interactive: true,
+      promptCredential: mockPrompt,
+    });
+
+    expect(mockPrompt).toHaveBeenCalledTimes(1);
+    expect(mockPrompt).toHaveBeenCalledWith("anthropic", {
+      suggestedType: "api_key",
+      displayName: "Anthropic (Claude)",
+      isFirstRun: false,
+      preferredStore: "keychain",
+    });
+    expect(result).toEqual({
+      provider: "anthropic",
+      type: "api_key",
+      value: "sk-prompted",
+    });
+  });
+
+  it("handles promptCredential errors gracefully", async () => {
+    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const mockPrompt = vi.fn().mockRejectedValue(new Error("User cancelled"));
+
+    const result = await promptForCredentials("anthropic", {
+      interactive: true,
+      promptCredential: mockPrompt,
+    });
+
+    expect(result).toBeNull();
+    expect(consoleSpy).toHaveBeenCalled();
+    expect(consoleSpy.mock.calls[0]?.[0]).toContain("Failed to prompt");
+
+    consoleSpy.mockRestore();
+  });
+
+  it("returns null when user cancels prompt", async () => {
+    const mockPrompt = vi.fn().mockResolvedValue(null);
+
+    const result = await promptForCredentials("anthropic", {
+      interactive: true,
+      promptCredential: mockPrompt,
+    });
+
+    expect(result).toBeNull();
+  });
+});
+
+describe("clearDeprecationWarningsCache", () => {
+  it("allows warnings to be shown again after clearing", () => {
+    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/test.toml");
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+
+    // Same path should not emit again
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/test.toml");
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+
+    // Clear cache
+    clearDeprecationWarningsCache();
+
+    // Now should emit again
+    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/test.toml");
+    expect(consoleSpy).toHaveBeenCalledTimes(2);
+
+    consoleSpy.mockRestore();
+    clearDeprecationWarningsCache();
   });
 });

@@ -2,8 +2,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as TOML from "@iarna/toml";
+import type { CredentialManager } from "../credentials/manager.js";
+import type { Credential, CredentialInput, CredentialSource } from "../credentials/types.js";
 import { Err, Ok, type Result } from "../types/result.js";
-import { type Config, ConfigSchema, type PartialConfig } from "./schema.js";
+import { type Config, ConfigSchema, type PartialConfig, type ProviderName } from "./schema.js";
 
 // ============================================
 // T034-T038: Configuration Loader Module
@@ -36,6 +38,44 @@ export interface LoadConfigOptions {
   skipEnv?: boolean;
   /** Skip loading project config file */
   skipProjectFile?: boolean;
+  /** CredentialManager instance for credential resolution (T025) */
+  credentialManager?: CredentialManager;
+  /** Enable interactive credential wizard for missing credentials (T023) */
+  interactive?: boolean;
+  /** Callback to prompt user for credentials in interactive mode (T023) */
+  promptCredential?: CredentialPromptCallback;
+  /** Suppress deprecation warnings (default: false) */
+  suppressDeprecationWarnings?: boolean;
+}
+
+// ============================================
+// T023: Credential Wizard Types
+// ============================================
+
+/**
+ * Callback type for prompting users for credentials in interactive mode
+ *
+ * @param provider - The provider requiring credentials (e.g., 'anthropic', 'openai')
+ * @param options - Additional options for the prompt
+ * @returns Promise resolving to credential input or null if cancelled
+ */
+export type CredentialPromptCallback = (
+  provider: ProviderName,
+  options: CredentialPromptOptions
+) => Promise<CredentialInput | null>;
+
+/**
+ * Options passed to credential prompt callback
+ */
+export interface CredentialPromptOptions {
+  /** Suggested credential type (default: 'api_key') */
+  suggestedType?: "api_key" | "oauth_token" | "bearer_token";
+  /** Human-readable provider name for display */
+  displayName?: string;
+  /** Whether this is the first run / initialization */
+  isFirstRun?: boolean;
+  /** Preferred store destination */
+  preferredStore?: CredentialSource;
 }
 
 // ============================================
@@ -221,6 +261,222 @@ export function deepMerge<T extends object>(...sources: Partial<T>[]): T {
 }
 
 // ============================================
+// T024: Deprecation Warnings
+// ============================================
+
+/**
+ * Deprecation warning context for tracking unique warnings
+ */
+const shownDeprecationWarnings = new Set<string>();
+
+/**
+ * Clear deprecation warnings cache (mainly for testing)
+ */
+export function clearDeprecationWarningsCache(): void {
+  shownDeprecationWarnings.clear();
+}
+
+/**
+ * Check config for deprecated apiKey usage and emit warnings
+ *
+ * @param config - The parsed configuration object
+ * @param configPath - Optional path to config file for better error messages
+ *
+ * @example
+ * ```typescript
+ * checkDeprecatedApiKeyUsage(parsedConfig, '/path/to/vellum.toml');
+ * // Console: ⚠️ DEPRECATION WARNING: 'apiKey' field is deprecated...
+ * ```
+ */
+export function checkDeprecatedApiKeyUsage(
+  config: Partial<PartialConfig>,
+  configPath?: string
+): void {
+  const llmConfig = config.llm as Record<string, unknown> | undefined;
+
+  if (llmConfig?.apiKey !== undefined) {
+    const warningKey = `apiKey:${configPath ?? "unknown"}`;
+
+    // Only show each warning once per session
+    if (!shownDeprecationWarnings.has(warningKey)) {
+      shownDeprecationWarnings.add(warningKey);
+
+      const location = configPath ? ` in ${configPath}` : "";
+      console.warn(
+        `⚠️  DEPRECATION WARNING: 'apiKey' field${location} is deprecated and will be removed in a future version.\n` +
+          `   Please migrate to the 'credential' field for secure credential management.\n` +
+          `\n` +
+          `   Before (deprecated):\n` +
+          `     [llm]\n` +
+          `     provider = "anthropic"\n` +
+          `     apiKey = "sk-..."\n` +
+          `\n` +
+          `   After (recommended):\n` +
+          `     [llm]\n` +
+          `     provider = "anthropic"\n` +
+          `\n` +
+          `     [llm.credential]\n` +
+          `     type = "api_key"\n` +
+          `     source = "keychain"  # or "env", "file"\n` +
+          `\n` +
+          `   Run 'vellum credentials migrate' to migrate your credentials securely.\n`
+      );
+    }
+  }
+}
+
+// ============================================
+// T025: Credential Resolution
+// ============================================
+
+/**
+ * Resolve credential for a provider using CredentialManager
+ *
+ * @param provider - Provider name (e.g., 'anthropic', 'openai')
+ * @param credentialManager - CredentialManager instance
+ * @returns The resolved credential or null if not found
+ */
+export async function resolveProviderCredential(
+  provider: ProviderName,
+  credentialManager: CredentialManager
+): Promise<Credential | null> {
+  const result = await credentialManager.resolve(provider);
+
+  if (!result.ok) {
+    console.warn(`⚠️  Failed to resolve credential for ${provider}: ${result.error.message}`);
+    return null;
+  }
+
+  return result.value;
+}
+
+/**
+ * Check if provider credentials are available
+ *
+ * @param provider - Provider name
+ * @param config - Current config (may have apiKey or credential)
+ * @param credentialManager - Optional CredentialManager instance
+ * @returns Whether credentials are available
+ */
+export async function hasProviderCredentials(
+  provider: ProviderName,
+  config: PartialConfig,
+  credentialManager?: CredentialManager
+): Promise<boolean> {
+  // Check for credential field
+  if (config.llm?.credential) {
+    return true;
+  }
+
+  // Check deprecated apiKey field
+  if (config.llm?.apiKey) {
+    return true;
+  }
+
+  // Check CredentialManager if available
+  if (credentialManager) {
+    const exists = await credentialManager.exists(provider);
+    if (exists.ok && exists.value) {
+      return true;
+    }
+  }
+
+  // Check environment variable fallback
+  const envKey = `${provider.toUpperCase().replace(/-/g, "_")}_API_KEY`;
+  if (process.env[envKey]) {
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================
+// T023: Credential Wizard
+// ============================================
+
+/**
+ * Provider display names for user-friendly prompts
+ */
+const PROVIDER_DISPLAY_NAMES: Record<ProviderName, string> = {
+  anthropic: "Anthropic (Claude)",
+  openai: "OpenAI (GPT)",
+  "azure-openai": "Azure OpenAI",
+  google: "Google AI",
+  gemini: "Google Gemini",
+  "vertex-ai": "Google Vertex AI",
+  cohere: "Cohere",
+  mistral: "Mistral AI",
+  groq: "Groq",
+  fireworks: "Fireworks AI",
+  together: "Together AI",
+  perplexity: "Perplexity",
+  bedrock: "AWS Bedrock",
+  ollama: "Ollama (Local)",
+  openrouter: "OpenRouter",
+};
+
+/**
+ * Get display name for a provider
+ */
+export function getProviderDisplayName(provider: ProviderName): string {
+  return PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+}
+
+/**
+ * Prompt for missing credentials during config load (interactive mode)
+ *
+ * @param provider - The provider requiring credentials
+ * @param options - Load config options including prompt callback
+ * @returns Credential input or null if skipped/cancelled
+ */
+export async function promptForCredentials(
+  provider: ProviderName,
+  options: LoadConfigOptions
+): Promise<CredentialInput | null> {
+  if (!options.interactive || !options.promptCredential) {
+    return null;
+  }
+
+  const promptOptions: CredentialPromptOptions = {
+    suggestedType: "api_key",
+    displayName: getProviderDisplayName(provider),
+    isFirstRun: false,
+    preferredStore: "keychain",
+  };
+
+  try {
+    return await options.promptCredential(provider, promptOptions);
+  } catch (error) {
+    console.warn(
+      `⚠️  Failed to prompt for ${provider} credentials: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return null;
+  }
+}
+
+/**
+ * Store credential using CredentialManager
+ *
+ * @param input - Credential input to store
+ * @param credentialManager - CredentialManager instance
+ * @returns Success status
+ */
+export async function storeCredential(
+  input: CredentialInput,
+  credentialManager: CredentialManager
+): Promise<boolean> {
+  const result = await credentialManager.store(input);
+
+  if (!result.ok) {
+    console.warn(`⚠️  Failed to store credential for ${input.provider}: ${result.error.message}`);
+    return false;
+  }
+
+  console.log(`✅ Credential for ${input.provider} stored successfully to ${result.value.source}`);
+  return true;
+}
+
+// ============================================
 // T038: loadConfig
 // ============================================
 
@@ -275,21 +531,42 @@ function readTomlFile(filePath: string): Result<Record<string, unknown>, ConfigE
  * 4. Environment variables (unless skipEnv)
  * 5. CLI overrides (options.overrides)
  *
+ * T023/T024/T025 Integration:
+ * - Checks for deprecated apiKey usage and emits warnings
+ * - Resolves credentials via CredentialManager if provided
+ * - Supports interactive credential wizard for missing credentials
+ *
  * @param options - Loading options
  * @returns Result with validated Config or ConfigError
  *
  * @example
  * ```typescript
+ * // Basic usage
  * const result = loadConfig({ cwd: "/my/project" });
  * if (result.ok) {
  *   console.log(result.value.llm.provider);
- * } else {
- *   console.error(result.error.message);
  * }
+ *
+ * // With credential resolution
+ * const result = loadConfig({
+ *   cwd: "/my/project",
+ *   credentialManager: myCredentialManager,
+ *   interactive: true,
+ *   promptCredential: async (provider, opts) => {
+ *     // Custom prompt implementation
+ *     return { provider, type: 'api_key', value: await askUser() };
+ *   }
+ * });
  * ```
  */
 export function loadConfig(options: LoadConfigOptions = {}): Result<Config, ConfigError> {
-  const { cwd, overrides, skipEnv = false, skipProjectFile = false } = options;
+  const {
+    cwd,
+    overrides,
+    skipEnv = false,
+    skipProjectFile = false,
+    suppressDeprecationWarnings = false,
+  } = options;
 
   // Start with empty object (schema defaults applied during validation)
   const configs: Partial<PartialConfig>[] = [];
@@ -299,6 +576,11 @@ export function loadConfig(options: LoadConfigOptions = {}): Result<Config, Conf
   const globalResult = readTomlFile(globalPath);
   if (globalResult.ok) {
     configs.push(globalResult.value as Partial<PartialConfig>);
+
+    // T024: Check for deprecated apiKey usage in global config
+    if (!suppressDeprecationWarnings) {
+      checkDeprecatedApiKeyUsage(globalResult.value as Partial<PartialConfig>, globalPath);
+    }
   }
   // Ignore FILE_NOT_FOUND for global config - it's optional
 
@@ -314,6 +596,11 @@ export function loadConfig(options: LoadConfigOptions = {}): Result<Config, Conf
         }
       } else {
         configs.push(projectResult.value as Partial<PartialConfig>);
+
+        // T024: Check for deprecated apiKey usage in project config
+        if (!suppressDeprecationWarnings) {
+          checkDeprecatedApiKeyUsage(projectResult.value as Partial<PartialConfig>, projectPath);
+        }
       }
     }
   }
@@ -323,12 +610,25 @@ export function loadConfig(options: LoadConfigOptions = {}): Result<Config, Conf
     const envConfig = parseEnvConfig();
     if (Object.keys(envConfig).length > 0) {
       configs.push(envConfig);
+
+      // T024: Check for deprecated apiKey usage via env var
+      if (!suppressDeprecationWarnings && envConfig.llm?.apiKey) {
+        checkDeprecatedApiKeyUsage(
+          envConfig as Partial<PartialConfig>,
+          "VELLUM_LLM_API_KEY env var"
+        );
+      }
     }
   }
 
   // 4. CLI overrides (highest priority)
   if (overrides) {
     configs.push(overrides);
+
+    // T024: Check for deprecated apiKey usage in overrides
+    if (!suppressDeprecationWarnings) {
+      checkDeprecatedApiKeyUsage(overrides as Partial<PartialConfig>, "CLI overrides");
+    }
   }
 
   // Merge all configs
@@ -349,4 +649,119 @@ export function loadConfig(options: LoadConfigOptions = {}): Result<Config, Conf
   }
 
   return Ok(parseResult.data);
+}
+
+// ============================================
+// T025: Async Config Loading with Credentials
+// ============================================
+
+/**
+ * Extended config result with credential resolution metadata
+ */
+export interface LoadConfigWithCredentialsResult {
+  /** The loaded configuration */
+  config: Config;
+  /** Whether credentials were resolved from CredentialManager */
+  credentialResolved: boolean;
+  /** Whether deprecated apiKey was used as fallback */
+  usedDeprecatedApiKey: boolean;
+  /** The resolved credential (if any) */
+  credential: Credential | null;
+}
+
+/**
+ * Load configuration with credential resolution (async)
+ *
+ * This is the recommended way to load config when using CredentialManager.
+ * It performs all the standard config loading, then:
+ * 1. Attempts to resolve credentials from CredentialManager
+ * 2. Falls back to deprecated apiKey if credential not found
+ * 3. Optionally prompts for credentials in interactive mode
+ *
+ * @param options - Loading options including CredentialManager
+ * @returns Result with config and credential resolution metadata
+ *
+ * @example
+ * ```typescript
+ * const result = await loadConfigWithCredentials({
+ *   cwd: '/my/project',
+ *   credentialManager: myCredentialManager,
+ *   interactive: true,
+ *   promptCredential: async (provider, opts) => {
+ *     const apiKey = await prompt(`Enter API key for ${opts.displayName}:`);
+ *     return { provider, type: 'api_key', value: apiKey };
+ *   }
+ * });
+ *
+ * if (result.ok) {
+ *   const { config, credentialResolved, usedDeprecatedApiKey } = result.value;
+ *   if (usedDeprecatedApiKey) {
+ *     console.log('Consider migrating to credential field');
+ *   }
+ * }
+ * ```
+ */
+export async function loadConfigWithCredentials(
+  options: LoadConfigOptions = {}
+): Promise<Result<LoadConfigWithCredentialsResult, ConfigError>> {
+  // First, load base config synchronously
+  const configResult = loadConfig(options);
+
+  if (!configResult.ok) {
+    return configResult as Result<LoadConfigWithCredentialsResult, ConfigError>;
+  }
+
+  const config = configResult.value;
+  const provider = config.llm.provider;
+  let credentialResolved = false;
+  let usedDeprecatedApiKey = false;
+  let credential: Credential | null = null;
+
+  // T025: Attempt credential resolution via CredentialManager
+  if (options.credentialManager) {
+    // Check if we already have a credential configured
+    if (config.llm.credential) {
+      // Credential is configured in config, resolve it
+      credential = await resolveProviderCredential(provider, options.credentialManager);
+      if (credential) {
+        credentialResolved = true;
+      }
+    } else {
+      // No credential in config, try to resolve from store
+      credential = await resolveProviderCredential(provider, options.credentialManager);
+
+      if (credential) {
+        credentialResolved = true;
+      } else if (config.llm.apiKey) {
+        // Fall back to deprecated apiKey
+        usedDeprecatedApiKey = true;
+      } else {
+        // T023: No credentials found, optionally prompt in interactive mode
+        if (options.interactive && options.promptCredential) {
+          const credentialInput = await promptForCredentials(provider, options);
+
+          if (credentialInput) {
+            // Store the new credential
+            const stored = await storeCredential(credentialInput, options.credentialManager);
+
+            if (stored) {
+              // Re-resolve to get the full credential object
+              credential = await resolveProviderCredential(provider, options.credentialManager);
+              credentialResolved = credential !== null;
+            }
+          }
+        }
+      }
+    }
+  } else if (config.llm.apiKey) {
+    // No CredentialManager but apiKey present
+    usedDeprecatedApiKey = true;
+  }
+
+  return Ok({
+    config,
+    credentialResolved,
+    usedDeprecatedApiKey,
+    credential,
+  });
 }

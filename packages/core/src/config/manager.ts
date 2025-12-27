@@ -1,11 +1,14 @@
 import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
+import type { CredentialManager } from "../credentials/manager.js";
+import type { Credential } from "../credentials/types.js";
 import { Err, Ok, type Result } from "../types/result.js";
 import {
   type ConfigError,
   findProjectConfig,
   type LoadConfigOptions,
   loadConfig,
+  loadConfigWithCredentials,
 } from "./loader.js";
 import type { Config } from "./schema.js";
 
@@ -21,6 +24,10 @@ export interface ConfigManagerEvents {
   change: [config: Config];
   /** Emitted when watch encounters an error */
   error: [error: Error];
+  /** Emitted when credential is resolved (T025) */
+  credentialResolved: [provider: string, credential: Credential];
+  /** Emitted when deprecated apiKey is used (T024) */
+  deprecatedApiKeyUsed: [provider: string];
 }
 
 /**
@@ -46,19 +53,32 @@ export interface ConfigManagerEmitter {
  * - Type-safe access to configuration values
  * - File watching for hot-reload support
  * - Event-based change notifications
+ * - Credential resolution via CredentialManager (T025)
+ * - Interactive credential wizard support (T023)
+ * - Deprecation warnings for legacy apiKey usage (T024)
  *
  * @example
  * ```typescript
- * const result = await ConfigManager.create({ cwd: '/my/project' });
+ * const result = await ConfigManager.create({
+ *   cwd: '/my/project',
+ *   credentialManager: myCredentialManager,
+ *   interactive: true
+ * });
  * if (result.ok) {
  *   const manager = result.value;
  *   manager.on('change', (newConfig) => {
  *     console.log('Config changed:', newConfig);
  *   });
+ *   manager.on('credentialResolved', (provider, cred) => {
+ *     console.log(`Credential resolved for ${provider}`);
+ *   });
  *   manager.watch();
  *
  *   // Access config
  *   const llm = manager.get('llm');
+ *
+ *   // Access resolved credential
+ *   const credential = manager.getCredential();
  *
  *   // Cleanup when done
  *   manager.dispose();
@@ -74,35 +94,98 @@ export class ConfigManager implements ConfigManagerEmitter {
   private disposed = false;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // T025: Credential management
+  private credentialManager: CredentialManager | null = null;
+  private resolvedCredential: Credential | null = null;
+  private usedDeprecatedApiKey = false;
+
   /**
    * Private constructor - use ConfigManager.create() instead
    */
-  private constructor(config: Config, options: LoadConfigOptions = {}) {
+  private constructor(
+    config: Config,
+    options: LoadConfigOptions = {},
+    credentialManager: CredentialManager | null = null,
+    resolvedCredential: Credential | null = null,
+    usedDeprecatedApiKey = false
+  ) {
     this.config = config;
     this.options = options;
+    this.credentialManager = credentialManager;
+    this.resolvedCredential = resolvedCredential;
+    this.usedDeprecatedApiKey = usedDeprecatedApiKey;
   }
 
   /**
    * Create a new ConfigManager instance
+   *
+   * If a CredentialManager is provided, this will also resolve credentials
+   * for the configured provider (T025). In interactive mode with a prompt
+   * callback, missing credentials can be collected from the user (T023).
    *
    * @param options - Configuration loading options
    * @returns Result with ConfigManager on success, ConfigError on failure
    *
    * @example
    * ```typescript
+   * // Basic usage
    * const result = await ConfigManager.create({
    *   cwd: '/my/project',
    *   overrides: { debug: true }
    * });
+   *
+   * // With credential resolution
+   * const result = await ConfigManager.create({
+   *   cwd: '/my/project',
+   *   credentialManager: myCredentialManager,
+   *   interactive: true,
+   *   promptCredential: async (provider, opts) => {
+   *     const key = await askUser(`Enter API key for ${opts.displayName}:`);
+   *     return { provider, type: 'api_key', value: key };
+   *   }
+   * });
+   *
    * if (result.ok) {
    *   const manager = result.value;
    *   console.log(manager.get('llm').provider);
+   *   console.log(manager.getCredential()?.value); // Resolved API key
    * }
    * ```
    */
   static async create(
     options: LoadConfigOptions = {}
   ): Promise<Result<ConfigManager, ConfigError>> {
+    // T025: Use credential-aware loading if CredentialManager is provided
+    if (options.credentialManager) {
+      const result = await loadConfigWithCredentials(options);
+
+      if (!result.ok) {
+        return Err(result.error);
+      }
+
+      const { config, credentialResolved, usedDeprecatedApiKey, credential } = result.value;
+
+      const manager = new ConfigManager(
+        config,
+        options,
+        options.credentialManager,
+        credential,
+        usedDeprecatedApiKey
+      );
+
+      // Emit events for credential resolution state
+      if (credentialResolved && credential) {
+        manager.emit("credentialResolved", config.llm.provider, credential);
+      }
+
+      if (usedDeprecatedApiKey) {
+        manager.emit("deprecatedApiKeyUsed", config.llm.provider);
+      }
+
+      return Ok(manager);
+    }
+
+    // Standard loading without credential resolution
     const result = loadConfig(options);
 
     if (!result.ok) {
@@ -141,6 +224,89 @@ export class ConfigManager implements ConfigManagerEmitter {
    */
   getAll(): Readonly<Config> {
     return Object.freeze({ ...this.config });
+  }
+
+  // ============================================
+  // T025: Credential Access Methods
+  // ============================================
+
+  /**
+   * Get the resolved credential for the current provider
+   *
+   * Returns the credential resolved via CredentialManager during initialization.
+   * May be null if no credential was found or CredentialManager wasn't provided.
+   *
+   * @returns The resolved Credential or null
+   *
+   * @example
+   * ```typescript
+   * const credential = manager.getCredential();
+   * if (credential) {
+   *   console.log(`Using ${credential.type} from ${credential.source}`);
+   *   // credential.value contains the actual secret
+   * }
+   * ```
+   */
+  getCredential(): Credential | null {
+    return this.resolvedCredential;
+  }
+
+  /**
+   * Check if deprecated apiKey field is being used
+   *
+   * Returns true if the config uses the deprecated apiKey field instead of
+   * credential resolution. Use this to show migration prompts.
+   *
+   * @returns Whether deprecated apiKey is in use
+   *
+   * @example
+   * ```typescript
+   * if (manager.isUsingDeprecatedApiKey()) {
+   *   console.log('Consider migrating to credential field');
+   * }
+   * ```
+   */
+  isUsingDeprecatedApiKey(): boolean {
+    return this.usedDeprecatedApiKey;
+  }
+
+  /**
+   * Get the CredentialManager instance (if configured)
+   *
+   * @returns The CredentialManager or null
+   */
+  getCredentialManager(): CredentialManager | null {
+    return this.credentialManager;
+  }
+
+  /**
+   * Get the effective API key for the provider
+   *
+   * Resolves the API key from credential or deprecated apiKey field.
+   * This is a convenience method for providers that just need the key string.
+   *
+   * @returns The API key string or null if not available
+   *
+   * @example
+   * ```typescript
+   * const apiKey = manager.getEffectiveApiKey();
+   * if (apiKey) {
+   *   const client = new AnthropicClient({ apiKey });
+   * }
+   * ```
+   */
+  getEffectiveApiKey(): string | null {
+    // Prefer resolved credential
+    if (this.resolvedCredential && this.resolvedCredential.type === "api_key") {
+      return this.resolvedCredential.value;
+    }
+
+    // Fall back to deprecated apiKey field
+    if (this.config.llm.apiKey) {
+      return this.config.llm.apiKey;
+    }
+
+    return null;
   }
 
   // ============================================
