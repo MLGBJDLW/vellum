@@ -307,6 +307,84 @@ await shutdown(container);
 | N/A | `ImagePart` |
 | N/A | `ToolState` |
 
+### TextAccumulator → StreamCollector
+
+The `TextAccumulator` class from `@vellum/provider` is deprecated in favor of `StreamCollector` from `@vellum/core`.
+
+**Key Differences:**
+
+| Feature | TextAccumulator (old) | StreamCollector (new) |
+|---------|----------------------|----------------------|
+| Processing | `process(event)` returns void | `processEvent(event)` returns `CollectorAction` |
+| Output | String properties (`text`, `reasoning`) | Structured `AssistantMessage` with `MessagePart[]` |
+| Error handling | Implicit | `Result<T, E>` pattern |
+| Citations | Not supported | Full support via `citations` field |
+| Actions | None | Discriminated union for UI updates |
+
+**Before (deprecated):**
+```typescript
+import { TextAccumulator } from '@vellum/provider';
+
+const accumulator = new TextAccumulator();
+
+for await (const event of stream) {
+  accumulator.process(event);
+}
+
+// Access properties directly
+const text = accumulator.text;
+const reasoning = accumulator.reasoning;
+const usage = accumulator.usage;
+const toolCalls = accumulator.toolCalls;
+```
+
+**After (recommended):**
+```typescript
+import { StreamCollector, type CollectorAction } from '@vellum/core';
+
+const collector = new StreamCollector();
+
+for await (const event of stream) {
+  const action: CollectorAction = collector.processEvent(event);
+  
+  // Handle actions for real-time UI updates
+  switch (action.type) {
+    case 'emit_text':
+      process.stdout.write(action.content);
+      break;
+    case 'tool_call_started':
+      console.log(`Tool ${action.name} started`);
+      break;
+    case 'stream_complete':
+      console.log('Done!', action.message);
+      break;
+  }
+}
+
+// Build final message with Result pattern
+const result = collector.build();
+if (result.ok) {
+  const message = result.value;
+  // message.parts: MessagePart[] (text, reasoning, tool parts)
+  // message.usage: Usage
+  // message.stopReason: StopReason
+  // message.citations: GroundingChunk[]
+}
+```
+
+**CollectorAction Types:**
+
+| Action Type | When Emitted | Payload |
+|-------------|--------------|---------|
+| `none` | No action needed | - |
+| `emit_text` | Text delta received | `content`, `index` |
+| `emit_reasoning` | Reasoning delta received | `content`, `index` |
+| `tool_call_started` | Tool call begins | `id`, `name`, `index` |
+| `tool_call_completed` | Tool call ends | `id`, `arguments` |
+| `emit_citations` | Citation received | `citations` |
+| `stream_complete` | Stream ends | `message` (AssistantMessage) |
+| `error` | Error occurred | `code`, `message` |
+
 ## Import Changes
 
 ```typescript

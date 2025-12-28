@@ -23,6 +23,7 @@
     "@opentelemetry/sdk-node": "^0.46.0",
     "@opentelemetry/sdk-trace-node": "^1.18.0",
     "@opentelemetry/semantic-conventions": "^1.18.0",
+    "@vellum/provider": "workspace:*",
     "@vellum/shared": "workspace:*",
     "keytar": "^7.9.0",
     "zod": "^3.24.1"

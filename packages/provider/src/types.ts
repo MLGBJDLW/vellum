@@ -225,6 +225,16 @@ export interface TokenUsage {
 
 /**
  * Stop reasons for completion termination
+ *
+ * @description Indicates why the model stopped generating tokens.
+ * Used in both streaming (StreamDoneEvent) and non-streaming (CompletionResult) responses.
+ *
+ * - `end_turn` - Natural completion (model finished its response)
+ * - `max_tokens` - Token limit reached (maxTokens parameter or model limit)
+ * - `stop_sequence` - Stop sequence encountered (from stopSequences parameter)
+ * - `tool_use` - Tool call requested (model wants to use a tool)
+ * - `content_filter` - Content filter triggered (response blocked by safety systems)
+ * - `error` - Error occurred during generation
  */
 export type StopReason =
   | "end_turn"
@@ -233,6 +243,33 @@ export type StopReason =
   | "tool_use"
   | "content_filter"
   | "error";
+
+/**
+ * Grounding/citation chunk from provider
+ *
+ * Represents a source document or reference used by the model to ground its response.
+ * Commonly returned by Google's grounded generation and other RAG-enabled providers.
+ *
+ * @example
+ * ```typescript
+ * const chunk: GroundingChunk = {
+ *   uri: 'https://example.com/article',
+ *   title: 'Example Article',
+ *   text: 'Relevant excerpt from the article...',
+ *   relevanceScore: 0.95,
+ * };
+ * ```
+ */
+export interface GroundingChunk {
+  /** URI/URL of the source document */
+  uri: string;
+  /** Title of the source document (if available) */
+  title?: string;
+  /** Relevant text excerpt from the source */
+  text?: string;
+  /** Relevance score between 0 and 1 (higher = more relevant) */
+  relevanceScore?: number;
+}
 
 /**
  * Tool call in a completion result
@@ -282,7 +319,9 @@ export interface StreamTextEvent {
   /** Discriminator for text events */
   type: "text";
   /** Incremental text content */
-  text: string;
+  content: string;
+  /** Content block index (for multi-part responses) */
+  index?: number;
 }
 
 /**
@@ -292,11 +331,106 @@ export interface StreamReasoningEvent {
   /** Discriminator for reasoning events */
   type: "reasoning";
   /** Incremental reasoning content */
-  text: string;
+  content: string;
+  /** Content block index (for multi-part responses) */
+  index?: number;
+}
+
+/**
+ * Tool call start event - emitted when a tool call begins
+ */
+export interface StreamToolCallStartEvent {
+  /** Discriminator for tool call start events */
+  type: "tool_call_start";
+  /** Unique identifier for the tool call */
+  id: string;
+  /** Name of the tool being called */
+  name: string;
+  /** Content block index for this tool call */
+  index: number;
+}
+
+/**
+ * Tool call delta event - emitted for incremental argument updates
+ */
+export interface StreamToolCallDeltaEvent {
+  /** Discriminator for tool call delta events */
+  type: "tool_call_delta";
+  /** Unique identifier for the tool call */
+  id: string;
+  /** Partial JSON string of input parameters */
+  arguments: string;
+  /** Content block index for this tool call */
+  index: number;
+}
+
+/**
+ * Tool call end event - emitted when a tool call is complete
+ */
+export interface StreamToolCallEndEvent {
+  /** Discriminator for tool call end events */
+  type: "tool_call_end";
+  /** Unique identifier for the tool call */
+  id: string;
+  /** Content block index for this tool call */
+  index: number;
+}
+
+/**
+ * MCP tool start event - emitted when an MCP tool begins execution
+ */
+export interface StreamMcpToolStartEvent {
+  /** Discriminator for MCP tool start events */
+  type: "mcp_tool_start";
+  /** Unique identifier for the tool execution */
+  toolId: string;
+  /** Name of the MCP server hosting the tool */
+  serverName: string;
+  /** Name of the tool being called */
+  toolName: string;
+}
+
+/**
+ * MCP tool progress event - emitted for progress updates during execution
+ */
+export interface StreamMcpToolProgressEvent {
+  /** Discriminator for MCP tool progress events */
+  type: "mcp_tool_progress";
+  /** Unique identifier for the tool execution */
+  toolId: string;
+  /** Progress percentage (0-100) */
+  progress: number;
+  /** Optional progress message */
+  message?: string;
+}
+
+/**
+ * MCP tool end event - emitted when an MCP tool completes
+ */
+export interface StreamMcpToolEndEvent {
+  /** Discriminator for MCP tool end events */
+  type: "mcp_tool_end";
+  /** Unique identifier for the tool execution */
+  toolId: string;
+  /** Tool execution result (if successful) */
+  result?: unknown;
+  /** Error message (if failed) */
+  error?: string;
+}
+
+/**
+ * Citation event - emitted when the model references a source
+ */
+export interface StreamCitationEvent {
+  /** Discriminator for citation events */
+  type: "citation";
+  /** Grounding chunk with source information */
+  chunk: GroundingChunk;
 }
 
 /**
  * Complete tool call event (after full parameters are received)
+ * @deprecated Use StreamToolCallStartEvent, StreamToolCallDeltaEvent, and StreamToolCallEndEvent instead
  */
 export interface StreamToolCallEvent {
   /** Discriminator for tool call events */
@@ -310,10 +444,11 @@ export interface StreamToolCallEvent {
 }
 
 /**
- * Incremental tool call event (partial parameters)
+ * Legacy incremental tool call event
+ * @deprecated Use StreamToolCallDeltaEvent with type: 'tool_call_delta' instead
  */
-export interface StreamToolCallDeltaEvent {
-  /** Discriminator for tool call delta events */
+export interface LegacyStreamToolCallDeltaEvent {
+  /** Discriminator for legacy tool call delta events */
   type: "toolCallDelta";
   /** Unique identifier for the tool call */
   id: string;
@@ -329,8 +464,14 @@ export interface StreamToolCallDeltaEvent {
 export interface StreamUsageEvent {
   /** Discriminator for usage events */
   type: "usage";
-  /** Token usage statistics */
-  usage: TokenUsage;
+  /** Number of tokens in the input/prompt */
+  inputTokens: number;
+  /** Number of tokens in the output/completion */
+  outputTokens: number;
+  /** Number of tokens read from cache (if applicable) */
+  cacheReadTokens?: number;
+  /** Number of tokens written to cache (if applicable) */
+  cacheWriteTokens?: number;
 }
 
 /**
@@ -350,6 +491,17 @@ export interface StreamErrorEvent {
 /**
  * Stream completion event
  */
+export interface StreamEndEvent {
+  /** Discriminator for end events */
+  type: "end";
+  /** Final stop reason */
+  stopReason: StopReason;
+}
+
+/**
+ * Stream completion event (legacy alias)
+ * @deprecated Use StreamEndEvent instead
+ */
 export interface StreamDoneEvent {
   /** Discriminator for done events */
   type: "done";
@@ -365,19 +517,40 @@ export interface StreamDoneEvent {
  * for await (const event of provider.stream(params)) {
  *   switch (event.type) {
  *     case 'text':
- *       process.stdout.write(event.text);
+ *       process.stdout.write(event.content);
  *       break;
  *     case 'reasoning':
- *       console.log('Thinking:', event.text);
+ *       console.log('Thinking:', event.content);
  *       break;
- *     case 'toolCall':
- *       await executeTool(event.name, event.input);
+ *     case 'tool_call_start':
+ *       console.log('Tool started:', event.name);
+ *       break;
+ *     case 'tool_call_delta':
+ *       console.log('Arguments chunk:', event.arguments);
+ *       break;
+ *     case 'tool_call_end':
+ *       console.log('Tool ended:', event.id);
+ *       break;
+ *     case 'mcp_tool_start':
+ *       console.log('MCP tool:', event.serverName, event.toolName);
+ *       break;
+ *     case 'mcp_tool_progress':
+ *       console.log('Progress:', event.progress, '%');
+ *       break;
+ *     case 'mcp_tool_end':
+ *       console.log('Result:', event.result);
+ *       break;
+ *     case 'citation':
+ *       console.log('Source:', event.chunk.uri);
  *       break;
  *     case 'usage':
- *       console.log('Tokens used:', event.usage);
+ *       console.log('Tokens:', event.inputTokens, event.outputTokens);
  *       break;
- *     case 'done':
+ *     case 'end':
  *       console.log('Completed:', event.stopReason);
+ *       break;
+ *     case 'error':
+ *       console.error('Error:', event.message);
  *       break;
  *   }
  * }
@@ -386,8 +559,34 @@ export interface StreamDoneEvent {
 export type StreamEvent =
   | StreamTextEvent
   | StreamReasoningEvent
-  | StreamToolCallEvent
+  | StreamToolCallStartEvent
   | StreamToolCallDeltaEvent
+  | StreamToolCallEndEvent
+  | StreamMcpToolStartEvent
+  | StreamMcpToolProgressEvent
+  | StreamMcpToolEndEvent
+  | StreamCitationEvent
+  | StreamUsageEvent
+  | StreamEndEvent
+  | StreamErrorEvent
+  // Legacy types for backward compatibility
+  | StreamToolCallEvent
+  | LegacyStreamToolCallDeltaEvent
+  | StreamDoneEvent;
+
+// =============================================================================
+// T040: Backward Compatibility Aliases
+// =============================================================================
+
+/**
+ * Legacy StreamEvent type for old consumers
+ * @deprecated Use StreamEvent instead
+ */
+export type LegacyStreamEvent =
+  | StreamTextEvent
+  | StreamReasoningEvent
+  | StreamToolCallEvent
+  | LegacyStreamToolCallDeltaEvent
   | StreamUsageEvent
   | StreamErrorEvent
   | StreamDoneEvent;

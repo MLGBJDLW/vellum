@@ -1,21 +1,36 @@
-// AgentLoop - Core execution loop for agent conversations
-// Note: For tool execution, use the new Tool interface from "./types/index.js"
-// with ok() and fail() result helpers instead of raw string returns.
-// See Events (./events/index.js) for event-driven architecture.
+// ============================================
+// AgentLoop - Re-export from agent module
+// ============================================
+//
+// DEPRECATION NOTICE:
+// This file is deprecated. Import from "./agent/index.js" instead.
+//
+// Migration:
+//   Old: import { AgentLoop } from "@vellum/core/loop"
+//   New: import { AgentLoop } from "@vellum/core/agent"
+//
+// Or use the barrel export:
+//   import { AgentLoop } from "@vellum/core"
 
-export class AgentLoop {
-  private running = false;
+// Log deprecation warning once per process
+let deprecationWarningShown = false;
 
-  async start(): Promise<void> {
-    this.running = true;
-    // TODO: Implement main loop
-  }
-
-  stop(): void {
-    this.running = false;
-  }
-
-  isRunning(): boolean {
-    return this.running;
+function showDeprecationWarning(): void {
+  if (!deprecationWarningShown) {
+    deprecationWarningShown = true;
+    console.warn(
+      "[DEPRECATED] Importing from '@vellum/core/loop' is deprecated. " +
+        "Please import from '@vellum/core/agent' or '@vellum/core' instead."
+    );
   }
 }
+
+// Re-export everything from agent/loop.ts with deprecation warning
+export {
+  AgentLoop,
+  type AgentLoopConfig,
+  type AgentLoopEvents,
+} from "./agent/loop.js";
+
+// Show warning on module load
+showDeprecationWarning();

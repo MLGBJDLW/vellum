@@ -264,20 +264,20 @@ describe("Type Inference Tests", () => {
 
   describe("StreamEvent Union", () => {
     it("should discriminate text events", () => {
-      const event: StreamTextEvent = { type: "text", text: "Hello" };
+      const event: StreamTextEvent = { type: "text", content: "Hello" };
       const streamEvent: StreamEvent = event;
 
       if (streamEvent.type === "text") {
-        expect(streamEvent.text).toBe("Hello");
+        expect(streamEvent.content).toBe("Hello");
       }
     });
 
     it("should discriminate reasoning events", () => {
-      const event: StreamReasoningEvent = { type: "reasoning", text: "Thinking..." };
+      const event: StreamReasoningEvent = { type: "reasoning", content: "Thinking..." };
       const streamEvent: StreamEvent = event;
 
       if (streamEvent.type === "reasoning") {
-        expect(streamEvent.text).toBe("Thinking...");
+        expect(streamEvent.content).toBe("Thinking...");
       }
     });
 
@@ -295,28 +295,30 @@ describe("Type Inference Tests", () => {
       }
     });
 
-    it("should discriminate toolCallDelta events", () => {
+    it("should discriminate tool_call_delta events", () => {
       const event: StreamToolCallDeltaEvent = {
-        type: "toolCallDelta",
+        type: "tool_call_delta",
         id: "tc_1",
-        inputDelta: '{"partial":',
+        arguments: '{"partial":',
+        index: 0,
       };
 
       const streamEvent: StreamEvent = event;
-      if (streamEvent.type === "toolCallDelta") {
-        expect(streamEvent.inputDelta).toBeDefined();
+      if (streamEvent.type === "tool_call_delta") {
+        expect(streamEvent.arguments).toBeDefined();
       }
     });
 
     it("should discriminate usage events", () => {
       const event: StreamUsageEvent = {
         type: "usage",
-        usage: { inputTokens: 10, outputTokens: 20 },
+        inputTokens: 10,
+        outputTokens: 20,
       };
 
       const streamEvent: StreamEvent = event;
       if (streamEvent.type === "usage") {
-        expect(streamEvent.usage.inputTokens).toBe(10);
+        expect(streamEvent.inputTokens).toBe(10);
       }
     });
 
@@ -348,11 +350,11 @@ describe("Type Inference Tests", () => {
 
     it("should allow exhaustive switch pattern", () => {
       const events: StreamEvent[] = [
-        { type: "text", text: "Hi" },
-        { type: "reasoning", text: "Think" },
+        { type: "text", content: "Hi" },
+        { type: "reasoning", content: "Think" },
         { type: "toolCall", id: "1", name: "t", input: {} },
-        { type: "toolCallDelta", id: "1", inputDelta: "{" },
-        { type: "usage", usage: { inputTokens: 1, outputTokens: 1 } },
+        { type: "tool_call_delta", id: "1", arguments: "{", index: 0 },
+        { type: "usage", inputTokens: 1, outputTokens: 1 },
         { type: "error", code: "e", message: "m", retryable: false },
         { type: "done", stopReason: "end_turn" },
       ];
@@ -370,8 +372,8 @@ describe("Type Inference Tests", () => {
           case "toolCall":
             results.push("toolCall");
             break;
-          case "toolCallDelta":
-            results.push("toolCallDelta");
+          case "tool_call_delta":
+            results.push("tool_call_delta");
             break;
           case "usage":
             results.push("usage");
@@ -389,11 +391,367 @@ describe("Type Inference Tests", () => {
         "text",
         "reasoning",
         "toolCall",
-        "toolCallDelta",
+        "tool_call_delta",
         "usage",
         "error",
         "done",
       ]);
+    });
+  });
+
+  // =============================================================================
+  // T023: StreamEvent Type Guards - All 12 Event Types
+  // =============================================================================
+
+  describe("StreamEvent Type Guards - All 12 Event Types", () => {
+    /**
+     * T023: Test type narrowing for all 12 stream event types
+     * Events: text, reasoning, tool_call_start, tool_call_delta, tool_call_end,
+     * mcp_tool_start, mcp_tool_progress, mcp_tool_end, citation, usage, end, error
+     */
+
+    it("should narrow text event type", () => {
+      const event: StreamEvent = { type: "text", content: "Hello", index: 0 };
+
+      expect(event.type).toBe("text");
+      if (event.type === "text") {
+        // TypeScript should narrow to StreamTextEvent
+        expect(event.content).toBe("Hello");
+        expect(event.index).toBe(0);
+      }
+    });
+
+    it("should narrow reasoning event type", () => {
+      const event: StreamEvent = { type: "reasoning", content: "Thinking...", index: 1 };
+
+      expect(event.type).toBe("reasoning");
+      if (event.type === "reasoning") {
+        // TypeScript should narrow to StreamReasoningEvent
+        expect(event.content).toBe("Thinking...");
+        expect(event.index).toBe(1);
+      }
+    });
+
+    it("should narrow tool_call_start event type", () => {
+      const event: StreamEvent = {
+        type: "tool_call_start",
+        id: "call_abc123",
+        name: "read_file",
+        index: 0,
+      };
+
+      expect(event.type).toBe("tool_call_start");
+      if (event.type === "tool_call_start") {
+        // TypeScript should narrow to StreamToolCallStartEvent
+        expect(event.id).toBe("call_abc123");
+        expect(event.name).toBe("read_file");
+        expect(event.index).toBe(0);
+      }
+    });
+
+    it("should narrow tool_call_delta event type", () => {
+      const event: StreamEvent = {
+        type: "tool_call_delta",
+        id: "call_abc123",
+        arguments: '{"path": "/test.txt"}',
+        index: 0,
+      };
+
+      expect(event.type).toBe("tool_call_delta");
+      if (event.type === "tool_call_delta") {
+        // TypeScript should narrow to StreamToolCallDeltaEvent
+        expect(event.id).toBe("call_abc123");
+        expect(event.arguments).toBe('{"path": "/test.txt"}');
+        expect(event.index).toBe(0);
+      }
+    });
+
+    it("should narrow tool_call_end event type", () => {
+      const event: StreamEvent = {
+        type: "tool_call_end",
+        id: "call_abc123",
+        index: 0,
+      };
+
+      expect(event.type).toBe("tool_call_end");
+      if (event.type === "tool_call_end") {
+        // TypeScript should narrow to StreamToolCallEndEvent
+        expect(event.id).toBe("call_abc123");
+        expect(event.index).toBe(0);
+      }
+    });
+
+    it("should narrow mcp_tool_start event type", () => {
+      const event: StreamEvent = {
+        type: "mcp_tool_start",
+        toolId: "mcp_tool_001",
+        serverName: "memory-server",
+        toolName: "store_memory",
+      };
+
+      expect(event.type).toBe("mcp_tool_start");
+      if (event.type === "mcp_tool_start") {
+        // TypeScript should narrow to StreamMcpToolStartEvent
+        expect(event.toolId).toBe("mcp_tool_001");
+        expect(event.serverName).toBe("memory-server");
+        expect(event.toolName).toBe("store_memory");
+      }
+    });
+
+    it("should narrow mcp_tool_progress event type", () => {
+      const event: StreamEvent = {
+        type: "mcp_tool_progress",
+        toolId: "mcp_tool_001",
+        progress: 50,
+        message: "Processing...",
+      };
+
+      expect(event.type).toBe("mcp_tool_progress");
+      if (event.type === "mcp_tool_progress") {
+        // TypeScript should narrow to StreamMcpToolProgressEvent
+        expect(event.toolId).toBe("mcp_tool_001");
+        expect(event.progress).toBe(50);
+        expect(event.message).toBe("Processing...");
+      }
+    });
+
+    it("should narrow mcp_tool_end event type", () => {
+      const event: StreamEvent = {
+        type: "mcp_tool_end",
+        toolId: "mcp_tool_001",
+        result: { success: true, data: "stored" },
+      };
+
+      expect(event.type).toBe("mcp_tool_end");
+      if (event.type === "mcp_tool_end") {
+        // TypeScript should narrow to StreamMcpToolEndEvent
+        expect(event.toolId).toBe("mcp_tool_001");
+        expect(event.result).toEqual({ success: true, data: "stored" });
+      }
+    });
+
+    it("should narrow mcp_tool_end event type with error", () => {
+      const event: StreamEvent = {
+        type: "mcp_tool_end",
+        toolId: "mcp_tool_001",
+        error: "Connection failed",
+      };
+
+      expect(event.type).toBe("mcp_tool_end");
+      if (event.type === "mcp_tool_end") {
+        // TypeScript should narrow to StreamMcpToolEndEvent
+        expect(event.toolId).toBe("mcp_tool_001");
+        expect(event.error).toBe("Connection failed");
+      }
+    });
+
+    it("should narrow citation event type", () => {
+      const event: StreamEvent = {
+        type: "citation",
+        chunk: {
+          uri: "https://example.com/source",
+          title: "Source Document",
+          text: "Relevant excerpt...",
+          relevanceScore: 0.95,
+        },
+      };
+
+      expect(event.type).toBe("citation");
+      if (event.type === "citation") {
+        // TypeScript should narrow to StreamCitationEvent
+        expect(event.chunk.uri).toBe("https://example.com/source");
+        expect(event.chunk.title).toBe("Source Document");
+        expect(event.chunk.text).toBe("Relevant excerpt...");
+        expect(event.chunk.relevanceScore).toBe(0.95);
+      }
+    });
+
+    it("should narrow usage event type", () => {
+      const event: StreamEvent = {
+        type: "usage",
+        inputTokens: 150,
+        outputTokens: 200,
+        cacheReadTokens: 50,
+        cacheWriteTokens: 30,
+      };
+
+      expect(event.type).toBe("usage");
+      if (event.type === "usage") {
+        // TypeScript should narrow to StreamUsageEvent
+        expect(event.inputTokens).toBe(150);
+        expect(event.outputTokens).toBe(200);
+        expect(event.cacheReadTokens).toBe(50);
+        expect(event.cacheWriteTokens).toBe(30);
+      }
+    });
+
+    it("should narrow end event type", () => {
+      const event: StreamEvent = {
+        type: "end",
+        stopReason: "end_turn",
+      };
+
+      expect(event.type).toBe("end");
+      if (event.type === "end") {
+        // TypeScript should narrow to StreamEndEvent
+        expect(event.stopReason).toBe("end_turn");
+      }
+    });
+
+    it("should narrow error event type", () => {
+      const event: StreamEvent = {
+        type: "error",
+        code: "rate_limit",
+        message: "Rate limit exceeded",
+        retryable: true,
+      };
+
+      expect(event.type).toBe("error");
+      if (event.type === "error") {
+        // TypeScript should narrow to StreamErrorEvent
+        expect(event.code).toBe("rate_limit");
+        expect(event.message).toBe("Rate limit exceeded");
+        expect(event.retryable).toBe(true);
+      }
+    });
+
+    it("should allow exhaustive switch for all 12 event types", () => {
+      const events: StreamEvent[] = [
+        { type: "text", content: "Hello" },
+        { type: "reasoning", content: "Thinking" },
+        { type: "tool_call_start", id: "1", name: "test", index: 0 },
+        { type: "tool_call_delta", id: "1", arguments: "{}", index: 0 },
+        { type: "tool_call_end", id: "1", index: 0 },
+        { type: "mcp_tool_start", toolId: "m1", serverName: "s", toolName: "t" },
+        { type: "mcp_tool_progress", toolId: "m1", progress: 50 },
+        { type: "mcp_tool_end", toolId: "m1", result: {} },
+        { type: "citation", chunk: { uri: "http://example.com" } },
+        { type: "usage", inputTokens: 10, outputTokens: 20 },
+        { type: "end", stopReason: "end_turn" },
+        { type: "error", code: "e", message: "m", retryable: false },
+      ];
+
+      const results: string[] = [];
+
+      for (const event of events) {
+        switch (event.type) {
+          case "text":
+            results.push("text");
+            break;
+          case "reasoning":
+            results.push("reasoning");
+            break;
+          case "tool_call_start":
+            results.push("tool_call_start");
+            break;
+          case "tool_call_delta":
+            results.push("tool_call_delta");
+            break;
+          case "tool_call_end":
+            results.push("tool_call_end");
+            break;
+          case "mcp_tool_start":
+            results.push("mcp_tool_start");
+            break;
+          case "mcp_tool_progress":
+            results.push("mcp_tool_progress");
+            break;
+          case "mcp_tool_end":
+            results.push("mcp_tool_end");
+            break;
+          case "citation":
+            results.push("citation");
+            break;
+          case "usage":
+            results.push("usage");
+            break;
+          case "end":
+            results.push("end");
+            break;
+          case "error":
+            results.push("error");
+            break;
+          // Legacy types (not part of the 12 core types)
+          case "toolCall":
+          case "toolCallDelta":
+          case "done":
+            results.push(`legacy_${event.type}`);
+            break;
+        }
+      }
+
+      expect(results).toEqual([
+        "text",
+        "reasoning",
+        "tool_call_start",
+        "tool_call_delta",
+        "tool_call_end",
+        "mcp_tool_start",
+        "mcp_tool_progress",
+        "mcp_tool_end",
+        "citation",
+        "usage",
+        "end",
+        "error",
+      ]);
+    });
+
+    it("should handle all stop reasons in end event", () => {
+      const stopReasons = [
+        "end_turn",
+        "max_tokens",
+        "stop_sequence",
+        "tool_use",
+        "content_filter",
+        "error",
+      ] as const;
+
+      for (const stopReason of stopReasons) {
+        const event: StreamEvent = { type: "end", stopReason };
+        expect(event.type).toBe("end");
+        if (event.type === "end") {
+          expect(event.stopReason).toBe(stopReason);
+        }
+      }
+    });
+
+    it("should handle optional fields in events", () => {
+      // text event without index
+      const textEvent: StreamEvent = { type: "text", content: "No index" };
+      if (textEvent.type === "text") {
+        expect(textEvent.content).toBe("No index");
+        expect(textEvent.index).toBeUndefined();
+      }
+
+      // reasoning event without index
+      const reasoningEvent: StreamEvent = { type: "reasoning", content: "No index" };
+      if (reasoningEvent.type === "reasoning") {
+        expect(reasoningEvent.content).toBe("No index");
+        expect(reasoningEvent.index).toBeUndefined();
+      }
+
+      // mcp_tool_progress without message
+      const progressEvent: StreamEvent = {
+        type: "mcp_tool_progress",
+        toolId: "m1",
+        progress: 75,
+      };
+      if (progressEvent.type === "mcp_tool_progress") {
+        expect(progressEvent.progress).toBe(75);
+        expect(progressEvent.message).toBeUndefined();
+      }
+
+      // usage event without cache tokens
+      const usageEvent: StreamEvent = {
+        type: "usage",
+        inputTokens: 100,
+        outputTokens: 200,
+      };
+      if (usageEvent.type === "usage") {
+        expect(usageEvent.inputTokens).toBe(100);
+        expect(usageEvent.cacheReadTokens).toBeUndefined();
+        expect(usageEvent.cacheWriteTokens).toBeUndefined();
+      }
     });
   });
 

@@ -220,6 +220,156 @@ export const credentialNotFound = defineEvent(
 );
 
 // ============================================
+// T029 - Agent Loop Events
+// ============================================
+
+/**
+ * Agent state values for state change events.
+ */
+const AgentStateEnum = z.enum([
+  "idle",
+  "streaming",
+  "tool_executing",
+  "wait_permission",
+  "wait_input",
+  "paused",
+  "recovering",
+  "retry",
+  "terminated",
+  "shutdown",
+]);
+
+/**
+ * Termination reason values.
+ */
+const TerminationReasonEnum = z.enum([
+  "max_steps",
+  "max_tokens",
+  "max_time",
+  "natural_stop",
+  "text_only",
+  "doom_loop",
+  "llm_stuck",
+  "cancelled",
+  "error",
+]);
+
+/**
+ * Emitted when the agent loop state changes.
+ */
+export const agentStateChange = defineEvent(
+  "agent:stateChange",
+  z.object({
+    /** Previous state */
+    from: AgentStateEnum,
+    /** New state */
+    to: AgentStateEnum,
+    /** Session identifier */
+    sessionId: z.string(),
+    /** Timestamp of the transition */
+    timestamp: z.number(),
+  })
+);
+
+/**
+ * Emitted when text is streamed from the LLM.
+ */
+export const agentText = defineEvent(
+  "agent:text",
+  z.object({
+    /** Session identifier */
+    sessionId: z.string(),
+    /** The text chunk received */
+    text: z.string(),
+  })
+);
+
+/**
+ * Emitted when thinking/reasoning content is streamed from the LLM.
+ */
+export const agentThinking = defineEvent(
+  "agent:thinking",
+  z.object({
+    /** Session identifier */
+    sessionId: z.string(),
+    /** The thinking content received */
+    text: z.string(),
+  })
+);
+
+/**
+ * Emitted when a tool execution starts in the agent loop.
+ */
+export const agentToolStart = defineEvent(
+  "agent:toolStart",
+  z.object({
+    /** Session identifier */
+    sessionId: z.string(),
+    /** Unique identifier for this tool call */
+    callId: z.string(),
+    /** Name of the tool being executed */
+    name: z.string(),
+    /** Input parameters passed to the tool */
+    input: z.record(z.unknown()),
+  })
+);
+
+/**
+ * Emitted when a tool execution completes in the agent loop.
+ */
+export const agentToolEnd = defineEvent(
+  "agent:toolEnd",
+  z.object({
+    /** Session identifier */
+    sessionId: z.string(),
+    /** Unique identifier for this tool call */
+    callId: z.string(),
+    /** Name of the tool that was executed */
+    name: z.string(),
+    /** Whether the tool execution succeeded */
+    success: z.boolean(),
+    /** Duration of execution in milliseconds */
+    durationMs: z.number().optional(),
+  })
+);
+
+/**
+ * Emitted when the agent loop is terminated.
+ */
+export const agentTerminated = defineEvent(
+  "agent:terminated",
+  z.object({
+    /** Session identifier */
+    sessionId: z.string(),
+    /** Reason for termination */
+    reason: TerminationReasonEnum,
+    /** Number of steps executed */
+    stepsExecuted: z.number().optional(),
+    /** Total tokens consumed */
+    tokensConsumed: z.number().optional(),
+    /** Execution time in milliseconds */
+    elapsedMs: z.number().optional(),
+  })
+);
+
+/**
+ * Emitted when graceful shutdown completes.
+ */
+export const agentShutdownComplete = defineEvent(
+  "agent:shutdownComplete",
+  z.object({
+    /** Session identifier */
+    sessionId: z.string(),
+    /** Whether state was successfully persisted */
+    stateSaved: z.boolean(),
+    /** The signal that triggered shutdown (if any) */
+    signal: z.enum(["SIGINT", "SIGTERM", "SIGQUIT"]).optional(),
+    /** Exit code */
+    exitCode: z.number(),
+  })
+);
+
+// ============================================
 // Events Object - Unified Export
 // ============================================
 
@@ -267,6 +417,15 @@ export const Events = {
   credentialStored,
   credentialRotated,
   credentialNotFound,
+
+  // Agent loop events (T029)
+  agentStateChange,
+  agentText,
+  agentThinking,
+  agentToolStart,
+  agentToolEnd,
+  agentTerminated,
+  agentShutdownComplete,
 } as const;
 
 /** Type helper for accessing event payload types */

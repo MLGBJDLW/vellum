@@ -44,7 +44,10 @@ describe("withRetry", () => {
 
     const fn = vi.fn().mockRejectedValue(recoverableError);
 
-    const promise = withRetry(fn, { maxRetries: 2, baseDelay: 100 });
+    let caughtError: Error | undefined;
+    const promise = withRetry(fn, { maxRetries: 2, baseDelay: 100 }).catch((err) => {
+      caughtError = err;
+    });
 
     // First attempt
     await vi.advanceTimersByTimeAsync(0);
@@ -53,7 +56,9 @@ describe("withRetry", () => {
     // Second retry after 200ms
     await vi.advanceTimersByTimeAsync(200);
 
-    await expect(promise).rejects.toThrow(recoverableError);
+    await promise;
+
+    expect(caughtError).toBe(recoverableError);
     expect(fn).toHaveBeenCalledTimes(3); // 1 initial + 2 retries
   });
 
@@ -63,11 +68,14 @@ describe("withRetry", () => {
     const fn = vi.fn().mockRejectedValue(recoverableError);
     const onRetry = vi.fn();
 
+    let caughtError: Error | undefined;
     const promise = withRetry(fn, {
       maxRetries: 3,
       baseDelay: 100,
       backoffMultiplier: 2,
       onRetry,
+    }).catch((err) => {
+      caughtError = err;
     });
 
     // Advance through all retries
@@ -76,7 +84,9 @@ describe("withRetry", () => {
     await vi.advanceTimersByTimeAsync(200); // Second retry: 200ms
     await vi.advanceTimersByTimeAsync(400); // Third retry: 400ms
 
-    await expect(promise).rejects.toThrow(recoverableError);
+    await promise;
+
+    expect(caughtError).toBe(recoverableError);
 
     // Check exponential delays
     expect(onRetry).toHaveBeenNthCalledWith(1, recoverableError, 1, 100);
@@ -156,14 +166,19 @@ describe("withRetry", () => {
 
     const fn = vi.fn().mockRejectedValue(recoverableError);
 
-    const promise = withRetry(fn, { maxRetries: 2, baseDelay: 100 });
+    let caughtError: Error | undefined;
+    const promise = withRetry(fn, { maxRetries: 2, baseDelay: 100 }).catch((err) => {
+      caughtError = err;
+    });
 
     // Advance through all retries
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(100);
     await vi.advanceTimersByTimeAsync(200);
 
-    await expect(promise).rejects.toThrow(recoverableError);
+    await promise;
+
+    expect(caughtError).toBe(recoverableError);
     expect(fn).toHaveBeenCalledTimes(3); // 1 initial + 2 retries
   });
 
@@ -242,12 +257,17 @@ describe("withTimeout", () => {
         () => new Promise((resolve) => setTimeout(() => resolve("success"), 2000))
       );
 
-    const promise = withTimeout(fn, 1000);
+    let caughtError: Error | undefined;
+    const promise = withTimeout(fn, 1000).catch((err) => {
+      caughtError = err;
+    });
 
     // Advance to timeout
     await vi.advanceTimersByTimeAsync(1000);
 
-    await expect(promise).rejects.toThrow("Operation timed out after 1000ms");
+    await promise;
+
+    expect(caughtError?.message).toContain("Operation timed out after 1000ms");
   });
 
   it("throws VellumError with correct code", async () => {
@@ -257,11 +277,16 @@ describe("withTimeout", () => {
         () => new Promise((resolve) => setTimeout(() => resolve("success"), 2000))
       );
 
-    const promise = withTimeout(fn, 500);
+    let caughtError: VellumError | undefined;
+    const promise = withTimeout(fn, 500).catch((err) => {
+      caughtError = err;
+    });
 
     await vi.advanceTimersByTimeAsync(500);
 
-    await expect(promise).rejects.toMatchObject({
+    await promise;
+
+    expect(caughtError).toMatchObject({
       name: "VellumError",
       code: ErrorCode.TOOL_TIMEOUT,
       message: "Operation timed out after 500ms",
@@ -275,17 +300,17 @@ describe("withTimeout", () => {
         () => new Promise((resolve) => setTimeout(() => resolve("success"), 2000))
       );
 
-    const promise = withTimeout(fn, 750);
+    let caughtError: VellumError | undefined;
+    const promise = withTimeout(fn, 750).catch((err) => {
+      caughtError = err;
+    });
 
     await vi.advanceTimersByTimeAsync(750);
 
-    try {
-      await promise;
-      expect.fail("Should have thrown");
-    } catch (error) {
-      expect(error).toBeInstanceOf(VellumError);
-      expect((error as VellumError).context).toEqual({ timeout: 750 });
-    }
+    await promise;
+
+    expect(caughtError).toBeInstanceOf(VellumError);
+    expect(caughtError!.context).toEqual({ timeout: 750 });
   });
 
   it("propagates errors from function", async () => {
@@ -317,14 +342,12 @@ describe("withTimeout", () => {
     const customError = new Error("Function failed");
     const fn = vi.fn().mockRejectedValue(customError);
 
-    const promise = withTimeout(fn, 1000);
+    const promise = withTimeout(fn, 1000).catch(() => {
+      // Expected - error is handled
+    });
     await vi.advanceTimersByTimeAsync(0);
 
-    try {
-      await promise;
-    } catch {
-      // Expected
-    }
+    await promise;
 
     expect(clearTimeoutSpy).toHaveBeenCalled();
     clearTimeoutSpy.mockRestore();
@@ -337,17 +360,17 @@ describe("withTimeout", () => {
         () => new Promise((resolve) => setTimeout(() => resolve("success"), 2000))
       );
 
-    const promise = withTimeout(fn, 500);
+    let caughtError: VellumError | undefined;
+    const promise = withTimeout(fn, 500).catch((err) => {
+      caughtError = err;
+    });
 
     await vi.advanceTimersByTimeAsync(500);
 
-    try {
-      await promise;
-      expect.fail("Should have thrown");
-    } catch (error) {
-      expect(error).toBeInstanceOf(VellumError);
-      expect((error as VellumError).isRetryable).toBe(true);
-      expect((error as VellumError).severity).toBe(ErrorSeverity.RECOVERABLE);
-    }
+    await promise;
+
+    expect(caughtError).toBeInstanceOf(VellumError);
+    expect(caughtError!.isRetryable).toBe(true);
+    expect(caughtError!.severity).toBe(ErrorSeverity.RECOVERABLE);
   });
 });

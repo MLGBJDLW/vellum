@@ -203,7 +203,16 @@ export class InstrumentedProvider
           for await (const event of self.wrapped.stream(params)) {
             // Capture usage from usage events
             if (event.type === "usage") {
-              usage = event.usage;
+              usage = {
+                inputTokens: event.inputTokens,
+                outputTokens: event.outputTokens,
+                ...(event.cacheReadTokens !== undefined && {
+                  cacheReadTokens: event.cacheReadTokens,
+                }),
+                ...(event.cacheWriteTokens !== undefined && {
+                  cacheWriteTokens: event.cacheWriteTokens,
+                }),
+              };
             }
 
             // Capture errors from error events

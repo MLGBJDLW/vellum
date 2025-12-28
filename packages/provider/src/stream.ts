@@ -12,6 +12,7 @@ import { ProviderError } from "./errors.js";
 import type {
   StopReason,
   StreamDoneEvent,
+  StreamEndEvent,
   StreamEvent,
   StreamReasoningEvent,
   StreamTextEvent,
@@ -78,7 +79,7 @@ export interface ProviderUsage {
  * @example
  * ```typescript
  * const event = normalizeTextDelta({ type: 'text_delta', text: 'Hello' });
- * // { type: 'text', text: 'Hello' }
+ * // { type: 'text', content: 'Hello' }
  * ```
  */
 export function normalizeTextDelta(delta: ProviderTextDelta): StreamTextEvent | undefined {
@@ -102,7 +103,7 @@ export function normalizeTextDelta(delta: ProviderTextDelta): StreamTextEvent | 
   }
 
   if (text !== undefined && text.length > 0) {
-    return { type: "text", text };
+    return { type: "text", content: text };
   }
   return undefined;
 }
@@ -127,7 +128,7 @@ export function normalizeReasoningDelta(
   }
 
   if (text !== undefined && text.length > 0) {
-    return { type: "reasoning", text };
+    return { type: "reasoning", content: text };
   }
   return undefined;
 }
@@ -172,15 +173,13 @@ export function normalizeToolCall(delta: ProviderToolCallDelta): StreamToolCallE
  * @returns Normalized StreamUsageEvent
  */
 export function normalizeUsage(usage: ProviderUsage): StreamUsageEvent {
-  const tokenUsage: TokenUsage = {
+  return {
+    type: "usage",
     inputTokens: usage.input_tokens ?? usage.prompt_tokens ?? 0,
     outputTokens: usage.output_tokens ?? usage.completion_tokens ?? 0,
-    thinkingTokens: usage.thinking_tokens,
     cacheReadTokens: usage.cache_read_input_tokens,
     cacheWriteTokens: usage.cache_creation_input_tokens,
   };
-
-  return { type: "usage", usage: tokenUsage };
 }
 
 /**
@@ -188,9 +187,20 @@ export function normalizeUsage(usage: ProviderUsage): StreamUsageEvent {
  *
  * @param stopReason - The reason generation stopped
  * @returns StreamDoneEvent
+ * @deprecated Use createEndEvent instead
  */
 export function createDoneEvent(stopReason: StopReason): StreamDoneEvent {
   return { type: "done", stopReason };
+}
+
+/**
+ * Create an end event with the given stop reason
+ *
+ * @param stopReason - The reason generation stopped
+ * @returns StreamEndEvent
+ */
+export function createEndEvent(stopReason: StopReason): StreamEndEvent {
+  return { type: "end", stopReason };
 }
 
 // =============================================================================
@@ -199,11 +209,46 @@ export function createDoneEvent(stopReason: StopReason): StreamDoneEvent {
 
 /**
  * Accumulator for building complete responses from stream chunks
+ *
+ * @deprecated Use {@link StreamCollector} from `@vellum/core` instead.
+ * StreamCollector provides:
+ * - Action-based processing (CollectorAction discriminated union)
+ * - Part-based message output (AssistantMessage with MessagePart[])
+ * - Better type safety with Result<T, E> pattern
+ * - Support for citations and grounding chunks
+ *
+ * @example Migration
+ * ```typescript
+ * // Before (deprecated)
+ * import { TextAccumulator } from '@vellum/provider';
+ * const accumulator = new TextAccumulator();
+ * for await (const event of stream) {
+ *   accumulator.process(event);
+ * }
+ * const text = accumulator.text;
+ *
+ * // After (recommended)
+ * import { StreamCollector } from '@vellum/core';
+ * const collector = new StreamCollector();
+ * for await (const event of stream) {
+ *   const action = collector.processEvent(event);
+ *   // Handle action (emit_text, tool_call_started, etc.)
+ * }
+ * const result = collector.build();
+ * if (result.ok) {
+ *   const message = result.value; // AssistantMessage with parts[]
+ * }
+ * ```
+ *
+ * @see {@link https://github.com/vellum-ai/vellum/blob/main/packages/core/MIGRATION.md#textaccumulator--streamcollector | Migration Guide}
  */
 export class TextAccumulator {
   private textChunks: string[] = [];
   private reasoningChunks: string[] = [];
-  private _usage: TokenUsage | undefined;
+  private _inputTokens = 0;
+  private _outputTokens = 0;
+  private _cacheReadTokens: number | undefined;
+  private _cacheWriteTokens: number | undefined;
   private _stopReason: StopReason = "end_turn";
   private toolCallBuilders: Map<string, { name: string; inputChunks: string[] }> = new Map();
 
@@ -215,20 +260,45 @@ export class TextAccumulator {
   process(event: StreamEvent): void {
     switch (event.type) {
       case "text":
-        this.textChunks.push(event.text);
+        this.textChunks.push(event.content);
         break;
       case "reasoning":
-        this.reasoningChunks.push(event.text);
+        this.reasoningChunks.push(event.content);
         break;
+      // New format tool events
+      case "tool_call_start":
+        this.toolCallBuilders.set(event.id, { name: event.name, inputChunks: [] });
+        break;
+      case "tool_call_delta":
+        this.processToolCallDelta(event.id, undefined, event.arguments);
+        break;
+      case "tool_call_end":
+        // End event, tool call is complete
+        break;
+      // Legacy format tool events
       case "toolCallDelta":
         this.processToolCallDelta(event.id, event.name, event.inputDelta);
         break;
       case "toolCall":
         // Complete tool call, already processed
         break;
-      case "usage":
-        this._usage = event.usage;
+      // MCP events (no accumulation needed)
+      case "mcp_tool_start":
+      case "mcp_tool_progress":
+      case "mcp_tool_end":
         break;
+      // Citation events (no accumulation needed)
+      case "citation":
+        break;
+      // Usage events
+      case "usage":
+        this._inputTokens = event.inputTokens;
+        this._outputTokens = event.outputTokens;
+        this._cacheReadTokens = event.cacheReadTokens;
+        this._cacheWriteTokens = event.cacheWriteTokens;
+        break;
+      // Completion events
+      case "end":
       case "done":
         this._stopReason = event.stopReason;
         break;
@@ -268,7 +338,15 @@ export class TextAccumulator {
    * Get token usage if available
    */
   get usage(): TokenUsage | undefined {
-    return this._usage;
+    if (this._inputTokens > 0 || this._outputTokens > 0) {
+      return {
+        inputTokens: this._inputTokens,
+        outputTokens: this._outputTokens,
+        ...(this._cacheReadTokens !== undefined && { cacheReadTokens: this._cacheReadTokens }),
+        ...(this._cacheWriteTokens !== undefined && { cacheWriteTokens: this._cacheWriteTokens }),
+      };
+    }
+    return undefined;
   }
 
   /**
@@ -302,7 +380,10 @@ export class TextAccumulator {
   reset(): void {
     this.textChunks = [];
     this.reasoningChunks = [];
-    this._usage = undefined;
+    this._inputTokens = 0;
+    this._outputTokens = 0;
+    this._cacheReadTokens = undefined;
+    this._cacheWriteTokens = undefined;
     this._stopReason = "end_turn";
     this.toolCallBuilders.clear();
   }
@@ -539,3 +620,216 @@ export async function consumeStream(source: AsyncIterable<StreamEvent>): Promise
     toolCalls: accumulator.toolCalls,
   };
 }
+
+// =============================================================================
+// T029: StreamProcessor Integration Utilities
+// =============================================================================
+
+/**
+ * Result type for StreamProcessor compatibility.
+ * Mirrors @vellum/core Result<T, E> for type compatibility.
+ */
+type StreamResult<T, E> = { ok: true; value: T } | { ok: false; error: E };
+
+/**
+ * Configuration for creating a StreamProcessor-compatible stream
+ */
+export interface StreamProcessorOptions {
+  /** Timeout in milliseconds for inactivity */
+  timeoutMs?: number;
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal;
+}
+
+/**
+ * Wraps a raw provider stream into a Result<StreamEvent, Error> stream
+ * compatible with StreamProcessor from @vellum/core.
+ *
+ * This bridge function allows existing provider streams to be used with
+ * the unified StreamProcessor pipeline.
+ *
+ * @param source - Raw async iterable of StreamEvents from a provider
+ * @param options - Optional timeout and abort configuration
+ * @returns AsyncGenerator yielding Result<StreamEvent, Error>
+ *
+ * @example
+ * ```typescript
+ * import { StreamProcessor } from '@vellum/core';
+ * import { wrapStreamForProcessor, streamWithOptions } from '@vellum/provider';
+ *
+ * const provider = new AnthropicProvider({ apiKey });
+ * const rawStream = provider.stream(params);
+ *
+ * // Apply timeout and abort, then wrap for StreamProcessor
+ * const wrapped = streamWithOptions(rawStream, { timeoutMs: 30000, signal });
+ * const resultStream = wrapStreamForProcessor(wrapped);
+ *
+ * const processor = new StreamProcessor();
+ * const result = await processor.processStream(resultStream);
+ * ```
+ */
+export async function* wrapStreamForProcessor(
+  source: AsyncIterable<StreamEvent>,
+  options?: StreamProcessorOptions
+): AsyncGenerator<StreamResult<StreamEvent, Error>, void, undefined> {
+  // Apply options if provided
+  let stream: AsyncIterable<StreamEvent> = source;
+
+  if (options?.signal || options?.timeoutMs) {
+    stream = streamWithOptions(source, {
+      timeoutMs: options.timeoutMs,
+      signal: options.signal,
+    });
+  }
+
+  try {
+    for await (const event of stream) {
+      yield { ok: true as const, value: event };
+    }
+  } catch (error) {
+    yield {
+      ok: false as const,
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+}
+
+/**
+ * Creates a normalized StreamEvent from provider-specific formats.
+ *
+ * Use this when you have raw provider data and need to create
+ * a standard StreamEvent for processing.
+ *
+ * @param type - The event type
+ * @param data - Provider-specific data
+ * @returns Normalized StreamEvent
+ *
+ * @example
+ * ```typescript
+ * // From Anthropic format
+ * const event = createStreamEvent('text', { type: 'text_delta', text: 'Hello' });
+ *
+ * // From OpenAI format
+ * const event = createStreamEvent('text', { delta: { content: 'Hello' } });
+ * ```
+ */
+export function createStreamEvent(
+  type: "text",
+  data: ProviderTextDelta
+): StreamTextEvent | undefined;
+export function createStreamEvent(
+  type: "reasoning",
+  data: ProviderReasoningDelta
+): StreamReasoningEvent | undefined;
+export function createStreamEvent(
+  type: "toolCall",
+  data: ProviderToolCallDelta
+): StreamToolCallEvent | undefined;
+export function createStreamEvent(
+  type: "usage",
+  data: ProviderUsage
+): StreamUsageEvent;
+export function createStreamEvent(
+  type: "end",
+  data: { stopReason: StopReason }
+): StreamEndEvent;
+export function createStreamEvent(
+  type: "text" | "reasoning" | "toolCall" | "usage" | "end",
+  data: unknown
+):
+  | StreamTextEvent
+  | StreamReasoningEvent
+  | StreamToolCallEvent
+  | StreamUsageEvent
+  | StreamEndEvent
+  | undefined {
+  switch (type) {
+    case "text":
+      return normalizeTextDelta(data as ProviderTextDelta);
+    case "reasoning":
+      return normalizeReasoningDelta(data as ProviderReasoningDelta);
+    case "toolCall":
+      return normalizeToolCall(data as ProviderToolCallDelta);
+    case "usage":
+      return normalizeUsage(data as ProviderUsage);
+    case "end":
+      return createEndEvent((data as { stopReason: StopReason }).stopReason);
+  }
+}
+
+/**
+ * Maps a raw provider stream through an event transformer.
+ *
+ * Useful for normalizing provider-specific events before processing.
+ *
+ * @param source - Raw provider stream
+ * @param mapper - Function to transform each event
+ * @returns Transformed stream
+ *
+ * @example
+ * ```typescript
+ * const normalized = mapStreamEvents(rawStream, (event) => {
+ *   // Transform provider-specific event to StreamEvent
+ *   if (event.type === 'content_block_delta') {
+ *     return createStreamEvent('text', event);
+ *   }
+ *   return event;
+ * });
+ * ```
+ */
+export async function* mapStreamEvents<T, U>(
+  source: AsyncIterable<T>,
+  mapper: (event: T) => U | undefined
+): AsyncGenerator<U, void, undefined> {
+  for await (const event of source) {
+    const mapped = mapper(event);
+    if (mapped !== undefined) {
+      yield mapped;
+    }
+  }
+}
+
+/**
+ * Filters stream events by predicate.
+ *
+ * @param source - Source stream
+ * @param predicate - Filter function
+ * @returns Filtered stream
+ */
+export async function* filterStreamEvents<T>(
+  source: AsyncIterable<T>,
+  predicate: (event: T) => boolean
+): AsyncGenerator<T, void, undefined> {
+  for await (const event of source) {
+    if (predicate(event)) {
+      yield event;
+    }
+  }
+}
+
+/**
+ * Taps into a stream for side effects without modifying events.
+ *
+ * Useful for logging, metrics, or debugging.
+ *
+ * @param source - Source stream
+ * @param handler - Side effect handler
+ * @returns Original stream unchanged
+ *
+ * @example
+ * ```typescript
+ * const logged = tapStreamEvents(stream, (event) => {
+ *   console.log('Event:', event.type);
+ * });
+ * ```
+ */
+export async function* tapStreamEvents<T>(
+  source: AsyncIterable<T>,
+  handler: (event: T) => void | Promise<void>
+): AsyncGenerator<T, void, undefined> {
+  for await (const event of source) {
+    await handler(event);
+    yield event;
+  }
+}
+

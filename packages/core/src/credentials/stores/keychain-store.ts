@@ -175,7 +175,7 @@ export class KeychainStore implements CredentialStore {
 
     try {
       // Dynamic import to handle environments where keytar isn't available
-      // @ts-expect-error - keytar may not be installed, this is handled at runtime
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const keytar = (await import("keytar")) as KeytarModule & { default?: KeytarModule };
       this.keytarModule = keytar.default ?? keytar;
       return Ok(this.keytarModule);

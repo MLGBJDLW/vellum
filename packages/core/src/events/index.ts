@@ -28,4 +28,12 @@ export {
   toolEnd,
   toolStart,
   toolStateChange,
+  // Agent loop events (T029)
+  agentStateChange,
+  agentText,
+  agentThinking,
+  agentToolStart,
+  agentToolEnd,
+  agentTerminated,
+  agentShutdownComplete,
 } from "./definitions.js";

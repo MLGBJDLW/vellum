@@ -27,16 +27,20 @@ import type {
   CompletionResult,
   CredentialValidationResult,
   LanguageModel,
+  LegacyStreamToolCallDeltaEvent,
   ModelInfo,
   Provider,
   ProviderCredential,
   ProviderOptions,
   StopReason,
   StreamDoneEvent,
+  StreamEndEvent,
   StreamEvent,
   StreamTextEvent,
   StreamToolCallDeltaEvent,
+  StreamToolCallEndEvent,
   StreamToolCallEvent,
+  StreamToolCallStartEvent,
   StreamUsageEvent,
   TokenUsage,
   ToolCall,
@@ -664,8 +668,10 @@ export class GoogleProvider implements Provider {
     stream: AsyncIterable<GenerateContentResponse>
   ): AsyncIterable<StreamEvent> {
     // Track state for tool calls
-    let usage: TokenUsage | null = null;
+    let inputTokens = 0;
+    let outputTokens = 0;
     let stopReason: StopReason = "end_turn";
+    let toolCallIndex = 0;
 
     for await (const chunk of stream) {
       const candidate = chunk.candidates?.[0];
@@ -676,24 +682,51 @@ export class GoogleProvider implements Provider {
           if ("text" in part && part.text) {
             const textEvent: StreamTextEvent = {
               type: "text",
-              text: part.text,
+              content: part.text,
             };
             yield textEvent;
           } else if ("functionCall" in part && part.functionCall) {
             const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             const name = part.functionCall.name ?? "";
             const args = part.functionCall.args ?? {};
+            const currentIndex = toolCallIndex++;
 
-            // Emit tool call delta for streaming
-            const deltaEvent: StreamToolCallDeltaEvent = {
+            // Emit new format tool_call_start event
+            const startEvent: StreamToolCallStartEvent = {
+              type: "tool_call_start",
+              id: callId,
+              name,
+              index: currentIndex,
+            };
+            yield startEvent;
+
+            // Emit new format tool_call_delta event
+            const newDeltaEvent: StreamToolCallDeltaEvent = {
+              type: "tool_call_delta",
+              id: callId,
+              arguments: JSON.stringify(args),
+              index: currentIndex,
+            };
+            yield newDeltaEvent;
+
+            // Also emit legacy toolCallDelta for backward compatibility
+            const legacyDeltaEvent: LegacyStreamToolCallDeltaEvent = {
               type: "toolCallDelta",
               id: callId,
               name,
               inputDelta: JSON.stringify(args),
             };
-            yield deltaEvent;
+            yield legacyDeltaEvent;
 
-            // Emit complete tool call
+            // Emit new format tool_call_end event
+            const endEvent: StreamToolCallEndEvent = {
+              type: "tool_call_end",
+              id: callId,
+              index: currentIndex,
+            };
+            yield endEvent;
+
+            // Also emit legacy toolCall for backward compatibility
             const toolCallEvent: StreamToolCallEvent = {
               type: "toolCall",
               id: callId,
@@ -712,26 +745,24 @@ export class GoogleProvider implements Provider {
 
       // Track usage metadata
       if (chunk.usageMetadata) {
-        usage = {
-          inputTokens: chunk.usageMetadata.promptTokenCount ?? 0,
-          outputTokens: chunk.usageMetadata.candidatesTokenCount ?? 0,
-        };
-
-        // Add thinking tokens if present
-        if ("thoughtsTokenCount" in chunk.usageMetadata) {
-          usage.thinkingTokens = (
-            chunk.usageMetadata as { thoughtsTokenCount?: number }
-          ).thoughtsTokenCount;
-        }
+        inputTokens = chunk.usageMetadata.promptTokenCount ?? 0;
+        outputTokens = chunk.usageMetadata.candidatesTokenCount ?? 0;
       }
     }
 
-    // Emit final events
-    if (usage) {
-      const usageEvent: StreamUsageEvent = { type: "usage", usage };
-      yield usageEvent;
-    }
+    // Emit usage event with new flat structure
+    const usageEvent: StreamUsageEvent = {
+      type: "usage",
+      inputTokens,
+      outputTokens,
+    };
+    yield usageEvent;
 
+    // Emit new end event
+    const endEvent: StreamEndEvent = { type: "end", stopReason };
+    yield endEvent;
+
+    // Also emit legacy done event for backward compatibility
     const doneEvent: StreamDoneEvent = { type: "done", stopReason };
     yield doneEvent;
   }

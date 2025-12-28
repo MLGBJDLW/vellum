@@ -9,6 +9,45 @@ import {
 } from "./commands/credentials.js";
 import { version } from "./version.js";
 
+// ============================================
+// Graceful Shutdown Setup (T030)
+// ============================================
+
+/**
+ * Global shutdown handler reference for cleanup.
+ * Set by the chat command when an agent loop is active.
+ */
+let shutdownCleanup: (() => void) | null = null;
+
+/**
+ * Handle process signals for graceful shutdown.
+ */
+function setupGlobalShutdownHandlers(): void {
+  const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
+
+  for (const signal of signals) {
+    process.on(signal, () => {
+      console.log(`\n[CLI] Received ${signal}, shutting down gracefully...`);
+      if (shutdownCleanup) {
+        shutdownCleanup();
+      }
+      // Give time for cleanup, then exit
+      setTimeout(() => process.exit(0), 100);
+    });
+  }
+}
+
+// Setup handlers early
+setupGlobalShutdownHandlers();
+
+/**
+ * Sets the shutdown cleanup function.
+ * Called by App component when agent loop is created.
+ */
+export function setShutdownCleanup(cleanup: (() => void) | null): void {
+  shutdownCleanup = cleanup;
+}
+
 const program = new Command();
 
 program.name("vellum").description("Next-generation AI coding agent").version(version);

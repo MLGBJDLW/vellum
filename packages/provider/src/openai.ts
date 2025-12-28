@@ -29,16 +29,20 @@ import type {
   CompletionResult,
   CredentialValidationResult,
   LanguageModel,
+  LegacyStreamToolCallDeltaEvent,
   ModelInfo,
   ProviderCredential,
   ProviderOptions,
   StopReason,
   StreamDoneEvent,
+  StreamEndEvent,
   StreamEvent,
   StreamReasoningEvent,
   StreamTextEvent,
   StreamToolCallDeltaEvent,
+  StreamToolCallEndEvent,
   StreamToolCallEvent,
+  StreamToolCallStartEvent,
   StreamUsageEvent,
   TokenUsage,
   ToolCall,
@@ -905,10 +909,13 @@ export class OpenAIProvider {
     stream: AsyncIterable<ChatCompletionChunk>
   ): AsyncIterable<StreamEvent> {
     // Track state for tool calls
-    const toolCallState: Map<number, { id: string; name: string; argumentsJson: string }> =
-      new Map();
+    const toolCallState: Map<
+      number,
+      { id: string; name: string; argumentsJson: string; started: boolean }
+    > = new Map();
 
-    let usage: TokenUsage | null = null;
+    let inputTokens = 0;
+    let outputTokens = 0;
     let stopReason: StopReason = "end_turn";
 
     for await (const chunk of stream) {
@@ -921,7 +928,7 @@ export class OpenAIProvider {
         if (delta.content) {
           const textEvent: StreamTextEvent = {
             type: "text",
-            text: delta.content,
+            content: delta.content,
           };
           yield textEvent;
         }
@@ -933,11 +940,14 @@ export class OpenAIProvider {
 
             // Initialize or get existing state
             let state = toolCallState.get(index);
+            const isNewToolCall = !state;
+
             if (!state) {
               state = {
                 id: toolCallDelta.id ?? "",
                 name: toolCallDelta.function?.name ?? "",
                 argumentsJson: "",
+                started: false,
               };
               toolCallState.set(index, state);
             }
@@ -949,17 +959,39 @@ export class OpenAIProvider {
             if (toolCallDelta.function?.name) {
               state.name = toolCallDelta.function.name;
             }
+
+            // Emit start event on first encounter
+            if (isNewToolCall && !state.started) {
+              state.started = true;
+              const startEvent: StreamToolCallStartEvent = {
+                type: "tool_call_start",
+                id: state.id,
+                name: state.name,
+                index,
+              };
+              yield startEvent;
+            }
+
             if (toolCallDelta.function?.arguments) {
               state.argumentsJson += toolCallDelta.function.arguments;
 
-              // Emit tool call delta
+              // Emit new tool_call_delta event
               const deltaEvent: StreamToolCallDeltaEvent = {
+                type: "tool_call_delta",
+                id: state.id,
+                arguments: toolCallDelta.function.arguments,
+                index,
+              };
+              yield deltaEvent;
+
+              // Also emit legacy toolCallDelta for backward compatibility
+              const legacyDeltaEvent: LegacyStreamToolCallDeltaEvent = {
                 type: "toolCallDelta",
                 id: state.id,
                 name: state.name || undefined,
                 inputDelta: toolCallDelta.function.arguments,
               };
-              yield deltaEvent;
+              yield legacyDeltaEvent;
             }
           }
         }
@@ -969,7 +1001,16 @@ export class OpenAIProvider {
           stopReason = this.mapStopReason(choice.finish_reason);
 
           // Emit complete tool calls when finished
-          for (const [, state] of toolCallState) {
+          for (const [index, state] of toolCallState) {
+            // Emit tool_call_end event
+            const endEvent: StreamToolCallEndEvent = {
+              type: "tool_call_end",
+              id: state.id,
+              index,
+            };
+            yield endEvent;
+
+            // Also emit legacy toolCall for backward compatibility
             try {
               const input = state.argumentsJson ? JSON.parse(state.argumentsJson) : {};
               const toolCallEvent: StreamToolCallEvent = {
@@ -996,19 +1037,24 @@ export class OpenAIProvider {
 
       // Track usage from final chunk
       if (chunk.usage) {
-        usage = {
-          inputTokens: chunk.usage.prompt_tokens,
-          outputTokens: chunk.usage.completion_tokens,
-        };
+        inputTokens = chunk.usage.prompt_tokens;
+        outputTokens = chunk.usage.completion_tokens;
       }
     }
 
-    // Emit final events
-    if (usage) {
-      const usageEvent: StreamUsageEvent = { type: "usage", usage };
-      yield usageEvent;
-    }
+    // Emit usage event with new flat structure
+    const usageEvent: StreamUsageEvent = {
+      type: "usage",
+      inputTokens,
+      outputTokens,
+    };
+    yield usageEvent;
 
+    // Emit new end event
+    const endEvent: StreamEndEvent = { type: "end", stopReason };
+    yield endEvent;
+
+    // Also emit legacy done event for backward compatibility
     const doneEvent: StreamDoneEvent = { type: "done", stopReason };
     yield doneEvent;
   }
@@ -1026,7 +1072,7 @@ export class OpenAIProvider {
       if (result.content) {
         const textEvent: StreamTextEvent = {
           type: "text",
-          text: result.content,
+          content: result.content,
         };
         yield textEvent;
       }
@@ -1035,14 +1081,33 @@ export class OpenAIProvider {
       if (result.thinking) {
         const reasoningEvent: StreamReasoningEvent = {
           type: "reasoning",
-          text: result.thinking,
+          content: result.thinking,
         };
         yield reasoningEvent;
       }
 
       // Yield tool calls if present
       if (result.toolCalls) {
-        for (const toolCall of result.toolCalls) {
+        for (let index = 0; index < result.toolCalls.length; index++) {
+          const toolCall = result.toolCalls[index]!;
+
+          // Emit new format events
+          const startEvent: StreamToolCallStartEvent = {
+            type: "tool_call_start",
+            id: toolCall.id,
+            name: toolCall.name,
+            index,
+          };
+          yield startEvent;
+
+          const endEvent: StreamToolCallEndEvent = {
+            type: "tool_call_end",
+            id: toolCall.id,
+            index,
+          };
+          yield endEvent;
+
+          // Also emit legacy toolCall for backward compatibility
           const toolCallEvent: StreamToolCallEvent = {
             type: "toolCall",
             id: toolCall.id,
@@ -1053,14 +1118,28 @@ export class OpenAIProvider {
         }
       }
 
-      // Yield usage
+      // Yield usage with new flat structure
       const usageEvent: StreamUsageEvent = {
         type: "usage",
-        usage: result.usage,
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        ...(result.usage.cacheReadTokens !== undefined && {
+          cacheReadTokens: result.usage.cacheReadTokens,
+        }),
+        ...(result.usage.cacheWriteTokens !== undefined && {
+          cacheWriteTokens: result.usage.cacheWriteTokens,
+        }),
       };
       yield usageEvent;
 
-      // Yield done
+      // Emit new end event
+      const streamEndEvent: StreamEndEvent = {
+        type: "end",
+        stopReason: result.stopReason,
+      };
+      yield streamEndEvent;
+
+      // Also emit legacy done event for backward compatibility
       const doneEvent: StreamDoneEvent = {
         type: "done",
         stopReason: result.stopReason,

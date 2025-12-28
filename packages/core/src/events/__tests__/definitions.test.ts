@@ -445,6 +445,14 @@ describe("Event Definitions", () => {
         "credentialStored",
         "credentialRotated",
         "credentialNotFound",
+        // T029 - Agent loop events
+        "agentStateChange",
+        "agentText",
+        "agentThinking",
+        "agentToolStart",
+        "agentToolEnd",
+        "agentTerminated",
+        "agentShutdownComplete",
       ];
 
       for (const eventName of expectedEvents) {
@@ -452,8 +460,8 @@ describe("Event Definitions", () => {
       }
     });
 
-    it("should have exactly 14 events", () => {
-      expect(Object.keys(Events)).toHaveLength(14);
+    it("should have exactly 21 events", () => {
+      expect(Object.keys(Events)).toHaveLength(21);
     });
   });
 });

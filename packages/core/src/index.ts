@@ -14,7 +14,89 @@
 // ============================================
 // Legacy Exports (Agent/Loop)
 // ============================================
-export { Agent } from "./agent.js";
+export { Agent, type ExtendedAgentOptions } from "./agent.js";
+
+// ============================================
+// Agent Module (T026-T031)
+// ============================================
+export {
+  // Core Loop
+  AgentLoop,
+  type AgentLoopConfig,
+  type AgentLoopEvents,
+  // State Machine
+  AgentStateSchema,
+  type AgentState,
+  AGENT_STATES,
+  type StateContext,
+  type StateTransitionEvent,
+  VALID_TRANSITIONS,
+  createStateContext,
+  isValidTransition,
+  // Modes
+  AgentModeSchema,
+  type AgentMode,
+  AGENT_MODES,
+  type ModeConfig,
+  MODE_CONFIGS,
+  type ToolPermissions,
+  canEdit,
+  getBashPermission,
+  getModeConfig,
+  getTemperature,
+  // Cancellation
+  CancelledError,
+  CancellationToken,
+  type CancelCallback,
+  type PendingTool,
+  // Termination
+  TerminationChecker,
+  TerminationReason,
+  type TerminationContext,
+  type TerminationLimits,
+  type TerminationMetadata,
+  type TerminationResult,
+  type TerminationTokenUsage,
+  type ToolCallInfo,
+  DEFAULT_TERMINATION_LIMITS,
+  createTerminationContext,
+  // Loop Detection
+  detectLoop,
+  detectLoopAsync,
+  createLoopDetectionContext,
+  getLoopWarningLevel,
+  type LoopType,
+  type LoopAction,
+  type CombinedLoopResult,
+  type LoopDetectionConfig,
+  type LoopDetectionContext,
+  DEFAULT_LOOP_DETECTION_CONFIG,
+  // State Persistence
+  FileStatePersister,
+  MemoryStatePersister,
+  createSnapshot,
+  isValidSnapshot,
+  SNAPSHOT_VERSION,
+  DEFAULT_SESSION_DIR,
+  type SessionSnapshot,
+  type SnapshotContext,
+  type StatePersister,
+  type FileStatePersisterOptions,
+  // Graceful Shutdown
+  GracefulShutdownHandler,
+  registerShutdownHandler,
+  type ShutdownSignal,
+  type ShutdownResult,
+  type GracefulShutdownHandlerOptions,
+  // System Prompt
+  SystemPromptConfigSchema,
+  type SystemPromptConfig,
+  type SystemPromptResult,
+  buildSystemPrompt,
+  buildModePrompt,
+  buildEnvironmentSection,
+} from "./agent/index.js";
+
 // ============================================
 // Builtin Tools (T117)
 // ============================================
@@ -95,6 +177,10 @@ export {
 export * from "./config/logging.config.js";
 export { ContextManager } from "./context.js";
 // ============================================
+// Context Management (T401-T402)
+// ============================================
+export * from "./context/index.js";
+// ============================================
 // Credentials (T001-T003)
 // ============================================
 export * from "./credentials/index.js";
@@ -127,7 +213,8 @@ export {
   type LogLevel,
   type LogTransport,
 } from "./logger/index.js";
-export { AgentLoop } from "./loop.js";
+// Note: AgentLoop is now exported from ./agent/index.js above
+// The ./loop.js re-export is deprecated but kept for backward compatibility
 // ============================================
 // Metrics
 // ============================================
@@ -144,6 +231,18 @@ export * from "./privacy/index.js";
 // Telemetry
 // ============================================
 export * from "./telemetry/index.js";
+// ============================================
+// Tool Executor (T012-T016)
+// ============================================
+export * from "./tool/index.js";
+// ============================================
+// Session (LLM, Messages, Thinking)
+// ============================================
+export * from "./session/index.js";
+// ============================================
+// Streaming (T005-T008)
+// ============================================
+export * from "./streaming/index.js";
 // ============================================
 // Types (T001-T024)
 // ============================================

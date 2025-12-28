@@ -52,7 +52,7 @@ describe("stream normalization", () => {
         type: "text_delta",
         text: "Hello",
       });
-      expect(result).toEqual({ type: "text", text: "Hello" });
+      expect(result).toEqual({ type: "text", content: "Hello" });
     });
 
     it("should normalize OpenAI delta.content format", () => {
@@ -60,7 +60,7 @@ describe("stream normalization", () => {
         type: "delta",
         delta: { content: "World" },
       });
-      expect(result).toEqual({ type: "text", text: "World" });
+      expect(result).toEqual({ type: "text", content: "World" });
     });
 
     it("should normalize delta.text format", () => {
@@ -68,7 +68,7 @@ describe("stream normalization", () => {
         type: "delta",
         delta: { text: "Test" },
       });
-      expect(result).toEqual({ type: "text", text: "Test" });
+      expect(result).toEqual({ type: "text", content: "Test" });
     });
 
     it("should normalize direct content format", () => {
@@ -76,7 +76,7 @@ describe("stream normalization", () => {
         type: "text",
         content: "Direct",
       });
-      expect(result).toEqual({ type: "text", text: "Direct" });
+      expect(result).toEqual({ type: "text", content: "Direct" });
     });
 
     it("should return undefined for empty text", () => {
@@ -102,7 +102,7 @@ describe("stream normalization", () => {
         type: "thinking_delta",
         text: "Let me think...",
       });
-      expect(result).toEqual({ type: "reasoning", text: "Let me think..." });
+      expect(result).toEqual({ type: "reasoning", content: "Let me think..." });
     });
 
     it("should normalize thinking field", () => {
@@ -110,7 +110,7 @@ describe("stream normalization", () => {
         type: "thinking",
         thinking: "Analyzing...",
       });
-      expect(result).toEqual({ type: "reasoning", text: "Analyzing..." });
+      expect(result).toEqual({ type: "reasoning", content: "Analyzing..." });
     });
 
     it("should normalize delta.thinking format", () => {
@@ -118,7 +118,7 @@ describe("stream normalization", () => {
         type: "reasoning_delta",
         delta: { thinking: "Processing..." },
       });
-      expect(result).toEqual({ type: "reasoning", text: "Processing..." });
+      expect(result).toEqual({ type: "reasoning", content: "Processing..." });
     });
 
     it("should return undefined for empty reasoning", () => {
@@ -204,13 +204,10 @@ describe("stream normalization", () => {
       });
       expect(result).toEqual({
         type: "usage",
-        usage: {
-          inputTokens: 100,
-          outputTokens: 50,
-          thinkingTokens: undefined,
-          cacheReadTokens: undefined,
-          cacheWriteTokens: undefined,
-        },
+        inputTokens: 100,
+        outputTokens: 50,
+        cacheReadTokens: undefined,
+        cacheWriteTokens: undefined,
       });
     });
 
@@ -219,17 +216,8 @@ describe("stream normalization", () => {
         prompt_tokens: 80,
         completion_tokens: 40,
       });
-      expect(result.usage.inputTokens).toBe(80);
-      expect(result.usage.outputTokens).toBe(40);
-    });
-
-    it("should include thinking tokens", () => {
-      const result = normalizeUsage({
-        input_tokens: 100,
-        output_tokens: 50,
-        thinking_tokens: 200,
-      });
-      expect(result.usage.thinkingTokens).toBe(200);
+      expect(result.inputTokens).toBe(80);
+      expect(result.outputTokens).toBe(40);
     });
 
     it("should include cache tokens", () => {
@@ -239,8 +227,8 @@ describe("stream normalization", () => {
         cache_read_input_tokens: 80,
         cache_creation_input_tokens: 20,
       });
-      expect(result.usage.cacheReadTokens).toBe(80);
-      expect(result.usage.cacheWriteTokens).toBe(20);
+      expect(result.cacheReadTokens).toBe(80);
+      expect(result.cacheWriteTokens).toBe(20);
     });
   });
 
@@ -264,24 +252,24 @@ describe("stream normalization", () => {
 describe("TextAccumulator", () => {
   it("should accumulate text events", () => {
     const accumulator = new TextAccumulator();
-    accumulator.process({ type: "text", text: "Hello" });
-    accumulator.process({ type: "text", text: " " });
-    accumulator.process({ type: "text", text: "World" });
+    accumulator.process({ type: "text", content: "Hello" });
+    accumulator.process({ type: "text", content: " " });
+    accumulator.process({ type: "text", content: "World" });
 
     expect(accumulator.text).toBe("Hello World");
   });
 
   it("should accumulate reasoning events", () => {
     const accumulator = new TextAccumulator();
-    accumulator.process({ type: "reasoning", text: "Let me " });
-    accumulator.process({ type: "reasoning", text: "think..." });
+    accumulator.process({ type: "reasoning", content: "Let me " });
+    accumulator.process({ type: "reasoning", content: "think..." });
 
     expect(accumulator.reasoning).toBe("Let me think...");
   });
 
   it("should return undefined reasoning if none", () => {
     const accumulator = new TextAccumulator();
-    accumulator.process({ type: "text", text: "Hello" });
+    accumulator.process({ type: "text", content: "Hello" });
 
     expect(accumulator.reasoning).toBeUndefined();
   });
@@ -290,7 +278,8 @@ describe("TextAccumulator", () => {
     const accumulator = new TextAccumulator();
     accumulator.process({
       type: "usage",
-      usage: { inputTokens: 100, outputTokens: 50 },
+      inputTokens: 100,
+      outputTokens: 50,
     });
 
     expect(accumulator.usage?.inputTokens).toBe(100);
@@ -326,7 +315,7 @@ describe("TextAccumulator", () => {
 
   it("should reset state", () => {
     const accumulator = new TextAccumulator();
-    accumulator.process({ type: "text", text: "Hello" });
+    accumulator.process({ type: "text", content: "Hello" });
     accumulator.process({ type: "done", stopReason: "max_tokens" });
 
     accumulator.reset();
@@ -504,9 +493,9 @@ describe("streamWithOptions", () => {
 describe("consumeStream", () => {
   it("should consume stream and return accumulated result", async () => {
     const events: StreamEvent[] = [
-      { type: "text", text: "Hello " },
-      { type: "text", text: "World" },
-      { type: "usage", usage: { inputTokens: 10, outputTokens: 5 } },
+      { type: "text", content: "Hello " },
+      { type: "text", content: "World" },
+      { type: "usage", inputTokens: 10, outputTokens: 5 },
       { type: "done", stopReason: "end_turn" },
     ];
 
@@ -519,8 +508,8 @@ describe("consumeStream", () => {
 
   it("should include reasoning if present", async () => {
     const events: StreamEvent[] = [
-      { type: "reasoning", text: "Thinking..." },
-      { type: "text", text: "Answer" },
+      { type: "reasoning", content: "Thinking..." },
+      { type: "text", content: "Answer" },
       { type: "done", stopReason: "end_turn" },
     ];
 

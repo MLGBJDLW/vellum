@@ -31,17 +31,21 @@ import type {
   CompletionResult,
   CredentialValidationResult,
   LanguageModel,
+  LegacyStreamToolCallDeltaEvent,
   ModelInfo,
   Provider,
   ProviderCredential,
   ProviderOptions,
   StopReason,
   StreamDoneEvent,
+  StreamEndEvent,
   StreamEvent,
   StreamReasoningEvent,
   StreamTextEvent,
   StreamToolCallDeltaEvent,
+  StreamToolCallEndEvent,
   StreamToolCallEvent,
+  StreamToolCallStartEvent,
   StreamUsageEvent,
   TokenUsage,
   ToolDefinition,
@@ -663,7 +667,10 @@ export class AnthropicProvider implements Provider {
     // Track state for tool calls
     const toolCallState: Map<number, { id: string; name: string; inputJson: string }> = new Map();
 
-    let usage: TokenUsage | null = null;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cacheReadTokens: number | undefined;
+    let cacheWriteTokens: number | undefined;
     let stopReason: StopReason = "end_turn";
 
     for await (const event of stream) {
@@ -678,10 +685,7 @@ export class AnthropicProvider implements Provider {
         };
 
         if (delta.usage) {
-          usage = {
-            inputTokens: 0, // Will be filled from message_start
-            outputTokens: delta.usage.output_tokens,
-          };
+          outputTokens = delta.usage.output_tokens;
         }
 
         if (delta.delta?.stop_reason) {
@@ -693,28 +697,42 @@ export class AnthropicProvider implements Provider {
       if (event.type === "message_start") {
         const start = event as RawMessageStreamEvent & {
           type: "message_start";
-          message?: { usage?: { input_tokens: number } };
+          message?: {
+            usage?: {
+              input_tokens: number;
+              cache_read_input_tokens?: number;
+              cache_creation_input_tokens?: number;
+            };
+          };
         };
 
         if (start.message?.usage) {
-          if (usage) {
-            usage.inputTokens = start.message.usage.input_tokens;
-          } else {
-            usage = {
-              inputTokens: start.message.usage.input_tokens,
-              outputTokens: 0,
-            };
+          inputTokens = start.message.usage.input_tokens;
+          if (start.message.usage.cache_read_input_tokens !== undefined) {
+            cacheReadTokens = start.message.usage.cache_read_input_tokens;
+          }
+          if (start.message.usage.cache_creation_input_tokens !== undefined) {
+            cacheWriteTokens = start.message.usage.cache_creation_input_tokens;
           }
         }
       }
     }
 
-    // Emit final events
-    if (usage) {
-      const usageEvent: StreamUsageEvent = { type: "usage", usage };
-      yield usageEvent;
-    }
+    // Emit usage event with new flat structure
+    const usageEvent: StreamUsageEvent = {
+      type: "usage",
+      inputTokens,
+      outputTokens,
+      ...(cacheReadTokens !== undefined && { cacheReadTokens }),
+      ...(cacheWriteTokens !== undefined && { cacheWriteTokens }),
+    };
+    yield usageEvent;
 
+    // Emit new end event
+    const endEvent: StreamEndEvent = { type: "end", stopReason };
+    yield endEvent;
+
+    // Also emit legacy done event for backward compatibility
     const doneEvent: StreamDoneEvent = { type: "done", stopReason };
     yield doneEvent;
   }
@@ -743,14 +761,23 @@ export class AnthropicProvider implements Provider {
             inputJson: "",
           });
 
-          // Emit tool call delta for the name
-          const deltaEvent: StreamToolCallDeltaEvent = {
+          // Emit new tool_call_start event
+          const startEvent: StreamToolCallStartEvent = {
+            type: "tool_call_start",
+            id: toolBlock.id,
+            name: toolBlock.name,
+            index: blockStart.index,
+          };
+          yield startEvent;
+
+          // Also emit legacy toolCallDelta for backward compatibility
+          const legacyDeltaEvent: LegacyStreamToolCallDeltaEvent = {
             type: "toolCallDelta",
             id: toolBlock.id,
             name: toolBlock.name,
             inputDelta: "",
           };
-          yield deltaEvent;
+          yield legacyDeltaEvent;
         }
         break;
       }
@@ -765,13 +792,15 @@ export class AnthropicProvider implements Provider {
         if (blockDelta.delta.type === "text_delta" && blockDelta.delta.text) {
           const textEvent: StreamTextEvent = {
             type: "text",
-            text: blockDelta.delta.text,
+            content: blockDelta.delta.text,
+            index: blockDelta.index,
           };
           yield textEvent;
         } else if (blockDelta.delta.type === "thinking_delta" && blockDelta.delta.thinking) {
           const reasoningEvent: StreamReasoningEvent = {
             type: "reasoning",
-            text: blockDelta.delta.thinking,
+            content: blockDelta.delta.thinking,
+            index: blockDelta.index,
           };
           yield reasoningEvent;
         } else if (blockDelta.delta.type === "input_json_delta" && blockDelta.delta.partial_json) {
@@ -779,12 +808,22 @@ export class AnthropicProvider implements Provider {
           if (state) {
             state.inputJson += blockDelta.delta.partial_json;
 
+            // Emit new tool_call_delta event
             const deltaEvent: StreamToolCallDeltaEvent = {
+              type: "tool_call_delta",
+              id: state.id,
+              arguments: blockDelta.delta.partial_json,
+              index: blockDelta.index,
+            };
+            yield deltaEvent;
+
+            // Also emit legacy toolCallDelta for backward compatibility
+            const legacyDeltaEvent: LegacyStreamToolCallDeltaEvent = {
               type: "toolCallDelta",
               id: state.id,
               inputDelta: blockDelta.delta.partial_json,
             };
-            yield deltaEvent;
+            yield legacyDeltaEvent;
           }
         }
         break;
@@ -799,6 +838,15 @@ export class AnthropicProvider implements Provider {
         // Emit complete tool call when block ends
         const state = toolCallState.get(blockStop.index);
         if (state) {
+          // Emit new tool_call_end event
+          const endEvent: StreamToolCallEndEvent = {
+            type: "tool_call_end",
+            id: state.id,
+            index: blockStop.index,
+          };
+          yield endEvent;
+
+          // Also emit legacy toolCall for backward compatibility
           try {
             const input = state.inputJson ? JSON.parse(state.inputJson) : {};
             const toolCallEvent: StreamToolCallEvent = {
