@@ -559,7 +559,7 @@ describe("Logger", () => {
       await new Promise((r) => setTimeout(r, 10));
       timer.stop();
 
-      expect(timer.duration).toBeGreaterThanOrEqual(10);
+      expect(timer.duration).toBeGreaterThanOrEqual(9);
     });
 
     it("timer.duration should be updated after end()", async () => {

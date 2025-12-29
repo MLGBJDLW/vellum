@@ -7,7 +7,7 @@
  * @module mappers/types
  */
 
-import type { Result } from "@vellum/core";
+import type { Result } from "@vellum/shared";
 import type { StreamEvent } from "../types.js";
 
 // =============================================================================

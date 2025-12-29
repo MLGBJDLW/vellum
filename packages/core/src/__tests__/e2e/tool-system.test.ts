@@ -80,8 +80,9 @@ describe("Tool System E2E (T071)", () => {
 
       const result = await tool?.execute({ path: testFile }, ctx);
 
-      expect(result.success).toBe(true);
-      if (result.success) {
+      expect(result).toBeDefined();
+      expect(result?.success).toBe(true);
+      if (result?.success) {
         expect(result.output.content).toContain("Hello, World!");
       }
     });
@@ -114,6 +115,7 @@ export { greet };
       const editResult = await editTool.execute(
         {
           pattern: '"Hello, " \\+ name',
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentionally testing template string replacement
           replacement: "`Hello, ${name}!`",
           paths: [targetFile],
           isRegex: true,
@@ -128,6 +130,7 @@ export { greet };
 
       expect(verifyResult.success).toBe(true);
       if (verifyResult.success) {
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Verifying template string replacement
         expect(verifyResult.output.content).toContain("`Hello, ${name}!`");
         expect(verifyResult.output.content).not.toContain('"Hello, " + name');
       }

@@ -116,6 +116,36 @@ const ERROR_CLASSIFICATIONS: Record<ErrorCode, Omit<ErrorInfo, "error" | "code">
     maxRetries: 2,
     userMessage: "Received invalid response. Retrying...",
   },
+  [ErrorCode.QUOTA_TERMINAL]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Quota permanently exceeded. Please check your billing or usage limits.",
+  },
+  [ErrorCode.QUOTA_RETRYABLE]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 60000,
+    maxRetries: 3,
+    userMessage: "Rate limit reached. Waiting before retry.",
+  },
+  [ErrorCode.CIRCUIT_OPEN]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 30000,
+    maxRetries: 3,
+    userMessage: "Service temporarily unavailable. Circuit breaker is open.",
+  },
+  [ErrorCode.NETWORK_ERROR]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 5000,
+    maxRetries: 3,
+    userMessage: "Network error. Retrying...",
+  },
 
   // Tool errors - mixed handling
   [ErrorCode.TOOL_NOT_FOUND]: {
@@ -239,6 +269,94 @@ const ERROR_CLASSIFICATIONS: Record<ErrorCode, Omit<ErrorInfo, "error" | "code">
     retryable: false,
     suggestedAction: "abort",
     userMessage: "An unexpected error occurred.",
+  },
+
+  // Git/Snapshot errors
+  [ErrorCode.GIT_NOT_INITIALIZED]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Git repository not initialized. Run 'git init' to enable snapshots.",
+  },
+  [ErrorCode.GIT_SNAPSHOT_DISABLED]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "ignore",
+    userMessage: "Git snapshots are disabled in configuration.",
+  },
+  [ErrorCode.GIT_PROTECTED_PATH]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Cannot modify protected path.",
+  },
+  [ErrorCode.GIT_OPERATION_FAILED]: {
+    severity: "recoverable",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 1000,
+    maxRetries: 2,
+    userMessage: "Git operation failed.",
+  },
+  [ErrorCode.GIT_LOCK_TIMEOUT]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 500,
+    maxRetries: 5,
+    userMessage: "Git lock timeout. Retrying...",
+  },
+  [ErrorCode.GIT_CONFLICT]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Git conflict detected. Please resolve conflicts manually.",
+  },
+  [ErrorCode.GIT_DIRTY_WORKDIR]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Working directory has uncommitted changes. Please commit or stash changes first.",
+  },
+  [ErrorCode.GIT_BRANCH_EXISTS]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Branch already exists.",
+  },
+  [ErrorCode.GIT_BRANCH_NOT_FOUND]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Branch not found.",
+  },
+  [ErrorCode.GIT_REMOTE_ERROR]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 5000,
+    maxRetries: 3,
+    userMessage: "Git remote operation failed. Retrying...",
+  },
+  [ErrorCode.GIT_TIMEOUT]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 1000,
+    maxRetries: 3,
+    userMessage: "Git operation timed out. Retrying...",
+  },
+  [ErrorCode.GIT_NO_STAGED_CHANGES]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "No staged changes to commit.",
+  },
+  [ErrorCode.GIT_STASH_EMPTY]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "No stash entries found.",
   },
 };
 

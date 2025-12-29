@@ -5,6 +5,26 @@
 import { ErrorCode, isRetryableError, VellumError } from "./types.js";
 
 // ============================================
+// AbortError for abort signal handling
+// ============================================
+
+/**
+ * Error thrown when an operation is aborted via AbortSignal.
+ * AC-006-2: AbortError thrown on abort
+ */
+export class AbortError extends Error {
+  constructor(message = "Operation aborted") {
+    super(message);
+    this.name = "AbortError";
+
+    // Maintain proper stack trace in V8 environments
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, AbortError);
+    }
+  }
+}
+
+// ============================================
 // T088, T089 - withRetry Function
 // ============================================
 
@@ -24,9 +44,11 @@ export interface RetryOptions {
   shouldRetry?: (error: unknown) => boolean;
   /** Callback called before each retry attempt */
   onRetry?: (error: unknown, attempt: number, delay: number) => void;
+  /** AbortSignal to cancel retry attempts (AC-006-1, AC-006-2, AC-006-3) */
+  signal?: AbortSignal;
 }
 
-const DEFAULT_RETRY_OPTIONS: Required<Omit<RetryOptions, "shouldRetry" | "onRetry">> = {
+const DEFAULT_RETRY_OPTIONS: Required<Omit<RetryOptions, "shouldRetry" | "onRetry" | "signal">> = {
   maxRetries: 3,
   baseDelay: 1000,
   maxDelay: 30000,
@@ -34,10 +56,46 @@ const DEFAULT_RETRY_OPTIONS: Required<Omit<RetryOptions, "shouldRetry" | "onRetr
 };
 
 /**
- * Sleeps for the specified duration.
+ * Sleeps for the specified duration with abort signal support.
+ * AC-006-3: Delay cancelled on abort
+ *
+ * @param ms - Duration in milliseconds
+ * @param signal - Optional AbortSignal to cancel the sleep
+ * @throws AbortError if the signal is aborted
  */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+async function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  // AC-006-1: Check if already aborted before starting
+  if (signal?.aborted) {
+    throw new AbortError("Operation aborted");
+  }
+
+  return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let abortHandler: (() => void) | undefined;
+
+    const cleanup = (): void => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+      if (signal && abortHandler) {
+        signal.removeEventListener("abort", abortHandler);
+      }
+    };
+
+    timeoutId = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+
+    if (signal) {
+      abortHandler = (): void => {
+        cleanup();
+        reject(new AbortError("Operation aborted"));
+      };
+
+      signal.addEventListener("abort", abortHandler, { once: true });
+    }
+  });
 }
 
 /**
@@ -51,7 +109,7 @@ function sleep(ms: number): Promise<void> {
  */
 function calculateDelay(
   attempt: number,
-  options: Required<Omit<RetryOptions, "shouldRetry" | "onRetry">>,
+  options: Required<Omit<RetryOptions, "shouldRetry" | "onRetry" | "signal">>,
   error: unknown
 ): number {
   // Check if error has a retryDelay hint
@@ -81,10 +139,21 @@ function calculateDelay(
  * );
  * ```
  *
+ * @example With AbortSignal
+ * ```typescript
+ * const controller = new AbortController();
+ * const result = await withRetry(
+ *   () => fetchData(),
+ *   { signal: controller.signal }
+ * );
+ * // Call controller.abort() to cancel
+ * ```
+ *
  * @param fn - The async function to execute with retries
  * @param options - Retry configuration options
  * @returns The result of the function
  * @throws The last error if all retries are exhausted
+ * @throws AbortError if the signal is aborted
  */
 export async function withRetry<T>(fn: () => Promise<T>, options?: RetryOptions): Promise<T> {
   const opts = {
@@ -94,11 +163,17 @@ export async function withRetry<T>(fn: () => Promise<T>, options?: RetryOptions)
 
   const shouldRetryFn = options?.shouldRetry ?? isRetryableError;
   const onRetryFn = options?.onRetry;
+  const signal = options?.signal;
 
   let lastError: unknown;
   let attempt = 0;
 
   while (attempt <= opts.maxRetries) {
+    // AC-006-1: Check if aborted before each attempt
+    if (signal?.aborted) {
+      throw new AbortError("Operation aborted");
+    }
+
     try {
       return await fn();
     } catch (error) {
@@ -118,8 +193,8 @@ export async function withRetry<T>(fn: () => Promise<T>, options?: RetryOptions)
         onRetryFn(error, attempt, delay);
       }
 
-      // Wait before retrying
-      await sleep(delay);
+      // Wait before retrying (with abort support - AC-006-3)
+      await abortableSleep(delay, signal);
     }
   }
 

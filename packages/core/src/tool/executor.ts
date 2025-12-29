@@ -1,10 +1,11 @@
 // ============================================
-// Tool Executor - T012, T013, T035, T037a
+// Tool Executor - T012, T013, T024, T025, T035, T037a
 // ============================================
 
 import type { z } from "zod";
 
 import { ErrorCode, VellumError } from "../errors/index.js";
+import type { IGitSnapshotService } from "../git/types.js";
 import { createDefaultPermissionChecker } from "../permission/checker.js";
 import type { Tool, ToolContext, ToolResult } from "../types/tool.js";
 
@@ -277,6 +278,10 @@ export interface ExecutionResult<T = unknown> {
   aborted?: boolean;
   /** Whether execution timed out */
   timedOut?: boolean;
+  /** T025: Git snapshot hash taken before tool execution (if enabled) */
+  preToolSnapshot?: string;
+  /** T025: List of files changed by tool execution (if snapshot enabled) */
+  changedFiles?: string[];
 }
 
 // =============================================================================
@@ -359,6 +364,13 @@ export interface ToolExecutorConfig {
    * Default: true
    */
   enableLogging?: boolean;
+
+  /**
+   * T024: Optional git snapshot service for tracking file changes.
+   * When provided, snapshots are taken before tool execution and
+   * changed files are detected after execution.
+   */
+  gitSnapshotService?: IGitSnapshotService;
 }
 
 /**
@@ -408,6 +420,9 @@ export class ToolExecutor {
   /** Whether logging is enabled */
   private readonly enableLogging: boolean;
 
+  /** T024: Optional git snapshot service for tracking file changes */
+  private readonly gitSnapshotService?: IGitSnapshotService;
+
   constructor(config: ToolExecutorConfig = {}) {
     // T035: Use default permission checker if requested and no explicit checker provided
     if (config.permissionChecker) {
@@ -421,6 +436,8 @@ export class ToolExecutor {
     this.shellTimeout = config.shellTimeout ?? SHELL_TIMEOUT_MS;
     this.logger = config.logger ?? defaultExecutionLogger;
     this.enableLogging = config.enableLogging ?? true;
+    // T024: Store git snapshot service reference
+    this.gitSnapshotService = config.gitSnapshotService;
   }
 
   /**
@@ -602,7 +619,20 @@ export class ToolExecutor {
     const timeout = options?.timeout ?? this.getTimeoutForTool(tool);
     const abortSignal = options?.abortSignal ?? context.abortSignal;
 
-    return this.executeWithTimeoutAndAbort(
+    // T024: Take pre-tool snapshot if git snapshot service is available
+    let preToolSnapshot: string | undefined;
+    if (this.gitSnapshotService) {
+      try {
+        const trackResult = await this.gitSnapshotService.track();
+        if (trackResult.ok && trackResult.value) {
+          preToolSnapshot = trackResult.value;
+        }
+      } catch {
+        // Gracefully ignore snapshot errors - don't block tool execution
+      }
+    }
+
+    const executionResult = await this.executeWithTimeoutAndAbort(
       tool,
       parseResult.data,
       context,
@@ -610,6 +640,22 @@ export class ToolExecutor {
       timeout,
       abortSignal
     );
+
+    // T024: Detect changed files if we have a pre-tool snapshot
+    if (preToolSnapshot && this.gitSnapshotService) {
+      try {
+        const patchResult = await this.gitSnapshotService.patch(preToolSnapshot);
+        if (patchResult.ok) {
+          executionResult.preToolSnapshot = preToolSnapshot;
+          executionResult.changedFiles = patchResult.value.files.map((f) => f.path);
+        }
+      } catch {
+        // Gracefully ignore patch errors - result is still valid
+        executionResult.preToolSnapshot = preToolSnapshot;
+      }
+    }
+
+    return executionResult;
   }
 
   /**

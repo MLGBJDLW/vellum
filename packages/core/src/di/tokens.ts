@@ -9,6 +9,7 @@ import type { Config, ConfigManager } from "../config/index.js";
 import type { CredentialManager } from "../credentials/index.js";
 import type { GlobalErrorHandler } from "../errors/index.js";
 import type { EventBus } from "../events/index.js";
+import type { IGitSnapshotService } from "../git/types.js";
 import type { Logger } from "../logger/index.js";
 import { Token } from "./container.js";
 
@@ -34,4 +35,7 @@ export const Tokens = {
 
   /** Credential manager for secure credential storage */
   CredentialManager: new Token<CredentialManager>("CredentialManager"),
+
+  /** T028: Git snapshot service for session state preservation */
+  GitSnapshotService: new Token<IGitSnapshotService>("GitSnapshotService"),
 } as const;

@@ -309,7 +309,7 @@ export class GoogleProvider implements Provider {
     try {
       const { contents, config } = this.buildRequest(params);
 
-      const response = await this.client!.models.generateContent({
+      const response = await this.client?.models.generateContent({
         model: params.model,
         contents,
         config,
@@ -334,7 +334,7 @@ export class GoogleProvider implements Provider {
     try {
       const { contents, config } = this.buildRequest(params);
 
-      const stream = await this.client!.models.generateContentStream({
+      const stream = await this.client?.models.generateContentStream({
         model: params.model,
         contents,
         config,
@@ -365,7 +365,7 @@ export class GoogleProvider implements Provider {
           ? [{ role: "user", parts: [{ text: input }] }]
           : this.convertMessages(input);
 
-      const result = await this.client!.models.countTokens({
+      const result = await this.client?.models.countTokens({
         model: modelId,
         contents,
       });

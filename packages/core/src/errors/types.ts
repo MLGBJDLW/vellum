@@ -2,6 +2,8 @@
 // Vellum Error Types
 // ============================================
 
+import { nanoid } from "nanoid";
+
 /**
  * Categorized error codes for the Vellum system.
  *
@@ -11,6 +13,7 @@
  * - 3xxx: Tool errors
  * - 4xxx: Session errors
  * - 5xxx: System errors
+ * - 7xxx: Git/Snapshot errors
  */
 export enum ErrorCode {
   // 1xxx - Configuration errors
@@ -25,6 +28,10 @@ export enum ErrorCode {
   LLM_NETWORK_ERROR = 2004,
   LLM_TIMEOUT = 2005,
   LLM_INVALID_RESPONSE = 2006,
+  QUOTA_TERMINAL = 2010,
+  QUOTA_RETRYABLE = 2011,
+  CIRCUIT_OPEN = 2020,
+  NETWORK_ERROR = 2030,
 
   // 3xxx - Tool errors
   TOOL_NOT_FOUND = 3001,
@@ -48,6 +55,21 @@ export enum ErrorCode {
   SYSTEM_IO_ERROR = 5001,
   SYSTEM_OUT_OF_MEMORY = 5002,
   SYSTEM_UNKNOWN = 5999,
+
+  // 7xxx - Git/Snapshot errors
+  GIT_NOT_INITIALIZED = 7000,
+  GIT_SNAPSHOT_DISABLED = 7001,
+  GIT_PROTECTED_PATH = 7002,
+  GIT_OPERATION_FAILED = 7010,
+  GIT_LOCK_TIMEOUT = 7020,
+  GIT_CONFLICT = 7030,
+  GIT_DIRTY_WORKDIR = 7031,
+  GIT_BRANCH_EXISTS = 7032,
+  GIT_BRANCH_NOT_FOUND = 7033,
+  GIT_REMOTE_ERROR = 7034,
+  GIT_TIMEOUT = 7035,
+  GIT_NO_STAGED_CHANGES = 7036,
+  GIT_STASH_EMPTY = 7037,
 }
 
 /**
@@ -72,13 +94,18 @@ export enum ErrorSeverity {
 export function inferSeverity(code: ErrorCode): ErrorSeverity {
   switch (code) {
     // Recoverable errors - can retry automatically
+    case ErrorCode.GIT_LOCK_TIMEOUT:
+    case ErrorCode.GIT_TIMEOUT:
+    case ErrorCode.GIT_REMOTE_ERROR:
     case ErrorCode.LLM_RATE_LIMIT:
     case ErrorCode.LLM_TIMEOUT:
     case ErrorCode.LLM_NETWORK_ERROR:
+    case ErrorCode.NETWORK_ERROR:
     case ErrorCode.TOOL_TIMEOUT:
     case ErrorCode.SYSTEM_IO_ERROR:
     case ErrorCode.MCP_TIMEOUT:
     case ErrorCode.MCP_CONNECTION:
+    case ErrorCode.CIRCUIT_OPEN:
       return ErrorSeverity.RECOVERABLE;
 
     // User action required - user needs to fix something
@@ -98,6 +125,16 @@ export function inferSeverity(code: ErrorCode): ErrorSeverity {
     case ErrorCode.SMART_EDIT_FAILED:
     case ErrorCode.SESSION_NOT_FOUND:
     case ErrorCode.SESSION_EXPIRED:
+    case ErrorCode.GIT_NOT_INITIALIZED:
+    case ErrorCode.GIT_SNAPSHOT_DISABLED:
+    case ErrorCode.GIT_PROTECTED_PATH:
+    case ErrorCode.GIT_OPERATION_FAILED:
+    case ErrorCode.GIT_CONFLICT:
+    case ErrorCode.GIT_DIRTY_WORKDIR:
+    case ErrorCode.GIT_BRANCH_EXISTS:
+    case ErrorCode.GIT_BRANCH_NOT_FOUND:
+    case ErrorCode.GIT_NO_STAGED_CHANGES:
+    case ErrorCode.GIT_STASH_EMPTY:
     case ErrorCode.SESSION_CONFLICT:
       return ErrorSeverity.USER_ACTION;
     default:
@@ -117,6 +154,8 @@ export interface VellumErrorOptions {
   isRetryable?: boolean;
   /** Suggested delay before retry in milliseconds */
   retryDelay?: number;
+  /** Request ID for tracing across services */
+  requestId?: string;
 }
 
 /**
@@ -128,8 +167,15 @@ export interface VellumErrorOptions {
  * - Retry configuration
  * - Error cause chaining
  * - Additional context
+ * - Error tracing with errorId, timestamp, requestId
  */
 export class VellumError extends Error {
+  /** Unique identifier for this error instance (nanoid, 21 chars) */
+  public readonly errorId: string;
+  /** ISO-8601 UTC timestamp when error was created */
+  public readonly timestamp: string;
+  /** Request ID for distributed tracing */
+  public readonly requestId?: string;
   public readonly code: ErrorCode;
   public readonly context?: Record<string, unknown>;
   private readonly _isRetryable?: boolean;
@@ -139,6 +185,9 @@ export class VellumError extends Error {
     super(message, { cause: options?.cause });
     this.name = "VellumError";
     this.code = code;
+    this.errorId = nanoid(21);
+    this.timestamp = new Date().toISOString();
+    this.requestId = options?.requestId;
     this.context = options?.context;
     this._isRetryable = options?.isRetryable;
     this._retryDelay = options?.retryDelay;
@@ -179,6 +228,27 @@ export class VellumError extends Error {
   }
 
   /**
+   * Creates a new VellumError with additional context merged in.
+   * Preserves the original errorId and timestamp for tracing.
+   *
+   * @param additionalContext - Context to merge with existing context
+   * @returns New VellumError instance with merged context
+   */
+  withContext(additionalContext: Record<string, unknown>): VellumError {
+    const newError = new VellumError(this.message, this.code, {
+      cause: this.cause instanceof Error ? this.cause : undefined,
+      context: { ...this.context, ...additionalContext },
+      isRetryable: this._isRetryable,
+      retryDelay: this._retryDelay,
+      requestId: this.requestId,
+    });
+    // Preserve original errorId and timestamp for tracing (AC-004-5)
+    (newError as { errorId: string }).errorId = this.errorId;
+    (newError as { timestamp: string }).timestamp = this.timestamp;
+    return newError;
+  }
+
+  /**
    * Returns a JSON-serializable representation of this error.
    */
   toJSON(): Record<string, unknown> {
@@ -186,12 +256,69 @@ export class VellumError extends Error {
       name: this.name,
       message: this.message,
       code: this.code,
+      errorId: this.errorId,
+      timestamp: this.timestamp,
+      requestId: this.requestId,
       severity: this.severity,
       isRetryable: this.isRetryable,
       retryDelay: this.retryDelay,
       context: this.context,
       cause: this.cause instanceof Error ? this.cause.message : this.cause,
     };
+  }
+
+  /**
+   * Cloudflare block detection patterns.
+   * @internal
+   */
+  private static readonly CLOUDFLARE_PATTERNS = [
+    "cloudflare",
+    "cf-ray",
+    "ray id:",
+    "attention required",
+    "please wait while",
+    "checking your browser",
+  ];
+
+  /**
+   * Maximum message length before truncation.
+   * @internal
+   */
+  private static readonly MAX_MESSAGE_LENGTH = 200;
+
+  /**
+   * Returns a user-friendly version of this error message.
+   *
+   * Features:
+   * - Detects Cloudflare security blocks and returns a friendly message
+   * - Truncates very long messages (> 200 chars) with ellipsis
+   * - Preserves short, already-friendly messages
+   *
+   * @returns User-friendly error message
+   *
+   * @example
+   * ```typescript
+   * const error = new VellumError('Cloudflare Ray ID: abc123...', ErrorCode.NETWORK_ERROR);
+   * error.getFriendlyMessage();
+   * // "Request blocked by security service. Please try again later or check your network."
+   * ```
+   */
+  getFriendlyMessage(): string {
+    const lowerMessage = this.message.toLowerCase();
+
+    // Detect Cloudflare block patterns
+    for (const pattern of VellumError.CLOUDFLARE_PATTERNS) {
+      if (lowerMessage.includes(pattern)) {
+        return "Request blocked by security service. Please try again later or check your network.";
+      }
+    }
+
+    // Truncate very long messages
+    if (this.message.length > VellumError.MAX_MESSAGE_LENGTH) {
+      return `${this.message.substring(0, VellumError.MAX_MESSAGE_LENGTH - 3)}...`;
+    }
+
+    return this.message;
   }
 }
 

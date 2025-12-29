@@ -821,7 +821,9 @@ describe("Phase 2: Core Algorithms", () => {
 
         // Should be sorted: NORMAL first, then TOOL_PAIR, then RECENT
         for (let i = 1; i < candidates.length; i++) {
-          expect(candidates[i]?.priority).toBeGreaterThanOrEqual(candidates[i - 1]?.priority);
+          expect(candidates[i]?.priority ?? 0).toBeGreaterThanOrEqual(
+            candidates[i - 1]?.priority ?? 0
+          );
         }
       });
     });

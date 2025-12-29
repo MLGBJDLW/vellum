@@ -232,7 +232,9 @@ export class EncryptedFileStore implements CredentialStore {
 
     // Update cache
     const credKey = getCredentialKey(credential.provider);
-    this.cache?.credentials[credKey] = encryptResult.value;
+    if (this.cache) {
+      this.cache.credentials[credKey] = encryptResult.value;
+    }
 
     // Save to disk
     return this.saveFile();
@@ -260,10 +262,12 @@ export class EncryptedFileStore implements CredentialStore {
       return Ok(false);
     }
 
-    delete this.cache?.credentials[credKey];
+    if (this.cache) {
+      delete this.cache.credentials[credKey];
+    }
 
     // If no credentials left, delete the file
-    if (Object.keys(this.cache?.credentials).length === 0) {
+    if (Object.keys(this.cache?.credentials ?? {}).length === 0) {
       try {
         await unlink(this.filePath);
         this.cache = null;

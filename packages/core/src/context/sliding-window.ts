@@ -98,6 +98,7 @@ const CHARS_PER_TOKEN = 4;
  * // tokens ≈ 4
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Token estimation requires handling multiple content types
 export function estimateTokens(message: ContextMessage): number {
   // If already has token count, use it
   if (message.tokens !== undefined) {
@@ -396,6 +397,7 @@ function calculateTotalTokens(
  * console.log(`Removed ${result.removedCount} messages`);
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Truncation algorithm requires complex priority-based selection logic
 export function truncate(messages: ContextMessage[], options: TruncateOptions): TruncateResult {
   const {
     targetTokens,
@@ -460,7 +462,10 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
         for (const idx of linkedIndices) {
           if (!indicesToRemove.has(idx)) {
             pairTokens += tokenizer(messages[idx]!);
-            pairIds.push(messages[idx]?.id);
+            const msgId = messages[idx]?.id;
+            if (msgId) {
+              pairIds.push(msgId);
+            }
           }
         }
 
@@ -492,7 +497,10 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
 
     // Not part of a tool pair (or not preserving pairs) - remove individually
     indicesToRemove.add(candidate.index);
-    removedIds.push(messages[candidate.index]?.id);
+    const msgId = messages[candidate.index]?.id;
+    if (msgId) {
+      removedIds.push(msgId);
+    }
     currentTokens -= candidate.tokens;
   }
 

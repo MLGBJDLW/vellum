@@ -46,10 +46,11 @@ export {
   // T010: ToolStates Helper
   ToolStates,
 } from "./message.js";
+// T019: Result type
+export type { Result } from "./result.js";
 // T019-T024: Result Type and Utilities
 export {
   all,
-  type Err as ErrType,
   Err,
   // T022: flatMap
   flatMap,
@@ -60,10 +61,7 @@ export {
   mapErr,
   // T023: match and all
   match,
-  type Ok as OkType,
   Ok,
-  // T019: Result type and constructors
-  type Result,
   // T024: try-catch wrappers
   tryCatch,
   tryCatchAsync,

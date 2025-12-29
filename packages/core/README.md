@@ -14,6 +14,7 @@ pnpm add @vellum/core
 - **Tool System** - Extensible tool registry with permission checking and execution
 - **Session Management** - Message history, state persistence, and context management
 - **Provider Support** - Multi-provider LLM integration (Anthropic, OpenAI, Google)
+- **Git Snapshots** - Automatic working directory state tracking and restoration
 
 ---
 
@@ -104,6 +105,25 @@ Available built-in tools:
 - `grep_search` - Search file contents
 - `store_memory` - Store persistent memory
 - `recall_memory` - Recall stored memories
+
+**Git Tools** (15 tools for repository management):
+- `git_status` - Repository status and branch info
+- `git_diff` - Show differences between commits/working tree
+- `git_log` - Commit history with filters
+- `git_commit` - Create commits
+- `git_branch` - Manage branches (list/create/delete/rename)
+- `git_checkout` - Switch branches or restore files
+- `git_merge` - Merge branches
+- `git_conflict_info` - List merge conflicts
+- `git_resolve_conflict` - Resolve merge conflicts
+- `git_stash` - Stash management (push/pop/apply/list/drop/clear)
+- `git_fetch` - Fetch from remote
+- `git_pull` - Pull changes from remote
+- `git_push` - Push changes to remote
+- `git_remote` - Manage remotes (list/add/remove/rename)
+- `git_generate_pr` - Generate PR title and description
+
+> See [Git Tools Documentation](../../docs/tools/git.md) for detailed usage and examples.
 
 #### ToolExecutor
 
@@ -408,6 +428,245 @@ if (result.success) {
 
 ---
 
+## Git Snapshot System
+
+The git snapshot system provides automatic tracking and restoration of working directory states using git's internal storage.
+
+### Quick Start
+
+```typescript
+import {
+  createGitSnapshotService,
+  GitOperations,
+  GitSnapshotLock,
+  type GitSnapshotConfig,
+} from "@vellum/core/git";
+
+// Configure the snapshot system
+const config: GitSnapshotConfig = {
+  enabled: true,
+  workDir: "/path/to/repo",
+  maxSnapshots: 100,
+  lockTimeoutMs: 30000,
+};
+
+// Create service instance
+const operations = new GitOperations(config.workDir);
+const lock = new GitSnapshotLock(config.lockTimeoutMs);
+
+const snapshotService = createGitSnapshotService({
+  config,
+  operations,
+  lock,
+  logger: console, // Optional
+});
+
+// Create a snapshot
+const trackResult = await snapshotService.track();
+if (trackResult.ok && trackResult.value) {
+  console.log("Snapshot created:", trackResult.value);
+}
+```
+
+### Core Operations
+
+#### track() - Create Snapshot
+
+Creates a snapshot of the current working directory state:
+
+```typescript
+const result = await snapshotService.track();
+if (result.ok) {
+  if (result.value) {
+    // Snapshot created - result.value is 40-char SHA hash
+    console.log("Snapshot hash:", result.value);
+  } else {
+    // Snapshots are disabled
+    console.log("Snapshots disabled");
+  }
+} else {
+  // Error occurred
+  console.error("Failed:", result.error.message);
+}
+```
+
+#### patch() - Get Changed Files
+
+Gets the list of files changed since a snapshot:
+
+```typescript
+const patchResult = await snapshotService.patch(snapshotHash);
+if (patchResult.ok) {
+  for (const file of patchResult.value.files) {
+    console.log(`${file.type}: ${file.path}`);
+    // file.type: "added" | "modified" | "deleted" | "renamed"
+  }
+}
+```
+
+#### diff() - Get Unified Diff
+
+Gets a unified diff since a snapshot:
+
+```typescript
+const diffResult = await snapshotService.diff(snapshotHash);
+if (diffResult.ok) {
+  console.log(diffResult.value); // Standard unified diff output
+}
+```
+
+#### restore() - Full Restore
+
+Restores the entire working directory to a snapshot state:
+
+```typescript
+const restoreResult = await snapshotService.restore(snapshotHash);
+if (restoreResult.ok) {
+  console.log("Working directory restored");
+}
+```
+
+#### revert() - Selective Revert
+
+Reverts specific files from a patch:
+
+```typescript
+const patchResult = await snapshotService.patch(hash);
+if (patchResult.ok) {
+  const revertResult = await snapshotService.revert(hash, patchResult.value);
+  if (revertResult.ok) {
+    console.log("Selected files reverted");
+  }
+}
+```
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable/disable snapshots |
+| `workDir` | string | - | Git repository path |
+| `maxSnapshots` | number | `100` | Max snapshots to retain (0 = unlimited) |
+| `autoSnapshotIntervalMs` | number | `0` | Auto-snapshot interval (0 = disabled) |
+| `includeUntracked` | boolean | `true` | Include untracked files |
+| `lockTimeoutMs` | number | `30000` | Lock acquisition timeout |
+| `customExclusions` | string[] | `[]` | Additional gitignore patterns |
+| `commitMessagePrefix` | string | `"[vellum-snapshot]"` | Prefix for snapshot commits |
+
+### Error Codes (7xxx Range)
+
+| Code | Constant | Description |
+|------|----------|-------------|
+| 7000 | `GIT_NOT_INITIALIZED` | No .git directory found |
+| 7001 | `GIT_SNAPSHOT_DISABLED` | Snapshots disabled in config |
+| 7002 | `GIT_PROTECTED_PATH` | Operation on protected path blocked |
+| 7010 | `GIT_OPERATION_FAILED` | General git command failure |
+| 7020 | `GIT_LOCK_TIMEOUT` | Lock acquisition timeout (retryable) |
+
+### Error Handling
+
+All methods return `Result<T, VellumError>` for type-safe error handling:
+
+```typescript
+import { gitNotInitializedError, gitOperationFailedError } from "@vellum/core/git";
+
+const result = await snapshotService.track();
+if (!result.ok) {
+  switch (result.error.code) {
+    case 7000: // GIT_NOT_INITIALIZED
+      console.error("Initialize git first: git init");
+      break;
+    case 7001: // GIT_SNAPSHOT_DISABLED
+      console.log("Enable snapshots in config");
+      break;
+    case 7020: // GIT_LOCK_TIMEOUT
+      // Retry after delay
+      if (result.error.isRetryable) {
+        await delay(result.error.retryDelay ?? 1000);
+        // Retry operation...
+      }
+      break;
+    default:
+      console.error(result.error.message);
+  }
+}
+```
+
+### Safety Features
+
+The git module includes built-in safety protections:
+
+```typescript
+import { checkProtectedPath, getSanitizedEnv } from "@vellum/core/git";
+
+// Check if a path is safe for git operations
+const safeResult = checkProtectedPath("/path/to/check");
+if (!safeResult.ok) {
+  console.error("Protected path:", safeResult.error.message);
+}
+
+// Get sanitized environment (no credential prompts)
+const env = getSanitizedEnv();
+```
+
+Protected paths include:
+
+- User home directory root
+- Desktop, Documents, Downloads, etc.
+- System directories (`/etc`, `C:\Windows`, etc.)
+
+### Diff Formatting
+
+Parse and format diff output for display:
+
+```typescript
+import {
+  formatFileDiff,
+  formatMultiFileDiff,
+  getDiffStats,
+} from "@vellum/core/git";
+
+// Parse a single file diff
+const formatted = formatFileDiff(diffText);
+console.log(`${formatted.path}: ${formatted.type}`);
+console.log(`Hunks: ${formatted.hunks.length}`);
+
+// Get statistics
+const stats = getDiffStats(formatted);
+console.log(`+${stats.additions} -${stats.deletions}`);
+```
+
+### Event Bus Integration
+
+Subscribe to snapshot events:
+
+```typescript
+const eventBus = {
+  emit: (event, payload) => {
+    switch (event) {
+      case "gitSnapshotCreated":
+        console.log("Created:", payload.hash);
+        break;
+      case "gitSnapshotRestored":
+        console.log("Restored:", payload.hash);
+        break;
+      case "gitSnapshotReverted":
+        console.log("Reverted files:", payload.files.length);
+        break;
+    }
+  },
+};
+
+const service = createGitSnapshotService({
+  config,
+  operations,
+  lock,
+  eventBus,
+});
+```
+
+---
+
 ## Agent Loop
 
 The agent loop manages the conversation cycle:
@@ -535,6 +794,50 @@ export {
   type TrustConfig,
   type TrustPreset,
 } from "@vellum/core/permission";
+
+// Git Snapshot System
+export {
+  // Service
+  GitSnapshotService,
+  createGitSnapshotService,
+  type CreateGitSnapshotServiceOptions,
+  type GitSnapshotEventBus,
+  // Operations
+  GitOperations,
+  type DiffNameEntry,
+  // Lock
+  GitSnapshotLock,
+  globalSnapshotLock,
+  // Safety
+  checkProtectedPath,
+  getSanitizedEnv,
+  getNoGpgFlags,
+  getGitSafetyConfig,
+  // Exclusions
+  getExclusionPatterns,
+  getMinimalExclusionPatterns,
+  // Diff Formatting
+  formatFileDiff,
+  formatMultiFileDiff,
+  renderFormattedDiff,
+  getDiffStats,
+  // Error Factories
+  gitNotInitializedError,
+  gitSnapshotDisabledError,
+  gitProtectedPathError,
+  gitLockTimeoutError,
+  gitOperationFailedError,
+  // Types
+  type GitSnapshotConfig,
+  type GitPatch,
+  type GitFileDiff,
+  type GitFileChange,
+  type FileChangeType,
+  type FormattedDiff,
+  type DiffHunk,
+  type DiffLine,
+  type IGitSnapshotService,
+} from "@vellum/core/git";
 
 // Agent
 export {

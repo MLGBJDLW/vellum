@@ -4,6 +4,7 @@
 // ============================================
 
 import { z } from "zod";
+import { circuitClose, circuitHalfOpen, circuitOpen } from "../errors/circuit-breaker/index.js";
 import { MessageContentSchema, MessageSchema, ToolStateSchema } from "../types/message.js";
 import { defineEvent } from "./bus.js";
 
@@ -370,6 +371,57 @@ export const agentShutdownComplete = defineEvent(
 );
 
 // ============================================
+// T010 - Git Snapshot Events
+// ============================================
+
+/**
+ * Emitted when a git snapshot is created.
+ */
+export const gitSnapshotCreated = defineEvent(
+  "git:snapshotCreated",
+  z.object({
+    /** The commit hash of the snapshot */
+    hash: z.string(),
+    /** Working directory where snapshot was created */
+    workDir: z.string(),
+    /** Number of files included in the snapshot */
+    fileCount: z.number().optional(),
+    /** Trigger that caused the snapshot (e.g., "auto", "manual", "tool") */
+    trigger: z.string().optional(),
+  })
+);
+
+/**
+ * Emitted when a git snapshot is restored.
+ */
+export const gitSnapshotRestored = defineEvent(
+  "git:snapshotRestored",
+  z.object({
+    /** The commit hash that was restored */
+    hash: z.string(),
+    /** Working directory where snapshot was restored */
+    workDir: z.string(),
+    /** Number of files affected by the restore */
+    fileCount: z.number().optional(),
+  })
+);
+
+/**
+ * Emitted when a git snapshot is reverted (undo operation).
+ */
+export const gitSnapshotReverted = defineEvent(
+  "git:snapshotReverted",
+  z.object({
+    /** The commit hash that was reverted */
+    hash: z.string(),
+    /** List of files that were reverted */
+    files: z.array(z.string()),
+    /** Working directory where revert occurred */
+    workDir: z.string().optional(),
+  })
+);
+
+// ============================================
 // Events Object - Unified Export
 // ============================================
 
@@ -426,6 +478,16 @@ export const Events = {
   agentToolEnd,
   agentTerminated,
   agentShutdownComplete,
+
+  // Git snapshot events (T010)
+  gitSnapshotCreated,
+  gitSnapshotRestored,
+  gitSnapshotReverted,
+
+  // Circuit breaker events (T038)
+  circuitOpen,
+  circuitClose,
+  circuitHalfOpen,
 } as const;
 
 /** Type helper for accessing event payload types */

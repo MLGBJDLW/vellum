@@ -324,7 +324,7 @@ export class AnthropicProvider implements Provider {
 
     try {
       const request = this.buildRequest(params);
-      const stream = this.client!.messages.stream(request);
+      const stream = this.client?.messages.stream(request);
 
       yield* this.processStream(stream);
     } catch (error) {
@@ -350,7 +350,7 @@ export class AnthropicProvider implements Provider {
         typeof input === "string" ? [{ role: "user", content: input }] : input;
 
       // Use the Anthropic token counting API
-      const result = await this.client!.messages.countTokens({
+      const result = await this.client?.messages.countTokens({
         model: modelId,
         messages: this.convertMessages(messages),
       });

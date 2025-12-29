@@ -8,6 +8,12 @@
 import { ConfigManager, type LoadConfigOptions, loadConfig } from "../config/index.js";
 import { GlobalErrorHandler } from "../errors/index.js";
 import { EventBus } from "../events/index.js";
+import {
+  GitOperations,
+  type GitSnapshotConfig,
+  GitSnapshotLock,
+  GitSnapshotService,
+} from "../git/index.js";
 import { ConsoleTransport, FileTransport, Logger } from "../logger/index.js";
 import { Container } from "./container.js";
 import { Tokens } from "./tokens.js";
@@ -28,6 +34,10 @@ export interface BootstrapOptions {
   debug?: boolean;
   /** Skip installing global exception handlers */
   skipGlobalHandlers?: boolean;
+  /** T028: Working directory for git snapshot service (defaults to cwd) */
+  workDir?: string;
+  /** T028: Disable git snapshot service */
+  disableGitSnapshots?: boolean;
 }
 
 // ============================================
@@ -131,6 +141,33 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<Contain
     eventBus,
   });
   container.registerValue(Tokens.ErrorHandler, errorHandler);
+
+  // ----------------------------------------
+  // T028 - Register GitSnapshotService as singleton
+  // ----------------------------------------
+  if (!options.disableGitSnapshots) {
+    container.registerSingleton(Tokens.GitSnapshotService, () => {
+      const workDir = options.workDir ?? process.cwd();
+      const gitConfig: GitSnapshotConfig = {
+        enabled: true,
+        workDir,
+        autoSnapshotIntervalMs: 0,
+        maxSnapshots: 100,
+        customExclusions: [],
+        includeUntracked: true,
+        commitMessagePrefix: "[vellum-snapshot]",
+        lockTimeoutMs: 30000,
+      };
+
+      const operations = new GitOperations(workDir);
+      const lock = new GitSnapshotLock(gitConfig.lockTimeoutMs);
+
+      // Note: Pass undefined for eventBus since GitSnapshotEventBus expects
+      // string-based event names while core EventBus uses EventDefinition<T>.
+      // Git snapshot events are optional - the service works without them.
+      return new GitSnapshotService(gitConfig, logger, undefined, operations, lock);
+    });
+  }
 
   // ----------------------------------------
   // T104 - Install global exception handlers

@@ -6,6 +6,7 @@
 import type { EventBus } from "../events/bus.js";
 import { Events } from "../events/definitions.js";
 import type { Logger } from "../logger/logger.js";
+import { shouldSkipTelemetry } from "./privacy/index.js";
 import { ErrorCode, ErrorSeverity, VellumError } from "./types.js";
 
 // ============================================
@@ -74,8 +75,9 @@ export class GlobalErrorHandler {
     // Log at appropriate level based on severity
     this.logError(vellumError);
 
-    // Emit error event if eventBus is provided
-    if (this.eventBus) {
+    // Emit error event if eventBus is provided and error is not privacy-sensitive
+    // T040: Check shouldSkipTelemetry() before emitting telemetry
+    if (this.eventBus && !shouldSkipTelemetry(vellumError)) {
       this.eventBus.emit(Events.error, {
         error: vellumError,
         context: vellumError.context,

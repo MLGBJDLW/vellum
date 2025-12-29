@@ -162,6 +162,10 @@ export const SessionMessageSchema = z.object({
   parts: z.array(SessionMessagePartSchema),
   /** Message metadata */
   metadata: SessionMessageMetadataSchema,
+  /** T026: Git snapshot hash taken before tool execution (if any) */
+  preToolSnapshot: z.string().optional(),
+  /** T026: List of files changed by tool execution (if any) */
+  changedFiles: z.array(z.string()).optional(),
 });
 
 export type SessionMessage = z.infer<typeof SessionMessageSchema>;

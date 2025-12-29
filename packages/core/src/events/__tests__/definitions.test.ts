@@ -48,8 +48,9 @@ describe("Event Definitions", () => {
       for (const key of eventKeys) {
         const event = Events[key];
         // All events except 'error' follow namespace:action pattern
+        // Action part can include hyphens (e.g., circuit:half-open)
         if (key !== "error") {
-          expect(event.name).toMatch(/^[a-z]+:[a-zA-Z]+$/);
+          expect(event.name).toMatch(/^[a-z]+:[a-zA-Z-]+$/);
         }
       }
     });
@@ -453,6 +454,14 @@ describe("Event Definitions", () => {
         "agentToolEnd",
         "agentTerminated",
         "agentShutdownComplete",
+        // T010 - Git snapshot events
+        "gitSnapshotCreated",
+        "gitSnapshotRestored",
+        "gitSnapshotReverted",
+        // T038 - Circuit breaker events
+        "circuitOpen",
+        "circuitClose",
+        "circuitHalfOpen",
       ];
 
       for (const eventName of expectedEvents) {
@@ -460,8 +469,8 @@ describe("Event Definitions", () => {
       }
     });
 
-    it("should have exactly 21 events", () => {
-      expect(Object.keys(Events)).toHaveLength(21);
+    it("should have exactly 27 events", () => {
+      expect(Object.keys(Events)).toHaveLength(27);
     });
   });
 });

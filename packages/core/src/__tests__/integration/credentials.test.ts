@@ -487,8 +487,8 @@ model = "gpt-4"
 
       // Verify timestamps are ordered
       for (let i = 1; i < auditLog.length; i++) {
-        expect(auditLog[i]?.timestamp.getTime()).toBeGreaterThanOrEqual(
-          auditLog[i - 1]?.timestamp.getTime()
+        expect(auditLog[i]?.timestamp.getTime() ?? 0).toBeGreaterThanOrEqual(
+          auditLog[i - 1]?.timestamp.getTime() ?? 0
         );
       }
     });

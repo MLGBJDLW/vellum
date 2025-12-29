@@ -8,7 +8,7 @@
  * @see https://html.spec.whatwg.org/multipage/server-sent-events.html
  */
 
-import { Err, Ok, type Result } from "@vellum/core";
+import { Err, Ok, type Result } from "@vellum/shared";
 
 // =============================================================================
 // T038: SSE Types
@@ -308,7 +308,7 @@ function parseSSEEvent(text: string): SSEEvent | undefined {
         break;
       case "retry": {
         const parsed = parseInt(value, 10);
-        if (!isNaN(parsed) && parsed >= 0) {
+        if (!Number.isNaN(parsed) && parsed >= 0) {
           retry = parsed;
         }
         break;

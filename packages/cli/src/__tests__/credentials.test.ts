@@ -122,7 +122,7 @@ class MockCredentialStore implements CredentialStore {
           provider: cred.provider,
           type: cred.type,
           source: cred.source,
-          maskedHint: cred.value.substring(0, 4) + "****",
+          maskedHint: `${cred.value.substring(0, 4)}****`,
           metadata: cred.metadata,
           createdAt: cred.createdAt,
         });
@@ -495,7 +495,7 @@ describe("/login Command", () => {
       const loginResult = await executeSlashCommand("/login anthropic", context);
 
       expect(loginResult.promptForInput?.onSubmit).toBeDefined();
-      const submitResult = await loginResult.promptForInput!.onSubmit("sk-test-key-12345");
+      const submitResult = await loginResult.promptForInput?.onSubmit("sk-test-key-12345");
 
       expect(submitResult.success).toBe(true);
       expect(submitResult.message).toContain("saved");
@@ -513,7 +513,7 @@ describe("/login Command", () => {
     it("rejects empty API key", async () => {
       const context = createMockContext();
       const loginResult = await executeSlashCommand("/login anthropic", context);
-      const submitResult = await loginResult.promptForInput!.onSubmit("");
+      const submitResult = await loginResult.promptForInput?.onSubmit("");
 
       expect(submitResult.success).toBe(false);
       expect(submitResult.message).toContain("cannot be empty");
@@ -523,7 +523,7 @@ describe("/login Command", () => {
       const stores = createMockStores();
       const context = createMockContext({ stores });
       const loginResult = await executeSlashCommand("/login anthropic", context);
-      await loginResult.promptForInput!.onSubmit("  sk-test-key  ");
+      await loginResult.promptForInput?.onSubmit("  sk-test-key  ");
 
       const keychainStore = stores.find((s) => s.name === "keychain");
       const stored = keychainStore?.getAll();
@@ -878,7 +878,7 @@ describe("Edge Cases", () => {
       const context = createMockContext({ stores });
 
       const loginResult = await executeSlashCommand("/login ANTHROPIC", context);
-      await loginResult.promptForInput!.onSubmit("sk-test-key");
+      await loginResult.promptForInput?.onSubmit("sk-test-key");
 
       const result = await executeSlashCommand("/credentials", context);
       expect(result.message).toContain("anthropic");
@@ -901,7 +901,7 @@ describe("Edge Cases", () => {
       const context = createMockContext({ stores });
 
       const loginResult = await executeSlashCommand("/login anthropic", context);
-      const submitResult = await loginResult.promptForInput!.onSubmit("sk-test-key");
+      const submitResult = await loginResult.promptForInput?.onSubmit("sk-test-key");
 
       expect(submitResult.success).toBe(true);
       expect(submitResult.message).toContain("file");
@@ -943,7 +943,7 @@ describe("Integration Scenarios", () => {
     expect(loginResult.success).toBe(true);
     expect(loginResult.promptForInput).toBeDefined();
 
-    const submitResult = await loginResult.promptForInput!.onSubmit("sk-ant-api-key-12345");
+    const submitResult = await loginResult.promptForInput?.onSubmit("sk-ant-api-key-12345");
     expect(submitResult.success).toBe(true);
     expect(submitResult.message).toContain("saved");
 
@@ -971,7 +971,7 @@ describe("Integration Scenarios", () => {
     const providers = ["anthropic", "openai", "google"];
     for (const provider of providers) {
       const loginResult = await executeSlashCommand(`/login ${provider}`, context);
-      await loginResult.promptForInput!.onSubmit(`sk-${provider}-key`);
+      await loginResult.promptForInput?.onSubmit(`sk-${provider}-key`);
     }
 
     // Verify all are listed
