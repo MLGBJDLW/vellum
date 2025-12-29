@@ -5,15 +5,15 @@
  * Provides reactive state, run/cancel methods, and automatic cleanup.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
 import {
   type AgentLoop,
   type AgentState,
-  type ExecutionResult,
-  type StateContext,
   createUserMessage,
+  type ExecutionResult,
   SessionParts,
+  type StateContext,
 } from "@vellum/core";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Message type for the hook's message list.

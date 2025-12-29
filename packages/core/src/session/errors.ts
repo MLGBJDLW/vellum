@@ -11,7 +11,7 @@
  * @module @vellum/core/session/errors
  */
 
-import { ErrorCode, ErrorSeverity, VellumError, inferSeverity } from "../errors/index.js";
+import { ErrorCode, ErrorSeverity, inferSeverity, VellumError } from "../errors/index.js";
 
 /**
  * Severity levels for error classification.
@@ -153,6 +153,48 @@ const ERROR_CLASSIFICATIONS: Record<ErrorCode, Omit<ErrorInfo, "error" | "code">
     retryDelay: 2000,
     maxRetries: 2,
     userMessage: "Tool execution timed out.",
+  },
+  [ErrorCode.TOOL_ABORTED]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Tool execution was aborted.",
+  },
+  [ErrorCode.PATH_SECURITY]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Path security validation failed.",
+  },
+  [ErrorCode.MCP_CONNECTION]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 5000,
+    maxRetries: 3,
+    userMessage: "MCP connection failed. Retrying...",
+  },
+  [ErrorCode.MCP_PROTOCOL]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "MCP protocol error.",
+  },
+  [ErrorCode.MCP_TIMEOUT]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 3000,
+    maxRetries: 2,
+    userMessage: "MCP request timed out.",
+  },
+  [ErrorCode.SMART_EDIT_FAILED]: {
+    severity: "recoverable",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 1000,
+    maxRetries: 2,
+    userMessage: "Smart edit operation failed.",
   },
 
   // Session errors - mostly fatal
@@ -325,7 +367,11 @@ function classifyByMessage(error: Error): ErrorInfo {
   }
 
   // Rate limit patterns
-  if (message.includes("rate limit") || message.includes("429") || message.includes("too many requests")) {
+  if (
+    message.includes("rate limit") ||
+    message.includes("429") ||
+    message.includes("too many requests")
+  ) {
     return {
       error,
       severity: "transient",

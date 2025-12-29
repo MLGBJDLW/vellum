@@ -11,7 +11,7 @@
  * @module @vellum/core/session/retry
  */
 
-import { VellumError, isRetryableError } from "../errors/index.js";
+import { isRetryableError, VellumError } from "../errors/index.js";
 
 /**
  * Options for session retry operations.

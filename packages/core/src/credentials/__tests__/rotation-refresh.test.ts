@@ -14,8 +14,8 @@ import {
   RefreshTimer,
   type RefreshTimerEvent,
 } from "../refresh.js";
-import { RotationManager, type RotationResult } from "../rotation.js";
-import type { Credential, CredentialRef, CredentialStore, CredentialStoreError } from "../types.js";
+import { RotationManager } from "../rotation.js";
+import type { Credential, CredentialRef, CredentialStore } from "../types.js";
 import { createStoreError } from "../types.js";
 
 // =============================================================================
@@ -70,7 +70,7 @@ function createMockStore(
       return Ok(existed);
     },
 
-    async list(provider?: string): Promise<ReturnType<CredentialStore["list"]>> {
+    async list(provider?: string) {
       const refs: CredentialRef[] = [];
       for (const [, cred] of credentials) {
         if (!provider || cred.provider === provider) {
@@ -83,7 +83,7 @@ function createMockStore(
             createdAt: cred.createdAt,
             expiresAt: cred.expiresAt,
             rotatedAt: cred.rotatedAt,
-            maskedHint: cred.value.slice(0, 4) + "...",
+            maskedHint: `${cred.value.slice(0, 4)}...`,
           });
         }
       }

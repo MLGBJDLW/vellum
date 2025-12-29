@@ -5,9 +5,15 @@
  */
 
 export {
-  useAgentLoop,
-  type UseAgentLoopReturn,
   type AgentMessage,
   type CurrentTool,
   type HookStatus,
+  type UseAgentLoopReturn,
+  useAgentLoop,
 } from "./useAgentLoop.js";
+
+export {
+  type PendingPermission,
+  type UsePermissionHandlerReturn,
+  usePermissionHandler,
+} from "./usePermissionHandler.js";

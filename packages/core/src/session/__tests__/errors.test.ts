@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { ErrorCode, VellumError } from "../../errors/index.js";
 import {
   classifyError,
-  isRetryable,
-  isFatal,
-  isTransient,
   getRetryDelay,
   getSuggestedErrorAction,
+  isFatal,
+  isRetryable,
+  isTransient,
 } from "../errors.js";
-import { VellumError, ErrorCode } from "../../errors/index.js";
 
 describe("Error Classification", () => {
   describe("classifyError", () => {
@@ -229,11 +229,15 @@ describe("Error Classification", () => {
     });
 
     it("should return abort for fatal errors", () => {
-      expect(getSuggestedErrorAction(new VellumError("Auth", ErrorCode.LLM_AUTH_FAILED))).toBe("abort");
+      expect(getSuggestedErrorAction(new VellumError("Auth", ErrorCode.LLM_AUTH_FAILED))).toBe(
+        "abort"
+      );
     });
 
     it("should return escalate for permission errors", () => {
-      expect(getSuggestedErrorAction(new VellumError("Denied", ErrorCode.TOOL_PERMISSION_DENIED))).toBe("escalate");
+      expect(
+        getSuggestedErrorAction(new VellumError("Denied", ErrorCode.TOOL_PERMISSION_DENIED))
+      ).toBe("escalate");
     });
   });
 });

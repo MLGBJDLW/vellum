@@ -3,14 +3,14 @@
  * @description Tests for backpressure controllers and trackers
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  ThroughputTracker,
-  LatencyTracker,
-  BackpressureController,
   AdaptiveBackpressure,
-  DEFAULT_BACKPRESSURE_CONFIG,
+  BackpressureController,
   DEFAULT_ADAPTIVE_CONFIG,
+  DEFAULT_BACKPRESSURE_CONFIG,
+  LatencyTracker,
+  ThroughputTracker,
 } from "../backpressure.js";
 
 // =============================================================================
@@ -314,7 +314,7 @@ describe("AdaptiveBackpressure", () => {
     (adaptive as any).latency.record(150);
     (adaptive as any).latency.record(150);
     (adaptive as any).latency.record(150);
-    
+
     // First sendWithTracking triggers maybeAdjustStrategy
     // Since lastAdjustment starts at 0 and Date.now() > 1000, it will adjust
     await adaptive.sendWithTracking("item1");
@@ -325,7 +325,7 @@ describe("AdaptiveBackpressure", () => {
     (adaptive as any).latency.record(20);
     (adaptive as any).latency.record(20);
     (adaptive as any).latency.record(20);
-    
+
     // Immediate second send - should NOT adjust (within interval)
     await adaptive.sendWithTracking("item2");
     const metrics2 = adaptive.getMetrics();

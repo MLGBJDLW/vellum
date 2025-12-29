@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { CitationCollector } from "../citation.js";
 
 describe("CitationCollector", () => {
@@ -55,9 +55,9 @@ describe("CitationCollector", () => {
 
       const sorted = collector.getSortedCitations();
 
-      expect(sorted[0]!.uri).toBe("https://example.com/high");
-      expect(sorted[1]!.uri).toBe("https://example.com/mid");
-      expect(sorted[2]!.uri).toBe("https://example.com/low");
+      expect(sorted[0]?.uri).toBe("https://example.com/high");
+      expect(sorted[1]?.uri).toBe("https://example.com/mid");
+      expect(sorted[2]?.uri).toBe("https://example.com/low");
     });
 
     it("treats missing relevanceScore as 0", () => {
@@ -73,8 +73,8 @@ describe("CitationCollector", () => {
 
       const sorted = collector.getSortedCitations();
 
-      expect(sorted[0]!.uri).toBe("https://example.com/with-score");
-      expect(sorted[1]!.uri).toBe("https://example.com/no-score");
+      expect(sorted[0]?.uri).toBe("https://example.com/with-score");
+      expect(sorted[1]?.uri).toBe("https://example.com/no-score");
     });
   });
 
@@ -93,8 +93,8 @@ describe("CitationCollector", () => {
 
       expect(collector.count).toBe(1);
       const citations = collector.getSortedCitations();
-      expect(citations[0]!.title).toBe("Second");
-      expect(citations[0]!.relevanceScore).toBe(0.9);
+      expect(citations[0]?.title).toBe("Second");
+      expect(citations[0]?.relevanceScore).toBe(0.9);
     });
   });
 

@@ -448,9 +448,9 @@ describe("KeychainStore (with mocked keytar)", () => {
         expect(result.value.length).toBe(2);
         expect(result.value.map((r) => r.provider).sort()).toEqual(["anthropic", "openai"]);
         // Values should be masked
-        expect(result.value[0].maskedHint).toBeDefined();
+        expect(result.value[0]?.maskedHint).toBeDefined();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        expect((result.value[0] as any).value).toBeUndefined();
+        expect((result.value[0]! as any).value).toBeUndefined();
       }
     });
 
@@ -481,7 +481,7 @@ describe("KeychainStore (with mocked keytar)", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.length).toBe(1);
-        expect(result.value[0].provider).toBe("anthropic");
+        expect(result.value[0]?.provider).toBe("anthropic");
       }
     });
 
@@ -503,7 +503,7 @@ describe("KeychainStore (with mocked keytar)", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.length).toBe(1);
-        expect(result.value[0].provider).toBe("openai");
+        expect(result.value[0]?.provider).toBe("openai");
       }
     });
 

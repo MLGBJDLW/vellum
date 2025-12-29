@@ -58,7 +58,7 @@ describe("migrateMessage", () => {
       const result = migrateMessage(legacy);
 
       expect(result.content).toHaveLength(1);
-      expect(result.content[0]!.type).toBe("text");
+      expect(result.content[0]?.type).toBe("text");
     });
   });
 
@@ -170,7 +170,7 @@ describe("migrateMessage", () => {
       const result = migrateMessage(legacy);
 
       expect(result.content).toHaveLength(3);
-      expect(result.content[0]!.type).toBe("text");
+      expect(result.content[0]?.type).toBe("text");
       expect(result.content[1]).toMatchObject({
         type: "tool",
         toolCallId: "call_1",
@@ -383,9 +383,9 @@ describe("migrateMessages", () => {
     const results = migrateMessages(legacyMessages);
 
     expect(results).toHaveLength(3);
-    expect(results[0]!.role).toBe("system");
-    expect(results[1]!.role).toBe("user");
-    expect(results[2]!.role).toBe("assistant");
+    expect(results[0]?.role).toBe("system");
+    expect(results[1]?.role).toBe("user");
+    expect(results[2]?.role).toBe("assistant");
   });
 
   it("should handle empty array", () => {

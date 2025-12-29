@@ -134,7 +134,7 @@ export class Logger {
   async flush(): Promise<void> {
     const flushPromises = this.transports
       .filter((t) => t.flush !== undefined)
-      .map((t) => t.flush!());
+      .map((t) => t.flush?.());
 
     await Promise.all(flushPromises);
   }

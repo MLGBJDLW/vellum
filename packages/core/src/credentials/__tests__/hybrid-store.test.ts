@@ -7,7 +7,7 @@
  * @module credentials/__tests__/hybrid-store.test
  */
 
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 

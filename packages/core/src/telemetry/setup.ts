@@ -76,7 +76,6 @@ function createExporter(
       return new OTLPTraceExporter({
         url: config.otlpEndpoint,
       });
-    case "none":
     default:
       return undefined;
   }

@@ -55,10 +55,7 @@ export function App({ model, provider }: AppProps) {
         // Cancel running operation
         cancellationRef.current.cancel("user_escape");
         setIsLoading(false);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "[Operation cancelled]" },
-        ]);
+        setMessages((prev) => [...prev, { role: "assistant", content: "[Operation cancelled]" }]);
       } else {
         // No operation running, exit app
         exit();

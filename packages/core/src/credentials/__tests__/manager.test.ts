@@ -7,7 +7,7 @@
  * @see packages/core/src/credentials/manager.ts
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { Err, Ok } from "../../types/result.js";
 import { CredentialManager, type CredentialManagerEvent } from "../manager.js";
@@ -16,7 +16,6 @@ import type {
   CredentialRef,
   CredentialSource,
   CredentialStore,
-  CredentialStoreError,
   CredentialValidationResult,
 } from "../types.js";
 import { createStoreError } from "../types.js";
@@ -177,6 +176,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test-key",
+        metadata: {},
       });
 
       expect(result.ok).toBe(true);
@@ -196,6 +196,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test-key",
+        metadata: {},
       });
 
       expect(fileStore.set).toHaveBeenCalled();
@@ -213,6 +214,7 @@ describe("CredentialManager", () => {
           provider: "anthropic",
           type: "api_key",
           value: "sk-test-key",
+          metadata: {},
         },
         "file"
       );
@@ -229,6 +231,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test-key",
+        metadata: {},
       });
 
       expect(result.ok).toBe(false);
@@ -244,6 +247,7 @@ describe("CredentialManager", () => {
           provider: "anthropic",
           type: "api_key",
           value: "sk-test-key",
+          metadata: {},
         },
         "env"
       );
@@ -268,6 +272,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "new-key",
+        metadata: {},
       });
 
       // Resolve again should hit store, not cache
@@ -286,6 +291,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test-key",
+        metadata: {},
       });
 
       expect(events).toContain("credential:stored");
@@ -304,6 +310,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "bad-key",
+        metadata: {},
       });
 
       expect(result.ok).toBe(false);
@@ -622,6 +629,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-ant-test-key",
+        metadata: {},
       });
       expect(storeResult.ok).toBe(true);
       expect(storeResult.ok && storeResult.value.provider).toBe("anthropic");
@@ -647,34 +655,43 @@ describe("CredentialManager", () => {
       const manager = new CredentialManager([keychainStore]);
 
       // Store multiple credentials
-      await manager.store({ provider: "anthropic", type: "api_key", value: "sk-ant-1" });
-      await manager.store({ provider: "openai", type: "api_key", value: "sk-openai-1" });
-      await manager.store({ provider: "cohere", type: "api_key", value: "sk-cohere-1" });
+      await manager.store({
+        provider: "anthropic",
+        type: "api_key",
+        value: "sk-ant-1",
+        metadata: {},
+      });
+      await manager.store({
+        provider: "openai",
+        type: "api_key",
+        value: "sk-openai-1",
+        metadata: {},
+      });
+      await manager.store({
+        provider: "cohere",
+        type: "api_key",
+        value: "sk-cohere-1",
+        metadata: {},
+      });
 
       // Verify all exist
-      expect(
-        (await manager.exists("anthropic")).ok && (await manager.exists("anthropic")).value
-      ).toBe(true);
-      expect((await manager.exists("openai")).ok && (await manager.exists("openai")).value).toBe(
-        true
-      );
-      expect((await manager.exists("cohere")).ok && (await manager.exists("cohere")).value).toBe(
-        true
-      );
+      const anthropicExists = await manager.exists("anthropic");
+      expect(anthropicExists.ok && anthropicExists.value).toBe(true);
+      const openaiExists = await manager.exists("openai");
+      expect(openaiExists.ok && openaiExists.value).toBe(true);
+      const cohereExists = await manager.exists("cohere");
+      expect(cohereExists.ok && cohereExists.value).toBe(true);
 
       // Delete one
       await manager.delete("openai");
 
       // Verify deletion
-      expect(
-        (await manager.exists("anthropic")).ok && (await manager.exists("anthropic")).value
-      ).toBe(true);
-      expect((await manager.exists("openai")).ok && (await manager.exists("openai")).value).toBe(
-        false
-      );
-      expect((await manager.exists("cohere")).ok && (await manager.exists("cohere")).value).toBe(
-        true
-      );
+      const anthropicExistsAfter = await manager.exists("anthropic");
+      expect(anthropicExistsAfter.ok && anthropicExistsAfter.value).toBe(true);
+      const openaiExistsAfter = await manager.exists("openai");
+      expect(openaiExistsAfter.ok && openaiExistsAfter.value).toBe(false);
+      const cohereExistsAfter = await manager.exists("cohere");
+      expect(cohereExistsAfter.ok && cohereExistsAfter.value).toBe(true);
     });
 
     it("should update existing credential via store", async () => {
@@ -686,6 +703,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "old-key",
+        metadata: {},
       });
 
       const initialResult = await manager.resolve("anthropic");
@@ -696,6 +714,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "new-key",
+        metadata: {},
       });
 
       const updatedResult = await manager.resolve("anthropic");
@@ -707,11 +726,21 @@ describe("CredentialManager", () => {
       const manager = new CredentialManager([keychainStore]);
 
       // Store and resolve (caches)
-      await manager.store({ provider: "anthropic", type: "api_key", value: "initial" });
+      await manager.store({
+        provider: "anthropic",
+        type: "api_key",
+        value: "initial",
+        metadata: {},
+      });
       await manager.resolve("anthropic");
 
       // Store new value (should invalidate cache)
-      await manager.store({ provider: "anthropic", type: "api_key", value: "updated" });
+      await manager.store({
+        provider: "anthropic",
+        type: "api_key",
+        value: "updated",
+        metadata: {},
+      });
 
       // Resolve should get new value, not cached
       const result = await manager.resolve("anthropic");
@@ -743,6 +772,7 @@ describe("CredentialManager", () => {
         provider: "openai",
         type: "api_key",
         value: "sk-openai-key",
+        metadata: {},
       });
       expect(storeResult.ok && storeResult.value.source).toBe("keychain");
     });
@@ -759,6 +789,7 @@ describe("CredentialManager", () => {
           provider: "anthropic",
           type: "api_key",
           value: "sk-test",
+          metadata: {},
         },
         "file"
       );
@@ -855,6 +886,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test",
+        metadata: {},
       });
 
       expect(events.some((e) => e.type === "credential:stored")).toBe(true);
@@ -930,6 +962,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test",
+        metadata: {},
       });
 
       expect(events.some((e) => e.type === "error")).toBe(true);
@@ -949,6 +982,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test",
+        metadata: {},
       });
 
       expect(events.some((e) => e.type === "credential:validated")).toBe(true);
@@ -964,7 +998,12 @@ describe("CredentialManager", () => {
       manager.on((e) => eventTypes.push(e.type));
 
       // Store
-      await manager.store({ provider: "anthropic", type: "api_key", value: "sk-test" });
+      await manager.store({
+        provider: "anthropic",
+        type: "api_key",
+        value: "sk-test",
+        metadata: {},
+      });
       expect(eventTypes).toContain("credential:stored");
 
       // Resolve (first time - not in cache yet after store invalidation)
@@ -994,6 +1033,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-valid-key",
+        metadata: {},
       });
 
       expect(validator).toHaveBeenCalled();
@@ -1013,6 +1053,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "invalid-key",
+        metadata: {},
       });
 
       expect(result.ok).toBe(false);
@@ -1039,6 +1080,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-ant-valid-key",
+        metadata: {},
       });
       expect(validResult.ok).toBe(true);
 
@@ -1047,6 +1089,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-wrong-prefix",
+        metadata: {},
       });
       expect(invalidResult.ok).toBe(false);
     });
@@ -1084,8 +1127,8 @@ describe("CredentialManager", () => {
       const manager = new CredentialManager([keychainStore], { validator });
 
       // Store multiple credentials
-      await manager.store({ provider: "anthropic", type: "api_key", value: "key1" });
-      await manager.store({ provider: "openai", type: "api_key", value: "key2" });
+      await manager.store({ provider: "anthropic", type: "api_key", value: "key1", metadata: {} });
+      await manager.store({ provider: "openai", type: "api_key", value: "key2", metadata: {} });
 
       expect(validationCount).toBe(2);
       expect(keychainStore.set).toHaveBeenCalledTimes(2);
@@ -1109,6 +1152,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test",
+        metadata: {},
       });
 
       expect(result.ok).toBe(true);
@@ -1125,6 +1169,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test",
+        metadata: {},
       });
 
       expect(result.ok).toBe(false);
@@ -1163,6 +1208,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "api_key",
         value: "sk-test",
+        metadata: {},
       });
 
       expect(result.ok).toBe(false);
@@ -1216,6 +1262,7 @@ describe("CredentialManager", () => {
         provider: "anthropic",
         type: "invalid_type" as "api_key", // Invalid: invalid type
         value: "sk-test",
+        metadata: {},
       });
 
       expect(result.ok).toBe(false);
@@ -1257,7 +1304,7 @@ describe("CredentialManager", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.length).toBe(1);
-        expect(result.value[0].provider).toBe("anthropic");
+        expect(result.value[0]?.provider).toBe("anthropic");
       }
     });
 
@@ -1267,8 +1314,8 @@ describe("CredentialManager", () => {
 
       // Run multiple operations concurrently
       const [storeResult1, storeResult2, resolveResult] = await Promise.all([
-        manager.store({ provider: "anthropic", type: "api_key", value: "key1" }),
-        manager.store({ provider: "openai", type: "api_key", value: "key2" }),
+        manager.store({ provider: "anthropic", type: "api_key", value: "key1", metadata: {} }),
+        manager.store({ provider: "openai", type: "api_key", value: "key2", metadata: {} }),
         manager.resolve("cohere"),
       ]);
 

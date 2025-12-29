@@ -6,6 +6,17 @@
  * @module mappers
  */
 
+// SSE Utilities
+export {
+  createSSEParser,
+  isRetryable,
+  parseSSE,
+  RETRYABLE_STATUS_CODES,
+  type RetryableStatusCode,
+  type SSEEvent,
+  type SSEParseError,
+  type SSEParser,
+} from "./sse.js";
 // Types
 export type {
   EventMapper,
@@ -13,15 +24,3 @@ export type {
   MapperErrorCode,
   SSEParserConfig,
 } from "./types.js";
-
-// SSE Utilities
-export {
-  parseSSE,
-  createSSEParser,
-  isRetryable,
-  RETRYABLE_STATUS_CODES,
-  type SSEEvent,
-  type SSEParseError,
-  type SSEParser,
-  type RetryableStatusCode,
-} from "./sse.js";

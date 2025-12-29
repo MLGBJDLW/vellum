@@ -32,6 +32,12 @@ export enum ErrorCode {
   TOOL_EXECUTION_FAILED = 3003,
   TOOL_PERMISSION_DENIED = 3004,
   TOOL_TIMEOUT = 3005,
+  TOOL_ABORTED = 3006,
+  PATH_SECURITY = 3007,
+  MCP_CONNECTION = 3008,
+  MCP_PROTOCOL = 3009,
+  MCP_TIMEOUT = 3010,
+  SMART_EDIT_FAILED = 3011,
 
   // 4xxx - Session errors
   SESSION_NOT_FOUND = 4001,
@@ -71,6 +77,8 @@ export function inferSeverity(code: ErrorCode): ErrorSeverity {
     case ErrorCode.LLM_NETWORK_ERROR:
     case ErrorCode.TOOL_TIMEOUT:
     case ErrorCode.SYSTEM_IO_ERROR:
+    case ErrorCode.MCP_TIMEOUT:
+    case ErrorCode.MCP_CONNECTION:
       return ErrorSeverity.RECOVERABLE;
 
     // User action required - user needs to fix something
@@ -84,14 +92,14 @@ export function inferSeverity(code: ErrorCode): ErrorSeverity {
     case ErrorCode.TOOL_VALIDATION_FAILED:
     case ErrorCode.TOOL_PERMISSION_DENIED:
     case ErrorCode.TOOL_EXECUTION_FAILED:
+    case ErrorCode.TOOL_ABORTED:
+    case ErrorCode.PATH_SECURITY:
+    case ErrorCode.MCP_PROTOCOL:
+    case ErrorCode.SMART_EDIT_FAILED:
     case ErrorCode.SESSION_NOT_FOUND:
     case ErrorCode.SESSION_EXPIRED:
     case ErrorCode.SESSION_CONFLICT:
       return ErrorSeverity.USER_ACTION;
-
-    // Fatal errors - cannot continue
-    case ErrorCode.SYSTEM_OUT_OF_MEMORY:
-    case ErrorCode.SYSTEM_UNKNOWN:
     default:
       return ErrorSeverity.FATAL;
   }

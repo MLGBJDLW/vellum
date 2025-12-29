@@ -11,15 +11,15 @@
  * @module @vellum/core/session/message
  */
 
-import { z } from "zod";
 import type {
   CompletionMessage,
   ContentPart,
   TextContentPart,
-  ToolUseContentPart,
   ToolResultContentPart,
+  ToolUseContentPart,
 } from "@vellum/provider";
 import { createId } from "@vellum/shared";
+import { z } from "zod";
 
 // =============================================================================
 // Session Message Part Schemas (Session-specific)
@@ -303,7 +303,11 @@ export function createSystemMessage(text: string): SessionMessage {
  * @param isError - Whether the result is an error
  * @returns Tool result message object
  */
-export function createToolResultMessage(toolId: string, content: string | unknown, isError?: boolean): SessionMessage {
+export function createToolResultMessage(
+  toolId: string,
+  content: string | unknown,
+  isError?: boolean
+): SessionMessage {
   return {
     id: createId(),
     role: "tool_result",
@@ -373,7 +377,9 @@ function messageToCompletionMessage(message: SessionMessage): CompletionMessage 
   const role = message.role === "tool_result" ? "user" : message.role;
 
   // Convert parts, filtering out non-convertible ones
-  const contentParts = message.parts.map(partToContentPart).filter((p): p is ContentPart => p !== undefined);
+  const contentParts = message.parts
+    .map(partToContentPart)
+    .filter((p): p is ContentPart => p !== undefined);
 
   // If only one text part, use simple string content
   const firstPart = contentParts[0];
@@ -450,7 +456,9 @@ export function getToolCalls(message: SessionMessage): SessionToolPart[] {
  * @returns Concatenated reasoning content or undefined
  */
 export function getReasoningContent(message: SessionMessage): string | undefined {
-  const reasoningParts = message.parts.filter((p): p is SessionReasoningPart => p.type === "reasoning");
+  const reasoningParts = message.parts.filter(
+    (p): p is SessionReasoningPart => p.type === "reasoning"
+  );
   if (reasoningParts.length === 0) {
     return undefined;
   }

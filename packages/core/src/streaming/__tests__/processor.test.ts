@@ -3,17 +3,17 @@
  * @description Tests for block processors, processMultiBlockStream, and StreamProcessor integration
  */
 
-import { describe, expect, it, vi } from "vitest";
 import type { StreamEvent } from "@vellum/provider";
-import { Ok, Err } from "../../types/result.js";
+import { describe, expect, it, vi } from "vitest";
 import type { Result } from "../../types/result.js";
+import { Err, Ok } from "../../types/result.js";
 import {
-  TextBlockProcessor,
-  ReasoningBlockProcessor,
   processMultiBlockStream,
+  ReasoningBlockProcessor,
   StreamProcessor,
-  type UiEvent,
   type StreamProcessorHooks,
+  TextBlockProcessor,
+  type UiEvent,
 } from "../processor.js";
 
 // =============================================================================
@@ -874,7 +874,12 @@ describe("StreamProcessor Integration Tests", () => {
           name: "search",
           index: 0,
         } as StreamEvent),
-        Ok({ type: "tool_call_delta", id: "call_1", arguments: '{"q":"a"}', index: 0 } as StreamEvent),
+        Ok({
+          type: "tool_call_delta",
+          id: "call_1",
+          arguments: '{"q":"a"}',
+          index: 0,
+        } as StreamEvent),
         Ok({ type: "tool_call_end", id: "call_1", index: 0 } as StreamEvent),
         Ok({
           type: "tool_call_start",

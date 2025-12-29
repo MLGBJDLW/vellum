@@ -62,7 +62,7 @@ export class RotatingFileTransport implements LogTransport {
    * Write a log entry to the file (alias for log).
    */
   write(entry: LogEntry): void {
-    const line = JSON.stringify(entry) + "\n";
+    const line = `${JSON.stringify(entry)}\n`;
     const bytes = Buffer.byteLength(line, "utf8");
 
     if (this.currentSize + bytes > this.maxSize) {

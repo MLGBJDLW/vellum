@@ -99,7 +99,7 @@ describe("credentials/providers/formats", () => {
         expect(COHERE_KEY_PATTERN.test("short")).toBe(false);
         expect(COHERE_KEY_PATTERN.test("a".repeat(39))).toBe(false); // too short
         expect(COHERE_KEY_PATTERN.test("a".repeat(41))).toBe(false); // too long
-        expect(COHERE_KEY_PATTERN.test("a".repeat(39) + "-")).toBe(false); // special char
+        expect(COHERE_KEY_PATTERN.test(`${"a".repeat(39)}-`)).toBe(false); // special char
       });
     });
 

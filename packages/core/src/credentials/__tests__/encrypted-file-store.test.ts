@@ -7,7 +7,7 @@
  * @see packages/core/src/credentials/stores/encrypted-file-store.ts
  */
 
-import { chmod, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -593,7 +593,7 @@ describe("EncryptedFileStore", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.length).toBe(1);
-        expect(result.value[0].provider).toBe("anthropic");
+        expect(result.value[0]?.provider).toBe("anthropic");
       }
     });
 
@@ -642,7 +642,7 @@ describe("EncryptedFileStore", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value[0].maskedHint).toBe("sk-...LMN");
+        expect(result.value[0]?.maskedHint).toBe("sk-...LMN");
       }
     });
   });
@@ -825,7 +825,7 @@ describe("EncryptedFileStore", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.length).toBe(1);
-        expect(result.value[0].provider).toBe("good");
+        expect(result.value[0]?.provider).toBe("good");
       }
     });
   });

@@ -792,7 +792,10 @@ describe("checkDeprecatedApiKeyUsage", () => {
   });
 
   it("emits warning when apiKey is present in config", () => {
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/path/to/config.toml");
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-test" } },
+      "/path/to/config.toml"
+    );
 
     expect(consoleSpy).toHaveBeenCalledTimes(1);
     expect(consoleSpy.mock.calls[0]?.[0]).toContain("DEPRECATION WARNING");
@@ -801,34 +804,54 @@ describe("checkDeprecatedApiKeyUsage", () => {
   });
 
   it("does not emit warning when apiKey is not present", () => {
-    checkDeprecatedApiKeyUsage({ llm: { provider: "anthropic" } }, "/path/to/config.toml");
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022" } },
+      "/path/to/config.toml"
+    );
 
     expect(consoleSpy).not.toHaveBeenCalled();
   });
 
   it("includes migration instructions in warning", () => {
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/test.toml");
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-test" } },
+      "/test.toml"
+    );
 
     expect(consoleSpy.mock.calls[0]?.[0]).toContain("credential");
     expect(consoleSpy.mock.calls[0]?.[0]).toContain("vellum credentials migrate");
   });
 
   it("only emits warning once per config path per session", () => {
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/same/path.toml");
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-other" } }, "/same/path.toml");
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-test" } },
+      "/same/path.toml"
+    );
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-other" } },
+      "/same/path.toml"
+    );
 
     expect(consoleSpy).toHaveBeenCalledTimes(1);
   });
 
   it("emits warning for different config paths", () => {
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/path/a.toml");
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/path/b.toml");
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-test" } },
+      "/path/a.toml"
+    );
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-test" } },
+      "/path/b.toml"
+    );
 
     expect(consoleSpy).toHaveBeenCalledTimes(2);
   });
 
   it("handles undefined config path", () => {
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } });
+    checkDeprecatedApiKeyUsage({
+      llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-test" },
+    });
 
     expect(consoleSpy).toHaveBeenCalledTimes(1);
     // Should not include specific path when undefined
@@ -1084,7 +1107,12 @@ describe("promptForCredentials", () => {
   it("returns null when not in interactive mode", async () => {
     const result = await promptForCredentials("anthropic", {
       interactive: false,
-      promptCredential: async () => ({ provider: "anthropic", type: "api_key", value: "test" }),
+      promptCredential: async () => ({
+        provider: "anthropic",
+        type: "api_key",
+        value: "test",
+        metadata: {},
+      }),
     });
 
     expect(result).toBeNull();
@@ -1156,18 +1184,27 @@ describe("clearDeprecationWarningsCache", () => {
   it("allows warnings to be shown again after clearing", () => {
     const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/test.toml");
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-test" } },
+      "/test.toml"
+    );
     expect(consoleSpy).toHaveBeenCalledTimes(1);
 
     // Same path should not emit again
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/test.toml");
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-test" } },
+      "/test.toml"
+    );
     expect(consoleSpy).toHaveBeenCalledTimes(1);
 
     // Clear cache
     clearDeprecationWarningsCache();
 
     // Now should emit again
-    checkDeprecatedApiKeyUsage({ llm: { apiKey: "sk-test" } }, "/test.toml");
+    checkDeprecatedApiKeyUsage(
+      { llm: { provider: "anthropic", model: "claude-3-5-sonnet-20241022", apiKey: "sk-test" } },
+      "/test.toml"
+    );
     expect(consoleSpy).toHaveBeenCalledTimes(2);
 
     consoleSpy.mockRestore();

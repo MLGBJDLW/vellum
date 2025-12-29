@@ -13,8 +13,8 @@
  * - Edge cases (EC-001, EC-002, EC-006, EC-007)
  */
 
-import { describe, expect, it, beforeEach } from "vitest";
 import type { GroundingChunk } from "@vellum/provider";
+import { beforeEach, describe, expect, it } from "vitest";
 import { StreamCollector } from "../collector.js";
 
 describe("StreamCollector", () => {
@@ -356,8 +356,8 @@ describe("StreamCollector", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.citations).toHaveLength(2);
-        expect(result.value.citations![0]).toEqual(chunk1);
-        expect(result.value.citations![1]).toEqual(chunk2);
+        expect(result.value.citations?.[0]).toEqual(chunk1);
+        expect(result.value.citations?.[1]).toEqual(chunk2);
       }
     });
 
@@ -746,13 +746,13 @@ describe("StreamCollector", () => {
         expect(reasoningParts.length).toBeGreaterThan(0);
 
         // Text content should be combined (based on index)
-        const combinedText = textParts.map((p) => p.type === "text" ? p.content : "").join("");
+        const combinedText = textParts.map((p) => (p.type === "text" ? p.content : "")).join("");
         expect(combinedText).toContain("Response part 1");
         expect(combinedText).toContain("Response part 2");
 
         // Reasoning content should be combined
         const combinedReasoning = reasoningParts
-          .map((p) => p.type === "reasoning" ? p.content : "")
+          .map((p) => (p.type === "reasoning" ? p.content : ""))
           .join("");
         expect(combinedReasoning).toContain("First thought");
         expect(combinedReasoning).toContain("Second thought");
@@ -889,7 +889,7 @@ describe("StreamCollector", () => {
 
         // Check citations
         expect(message.citations).toHaveLength(1);
-        expect(message.citations![0]).toEqual(chunk);
+        expect(message.citations?.[0]).toEqual(chunk);
 
         // Check usage
         expect(message.usage).toEqual({

@@ -6,7 +6,7 @@
  */
 
 import { Box, Text, useInput } from "ink";
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 
 /**
  * Props for the ThinkingBlock component.

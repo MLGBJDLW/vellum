@@ -387,10 +387,10 @@ model = "gpt-4"
 
       // Verify event was emitted
       expect(events.length).toBe(1);
-      expect(events[0]!.type).toBe("credential:resolved");
-      if (events[0]!.type === "credential:resolved") {
-        expect(events[0]!.provider).toBe("anthropic");
-        expect(events[0]!.source).toBe("keychain");
+      expect(events[0]?.type).toBe("credential:resolved");
+      if (events[0]?.type === "credential:resolved") {
+        expect(events[0]?.provider).toBe("anthropic");
+        expect(events[0]?.source).toBe("keychain");
       }
     });
 
@@ -403,9 +403,9 @@ model = "gpt-4"
       await credentialManager.resolve("nonexistent");
 
       expect(events.length).toBe(1);
-      expect(events[0]!.type).toBe("credential:not_found");
-      if (events[0]!.type === "credential:not_found") {
-        expect(events[0]!.provider).toBe("nonexistent");
+      expect(events[0]?.type).toBe("credential:not_found");
+      if (events[0]?.type === "credential:not_found") {
+        expect(events[0]?.provider).toBe("nonexistent");
       }
     });
 
@@ -420,6 +420,7 @@ model = "gpt-4"
         provider: "anthropic",
         type: "api_key",
         value: "sk-test",
+        metadata: {},
       });
 
       // Resolve
@@ -445,6 +446,7 @@ model = "gpt-4"
         provider: "anthropic",
         type: "api_key",
         value: "sk-test",
+        metadata: {},
       });
 
       const errorEvents = events.filter((e) => e.type === "error");
@@ -472,20 +474,21 @@ model = "gpt-4"
         provider: "anthropic",
         type: "api_key",
         value: "sk-audit-test",
+        metadata: {},
       });
       await credentialManager.resolve("anthropic");
       await credentialManager.delete("anthropic");
 
       // Verify audit trail
       expect(auditLog.length).toBe(3);
-      expect(auditLog[0]!.event.type).toBe("credential:stored");
-      expect(auditLog[1]!.event.type).toBe("credential:resolved");
-      expect(auditLog[2]!.event.type).toBe("credential:deleted");
+      expect(auditLog[0]?.event.type).toBe("credential:stored");
+      expect(auditLog[1]?.event.type).toBe("credential:resolved");
+      expect(auditLog[2]?.event.type).toBe("credential:deleted");
 
       // Verify timestamps are ordered
       for (let i = 1; i < auditLog.length; i++) {
-        expect(auditLog[i]!.timestamp.getTime()).toBeGreaterThanOrEqual(
-          auditLog[i - 1]!.timestamp.getTime()
+        expect(auditLog[i]?.timestamp.getTime()).toBeGreaterThanOrEqual(
+          auditLog[i - 1]?.timestamp.getTime()
         );
       }
     });
@@ -501,6 +504,7 @@ model = "gpt-4"
         provider: "anthropic",
         type: "api_key",
         value: "sk-secret-value-12345",
+        metadata: {},
       });
       await credentialManager.resolve("anthropic");
 
@@ -566,6 +570,7 @@ model = "claude-3"
           provider: "anthropic",
           type: "invalid_type" as any,
           value: "test-value",
+          metadata: {},
         });
 
         expect(result.ok).toBe(false);
@@ -582,6 +587,7 @@ model = "claude-3"
           provider: "", // Empty provider is accepted by schema but tested for completeness
           type: "api_key",
           value: "sk-test",
+          metadata: {},
         } as any);
 
         // Empty provider is technically valid per schema, so this tests the store behavior
@@ -597,6 +603,7 @@ model = "claude-3"
           provider: "anthropic",
           // type is missing
           value: "sk-test",
+          metadata: {},
         } as any);
 
         expect(result.ok).toBe(false);
@@ -620,6 +627,7 @@ model = "claude-3"
           provider: "anthropic",
           type: "api_key",
           value: "invalid-prefix-key",
+          metadata: {},
         });
 
         expect(result.ok).toBe(false);
@@ -682,8 +690,8 @@ apiKey = "sk-deprecated-key"
         });
 
         expect(consoleSpy).toHaveBeenCalled();
-        const warningCall = consoleSpy.mock.calls.find(
-          (call: string[]) => call[0] && call[0].includes("DEPRECATION WARNING")
+        const warningCall = consoleSpy.mock.calls.find((call: string[]) =>
+          call[0]?.includes("DEPRECATION WARNING")
         );
         expect(warningCall).toBeDefined();
       });
@@ -925,6 +933,7 @@ model = "claude-3"
         provider: "anthropic",
         type: "api_key",
         value: "sk-updated",
+        metadata: {},
       });
 
       // Resolve again (should hit store)

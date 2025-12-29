@@ -9,86 +9,79 @@
  */
 
 export {
-  // Types
-  type Usage,
-  type StreamTextPart,
-  type StreamReasoningPart,
-  type StreamToolPart,
-  type StreamMessagePart,
-  type AssistantMessage,
-  type CollectorAction,
+  AdaptiveBackpressure,
+  type AdaptiveBackpressureConfig,
+  type BackpressureConfig,
   // Classes
-  StreamCollector,
-} from "./collector.js";
-
-export {
-  // Types
-  type NewlineGateConfig,
-  // Constants
-  DEFAULT_NEWLINE_GATE_CONFIG,
-  // Classes
-  NewlineGate,
-} from "./newline-gate.js";
-
-export {
+  BackpressureController,
   // Types
   type BackpressureState,
   type BackpressureStrategy,
-  type BackpressureConfig,
-  type AdaptiveBackpressureConfig,
+  DEFAULT_ADAPTIVE_CONFIG,
   // Constants
   DEFAULT_BACKPRESSURE_CONFIG,
-  DEFAULT_ADAPTIVE_CONFIG,
-  // Classes
-  BackpressureController,
-  ThroughputTracker,
   LatencyTracker,
-  AdaptiveBackpressure,
+  ThroughputTracker,
 } from "./backpressure.js";
-
-export {
-  // Types
-  type StreamError,
-  type UiEvent,
-  type UiEventHandler,
-  type BlockProcessor,
-  type StreamProcessorConfig,
-  type StreamProcessorHooks,
-  // Classes
-  StreamProcessor,
-  TextBlockProcessor,
-  ReasoningBlockProcessor,
-  // Functions
-  processMultiBlockStream,
-} from "./processor.js";
-
-export {
-  // Types
-  type MCPToolStatus,
-  type MCPToolState,
-  type MCPStreamEvent,
-  type MCPToolCallback,
-  // Classes
-  MCPStreamHandler,
-} from "./mcp-handler.js";
-
 export {
   // Classes
   CitationCollector,
 } from "./citation.js";
-
+export {
+  type AssistantMessage,
+  type CollectorAction,
+  // Classes
+  StreamCollector,
+  type StreamMessagePart,
+  type StreamReasoningPart,
+  type StreamTextPart,
+  type StreamToolPart,
+  // Types
+  type Usage,
+} from "./collector.js";
 export {
   // Types
   type StreamContext,
-  type StreamingHooks,
   // Classes
   StreamingHookManager,
+  type StreamingHooks,
 } from "./hooks.js";
-
 export {
   // Types
   type LogLevel,
-  type StreamLoggerConfig,
   // Classes
   StreamLogger,
+  type StreamLoggerConfig,
 } from "./logging.js";
+export {
+  type MCPStreamEvent,
+  // Classes
+  MCPStreamHandler,
+  type MCPToolCallback,
+  type MCPToolState,
+  // Types
+  type MCPToolStatus,
+} from "./mcp-handler.js";
+export {
+  // Constants
+  DEFAULT_NEWLINE_GATE_CONFIG,
+  // Classes
+  NewlineGate,
+  // Types
+  type NewlineGateConfig,
+} from "./newline-gate.js";
+export {
+  type BlockProcessor,
+  // Functions
+  processMultiBlockStream,
+  ReasoningBlockProcessor,
+  // Types
+  type StreamError,
+  // Classes
+  StreamProcessor,
+  type StreamProcessorConfig,
+  type StreamProcessorHooks,
+  TextBlockProcessor,
+  type UiEvent,
+  type UiEventHandler,
+} from "./processor.js";

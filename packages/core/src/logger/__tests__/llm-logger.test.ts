@@ -43,7 +43,7 @@ describe("LLMLogger", () => {
 
       llmLogger.logRequestStart("anthropic", "claude-3-opus", "req-abc");
 
-      const data = transport.entries[0]!.data as Record<string, unknown>;
+      const data = transport.entries[0]?.data as Record<string, unknown>;
       expect(data.provider).toBe("anthropic");
       expect(data.model).toBe("claude-3-opus");
     });
@@ -92,7 +92,7 @@ describe("LLMLogger", () => {
         durationMs: 1000,
       });
 
-      const data = transport.entries[0]!.data as Record<string, unknown>;
+      const data = transport.entries[0]?.data as Record<string, unknown>;
       expect(data.inputTokens).toBeUndefined();
       expect(data.outputTokens).toBeUndefined();
       expect(data.totalTokens).toBeUndefined();
@@ -110,7 +110,7 @@ describe("LLMLogger", () => {
         requestId: "req-1",
         inputTokens: 100,
       });
-      expect((transport.entries[0]!.data as Record<string, unknown>).totalTokens).toBeUndefined();
+      expect((transport.entries[0]?.data as Record<string, unknown>).totalTokens).toBeUndefined();
 
       // Only outputTokens
       llmLogger.logRequestComplete({
@@ -119,7 +119,7 @@ describe("LLMLogger", () => {
         requestId: "req-2",
         outputTokens: 50,
       });
-      expect((transport.entries[1]!.data as Record<string, unknown>).totalTokens).toBeUndefined();
+      expect((transport.entries[1]?.data as Record<string, unknown>).totalTokens).toBeUndefined();
     });
   });
 
@@ -168,7 +168,7 @@ describe("LLMLogger", () => {
         error: "Connection timeout",
       });
 
-      const data = transport.entries[0]!.data as Record<string, unknown>;
+      const data = transport.entries[0]?.data as Record<string, unknown>;
       const errorData = data.error as Record<string, unknown>;
       expect(errorData.raw).toBe("Connection timeout");
     });
@@ -186,7 +186,7 @@ describe("LLMLogger", () => {
         error,
       });
 
-      const data = transport.entries[0]!.data as Record<string, unknown>;
+      const data = transport.entries[0]?.data as Record<string, unknown>;
       const errorData = data.error as Record<string, unknown>;
       expect(errorData.name).toBe("TypeError");
       expect(errorData.message).toBe("Invalid response format");
@@ -215,12 +215,12 @@ describe("LLMLogger", () => {
       });
 
       expect(transport.entries).toHaveLength(2);
-      expect(transport.entries[0]!.message).toBe("LLM request started");
-      expect(transport.entries[1]!.message).toBe("LLM request completed");
+      expect(transport.entries[0]?.message).toBe("LLM request started");
+      expect(transport.entries[1]?.message).toBe("LLM request completed");
 
       // Verify requestId correlation
-      const startData = transport.entries[0]!.data as Record<string, unknown>;
-      const completeData = transport.entries[1]!.data as Record<string, unknown>;
+      const startData = transport.entries[0]?.data as Record<string, unknown>;
+      const completeData = transport.entries[1]?.data as Record<string, unknown>;
       expect(startData.requestId).toBe(completeData.requestId);
     });
 
@@ -244,8 +244,8 @@ describe("LLMLogger", () => {
       });
 
       expect(transport.entries).toHaveLength(2);
-      expect(transport.entries[0]!.level).toBe("info");
-      expect(transport.entries[1]!.level).toBe("error");
+      expect(transport.entries[0]?.level).toBe("info");
+      expect(transport.entries[1]?.level).toBe("error");
     });
   });
 });

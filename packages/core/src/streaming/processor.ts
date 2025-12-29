@@ -11,9 +11,9 @@ import type { GroundingChunk, StopReason, StreamEvent } from "@vellum/provider";
 import type { Result } from "../types/result.js";
 import { Err, Ok } from "../types/result.js";
 import {
-  StreamCollector,
   type AssistantMessage,
   type CollectorAction,
+  StreamCollector,
   type StreamMessagePart,
   type StreamReasoningPart,
   type StreamTextPart,
@@ -328,7 +328,7 @@ export class StreamProcessor {
         });
         return messageResult;
       }
-      
+
       // Map string error to Error type
       return Err(new Error(messageResult.error));
     } catch (err) {
@@ -527,7 +527,7 @@ export async function processMultiBlockStream(
         if (!textProcessors.has(index)) {
           textProcessors.set(index, new TextBlockProcessor());
         }
-        textProcessors.get(index)!.processDelta(event.content);
+        textProcessors.get(index)?.processDelta(event.content);
         break;
       }
 
@@ -536,7 +536,7 @@ export async function processMultiBlockStream(
         if (!reasoningProcessors.has(index)) {
           reasoningProcessors.set(index, new ReasoningBlockProcessor());
         }
-        reasoningProcessors.get(index)!.processDelta(event.content);
+        reasoningProcessors.get(index)?.processDelta(event.content);
         break;
       }
 
@@ -606,9 +606,7 @@ export async function processMultiBlockStream(
   const parts: StreamMessagePart[] = [];
 
   // Add text parts (sorted by index)
-  const sortedTextEntries = Array.from(textProcessors.entries()).sort(
-    (a, b) => a[0] - b[0]
-  );
+  const sortedTextEntries = Array.from(textProcessors.entries()).sort((a, b) => a[0] - b[0]);
   for (const [, processor] of sortedTextEntries) {
     parts.push(processor.finalize());
   }

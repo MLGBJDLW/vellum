@@ -17,12 +17,12 @@
 import type {
   CompletionMessage,
   CompletionParams,
+  LLMProvider,
+  ProviderRegistry,
+  ProviderType,
   StreamEvent,
   ToolDefinition,
-  ProviderType,
-  LLMProvider,
 } from "@vellum/provider";
-import { ProviderRegistry } from "@vellum/provider";
 import { ErrorCode } from "@vellum/shared";
 import { z } from "zod";
 
@@ -245,7 +245,9 @@ export namespace LLM {
    * }
    * ```
    */
-  export async function* stream(config: StreamConfig): AsyncGenerator<LLMStreamEvent, void, undefined> {
+  export async function* stream(
+    config: StreamConfig
+  ): AsyncGenerator<LLMStreamEvent, void, undefined> {
     // Validate config
     const validated = StreamConfigSchema.parse(config);
 
@@ -265,7 +267,9 @@ export namespace LLM {
     }
 
     // Build tool lookup for repair
-    const toolLookup = validated.tools ? buildToolLookup(validated.tools) : new Map<string, string>();
+    const toolLookup = validated.tools
+      ? buildToolLookup(validated.tools)
+      : new Map<string, string>();
 
     // Build completion params
     const completionParams: CompletionParams = {

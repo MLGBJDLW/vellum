@@ -76,12 +76,12 @@ export type {
   // T001: Grounding chunk for citations
   GroundingChunk,
   ImageContentPart,
-  // T001: LLMProvider interface
-  LLMProvider,
   // T040: Legacy stream event type
   LegacyStreamEvent,
   // T040: Legacy tool call delta event
   LegacyStreamToolCallDeltaEvent,
+  // T001: LLMProvider interface
+  LLMProvider,
   MessageRole,
   // T005: Model info
   ModelInfo,
@@ -126,13 +126,6 @@ export type {
 // T003/T038: Event Mappers and SSE Utilities
 // =============================================================================
 
-export type {
-  EventMapper,
-  MapperError,
-  MapperErrorCode,
-  SSEParserConfig,
-} from "./mappers/types.js";
-
 export {
   createSSEParser,
   isRetryable as isSSERetryable,
@@ -143,6 +136,12 @@ export {
   type SSEParseError,
   type SSEParser,
 } from "./mappers/sse.js";
+export type {
+  EventMapper,
+  MapperError,
+  MapperErrorCode,
+  SSEParserConfig,
+} from "./mappers/types.js";
 
 // =============================================================================
 // T006: Error Classification Utilities
@@ -184,8 +183,8 @@ export {
   streamWithAbort,
   streamWithOptions,
   streamWithTimeout,
-  tapStreamEvents,
   TextAccumulator,
+  tapStreamEvents,
   wrapStreamForProcessor,
 } from "./stream.js";
 

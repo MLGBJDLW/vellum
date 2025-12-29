@@ -294,6 +294,7 @@ describe("EnvCredentialStore", () => {
         value: "test-value",
         source: "env" as const,
         createdAt: new Date(),
+        metadata: {},
       };
 
       const result = await store.set(credential);
@@ -388,7 +389,7 @@ describe("EnvCredentialStore", () => {
           expect(result.ok).toBe(true);
           if (result.ok) {
             expect(result.value.length).toBe(1);
-            expect(result.value[0].provider).toBe("anthropic");
+            expect(result.value[0]?.provider).toBe("anthropic");
           }
         }
       )

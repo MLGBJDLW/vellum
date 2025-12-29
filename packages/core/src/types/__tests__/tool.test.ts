@@ -501,7 +501,7 @@ describe("defineTool factory", () => {
       await tool.execute({}, ctx);
 
       expect(capturedCtx).not.toBeNull();
-      expect(capturedCtx!.workingDir).toBe("/captured/dir");
+      expect(capturedCtx?.workingDir).toBe("/captured/dir");
     });
 
     it("should support async operations in execute", async () => {

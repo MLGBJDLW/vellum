@@ -2,17 +2,16 @@
 // ToolExecutor Tests - T016
 // ============================================
 
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-
+import { defineTool, fail, ok, type ToolContext } from "../../types/tool.js";
 import {
-  ToolExecutor,
-  PermissionDeniedError,
-  ToolNotFoundError,
   type PermissionChecker,
   type PermissionDecision,
+  PermissionDeniedError,
+  ToolExecutor,
+  ToolNotFoundError,
 } from "../executor.js";
-import { defineTool, ok, fail, type ToolContext } from "../../types/tool.js";
 
 // =============================================================================
 // Test Fixtures
@@ -119,7 +118,7 @@ describe("ToolExecutor", () => {
 
     it("should preserve original name casing", () => {
       const executor = new ToolExecutor();
-      
+
       const mixedCaseTool = defineTool({
         name: "MyTool",
         description: "Mixed case name",
@@ -131,7 +130,7 @@ describe("ToolExecutor", () => {
       });
 
       executor.registerTool(mixedCaseTool);
-      
+
       expect(executor.getOriginalName("mytool")).toBe("MyTool");
       expect(executor.getOriginalName("MYTOOL")).toBe("MyTool");
     });
@@ -202,9 +201,7 @@ describe("ToolExecutor", () => {
     });
 
     it("should throw ToolNotFoundError for unknown tool", async () => {
-      await expect(executor.execute("nonexistent", {}, ctx)).rejects.toThrow(
-        ToolNotFoundError
-      );
+      await expect(executor.execute("nonexistent", {}, ctx)).rejects.toThrow(ToolNotFoundError);
     });
 
     it("should return validation error for invalid params", async () => {
@@ -246,9 +243,7 @@ describe("ToolExecutor", () => {
       expect(result.timing.completedAt).toBeTypeOf("number");
       expect(result.timing.durationMs).toBeTypeOf("number");
       expect(result.timing.completedAt).toBeGreaterThanOrEqual(result.timing.startedAt);
-      expect(result.timing.durationMs).toBe(
-        result.timing.completedAt - result.timing.startedAt
-      );
+      expect(result.timing.durationMs).toBe(result.timing.completedAt - result.timing.startedAt);
     });
 
     it("should capture timing for slow operations", async () => {
@@ -291,11 +286,7 @@ describe("ToolExecutor", () => {
 
       await executor.execute("echo", { message: "test" }, ctx);
 
-      expect(mockChecker.checkPermission).toHaveBeenCalledWith(
-        "echo",
-        { message: "test" },
-        ctx
-      );
+      expect(mockChecker.checkPermission).toHaveBeenCalledWith("echo", { message: "test" }, ctx);
     });
 
     it("should throw PermissionDeniedError when permission is denied", async () => {
@@ -356,11 +347,7 @@ describe("ToolExecutor", () => {
         executor.registerTool(echoTool);
         const ctx = createMockContext();
 
-        const result = await executor.executeWithPermissionCheck(
-          "echo",
-          { message: "test" },
-          ctx
-        );
+        const result = await executor.executeWithPermissionCheck("echo", { message: "test" }, ctx);
 
         expect(result.status).toBe("completed");
         if (result.status === "completed") {
@@ -372,11 +359,7 @@ describe("ToolExecutor", () => {
         const executor = new ToolExecutor();
         const ctx = createMockContext();
 
-        const result = await executor.executeWithPermissionCheck(
-          "unknown",
-          {},
-          ctx
-        );
+        const result = await executor.executeWithPermissionCheck("unknown", {}, ctx);
 
         expect(result.status).toBe("not_found");
         if (result.status === "not_found") {
@@ -393,11 +376,7 @@ describe("ToolExecutor", () => {
         executor.registerTool(echoTool);
         const ctx = createMockContext();
 
-        const result = await executor.executeWithPermissionCheck(
-          "echo",
-          { message: "test" },
-          ctx
-        );
+        const result = await executor.executeWithPermissionCheck("echo", { message: "test" }, ctx);
 
         expect(result.status).toBe("denied");
         if (result.status === "denied") {
@@ -414,11 +393,7 @@ describe("ToolExecutor", () => {
         executor.registerTool(echoTool);
         const ctx = createMockContext();
 
-        const result = await executor.executeWithPermissionCheck(
-          "echo",
-          { message: "test" },
-          ctx
-        );
+        const result = await executor.executeWithPermissionCheck("echo", { message: "test" }, ctx);
 
         expect(result.status).toBe("permission_required");
         if (result.status === "permission_required") {
@@ -456,6 +431,275 @@ describe("ToolExecutor", () => {
       const error = new PermissionDeniedError("test_tool", "Custom message");
 
       expect(error.message).toBe("Custom message");
+    });
+  });
+
+  // =============================================================================
+  // T008: Timeout Tests
+  // =============================================================================
+
+  describe("timeout handling", () => {
+    it("should timeout slow tool execution", async () => {
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          // Sleep for longer than timeout
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          return ok({ done: true });
+        },
+      });
+
+      const executor = new ToolExecutor({ defaultTimeout: 50 });
+      executor.registerTool(slowTool);
+      const ctx = createMockContext();
+
+      const result = await executor.execute("slow_tool", {}, ctx);
+
+      expect(result.result.success).toBe(false);
+      expect(result.timedOut).toBe(true);
+      if (!result.result.success) {
+        expect(result.result.error).toContain("timed out");
+      }
+    });
+
+    it("should use shell timeout for shell tools", async () => {
+      const shellTool = defineTool({
+        name: "shell_cmd",
+        description: "A shell command",
+        parameters: z.object({}),
+        kind: "shell",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          return ok({ done: true });
+        },
+      });
+
+      // Default timeout is 30ms but shell timeout is 200ms
+      const executor = new ToolExecutor({
+        defaultTimeout: 30,
+        shellTimeout: 200,
+      });
+      executor.registerTool(shellTool);
+      const ctx = createMockContext();
+
+      const result = await executor.execute("shell_cmd", {}, ctx);
+
+      // Should succeed because shell timeout is longer
+      expect(result.result.success).toBe(true);
+      expect(result.timedOut).toBeUndefined();
+    });
+
+    it("should allow timeout override via options", async () => {
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          return ok({ done: true });
+        },
+      });
+
+      const executor = new ToolExecutor({ defaultTimeout: 50 });
+      executor.registerTool(slowTool);
+      const ctx = createMockContext();
+
+      // Override with longer timeout
+      const result = await executor.execute("slow_tool", {}, ctx, { timeout: 200 });
+
+      expect(result.result.success).toBe(true);
+    });
+
+    it("should capture timing on timeout", async () => {
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          return ok({ done: true });
+        },
+      });
+
+      const executor = new ToolExecutor({ defaultTimeout: 50 });
+      executor.registerTool(slowTool);
+      const ctx = createMockContext();
+
+      const result = await executor.execute("slow_tool", {}, ctx);
+
+      expect(result.timing).toBeDefined();
+      expect(result.timing.durationMs).toBeGreaterThanOrEqual(45);
+    });
+  });
+
+  // =============================================================================
+  // T009: Abort Signal Tests
+  // =============================================================================
+
+  describe("abort signal handling", () => {
+    it("should abort execution when signal is triggered", async () => {
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          return ok({ done: true });
+        },
+      });
+
+      const executor = new ToolExecutor();
+      executor.registerTool(slowTool);
+
+      const controller = new AbortController();
+      const ctx = createMockContext();
+
+      // Abort after 50ms
+      setTimeout(() => controller.abort(), 50);
+
+      const result = await executor.execute("slow_tool", {}, ctx, {
+        abortSignal: controller.signal,
+      });
+
+      expect(result.result.success).toBe(false);
+      expect(result.aborted).toBe(true);
+      if (!result.result.success) {
+        expect(result.result.error).toContain("aborted");
+      }
+    });
+
+    it("should return immediately if already aborted", async () => {
+      const echoTool = defineTool({
+        name: "echo",
+        description: "Echo input",
+        parameters: z.object({ message: z.string() }),
+        kind: "read",
+        async execute(input) {
+          return ok({ echoed: input.message });
+        },
+      });
+
+      const executor = new ToolExecutor();
+      executor.registerTool(echoTool);
+
+      const controller = new AbortController();
+      controller.abort(); // Pre-abort
+
+      const ctx = createMockContext();
+
+      const result = await executor.execute("echo", { message: "test" }, ctx, {
+        abortSignal: controller.signal,
+      });
+
+      expect(result.result.success).toBe(false);
+      expect(result.aborted).toBe(true);
+    });
+
+    it("should use context abort signal if no option provided", async () => {
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          return ok({ done: true });
+        },
+      });
+
+      const executor = new ToolExecutor();
+      executor.registerTool(slowTool);
+
+      const controller = new AbortController();
+      const ctx = createMockContext({ abortSignal: controller.signal });
+
+      // Abort after 50ms
+      setTimeout(() => controller.abort(), 50);
+
+      const result = await executor.execute("slow_tool", {}, ctx);
+
+      expect(result.result.success).toBe(false);
+      expect(result.aborted).toBe(true);
+    });
+
+    it("should abort within 100ms of signal", async () => {
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          return ok({ done: true });
+        },
+      });
+
+      const executor = new ToolExecutor();
+      executor.registerTool(slowTool);
+
+      const controller = new AbortController();
+      const ctx = createMockContext();
+
+      const startTime = Date.now();
+      setTimeout(() => controller.abort(), 50);
+
+      const result = await executor.execute("slow_tool", {}, ctx, {
+        abortSignal: controller.signal,
+      });
+
+      const elapsed = Date.now() - startTime;
+
+      expect(result.aborted).toBe(true);
+      // Should abort within 150ms (50ms delay + 100ms tolerance)
+      expect(elapsed).toBeLessThan(200);
+    });
+  });
+
+  // =============================================================================
+  // T008, T009: Error Types Tests
+  // =============================================================================
+
+  describe("timeout and abort error types", () => {
+    it("ToolTimeoutError should have correct properties", async () => {
+      // Import the error class for testing
+      const { ToolTimeoutError } = await import("../executor.js");
+      const error = new ToolTimeoutError("test_tool", 5000);
+
+      expect(error.name).toBe("ToolTimeoutError");
+      expect(error.toolName).toBe("test_tool");
+      expect(error.timeoutMs).toBe(5000);
+      expect(error.message).toContain("5000ms");
+      expect(error.isRetryable).toBe(true);
+    });
+
+    it("ToolTimeoutError should support partial output", async () => {
+      const { ToolTimeoutError } = await import("../executor.js");
+      const error = new ToolTimeoutError("test_tool", 5000, { partial: "data" });
+
+      expect(error.partialOutput).toEqual({ partial: "data" });
+    });
+
+    it("ToolAbortedError should have correct properties", async () => {
+      const { ToolAbortedError } = await import("../executor.js");
+      const error = new ToolAbortedError("test_tool");
+
+      expect(error.name).toBe("ToolAbortedError");
+      expect(error.toolName).toBe("test_tool");
+      expect(error.message).toContain("aborted");
+      expect(error.isRetryable).toBe(false);
+    });
+
+    it("ToolAbortedError should support partial output", async () => {
+      const { ToolAbortedError } = await import("../executor.js");
+      const error = new ToolAbortedError("test_tool", { partial: "result" });
+
+      expect(error.partialOutput).toEqual({ partial: "result" });
     });
   });
 });

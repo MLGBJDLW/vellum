@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { StreamEvent } from "@vellum/provider";
-import { StreamingHookManager, type StreamContext, type StreamingHooks } from "../hooks.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AssistantMessage } from "../collector.js";
+import { type StreamContext, StreamingHookManager, type StreamingHooks } from "../hooks.js";
 import type { StreamError } from "../processor.js";
 
 describe("StreamingHookManager", () => {
@@ -154,8 +154,16 @@ describe("StreamingHookManager", () => {
     it("all hooks receive the same context", async () => {
       const contexts: StreamContext[] = [];
 
-      manager.register({ onStreamStart: (c) => { contexts.push(c); } });
-      manager.register({ onStreamStart: (c) => { contexts.push(c); } });
+      manager.register({
+        onStreamStart: (c) => {
+          contexts.push(c);
+        },
+      });
+      manager.register({
+        onStreamStart: (c) => {
+          contexts.push(c);
+        },
+      });
 
       await manager.fireStreamStart(ctx);
 

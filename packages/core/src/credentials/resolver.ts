@@ -280,7 +280,7 @@ export class CredentialResolver {
       }
 
       for (const ref of result.value) {
-        const key = cacheKeyStr(ref.provider, ref.metadata?.tags?.["key"] as string | undefined);
+        const key = cacheKeyStr(ref.provider, ref.metadata?.tags?.key as string | undefined);
         // Only add if not already seen (higher priority stores are processed first)
         if (!seen.has(key)) {
           seen.add(key);

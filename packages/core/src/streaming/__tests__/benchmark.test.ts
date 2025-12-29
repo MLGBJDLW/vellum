@@ -11,11 +11,11 @@
  * To run as benchmarks: pnpm vitest bench packages/core/src/streaming/__tests__/benchmark.test.ts
  */
 
-import { describe, it, expect } from "vitest";
 import type { StreamEvent } from "@vellum/provider";
+import { describe, expect, it } from "vitest";
+import { BackpressureController } from "../backpressure.js";
 import { StreamCollector } from "../collector.js";
 import { NewlineGate } from "../newline-gate.js";
-import { BackpressureController } from "../backpressure.js";
 
 // =============================================================================
 // T039: Performance Benchmark Tests
@@ -164,9 +164,7 @@ describe("Performance Benchmarks", () => {
       expect(totalOutput).toBeGreaterThan(0);
 
       expect(elapsedMs).toBeLessThan(2000); // 2 seconds max
-      console.log(
-        `NewlineGate 100KB: ${elapsedMs.toFixed(2)}ms, ${totalBytes} bytes processed`
-      );
+      console.log(`NewlineGate 100KB: ${elapsedMs.toFixed(2)}ms, ${totalBytes} bytes processed`);
     });
 
     it("should handle rapid small feeds efficiently", () => {

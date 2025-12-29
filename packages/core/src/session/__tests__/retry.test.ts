@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ErrorCode, VellumError } from "../../errors/index.js";
 import {
-  withSessionRetry,
   abortableSleep,
   calculateRetryDelay,
   createSessionRetry,
   isAbortError,
   RetryAbortedError,
+  withSessionRetry,
 } from "../retry.js";
-import { VellumError, ErrorCode } from "../../errors/index.js";
 
 describe("Session Retry (T022)", () => {
   beforeEach(() => {

@@ -538,7 +538,9 @@ describe("Context Management Integration", () => {
         type: string;
         input: { path: string };
       }>;
-      content[0]?.input.path = "/modified.ts";
+      if (content[0]) {
+        content[0].input.path = "/modified.ts";
+      }
 
       // Rollback should have original value
       const restored = manager.rollbackToCheckpoint(checkpointId, originalMessages);

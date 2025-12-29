@@ -118,7 +118,7 @@ describe("Logger", () => {
       logger.info("simple message");
 
       expect(transport.entries).toHaveLength(1);
-      expect(transport.entries[0]!.data).toBeUndefined();
+      expect(transport.entries[0]?.data).toBeUndefined();
     });
   });
 
@@ -169,7 +169,7 @@ describe("Logger", () => {
       logger.error("error");
 
       expect(transport.entries).toHaveLength(1);
-      expect(transport.entries[0]!.level).toBe("error");
+      expect(transport.entries[0]?.level).toBe("error");
     });
 
     it("should respect level change via setLevel", () => {
@@ -198,7 +198,7 @@ describe("Logger", () => {
       child.info("child message");
 
       expect(transport.entries).toHaveLength(1);
-      expect(transport.entries[0]!.context).toEqual({
+      expect(transport.entries[0]?.context).toEqual({
         app: "test",
         requestId: "123",
       });
@@ -215,7 +215,7 @@ describe("Logger", () => {
       const child = parent.child({ version: "v2" });
       child.info("child message");
 
-      expect(transport.entries[0]!.context).toEqual({ version: "v2" });
+      expect(transport.entries[0]?.context).toEqual({ version: "v2" });
     });
 
     it("should inherit parent transports", () => {
@@ -237,7 +237,7 @@ describe("Logger", () => {
       child.warn("not filtered");
 
       expect(transport.entries).toHaveLength(1);
-      expect(transport.entries[0]!.message).toBe("not filtered");
+      expect(transport.entries[0]?.message).toBe("not filtered");
     });
   });
 
@@ -288,7 +288,7 @@ describe("Logger", () => {
       expect(jsonOutput).toHaveBeenCalled();
 
       // Verify JSON output format
-      const jsonLine = jsonOutput.mock.calls[0]![0] as string;
+      const jsonLine = jsonOutput.mock.calls[0]?.[0] as string;
       const parsed = JSON.parse(jsonLine) as Record<string, unknown>;
       expect(parsed.level).toBe("info");
       expect(parsed.message).toBe("multi-transport test");
@@ -405,7 +405,7 @@ describe("Logger", () => {
 
       logger.info("no context");
 
-      expect(transport.entries[0]!.context).toBeUndefined();
+      expect(transport.entries[0]?.context).toBeUndefined();
     });
 
     it("should include context when provided", () => {
@@ -418,7 +418,7 @@ describe("Logger", () => {
 
       logger.info("with context");
 
-      expect(transport.entries[0]!.context).toEqual({ service: "api" });
+      expect(transport.entries[0]?.context).toEqual({ service: "api" });
     });
   });
 
@@ -483,7 +483,7 @@ describe("Logger", () => {
       logger.fatal("6");
 
       expect(transport.entries).toHaveLength(1);
-      expect(transport.entries[0]!.level).toBe("fatal");
+      expect(transport.entries[0]?.level).toBe("fatal");
     });
   });
 
@@ -530,7 +530,7 @@ describe("Logger", () => {
       const timer = logger.time("db-query");
       timer.end("Database query finished");
 
-      expect(transport.entries[0]!.message).toBe("Database query finished");
+      expect(transport.entries[0]?.message).toBe("Database query finished");
     });
 
     it("timer.stop() should return duration without logging", async () => {

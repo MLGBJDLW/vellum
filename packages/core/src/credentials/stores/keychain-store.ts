@@ -218,7 +218,7 @@ export class KeychainStore implements CredentialStore {
       // Test keytar by attempting to find credentials (non-destructive)
       await keytarResult.value.findCredentials(SERVICE_NAME);
       return Ok(true);
-    } catch (error) {
+    } catch (_error) {
       // Keytar loaded but backend service unavailable
       return Ok(false);
     }

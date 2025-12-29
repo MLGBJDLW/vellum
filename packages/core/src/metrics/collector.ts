@@ -142,7 +142,7 @@ export class MetricsCollector {
       observe: (value, labels = {}) => {
         const key = this.serializeLabels(labels);
         if (!histMap.has(key)) histMap.set(key, []);
-        histMap.get(key)!.push(value);
+        histMap.get(key)?.push(value);
       },
       getStats: (labels = {}): HistogramStats => {
         const key = this.serializeLabels(labels);

@@ -45,7 +45,7 @@ export enum ErrorCode {
   // Tool Errors (5xxx)
   TOOL_NOT_FOUND = 5001,
   TOOL_EXECUTION_FAILED = 5002,
-  TOOL_PERMISSION_DENIED = 5003,
+  TOOL_PERMISSION_DENIED = 5004,
 
   // Agent Errors (6xxx)
   AGENT_NOT_FOUND = 6001,

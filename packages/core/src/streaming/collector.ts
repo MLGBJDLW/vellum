@@ -8,12 +8,8 @@
  * @module @vellum/core/streaming/collector
  */
 
-import type {
-  GroundingChunk,
-  StopReason,
-  StreamEvent,
-} from "@vellum/provider";
-import { type Result, Ok } from "../types/result.js";
+import type { GroundingChunk, StopReason, StreamEvent } from "@vellum/provider";
+import { Ok, type Result } from "../types/result.js";
 
 // =============================================================================
 // T005: Usage and AssistantMessage Interfaces
@@ -416,9 +412,7 @@ export class StreamCollector {
     const parts: StreamMessagePart[] = [];
 
     // Convert text buffers to TextPart (sorted by index)
-    const textEntries = Array.from(this.textBuffers.entries()).sort(
-      ([a], [b]) => a - b
-    );
+    const textEntries = Array.from(this.textBuffers.entries()).sort(([a], [b]) => a - b);
     for (const [, content] of textEntries) {
       if (content.length > 0) {
         parts.push({ type: "text", content });
@@ -426,9 +420,7 @@ export class StreamCollector {
     }
 
     // Convert reasoning buffers to ReasoningPart (sorted by index)
-    const reasoningEntries = Array.from(this.reasoningBuffers.entries()).sort(
-      ([a], [b]) => a - b
-    );
+    const reasoningEntries = Array.from(this.reasoningBuffers.entries()).sort(([a], [b]) => a - b);
     for (const [, content] of reasoningEntries) {
       if (content.length > 0) {
         parts.push({ type: "reasoning", content });

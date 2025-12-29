@@ -130,7 +130,7 @@ MIIEpAIBAAKCAQEA2Z3qX2BTLS4e
 
     it("handles long strings without catastrophic backtracking", () => {
       // Create a long string that could cause backtracking issues
-      const longString = "a".repeat(10000) + " sk-abcdefghijklmnopqrstuvwxyz " + "b".repeat(10000);
+      const longString = `${"a".repeat(10000)} sk-abcdefghijklmnopqrstuvwxyz ${"b".repeat(10000)}`;
 
       const start = performance.now();
       const result = filter.filterString(longString);

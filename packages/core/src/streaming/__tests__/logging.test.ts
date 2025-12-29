@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
 import type { StreamEvent } from "@vellum/provider";
+import { describe, expect, it, vi } from "vitest";
 import { StreamLogger } from "../logging.js";
 
 describe("StreamLogger", () => {
@@ -26,11 +26,7 @@ describe("StreamLogger", () => {
 
       logger.logChunk(event);
 
-      expect(logFn).toHaveBeenCalledWith(
-        "error",
-        "[error] Something went wrong",
-        event
-      );
+      expect(logFn).toHaveBeenCalledWith("error", "[error] Something went wrong", event);
     });
 
     it("respects log level filtering", () => {
@@ -75,7 +71,7 @@ describe("StreamLogger", () => {
       expect(consoleSpy).toHaveBeenCalled();
       const call = consoleSpy.mock.calls[0];
       expect(call).toBeDefined();
-      const loggedMessage = call![0] as string;
+      const loggedMessage = call?.[0] as string;
       expect(loggedMessage).toMatch(/^\[\d{4}-\d{2}-\d{2}T/); // ISO timestamp
       expect(loggedMessage).toContain("Test");
 

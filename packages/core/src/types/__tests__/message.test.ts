@@ -562,9 +562,9 @@ describe("MessageSchema", () => {
       ],
     });
     expect(result.content).toHaveLength(3);
-    expect(result.content[0]!.type).toBe("text");
-    expect(result.content[1]!.type).toBe("file");
-    expect(result.content[2]!.type).toBe("image");
+    expect(result.content[0]?.type).toBe("text");
+    expect(result.content[1]?.type).toBe("file");
+    expect(result.content[2]?.type).toBe("image");
   });
 
   it("should validate message with empty content array", () => {
@@ -653,8 +653,8 @@ describe("createMessage()", () => {
     ];
     const message = createMessage("user", content);
     expect(message.content).toHaveLength(2);
-    expect(message.content[0]!.type).toBe("text");
-    expect(message.content[1]!.type).toBe("file");
+    expect(message.content[0]?.type).toBe("text");
+    expect(message.content[1]?.type).toBe("file");
   });
 
   it("should include metadata when provided", () => {
@@ -947,7 +947,7 @@ describe("Validation errors", () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ZodError);
         const zodError = error as ZodError;
-        expect(zodError.errors[0]!.path).toContain("createdAt");
+        expect(zodError.errors[0]?.path).toContain("createdAt");
       }
     });
 
@@ -958,7 +958,7 @@ describe("Validation errors", () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ZodError);
         const zodError = error as ZodError;
-        expect(zodError.errors[0]!.code).toBe("invalid_type");
+        expect(zodError.errors[0]?.code).toBe("invalid_type");
       }
     });
   });

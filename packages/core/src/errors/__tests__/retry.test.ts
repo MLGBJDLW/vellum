@@ -310,7 +310,7 @@ describe("withTimeout", () => {
     await promise;
 
     expect(caughtError).toBeInstanceOf(VellumError);
-    expect(caughtError!.context).toEqual({ timeout: 750 });
+    expect(caughtError?.context).toEqual({ timeout: 750 });
   });
 
   it("propagates errors from function", async () => {
@@ -370,7 +370,7 @@ describe("withTimeout", () => {
     await promise;
 
     expect(caughtError).toBeInstanceOf(VellumError);
-    expect(caughtError!.isRetryable).toBe(true);
-    expect(caughtError!.severity).toBe(ErrorSeverity.RECOVERABLE);
+    expect(caughtError?.isRetryable).toBe(true);
+    expect(caughtError?.severity).toBe(ErrorSeverity.RECOVERABLE);
   });
 });

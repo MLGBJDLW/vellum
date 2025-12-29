@@ -8,7 +8,7 @@
  * @see https://html.spec.whatwg.org/multipage/server-sent-events.html
  */
 
-import { Ok, Err, type Result } from "@vellum/core";
+import { Err, Ok, type Result } from "@vellum/core";
 
 // =============================================================================
 // T038: SSE Types
@@ -121,15 +121,10 @@ export function isRetryable(error: unknown): boolean {
     }
 
     // Check for nested response.status
-    if (
-      typeof errorObj.response === "object" &&
-      errorObj.response !== null
-    ) {
+    if (typeof errorObj.response === "object" && errorObj.response !== null) {
       const response = errorObj.response as Record<string, unknown>;
       if (typeof response.status === "number") {
-        return (RETRYABLE_STATUS_CODES as readonly number[]).includes(
-          response.status
-        );
+        return (RETRYABLE_STATUS_CODES as readonly number[]).includes(response.status);
       }
     }
 
@@ -311,12 +306,13 @@ function parseSSEEvent(text: string): SSEEvent | undefined {
           id = value;
         }
         break;
-      case "retry":
+      case "retry": {
         const parsed = parseInt(value, 10);
         if (!isNaN(parsed) && parsed >= 0) {
           retry = parsed;
         }
         break;
+      }
       // Ignore unknown fields per spec
     }
   }
@@ -357,9 +353,7 @@ function parseSSEEvent(text: string): SSEEvent | undefined {
  * const remaining = parser.flush();
  * ```
  */
-export function createSSEParser(
-  maxBufferSize: number = DEFAULT_MAX_BUFFER_SIZE
-): SSEParser {
+export function createSSEParser(maxBufferSize: number = DEFAULT_MAX_BUFFER_SIZE): SSEParser {
   let buffer = "";
 
   return {

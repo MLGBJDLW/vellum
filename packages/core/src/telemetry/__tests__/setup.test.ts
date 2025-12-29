@@ -131,7 +131,7 @@ describe("telemetry/setup", () => {
       // Verify SDK was started
       const sdkInstance = mockSdkInstances[0];
       expect(sdkInstance).toBeDefined();
-      expect(sdkInstance!.start).toHaveBeenCalled();
+      expect(sdkInstance?.start).toHaveBeenCalled();
     });
 
     it("initializes SDK with OTLP exporter", () => {
@@ -148,7 +148,7 @@ describe("telemetry/setup", () => {
       expect(mockOtlpExporterInstances).toHaveLength(1);
       const otlpExporter = mockOtlpExporterInstances[0];
       expect(otlpExporter).toBeDefined();
-      expect(otlpExporter!.url).toBe("http://localhost:4318/v1/traces");
+      expect(otlpExporter?.url).toBe("http://localhost:4318/v1/traces");
       expect(isTelemetryActive()).toBe(true);
     });
 
@@ -176,7 +176,7 @@ describe("telemetry/setup", () => {
       expect(mockResourceInstances).toHaveLength(1);
       const resource = mockResourceInstances[0];
       expect(resource).toBeDefined();
-      expect(resource!.attributes).toEqual({
+      expect(resource?.attributes).toEqual({
         "service.name": "vellum",
         "service.version": "0.0.0",
       });
@@ -194,7 +194,7 @@ describe("telemetry/setup", () => {
       expect(mockSamplerInstances).toHaveLength(1);
       const sampler = mockSamplerInstances[0];
       expect(sampler).toBeDefined();
-      expect(sampler!.ratio).toBe(0.5);
+      expect(sampler?.ratio).toBe(0.5);
     });
 
     it("clamps sampling ratio to valid range", () => {
@@ -208,7 +208,7 @@ describe("telemetry/setup", () => {
       expect(mockSamplerInstances).toHaveLength(1);
       const samplerHigh = mockSamplerInstances[0];
       expect(samplerHigh).toBeDefined();
-      expect(samplerHigh!.ratio).toBe(1.0);
+      expect(samplerHigh?.ratio).toBe(1.0);
 
       // Reset for next test
       _resetTelemetryForTesting();
@@ -227,7 +227,7 @@ describe("telemetry/setup", () => {
       expect(mockSamplerInstances).toHaveLength(1);
       const samplerLow = mockSamplerInstances[0];
       expect(samplerLow).toBeDefined();
-      expect(samplerLow!.ratio).toBe(0);
+      expect(samplerLow?.ratio).toBe(0);
     });
 
     it("prevents double initialization", () => {
@@ -256,7 +256,7 @@ describe("telemetry/setup", () => {
 
       const sdkInstance = mockSdkInstances[0];
       expect(sdkInstance).toBeDefined();
-      expect(sdkInstance!.shutdown).toHaveBeenCalled();
+      expect(sdkInstance?.shutdown).toHaveBeenCalled();
       expect(isTelemetryActive()).toBe(false);
     });
 

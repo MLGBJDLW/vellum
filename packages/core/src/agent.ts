@@ -1,8 +1,8 @@
 import type { Message } from "@vellum/shared";
-import type { AgentOptions } from "./types.js";
 import { AgentLoop, type AgentLoopConfig, type AgentLoopEvents } from "./agent/index.js";
-import { MODE_CONFIGS, type AgentMode } from "./agent/modes.js";
+import { type AgentMode, MODE_CONFIGS } from "./agent/modes.js";
 import type { SessionMessage } from "./session/index.js";
+import type { AgentOptions } from "./types.js";
 // Note: For new implementations, use Message from "./types/index.js" instead
 // of @vellum/shared. The new Message type provides typed content parts.
 // See migration helpers in "./migration/index.js" for converting legacy messages.

@@ -103,7 +103,7 @@ export class FileTransport implements LogTransport {
     this.buffer = [];
 
     try {
-      const content = entries.join("\n") + "\n";
+      const content = `${entries.join("\n")}\n`;
       await appendFile(this.path, content, "utf-8");
       this.lastError = null;
     } catch (error) {

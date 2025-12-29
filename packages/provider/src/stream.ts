@@ -725,14 +725,8 @@ export function createStreamEvent(
   type: "toolCall",
   data: ProviderToolCallDelta
 ): StreamToolCallEvent | undefined;
-export function createStreamEvent(
-  type: "usage",
-  data: ProviderUsage
-): StreamUsageEvent;
-export function createStreamEvent(
-  type: "end",
-  data: { stopReason: StopReason }
-): StreamEndEvent;
+export function createStreamEvent(type: "usage", data: ProviderUsage): StreamUsageEvent;
+export function createStreamEvent(type: "end", data: { stopReason: StopReason }): StreamEndEvent;
 export function createStreamEvent(
   type: "text" | "reasoning" | "toolCall" | "usage" | "end",
   data: unknown
@@ -832,4 +826,3 @@ export async function* tapStreamEvents<T>(
     yield event;
   }
 }
-

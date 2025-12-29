@@ -10,13 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Err, Ok } from "../../types/result.js";
 import { CredentialResolver, type CredentialResolverEvent, STORE_PRIORITIES } from "../resolver.js";
-import type {
-  Credential,
-  CredentialRef,
-  CredentialSource,
-  CredentialStore,
-  CredentialStoreError,
-} from "../types.js";
+import type { Credential, CredentialRef, CredentialSource, CredentialStore } from "../types.js";
 import { createStoreError } from "../types.js";
 
 // =============================================================================
@@ -123,9 +117,9 @@ describe("CredentialResolver", () => {
       const resolver = new CredentialResolver([fileStore, envStore, keychainStore]);
 
       const stores = resolver.getStores();
-      expect(stores[0].name).toBe("env");
-      expect(stores[1].name).toBe("keychain");
-      expect(stores[2].name).toBe("file");
+      expect(stores[0]?.name).toBe("env");
+      expect(stores[1]?.name).toBe("keychain");
+      expect(stores[2]?.name).toBe("file");
     });
 
     it("should use default priorities from STORE_PRIORITIES", () => {
@@ -228,7 +222,7 @@ describe("CredentialResolver", () => {
 
       const envStore = createMockStore("env");
       (envStore.get as ReturnType<typeof vi.fn>).mockImplementation(
-        async (provider: string, key?: string) => {
+        async (_provider: string, key?: string) => {
           if (key === "project-a") return Ok(projectCred);
           if (!key) return Ok(defaultCred);
           return Ok(null);
@@ -428,7 +422,7 @@ describe("CredentialResolver", () => {
 
       expect(result.ok).toBe(true);
       expect(result.ok && result.value.length).toBe(1);
-      expect(result.ok && result.value[0].source).toBe("env");
+      expect(result.ok && result.value[0]?.source).toBe("env");
     });
 
     it("should filter by provider when specified", async () => {
@@ -447,7 +441,7 @@ describe("CredentialResolver", () => {
 
       expect(result.ok).toBe(true);
       expect(result.ok && result.value.length).toBe(1);
-      expect(result.ok && result.value[0].provider).toBe("anthropic");
+      expect(result.ok && result.value[0]?.provider).toBe("anthropic");
     });
   });
 
@@ -1042,7 +1036,7 @@ describe("CredentialResolver", () => {
       // Should have store:error event for keychain
       const errorEvents = events.filter((e) => e.type === "store:error");
       expect(errorEvents.length).toBe(1);
-      expect(errorEvents[0].type === "store:error" && errorEvents[0].store).toBe("keychain");
+      expect(errorEvents[0]?.type === "store:error" && errorEvents[0]?.store).toBe("keychain");
     });
   });
 

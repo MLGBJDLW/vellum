@@ -11,6 +11,14 @@ export {
 } from "./bus.js";
 
 export {
+  agentShutdownComplete,
+  // Agent loop events (T029)
+  agentStateChange,
+  agentTerminated,
+  agentText,
+  agentThinking,
+  agentToolEnd,
+  agentToolStart,
   // Credential events (T034)
   credentialNotFound,
   credentialResolved,
@@ -28,12 +36,4 @@ export {
   toolEnd,
   toolStart,
   toolStateChange,
-  // Agent loop events (T029)
-  agentStateChange,
-  agentText,
-  agentThinking,
-  agentToolStart,
-  agentToolEnd,
-  agentTerminated,
-  agentShutdownComplete,
 } from "./definitions.js";

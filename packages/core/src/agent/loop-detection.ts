@@ -193,7 +193,7 @@ function combineResults(doomLoop?: DoomLoopResult, stuck?: StuckResult): Combine
   }
 
   // Only stuck detected
-  const stuckConfidence = stuck?.confidence;
+  const stuckConfidence = stuck?.confidence ?? 0;
   const similarity = stuck?.similarityScore ?? 0;
 
   return {

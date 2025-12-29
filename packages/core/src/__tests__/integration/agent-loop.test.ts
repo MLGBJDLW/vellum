@@ -8,11 +8,11 @@
  * - State transitions
  */
 
+import type { TokenUsage } from "@vellum/provider";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
-import { ToolExecutor, type PermissionChecker } from "../../tool/index.js";
-import type { TokenUsage } from "@vellum/provider";
 import type { SessionMessage } from "../../session/index.js";
+import { type PermissionChecker, ToolExecutor } from "../../tool/index.js";
 
 // Mock session/index.js (which is what loop.ts imports)
 vi.mock("../../session/index.js", async (importOriginal) => {
@@ -24,15 +24,17 @@ vi.mock("../../session/index.js", async (importOriginal) => {
       initialize: vi.fn(),
       getRegistry: vi.fn(),
     },
-    toModelMessages: vi.fn((messages) => messages.map((m: Record<string, unknown>) => ({
-      role: m.role,
-      content: m.parts
-        ? (m.parts as Array<{ type: string; text?: string }>).map((p) => {
-            if (p.type === "text") return { type: "text", text: p.text };
-            return p;
-          })
-        : m.content,
-    }))),
+    toModelMessages: vi.fn((messages) =>
+      messages.map((m: Record<string, unknown>) => ({
+        role: m.role,
+        content: m.parts
+          ? (m.parts as Array<{ type: string; text?: string }>).map((p) => {
+              if (p.type === "text") return { type: "text", text: p.text };
+              return p;
+            })
+          : m.content,
+      }))
+    ),
   };
 });
 
@@ -109,13 +111,15 @@ describe("AgentLoop Integration (T034)", () => {
   describe("Happy Path", () => {
     it("completes a simple text response without tool calls", async () => {
       const events = [
-        { type: "text", text: "Hello, " },
-        { type: "text", text: "world!" },
+        { type: "text", content: "Hello, " },
+        { type: "text", content: "world!" },
         { type: "usage", usage: { inputTokens: 10, outputTokens: 20 } },
         { type: "done", stopReason: "end_turn" },
       ];
 
-      vi.mocked(LLM.stream).mockReturnValue(createMockStream(events) as ReturnType<typeof LLM.stream>);
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream(events) as ReturnType<typeof LLM.stream>
+      );
 
       const loop = new AgentLoop(config);
 
@@ -152,7 +156,9 @@ describe("AgentLoop Integration (T034)", () => {
         { type: "done", stopReason: "tool_use" },
       ];
 
-      vi.mocked(LLM.stream).mockReturnValue(createMockStream(events) as ReturnType<typeof LLM.stream>);
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream(events) as ReturnType<typeof LLM.stream>
+      );
 
       // Mock tool execution
       vi.spyOn(mockToolExecutor, "executeWithPermissionCheck").mockResolvedValue({
@@ -186,12 +192,14 @@ describe("AgentLoop Integration (T034)", () => {
 
     it("tracks token usage correctly", async () => {
       const events = [
-        { type: "text", text: "Response" },
-        { type: "usage", usage: { inputTokens: 100, outputTokens: 50 } },
+        { type: "text", content: "Response" },
+        { type: "usage", inputTokens: 100, outputTokens: 50 },
         { type: "done", stopReason: "end_turn" },
       ];
 
-      vi.mocked(LLM.stream).mockReturnValue(createMockStream(events) as ReturnType<typeof LLM.stream>);
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream(events) as ReturnType<typeof LLM.stream>
+      );
 
       const loop = new AgentLoop(config);
 
@@ -293,7 +301,9 @@ describe("AgentLoop Integration (T034)", () => {
         { type: "done", stopReason: "end_turn" },
       ];
 
-      vi.mocked(LLM.stream).mockReturnValue(createMockStream(events) as ReturnType<typeof LLM.stream>);
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream(events) as ReturnType<typeof LLM.stream>
+      );
 
       const loop = new AgentLoop(config);
 
@@ -320,7 +330,9 @@ describe("AgentLoop Integration (T034)", () => {
         { type: "done", stopReason: "tool_use" },
       ];
 
-      vi.mocked(LLM.stream).mockReturnValue(createMockStream(events) as ReturnType<typeof LLM.stream>);
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream(events) as ReturnType<typeof LLM.stream>
+      );
 
       vi.spyOn(mockToolExecutor, "executeWithPermissionCheck").mockResolvedValue({
         status: "completed",
@@ -358,7 +370,9 @@ describe("AgentLoop Integration (T034)", () => {
       expect(messages[0]?.parts[0]?.type).toBe("text");
       expect((messages[0]?.parts[0] as { type: "text"; text: string })?.text).toBe("First message");
       expect(messages[1]?.role).toBe("assistant");
-      expect((messages[2]?.parts[0] as { type: "text"; text: string })?.text).toBe("Second message");
+      expect((messages[2]?.parts[0] as { type: "text"; text: string })?.text).toBe(
+        "Second message"
+      );
     });
 
     it("returns a copy of messages", () => {

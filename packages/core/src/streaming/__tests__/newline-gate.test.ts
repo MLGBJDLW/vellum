@@ -12,11 +12,8 @@
  * - EC-004: Unicode handling in buffer
  */
 
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import {
-  NewlineGate,
-  DEFAULT_NEWLINE_GATE_CONFIG,
-} from "../newline-gate.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_NEWLINE_GATE_CONFIG, NewlineGate } from "../newline-gate.js";
 
 describe("NewlineGate", () => {
   beforeEach(() => {
@@ -478,11 +475,7 @@ describe("NewlineGate", () => {
         output.push(remaining);
       }
 
-      expect(output).toEqual([
-        "Hello, how are you?\n",
-        "I'm doing great!\n",
-        "Thanks for asking.",
-      ]);
+      expect(output).toEqual(["Hello, how are you?\n", "I'm doing great!\n", "Thanks for asking."]);
     });
 
     it("should handle rapid timeout resets", () => {
