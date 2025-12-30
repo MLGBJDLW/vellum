@@ -10,8 +10,8 @@ import {
   createCollector,
   formatResultAsJson,
   parseNdjson,
-  StreamJsonWriter,
   type StreamEventType,
+  StreamJsonWriter,
   type StreamOutput,
 } from "../output/stream-json.js";
 import type { CommandResult } from "../types.js";

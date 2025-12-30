@@ -44,12 +44,19 @@ function renderHotkeysHook(hotkeys: ReadonlyArray<HotkeyDefinition>, options?: U
 
   const { rerender, unmount } = render(
     <AppProvider>
-      <TestHarness hotkeys={hotkeys} options={options} onHookReturn={(r) => (hookReturn = r)} />
+      <TestHarness
+        hotkeys={hotkeys}
+        options={options}
+        onHookReturn={(r) => {
+          hookReturn = r;
+        }}
+      />
     </AppProvider>
   );
 
   return {
     get current() {
+      // biome-ignore lint/style/noNonNullAssertion: Test helper requires non-null
       return hookReturn!;
     },
     rerender: (newHotkeys?: ReadonlyArray<HotkeyDefinition>, newOptions?: UseHotkeysOptions) => {
@@ -58,7 +65,9 @@ function renderHotkeysHook(hotkeys: ReadonlyArray<HotkeyDefinition>, options?: U
           <TestHarness
             hotkeys={newHotkeys ?? hotkeys}
             options={newOptions ?? options}
-            onHookReturn={(r) => (hookReturn = r)}
+            onHookReturn={(r) => {
+              hookReturn = r;
+            }}
           />
         </AppProvider>
       );
@@ -81,7 +90,7 @@ describe("useHotkeys", () => {
       const result = renderHotkeysHook(hotkeys);
 
       expect(result.current.hotkeys).toHaveLength(1);
-      expect(result.current.hotkeys.at(0)!.key).toBe("c");
+      expect(result.current.hotkeys.at(0)?.key).toBe("c");
     });
 
     it("applies default scope to hotkeys without scope", () => {
@@ -89,7 +98,7 @@ describe("useHotkeys", () => {
 
       const result = renderHotkeysHook(hotkeys);
 
-      expect(result.current.hotkeys.at(0)!.scope).toBe("global");
+      expect(result.current.hotkeys.at(0)?.scope).toBe("global");
     });
 
     it("preserves explicit scope on hotkeys", () => {
@@ -99,7 +108,7 @@ describe("useHotkeys", () => {
 
       const result = renderHotkeysHook(hotkeys);
 
-      expect(result.current.hotkeys.at(0)!.scope).toBe("input");
+      expect(result.current.hotkeys.at(0)?.scope).toBe("input");
     });
 
     it("overrides scope with options.scope", () => {
@@ -109,7 +118,7 @@ describe("useHotkeys", () => {
 
       const result = renderHotkeysHook(hotkeys, { scope: "messages" });
 
-      expect(result.current.hotkeys.at(0)!.scope).toBe("messages");
+      expect(result.current.hotkeys.at(0)?.scope).toBe("messages");
     });
   });
 
@@ -254,9 +263,9 @@ describe("createStandardHotkeys", () => {
     const hotkeys = createStandardHotkeys({ onInterrupt });
 
     expect(hotkeys).toHaveLength(1);
-    expect(hotkeys.at(0)!.key).toBe("c");
-    expect(hotkeys.at(0)!.ctrl).toBe(true);
-    expect(hotkeys.at(0)!.scope).toBe("global");
+    expect(hotkeys.at(0)?.key).toBe("c");
+    expect(hotkeys.at(0)?.ctrl).toBe(true);
+    expect(hotkeys.at(0)?.scope).toBe("global");
   });
 
   it("creates clear screen hotkey", () => {
@@ -264,8 +273,8 @@ describe("createStandardHotkeys", () => {
     const hotkeys = createStandardHotkeys({ onClearScreen });
 
     expect(hotkeys).toHaveLength(1);
-    expect(hotkeys.at(0)!.key).toBe("l");
-    expect(hotkeys.at(0)!.ctrl).toBe(true);
+    expect(hotkeys.at(0)?.key).toBe("l");
+    expect(hotkeys.at(0)?.ctrl).toBe(true);
   });
 
   it("creates vim toggle hotkey with input scope", () => {
@@ -273,9 +282,9 @@ describe("createStandardHotkeys", () => {
     const hotkeys = createStandardHotkeys({ onToggleVim });
 
     expect(hotkeys).toHaveLength(1);
-    expect(hotkeys.at(0)!.key).toBe("v");
-    expect(hotkeys.at(0)!.ctrl).toBe(true);
-    expect(hotkeys.at(0)!.scope).toBe("input");
+    expect(hotkeys.at(0)?.key).toBe("v");
+    expect(hotkeys.at(0)?.ctrl).toBe(true);
+    expect(hotkeys.at(0)?.scope).toBe("input");
   });
 
   it("creates help hotkey for F1", () => {
@@ -283,8 +292,8 @@ describe("createStandardHotkeys", () => {
     const hotkeys = createStandardHotkeys({ onShowHelp });
 
     expect(hotkeys).toHaveLength(1);
-    expect(hotkeys.at(0)!.key).toBe("f1");
-    expect(hotkeys.at(0)!.ctrl).toBeUndefined();
+    expect(hotkeys.at(0)?.key).toBe("f1");
+    expect(hotkeys.at(0)?.ctrl).toBeUndefined();
   });
 
   it("creates trust mode hotkeys with ctrl+shift", () => {

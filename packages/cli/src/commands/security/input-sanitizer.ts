@@ -35,6 +35,7 @@ const PATH_TRAVERSAL_PATTERNS = [
 /**
  * Dangerous characters to remove from general input
  */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: Need to match control chars for security
 const DANGEROUS_CHARS = /[|&;$`\\!(){}[\]<>*?#~\x00-\x1f\x7f]/g;
 
 // =============================================================================
@@ -112,9 +113,7 @@ export class InputSanitizer {
     // Ensure resolved path starts with the allowed root
     // Add path.sep to prevent partial directory name matches
     // e.g., /app/data should not allow /app/data-secret
-    return (
-      resolvedPath === normalizedRoot || resolvedPath.startsWith(normalizedRoot + path.sep)
-    );
+    return resolvedPath === normalizedRoot || resolvedPath.startsWith(normalizedRoot + path.sep);
   }
 
   /**

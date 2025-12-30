@@ -254,7 +254,7 @@ describe("docLookupTool", () => {
     });
 
     it("should truncate content when exceeds maxLength", async () => {
-      const longContent = "<p>" + "x".repeat(200) + "</p>";
+      const longContent = `<p>${"x".repeat(200)}</p>`;
 
       mockFetch.mockResolvedValueOnce({
         ok: true,

@@ -211,9 +211,15 @@ export class BatchExecutor {
    * @param config - Batch execution configuration
    * @returns Batch execution result
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Core batch execution logic requires sequential processing
   async execute(script: string, config: BatchConfig = {}): Promise<BatchResult> {
-    const { continueOnError = false, signal, onBeforeCommand, onAfterCommand, skipComments = true } =
-      config;
+    const {
+      continueOnError = false,
+      signal,
+      onBeforeCommand,
+      onAfterCommand,
+      skipComments = true,
+    } = config;
 
     const lines = script.split(/\r?\n/);
     const commands: BatchCommandResult[] = [];
@@ -233,7 +239,10 @@ export class BatchExecutor {
       const trimmedLine = line.trim();
 
       // Handle comments and empty lines
-      if (skipComments && (BatchScriptParser.isEmpty(trimmedLine) || BatchScriptParser.isComment(trimmedLine))) {
+      if (
+        skipComments &&
+        (BatchScriptParser.isEmpty(trimmedLine) || BatchScriptParser.isComment(trimmedLine))
+      ) {
         commands.push({
           command: line,
           index: i,

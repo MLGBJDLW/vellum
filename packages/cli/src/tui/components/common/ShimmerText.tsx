@@ -267,7 +267,7 @@ export function ShimmerBlock({
           lineContent = generateWaveEffect(lineWidth, frame);
           break;
         case "dots":
-          lineContent = DOT_FRAMES[frame % DOT_FRAMES.length]!.repeat(Math.ceil(lineWidth / 2));
+          lineContent = DOT_FRAMES[frame % DOT_FRAMES.length]?.repeat(Math.ceil(lineWidth / 2));
           break;
         default:
           lineContent = generateShimmerGradient(lineWidth, (frame + i * 3) % (lineWidth + 10), "█");

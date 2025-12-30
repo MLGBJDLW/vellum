@@ -14,8 +14,8 @@ import {
   getGenerator,
   isValidShell,
   PowerShellCompletionGenerator,
-  ZshCompletionGenerator,
   type ShellType,
+  ZshCompletionGenerator,
 } from "../completion/index.js";
 import type { SlashCommand } from "../types.js";
 

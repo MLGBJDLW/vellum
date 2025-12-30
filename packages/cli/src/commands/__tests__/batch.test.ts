@@ -6,11 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  BatchExecutor,
-  BatchScriptParser,
-  createBatchScript,
-} from "../batch/index.js";
+import { BatchExecutor, BatchScriptParser, createBatchScript } from "../batch/index.js";
 import type { CommandExecutor } from "../executor.js";
 import type { CommandResult } from "../types.js";
 
@@ -18,9 +14,7 @@ import type { CommandResult } from "../types.js";
 // Test Fixtures
 // =============================================================================
 
-function createMockExecutor(
-  results: Map<string, CommandResult> = new Map()
-): CommandExecutor {
+function createMockExecutor(results: Map<string, CommandResult> = new Map()): CommandExecutor {
   return {
     execute: vi.fn(async (input: string): Promise<CommandResult> => {
       const result = results.get(input.trim());

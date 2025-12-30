@@ -8,9 +8,9 @@
 
 export { InputSanitizer } from "./input-sanitizer.js";
 export {
+  type CommandSecurityPolicy,
   createPermissionChecker,
   PermissionChecker,
-  type CommandSecurityPolicy,
   type PermissionResult,
 } from "./permission-checker.js";
 export {
