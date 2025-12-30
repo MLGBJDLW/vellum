@@ -1,0 +1,110 @@
+{
+  "status": {
+    "model": "Model",
+    "mode": "Mode",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "ready": "Ready",
+    "loading": "Loading...",
+    "streaming": "Streaming...",
+    "waiting": "Waiting for response...",
+    "error": "Error",
+    "idle": "Idle",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "session": "Session",
+    "elapsed": "Elapsed"
+  },
+  "input": {
+    "placeholder": "Type a message...",
+    "multilinePlaceholder": "Type a message... (Shift+Enter for newline)",
+    "commandHint": "Type / for commands",
+    "emptyMessage": "Message cannot be empty",
+    "submit": "Send",
+    "cancel": "Cancel",
+    "clear": "Clear"
+  },
+  "permission": {
+    "title": "Permission Required",
+    "description": "The following action requires your approval:",
+    "toolName": "Tool",
+    "action": "Action",
+    "allow": "Allow",
+    "allowOnce": "Allow Once",
+    "allowAlways": "Always Allow",
+    "deny": "Deny",
+    "denyAlways": "Always Deny",
+    "abort": "Abort",
+    "details": "Details",
+    "reason": "Reason",
+    "path": "Path",
+    "command": "Command",
+    "file": {
+      "read": "Read file",
+      "write": "Write file",
+      "delete": "Delete file"
+    },
+    "shell": {
+      "execute": "Execute command"
+    },
+    "mcp": {
+      "connect": "Connect to MCP server",
+      "call": "Call MCP tool"
+    }
+  },
+  "vim": {
+    "normal": "NORMAL",
+    "insert": "INSERT",
+    "visual": "VISUAL",
+    "command": "COMMAND",
+    "replace": "REPLACE",
+    "modeIndicator": "Mode: {{mode}}"
+  },
+  "messages": {
+    "thinking": "Thinking...",
+    "generating": "Generating...",
+    "user": "You",
+    "assistant": "Assistant",
+    "system": "System",
+    "error": "Error",
+    "empty": "No messages yet",
+    "copied": "Copied to clipboard",
+    "copyFailed": "Failed to copy"
+  },
+  "tools": {
+    "executing": "Executing...",
+    "completed": "Completed",
+    "failed": "Failed",
+    "pending": "Pending approval",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "name": "Tool",
+    "duration": "Duration",
+    "result": "Result"
+  },
+  "commands": {
+    "help": "Show available commands",
+    "clear": "Clear messages",
+    "exit": "Exit application",
+    "model": "Change model",
+    "theme": "Change theme",
+    "history": "Show history",
+    "compact": "Toggle compact mode"
+  },
+  "errors": {
+    "connectionFailed": "Connection failed",
+    "timeout": "Request timed out",
+    "invalidInput": "Invalid input",
+    "unknown": "An unknown error occurred"
+  },
+  "common": {
+    "yes": "Yes",
+    "no": "No",
+    "ok": "OK",
+    "confirm": "Confirm",
+    "retry": "Retry",
+    "close": "Close",
+    "loading": "Loading...",
+    "processing": "Processing..."
+  }
+}

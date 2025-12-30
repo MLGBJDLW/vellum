@@ -82,3 +82,4 @@ export {
   type UsageTrackerOptions,
   type UsageWindow,
 } from "./usage/index.js";
+export * from "./web.js";

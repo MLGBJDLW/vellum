@@ -4,6 +4,42 @@
 
 // Error codes
 export { ErrorCode } from "./errors/index.js";
+// Theme types (Phase 33 - Visual Theme System)
+// Theme utilities (Phase 33 - Visual Theme System)
+export type {
+  BorderCharacters,
+  BorderRadius,
+  BorderWidth,
+  Color,
+  PartialTheme,
+  SemanticColors,
+  SpinnerFrames,
+  TextRoleColors,
+  ThemeAnimation,
+  ThemeBorders,
+  ThemeColors,
+  ThemeContextValue,
+  ThemeIcons,
+  ThemeMode,
+  ThemeName,
+  ThemeOptions,
+  ThemePreset,
+  ThemeSpacing,
+  VellumTheme,
+} from "./theme/index.js";
+export {
+  ansiTheme,
+  darkTheme,
+  defaultTheme,
+  draculaTheme,
+  getTheme,
+  getThemeNames,
+  getThemeOrDefault,
+  githubTheme,
+  lightTheme,
+  THEME_PRESETS,
+  themes,
+} from "./theme/index.js";
 export type { AgentConfig, AgentState } from "./types/agent.js";
 export type { Message, MessageRole } from "./types/message.js";
 export type { ModelInfo, ProviderConfig } from "./types/provider.js";

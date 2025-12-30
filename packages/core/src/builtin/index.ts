@@ -55,6 +55,16 @@ export {
   browserTool,
   cleanupBrowser,
 } from "./browser.js";
+// ============================================
+// Phase 14: Cache Utilities
+// ============================================
+export {
+  type CacheOptions,
+  type CacheStats,
+  createCacheKey,
+  isCacheable,
+  ResponseCache,
+} from "./cache/response-cache.js";
 export {
   type CodebaseSearchOutput,
   type CodebaseSearchParams,
@@ -70,6 +80,17 @@ export {
   delegateAgentParamsSchema,
   delegateAgentTool,
 } from "./delegate-agent.js";
+// ============================================
+// Phase 14: Documentation Lookup Tool
+// ============================================
+export {
+  type DocLookupOutput,
+  type DocLookupParams,
+  type DocSource,
+  DocSourceSchema,
+  docLookupParamsSchema,
+  docLookupTool,
+} from "./doc-lookup.js";
 // Example tools (for demonstration)
 export { exampleReadFileTool, exampleWriteFileTool } from "./example-tools.js";
 // Directory listing tool
@@ -131,6 +152,24 @@ export {
   searchFilesTool,
 } from "./search-files.js";
 export {
+  checkDomain,
+  checkUrlDomain,
+  type DomainCheckResult,
+  extractDomain,
+  matchDomainPattern,
+} from "./security/domain-control.js";
+// ============================================
+// Phase 14: Security Utilities
+// ============================================
+export {
+  type CloudMetadataCheckResult,
+  isCloudMetadata,
+  isPrivateIP,
+  normalizeIP,
+  type UrlValidationResult,
+  validateUrlWithDNS,
+} from "./security/url-validator.js";
+export {
   type ShellOutput,
   type ShellParams,
   shellParamsSchema,
@@ -188,6 +227,7 @@ import type { ToolRegistry } from "../tool/registry.js";
  * - Agent control: attempt_completion, ask_followup_question
  * - Browser: browser
  * - Network: web_fetch, web_search
+ * - Documentation: doc_lookup
  * - LSP: lsp
  * - Productivity: todo_manage, smart_edit
  * - Memory: save_memory, recall_memory
@@ -202,6 +242,7 @@ export const ALL_BUILTIN_TOOLS = [
   browserTool,
   codebaseSearchTool,
   delegateAgentTool,
+  docLookupTool,
   listDirTool,
   lspTool,
   readFileTool,
@@ -251,6 +292,7 @@ import { bashTool } from "./bash.js";
 import { browserTool } from "./browser.js";
 import { codebaseSearchTool } from "./codebase-search.js";
 import { delegateAgentTool } from "./delegate-agent.js";
+import { docLookupTool } from "./doc-lookup.js";
 import { listDirTool } from "./list-dir.js";
 import { lspTool } from "./lsp.js";
 import { readFileTool } from "./read-file.js";

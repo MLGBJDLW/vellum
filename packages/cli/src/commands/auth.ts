@@ -6,6 +6,9 @@
  * - /logout - Remove credential for current/specified provider
  * - /credentials - Show credential status
  *
+ * Supports both legacy interface (SlashCommandResult) and
+ * enhanced interface (SlashCommand from types.ts) for backward compatibility.
+ *
  * @module cli/commands/auth
  */
 
@@ -16,12 +19,20 @@ import {
   KeychainStore,
 } from "@vellum/core";
 
+import type {
+  CommandContext,
+  CommandResult,
+  SlashCommand as EnhancedSlashCommand,
+} from "./types.js";
+import { error, interactive, success } from "./types.js";
+
 // =============================================================================
 // Types
 // =============================================================================
 
 /**
  * Result of a slash command execution
+ * @deprecated Use CommandResult from ./types.ts for new commands
  */
 export interface SlashCommandResult {
   /** Whether the command succeeded */
@@ -327,6 +338,7 @@ async function handleCredentials(
 
 /**
  * All registered slash commands for authentication
+ * @deprecated Use enhancedAuthCommands for new code
  */
 export const authSlashCommands: SlashCommand[] = [
   {
@@ -350,6 +362,325 @@ export const authSlashCommands: SlashCommand[] = [
     usage: "/credentials [provider]",
     handler: handleCredentials,
   },
+];
+
+// =============================================================================
+// T034: Enhanced Auth Commands (New Interface)
+// =============================================================================
+
+/**
+ * Login command with enhanced interface
+ *
+ * Provides interactive API key input for credential storage.
+ *
+ * @example
+ * ```
+ * /login                    # Uses current provider
+ * /login anthropic          # Specify provider
+ * /login openai --store keychain  # Specify store
+ * ```
+ */
+export const loginCommand: EnhancedSlashCommand = {
+  name: "login",
+  description: "Add or update API credential for a provider",
+  kind: "builtin",
+  category: "auth",
+  aliases: ["signin", "auth"],
+  positionalArgs: [
+    {
+      name: "provider",
+      type: "string",
+      description: "Provider name (e.g., anthropic, openai)",
+      required: false,
+    },
+  ],
+  namedArgs: [
+    {
+      name: "store",
+      shorthand: "s",
+      type: "string",
+      description: "Credential store to use (keychain, encrypted-file, env)",
+      required: false,
+      default: "keychain",
+    },
+  ],
+  examples: ["/login anthropic", "/login openai --store keychain", "/login"],
+  execute: async (ctx: CommandContext): Promise<CommandResult> => {
+    const provider = (ctx.parsedArgs.positional[0] as string | undefined) ?? ctx.session.provider;
+    const store = ctx.parsedArgs.named.store as string | undefined;
+
+    if (!provider) {
+      return error(
+        "MISSING_ARGUMENT",
+        "❌ Provider required. Usage: /login <provider>\n   Example: /login anthropic"
+      );
+    }
+
+    const normalizedProvider = provider.toLowerCase();
+
+    // Check if credential already exists
+    const existsResult = await ctx.credentials.exists(normalizedProvider);
+    const alreadyExists = existsResult.ok && existsResult.value;
+
+    const promptMessage = alreadyExists
+      ? `🔐 Updating credential for ${normalizedProvider}. Enter your API key:`
+      : `🔐 Adding credential for ${normalizedProvider}. Enter your API key:`;
+
+    return interactive({
+      inputType: "password",
+      message: promptMessage,
+      placeholder: "sk-...",
+      provider: normalizedProvider,
+      handler: async (value: string): Promise<CommandResult> => {
+        if (!value.trim()) {
+          return error("INVALID_ARGUMENT", "❌ API key cannot be empty");
+        }
+
+        try {
+          const result = await ctx.credentials.store(
+            {
+              provider: normalizedProvider,
+              type: "api_key",
+              value: value.trim(),
+              metadata: {
+                label: `${normalizedProvider} API Key`,
+              },
+            },
+            store as "keychain" | "file" | undefined
+          );
+
+          if (!result.ok) {
+            return error("INTERNAL_ERROR", `❌ Failed to save credential: ${result.error.message}`);
+          }
+
+          return success(
+            `✅ Credential for ${normalizedProvider} saved to ${result.value.source}`,
+            { provider: normalizedProvider, source: result.value.source }
+          );
+        } catch (err) {
+          return error(
+            "INTERNAL_ERROR",
+            `❌ Error: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      },
+      onCancel: () => ({
+        kind: "error" as const,
+        code: "COMMAND_ABORTED" as const,
+        message: "Login cancelled",
+      }),
+    });
+  },
+};
+
+/**
+ * Logout command with enhanced interface
+ *
+ * Removes credential for a provider with optional force flag.
+ *
+ * @example
+ * ```
+ * /logout anthropic         # Prompts for confirmation
+ * /logout anthropic --force # Skips confirmation
+ * ```
+ */
+export const logoutCommand: EnhancedSlashCommand = {
+  name: "logout",
+  description: "Remove API credential for a provider",
+  kind: "builtin",
+  category: "auth",
+  aliases: ["signout", "deauth"],
+  positionalArgs: [
+    {
+      name: "provider",
+      type: "string",
+      description: "Provider name to remove credential for",
+      required: false,
+    },
+  ],
+  namedArgs: [
+    {
+      name: "force",
+      shorthand: "f",
+      type: "boolean",
+      description: "Skip confirmation prompt",
+      required: false,
+      default: false,
+    },
+  ],
+  examples: ["/logout anthropic", "/logout openai --force", "/logout -f"],
+  execute: async (ctx: CommandContext): Promise<CommandResult> => {
+    const provider = (ctx.parsedArgs.positional[0] as string | undefined) ?? ctx.session.provider;
+    const force = ctx.parsedArgs.named.force === true;
+
+    if (!provider) {
+      return error(
+        "MISSING_ARGUMENT",
+        "❌ Provider required. Usage: /logout <provider>\n   Example: /logout anthropic"
+      );
+    }
+
+    const normalizedProvider = provider.toLowerCase();
+
+    // Check if credential exists
+    const existsResult = await ctx.credentials.exists(normalizedProvider);
+    if (!existsResult.ok || !existsResult.value) {
+      return error("CREDENTIAL_NOT_FOUND", `⚠️ No credential found for ${normalizedProvider}`);
+    }
+
+    // If not forced, return confirmation prompt
+    if (!force) {
+      return interactive({
+        inputType: "confirm",
+        message: `Are you sure you want to remove credential for ${normalizedProvider}?`,
+        handler: async (value: string): Promise<CommandResult> => {
+          if (value.toLowerCase() !== "yes" && value.toLowerCase() !== "y") {
+            return error("COMMAND_ABORTED", "Logout cancelled");
+          }
+
+          return performLogout(ctx.credentials, normalizedProvider);
+        },
+        onCancel: () => ({
+          kind: "error" as const,
+          code: "COMMAND_ABORTED" as const,
+          message: "Logout cancelled",
+        }),
+      });
+    }
+
+    // Forced logout - delete immediately
+    return performLogout(ctx.credentials, normalizedProvider);
+  },
+};
+
+/**
+ * Perform the actual logout operation
+ */
+async function performLogout(
+  credentials: CommandContext["credentials"],
+  provider: string
+): Promise<CommandResult> {
+  try {
+    const result = await credentials.delete(provider);
+
+    if (!result.ok) {
+      return error("INTERNAL_ERROR", `❌ Failed to remove credential: ${result.error.message}`);
+    }
+
+    if (result.value === 0) {
+      return error("CREDENTIAL_NOT_FOUND", `⚠️ No credential found for ${provider}`);
+    }
+
+    return success(`✅ Credential for ${provider} removed from ${result.value} store(s)`, {
+      provider,
+      deletedCount: result.value,
+    });
+  } catch (err) {
+    return error("INTERNAL_ERROR", `❌ Error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Credentials command with enhanced interface
+ *
+ * Displays available stores and credential status.
+ *
+ * @example
+ * ```
+ * /credentials              # Show all credentials
+ * /credentials anthropic    # Show specific provider
+ * ```
+ */
+export const credentialsCommand: EnhancedSlashCommand = {
+  name: "credentials",
+  description: "Show credential status and available stores",
+  kind: "builtin",
+  category: "auth",
+  aliases: ["creds", "keys"],
+  positionalArgs: [
+    {
+      name: "provider",
+      type: "string",
+      description: "Filter by provider name",
+      required: false,
+    },
+  ],
+  namedArgs: [],
+  examples: ["/credentials", "/credentials anthropic", "/creds"],
+  execute: async (ctx: CommandContext): Promise<CommandResult> => {
+    const filterProvider = ctx.parsedArgs.positional[0] as string | undefined;
+    const normalizedFilter = filterProvider?.toLowerCase();
+
+    try {
+      // Get store availability
+      const availability = await ctx.credentials.getStoreAvailability();
+
+      // List credentials
+      const listResult = await ctx.credentials.list(normalizedFilter);
+
+      if (!listResult.ok) {
+        return error(
+          "INTERNAL_ERROR",
+          `❌ Failed to list credentials: ${listResult.error.message}`
+        );
+      }
+
+      const credentials = listResult.value;
+
+      // Build message
+      const lines: string[] = [];
+      lines.push("🔐 Credential Status");
+      lines.push("━".repeat(40));
+
+      // Store availability
+      lines.push("\n📦 Storage Backends:");
+      for (const [store, available] of Object.entries(availability)) {
+        lines.push(`   ${available ? "✓" : "✗"} ${store}`);
+      }
+
+      // Credentials
+      lines.push("\n🔑 Credentials:");
+      if (credentials.length === 0) {
+        if (normalizedFilter) {
+          lines.push(`   No credential found for ${normalizedFilter}`);
+        } else {
+          lines.push("   No credentials stored");
+          lines.push("   Use /login <provider> to add one");
+        }
+      } else {
+        for (const cred of credentials) {
+          const maskedValue = cred.maskedHint ?? "***";
+          lines.push(`   • ${cred.provider} (${cred.source}): ${maskedValue} [${cred.type}]`);
+        }
+      }
+
+      lines.push("━".repeat(40));
+
+      return success(lines.join("\n"), {
+        availability,
+        credentials: credentials.map((c) => ({
+          provider: c.provider,
+          source: c.source,
+          type: c.type,
+          maskedHint: c.maskedHint,
+        })),
+      });
+    } catch (err) {
+      return error(
+        "INTERNAL_ERROR",
+        `❌ Error: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  },
+};
+
+/**
+ * All enhanced auth commands using the new SlashCommand interface
+ */
+export const enhancedAuthCommands: EnhancedSlashCommand[] = [
+  loginCommand,
+  logoutCommand,
+  credentialsCommand,
 ];
 
 // =============================================================================

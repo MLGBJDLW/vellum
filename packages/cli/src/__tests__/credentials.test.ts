@@ -497,11 +497,12 @@ describe("/login Command", () => {
       expect(loginResult.promptForInput?.onSubmit).toBeDefined();
       const submitResult = await loginResult.promptForInput?.onSubmit("sk-test-key-12345");
 
-      expect(submitResult.success).toBe(true);
-      expect(submitResult.message).toContain("saved");
-      expect(submitResult.message).toContain("keychain");
-      expect(submitResult.data?.provider).toBe("anthropic");
-      expect(submitResult.data?.source).toBe("keychain");
+      expect(submitResult).toBeDefined();
+      expect(submitResult!.success).toBe(true);
+      expect(submitResult!.message).toContain("saved");
+      expect(submitResult!.message).toContain("keychain");
+      expect(submitResult!.data?.provider).toBe("anthropic");
+      expect(submitResult!.data?.source).toBe("keychain");
 
       // Verify credential was stored
       const keychainStore = stores.find((s) => s.name === "keychain");
@@ -515,8 +516,9 @@ describe("/login Command", () => {
       const loginResult = await executeSlashCommand("/login anthropic", context);
       const submitResult = await loginResult.promptForInput?.onSubmit("");
 
-      expect(submitResult.success).toBe(false);
-      expect(submitResult.message).toContain("cannot be empty");
+      expect(submitResult).toBeDefined();
+      expect(submitResult!.success).toBe(false);
+      expect(submitResult!.message).toContain("cannot be empty");
     });
 
     it("trims whitespace from API key", async () => {
@@ -903,8 +905,9 @@ describe("Edge Cases", () => {
       const loginResult = await executeSlashCommand("/login anthropic", context);
       const submitResult = await loginResult.promptForInput?.onSubmit("sk-test-key");
 
-      expect(submitResult.success).toBe(true);
-      expect(submitResult.message).toContain("file");
+      expect(submitResult).toBeDefined();
+      expect(submitResult!.success).toBe(true);
+      expect(submitResult!.message).toContain("file");
 
       const fileStore = stores.find((s) => s.name === "file");
       expect(fileStore?.getAll()).toHaveLength(1);
@@ -944,8 +947,9 @@ describe("Integration Scenarios", () => {
     expect(loginResult.promptForInput).toBeDefined();
 
     const submitResult = await loginResult.promptForInput?.onSubmit("sk-ant-api-key-12345");
-    expect(submitResult.success).toBe(true);
-    expect(submitResult.message).toContain("saved");
+    expect(submitResult).toBeDefined();
+    expect(submitResult!.success).toBe(true);
+    expect(submitResult!.message).toContain("saved");
 
     // 2. Verify
     const credsResult = await executeSlashCommand("/credentials", context);

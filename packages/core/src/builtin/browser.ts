@@ -9,8 +9,10 @@
  */
 
 import { z } from "zod";
+import { CDPConnectionError, CloudMetadataError, PrivateIPError } from "../errors/web.js";
 import { defineTool, fail, ok } from "../types/index.js";
 import type { ToolResult } from "../types/tool.js";
+import { isCloudMetadata, validateUrlWithDNS } from "./security/url-validator.js";
 
 /** Playwright browser instance type (generic for when not installed) */
 // biome-ignore lint/suspicious/noExplicitAny: Playwright types unavailable when not installed
@@ -111,9 +113,32 @@ async function loadPlaywright(): Promise<PlaywrightModule | null> {
 }
 
 /**
- * Get or create browser instance
+ * Connect to a remote browser via CDP (Chrome DevTools Protocol)
  */
-async function getBrowser(): Promise<Browser | null> {
+async function connectViaCDP(endpoint: string): Promise<Browser> {
+  try {
+    const playwright = await loadPlaywright();
+    if (!playwright) {
+      throw new Error("Playwright not available");
+    }
+    return await playwright.chromium.connectOverCDP(endpoint);
+  } catch (error) {
+    throw new CDPConnectionError(endpoint, error instanceof Error ? error.message : String(error));
+  }
+}
+
+/**
+ * Get or create browser instance
+ * @param config - Optional configuration for browser connection
+ * @param config.cdpEndpoint - CDP endpoint URL for remote browser connection
+ */
+async function getBrowser(config?: { cdpEndpoint?: string }): Promise<Browser | null> {
+  // CDP remote connection (creates new connection each time)
+  if (config?.cdpEndpoint) {
+    return connectViaCDP(config.cdpEndpoint);
+  }
+
+  // Local browser singleton
   if (browserInstance) {
     return browserInstance;
   }
@@ -187,6 +212,17 @@ async function handleNavigate(
 ): Promise<ToolResult<BrowserOutput>> {
   if (!url) {
     return fail("URL is required for navigate action");
+  }
+
+  // Security validation before navigation
+  const cloudCheck = isCloudMetadata(url);
+  if (cloudCheck.isMetadata) {
+    throw new CloudMetadataError(url, cloudCheck.provider);
+  }
+
+  const validationResult = await validateUrlWithDNS(url);
+  if (!validationResult.valid) {
+    throw new PrivateIPError(validationResult.resolvedIPs[0] ?? "unknown", url);
   }
 
   await page.goto(url, { waitUntil: "domcontentloaded" });

@@ -8,14 +8,23 @@
  */
 
 import { z } from "zod";
+import { CloudMetadataError, PrivateIPError, UnsafeRedirectError } from "../errors/web.js";
 import { defineTool, fail, ok } from "../types/index.js";
 import type { ToolResult } from "../types/tool.js";
+import { createCacheKey, ResponseCache } from "./cache/response-cache.js";
+import { isCloudMetadata, validateUrlWithDNS } from "./security/url-validator.js";
 
 /** Default timeout for HTTP requests (30 seconds) */
 const DEFAULT_TIMEOUT = 30000;
 
 /** Maximum response body size to capture (5MB) */
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024;
+
+/** Response cache for GET requests */
+const responseCache = new ResponseCache<{ body: string; contentType: string }>({
+  maxEntries: 1000,
+  defaultTtlMs: 300_000, // 5 minutes
+});
 
 /**
  * Schema for web_fetch tool parameters
@@ -185,6 +194,35 @@ export const webFetchTool = defineTool({
       return fail(`${method} requests should not include a body`);
     }
 
+    // Security validation before fetch (SSRF protection)
+    const cloudCheck = isCloudMetadata(input.url);
+    if (cloudCheck.isMetadata) {
+      throw new CloudMetadataError(input.url, cloudCheck.provider);
+    }
+
+    const validationResult = await validateUrlWithDNS(input.url);
+    if (!validationResult.valid) {
+      throw new PrivateIPError(validationResult.resolvedIPs[0] ?? "unknown", input.url);
+    }
+
+    // Check cache for GET requests
+    if (method === "GET") {
+      const cacheKey = createCacheKey(input.url);
+      const cached = responseCache.get(cacheKey);
+      if (cached) {
+        return ok({
+          status: 200,
+          statusText: "OK (Cached)",
+          headers: { "content-type": cached.contentType, "x-cache": "HIT" },
+          body: cached.body,
+          timing: {
+            startTime: Date.now(),
+            duration: 0,
+          },
+        });
+      }
+    }
+
     // Create abort controller for timeout
     const timeoutController = new AbortController();
     const timeoutId = setTimeout(() => timeoutController.abort(), timeout);
@@ -205,6 +243,19 @@ export const webFetchTool = defineTool({
 
       const response = await fetch(input.url, fetchOptions);
 
+      // Validate redirected URL for SSRF protection
+      if (response.redirected) {
+        const redirectUrl = response.url;
+        const redirectCloud = isCloudMetadata(redirectUrl);
+        if (redirectCloud.isMetadata) {
+          throw new UnsafeRedirectError(input.url, redirectUrl, "redirects to cloud metadata");
+        }
+        const redirectValidation = await validateUrlWithDNS(redirectUrl);
+        if (!redirectValidation.valid) {
+          throw new UnsafeRedirectError(input.url, redirectUrl, "redirects to private IP");
+        }
+      }
+
       // Check content length before reading body
       const sizeError = checkContentLength(response);
       if (sizeError) return sizeError;
@@ -220,11 +271,25 @@ export const webFetchTool = defineTool({
       }
 
       const endTime = Date.now();
+      const responseHeaders = extractResponseHeaders(response);
+
+      // Cache successful GET responses
+      if (method === "GET" && response.ok) {
+        const cacheControl = response.headers.get("cache-control")?.toLowerCase() ?? "";
+        if (!cacheControl.includes("no-store") && !cacheControl.includes("private")) {
+          const cacheKey = createCacheKey(input.url);
+          const contentType = response.headers.get("content-type") ?? "text/plain";
+          responseCache.set(cacheKey, {
+            body,
+            contentType,
+          });
+        }
+      }
 
       return ok({
         status: response.status,
         statusText: response.statusText,
-        headers: extractResponseHeaders(response),
+        headers: responseHeaders,
         body,
         timing: {
           startTime,

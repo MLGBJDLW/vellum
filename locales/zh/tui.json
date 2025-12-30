@@ -1,0 +1,110 @@
+{
+  "status": {
+    "model": "模型",
+    "mode": "模式",
+    "tokens": "令牌",
+    "cost": "费用",
+    "ready": "就绪",
+    "loading": "加载中...",
+    "streaming": "流式输出中...",
+    "waiting": "等待响应...",
+    "error": "错误",
+    "idle": "空闲",
+    "connected": "已连接",
+    "disconnected": "已断开",
+    "session": "会话",
+    "elapsed": "已用时间"
+  },
+  "input": {
+    "placeholder": "输入消息...",
+    "multilinePlaceholder": "输入消息... (Shift+Enter 换行)",
+    "commandHint": "输入 / 打开命令菜单",
+    "emptyMessage": "消息不能为空",
+    "submit": "发送",
+    "cancel": "取消",
+    "clear": "清除"
+  },
+  "permission": {
+    "title": "需要权限",
+    "description": "以下操作需要您的批准：",
+    "toolName": "工具",
+    "action": "操作",
+    "allow": "允许",
+    "allowOnce": "允许一次",
+    "allowAlways": "始终允许",
+    "deny": "拒绝",
+    "denyAlways": "始终拒绝",
+    "abort": "中止",
+    "details": "详情",
+    "reason": "原因",
+    "path": "路径",
+    "command": "命令",
+    "file": {
+      "read": "读取文件",
+      "write": "写入文件",
+      "delete": "删除文件"
+    },
+    "shell": {
+      "execute": "执行命令"
+    },
+    "mcp": {
+      "connect": "连接 MCP 服务器",
+      "call": "调用 MCP 工具"
+    }
+  },
+  "vim": {
+    "normal": "普通",
+    "insert": "插入",
+    "visual": "可视",
+    "command": "命令",
+    "replace": "替换",
+    "modeIndicator": "模式: {{mode}}"
+  },
+  "messages": {
+    "thinking": "思考中...",
+    "generating": "生成中...",
+    "user": "你",
+    "assistant": "助手",
+    "system": "系统",
+    "error": "错误",
+    "empty": "暂无消息",
+    "copied": "已复制到剪贴板",
+    "copyFailed": "复制失败"
+  },
+  "tools": {
+    "executing": "执行中...",
+    "completed": "已完成",
+    "failed": "失败",
+    "pending": "等待批准",
+    "approved": "已批准",
+    "rejected": "已拒绝",
+    "name": "工具",
+    "duration": "耗时",
+    "result": "结果"
+  },
+  "commands": {
+    "help": "显示可用命令",
+    "clear": "清除消息",
+    "exit": "退出应用",
+    "model": "切换模型",
+    "theme": "切换主题",
+    "history": "显示历史",
+    "compact": "切换紧凑模式"
+  },
+  "errors": {
+    "connectionFailed": "连接失败",
+    "timeout": "请求超时",
+    "invalidInput": "无效输入",
+    "unknown": "发生未知错误"
+  },
+  "common": {
+    "yes": "是",
+    "no": "否",
+    "ok": "确定",
+    "confirm": "确认",
+    "retry": "重试",
+    "close": "关闭",
+    "loading": "加载中...",
+    "processing": "处理中..."
+  }
+}

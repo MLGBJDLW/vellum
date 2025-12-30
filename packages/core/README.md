@@ -428,6 +428,72 @@ if (result.success) {
 
 ---
 
+## Web Browsing Tools
+
+Vellum provides secure web browsing tools with built-in SSRF protection.
+
+### doc_lookup
+
+Look up documentation from various sources:
+
+```typescript
+import { docLookupTool } from "@vellum/core";
+
+// MDN documentation
+await docLookupTool.execute({ source: "mdn", query: "Array.map" });
+
+// npm package info
+await docLookupTool.execute({ source: "npm", package: "zod" });
+
+// PyPI package info  
+await docLookupTool.execute({ source: "pypi", package: "requests" });
+
+// GitHub README
+await docLookupTool.execute({ source: "github", repo: "microsoft/vscode" });
+```
+
+### Security Features
+
+All web tools include SSRF protection:
+- Private IP blocking (RFC 1918, link-local, CGNAT)
+- Cloud metadata endpoint blocking (AWS, GCP, Azure, etc.)
+- DNS rebinding protection
+- Domain whitelist/blacklist support
+
+### Configuration
+
+```typescript
+import { WebBrowsingConfigSchema } from "@vellum/core";
+
+const config = WebBrowsingConfigSchema.parse({
+  security: {
+    blockPrivateIPs: true,
+    blockCloudMetadata: true,
+    validateDNS: true,
+  },
+  domains: {
+    blacklist: ["malicious.com"],
+  },
+  cache: {
+    enabled: true,
+    maxEntries: 1000,
+    defaultTtlMs: 300_000,
+  },
+});
+```
+
+### Error Codes
+
+Web browsing errors use the 31xx code range:
+- 3100-3109: SSRF protection errors
+- 3110-3119: Domain control errors
+- 3120-3129: Rate limiting errors
+- 3130-3139: Connection errors
+- 3140-3149: Response errors
+- 3150-3159: Browser errors
+
+---
+
 ## Git Snapshot System
 
 The git snapshot system provides automatic tracking and restoration of working directory states using git's internal storage.

@@ -175,6 +175,24 @@ export {
 // ============================================
 export * from "./config/logging.config.js";
 // ============================================
+// Web Browsing Config
+// ============================================
+export {
+  type BrowserConfig,
+  BrowserConfigSchema,
+  type CacheConfig,
+  CacheConfigSchema,
+  type DomainControl,
+  DomainControlSchema,
+  parseWebBrowsingConfig,
+  type RateLimit,
+  RateLimitSchema,
+  type SecurityConfig,
+  SecurityConfigSchema,
+  type WebBrowsingConfig,
+  WebBrowsingConfigSchema,
+} from "./config/web-browsing.js";
+// ============================================
 // Context Management (T401-T402)
 // ============================================
 export * from "./context/index.js";
