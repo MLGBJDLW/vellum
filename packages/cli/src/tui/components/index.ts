@@ -4,6 +4,8 @@
  * React Ink components for the Vellum CLI terminal UI.
  */
 
+// AgentProgress (T046)
+export { AgentProgress, type AgentProgressProps } from "./AgentProgress.js";
 // Backtrack controls
 export * from "./backtrack/index.js";
 // Common components

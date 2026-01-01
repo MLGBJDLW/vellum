@@ -792,6 +792,242 @@ session.clear();
 
 ---
 
+## Session System
+
+The session system provides comprehensive session management with persistence, search, export, and Git-based file tracking.
+
+> See [Session System Documentation](../../docs/session-system.md) for detailed architecture and examples.
+
+### Quick Start
+
+```typescript
+import { 
+  StorageManager, 
+  PersistenceManager,
+  SearchService,
+  ExportService 
+} from "@vellum/core/session";
+
+// 1. Create storage manager
+const storage = await StorageManager.create();
+
+// 2. Create persistence manager with auto-save
+const persistence = new PersistenceManager(storage, {
+  autoSaveIntervalSecs: 60,
+  maxUnsavedMessages: 10
+});
+
+// 3. Create a new session
+await persistence.newSession({ title: "My Session" });
+
+// 4. Handle messages
+await persistence.onMessage(message);
+
+// 5. Close when done
+await persistence.closeSession();
+```
+
+### Core Components
+
+#### StorageManager
+
+Manages session persistence to disk with JSON storage and optional compression.
+
+```typescript
+import { StorageManager } from "@vellum/core/session";
+
+// Create with custom storage path
+const storage = await StorageManager.create({
+  storageDir: "/custom/path/.vellum/sessions",
+  compress: true  // Enable gzip compression
+});
+
+// Save session
+await storage.saveSession(session);
+
+// Load session
+const session = await storage.loadSession("session-123");
+
+// List all sessions
+const sessions = await storage.listSessions();
+
+// Delete session
+await storage.deleteSession("session-123");
+```
+
+#### PersistenceManager
+
+Provides auto-save and session lifecycle management with event emission.
+
+```typescript
+import { PersistenceManager } from "@vellum/core/session";
+
+const persistence = new PersistenceManager(storage, {
+  autoSaveEnabled: true,
+  autoSaveIntervalSecs: 30,
+  maxUnsavedMessages: 5
+});
+
+// Listen for save events
+persistence.on('save', (session) => {
+  console.log('Session saved:', session.metadata.id);
+});
+
+persistence.on('error', (err, session) => {
+  console.error('Save failed:', err);
+});
+
+// Create new session
+await persistence.newSession({ 
+  title: "Code Review",
+  tags: ["review", "typescript"]
+});
+
+// Load existing session
+await persistence.loadSession("session-123");
+
+// Add message (auto-saves based on config)
+await persistence.onMessage(message);
+
+// Manual checkpoint
+await persistence.createCheckpoint("Before refactor");
+
+// Close session (final save)
+await persistence.closeSession();
+```
+
+#### SearchService
+
+Full-text search across session titles, summaries, tags, and message content using MiniSearch.
+
+```typescript
+import { SearchService } from "@vellum/core/session";
+
+const searchService = new SearchService(storage);
+
+// Initialize index
+await searchService.initialize();
+
+// Search sessions
+const results = await searchService.search("typescript error", {
+  limit: 10,
+  includeSnippets: true
+});
+
+// Results include relevance scoring
+for (const result of results) {
+  console.log(`${result.title} (score: ${result.score})`);
+  console.log(`Matches: ${result.matches.join(", ")}`);
+  if (result.snippet) {
+    console.log(`Snippet: ${result.snippet}`);
+  }
+}
+
+// Rebuild index after changes
+await searchService.rebuildIndex();
+```
+
+#### ExportService
+
+Export sessions to JSON, Markdown, HTML, or plain text formats.
+
+```typescript
+import { ExportService } from "@vellum/core/session";
+
+const exportService = new ExportService();
+
+// Export to Markdown
+const markdown = exportService.export(session, { 
+  format: 'markdown',
+  includeMetadata: true,
+  includeToolOutputs: true,
+  includeTimestamps: true
+});
+
+// Export to HTML
+const html = exportService.export(session, { format: 'html' });
+
+// Export to JSON
+const json = exportService.export(session, { format: 'json' });
+
+// Export to text
+const text = exportService.export(session, { format: 'text' });
+
+// Save to file
+await exportService.exportToFile(session, '/path/to/export.md', {
+  format: 'markdown'
+});
+```
+
+**Supported Formats:**
+- `json` - Pretty-printed JSON with full session data
+- `markdown` - Formatted Markdown with role emojis (👤 🤖 ⚙️ 🔧)
+- `html` - Self-contained HTML document with styling
+- `text` - Plain text with role prefixes
+
+#### Snapshot
+
+Git-based file tracking using a shadow repository (`.vellum/.git-shadow/`).
+
+```typescript
+import { Snapshot } from "@vellum/core/session";
+
+// Initialize shadow repository
+await Snapshot.init("/project/root");
+
+// Create snapshot
+const snapshot = await Snapshot.create("/project/root", [
+  "src/main.ts",
+  "package.json"
+]);
+console.log("Created:", snapshot.hash);
+
+// Get snapshot info
+const info = await Snapshot.getInfo("/project/root", snapshot.hash);
+console.log("Files:", info.files);
+console.log("Timestamp:", info.timestamp);
+
+// Compare with current state
+const diff = await Snapshot.diff("/project/root", snapshot.hash);
+console.log("Added:", diff.added);
+console.log("Modified:", diff.modified);
+console.log("Deleted:", diff.deleted);
+
+// Restore files from snapshot
+await Snapshot.restore("/project/root", snapshot.hash, ["src/main.ts"]);
+
+// List all snapshots
+const snapshots = await Snapshot.list("/project/root");
+```
+
+### Error Handling
+
+All session APIs use typed errors for reliable error handling:
+
+```typescript
+import { StorageError, StorageErrorType } from "@vellum/core/session";
+
+try {
+  await storage.loadSession("session-123");
+} catch (err) {
+  if (err instanceof StorageError) {
+    switch (err.type) {
+      case StorageErrorType.SESSION_NOT_FOUND:
+        console.log("Session does not exist");
+        break;
+      case StorageErrorType.IO:
+        console.error("Filesystem error:", err.cause);
+        break;
+      case StorageErrorType.SERIALIZATION:
+        console.error("Invalid session data:", err.cause);
+        break;
+    }
+  }
+}
+```
+
+---
+
 ## Configuration
 
 Configuration is loaded from multiple sources with priority:

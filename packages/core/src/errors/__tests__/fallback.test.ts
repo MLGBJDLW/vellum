@@ -340,7 +340,7 @@ describe("CacheFallback", () => {
       cache.set("key", "stale-value");
       vi.advanceTimersByTime(2000);
 
-      let resolveRevalidation: (value: string) => void;
+      let resolveRevalidation!: (value: string) => void;
       const slowPrimary = vi.fn().mockImplementation(
         () =>
           new Promise<string>((resolve) => {

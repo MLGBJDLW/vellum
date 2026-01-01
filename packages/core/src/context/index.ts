@@ -354,3 +354,9 @@ export {
   removeAllParentPointers,
   validateParentPointers,
 } from "./orphan-cleanup.js";
+
+// ============================================================================
+// Agents Configuration (AGENTS.md Protocol)
+// ============================================================================
+
+export * from "./agents/index.js";

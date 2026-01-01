@@ -32,6 +32,8 @@ export {
   serializeToolCall,
   type ToolCall,
 } from "./doom.js";
+// Agent Level Hierarchy (T001)
+export { AgentLevel, AgentLevelSchema, canSpawn } from "./level.js";
 export {
   AgentLoop,
   type AgentLoopConfig,
@@ -50,17 +52,34 @@ export {
   type LoopDetectionContext,
   type LoopType,
 } from "./loop-detection.js";
+// Mode Loader (T006)
+export {
+  createModeLoader,
+  ModeFileNotFoundError,
+  type ModeLoader,
+  ModeValidationError,
+  type YamlModeConfig,
+  YamlModeConfigSchema,
+} from "./mode-loader.js";
+// Mode Registry (T005)
+export { createModeRegistry, type ModeRegistry } from "./mode-registry.js";
 export {
   AGENT_MODES,
   type AgentMode,
   AgentModeSchema,
   canEdit,
+  DEFAULT_MAX_CONCURRENT_SUBAGENTS,
+  type ExtendedModeConfig,
+  ExtendedModeConfigSchema,
   getBashPermission,
   getModeConfig,
   getTemperature,
   MODE_CONFIGS,
   type ModeConfig,
+  ModeConfigSchema,
   type ToolPermissions,
+  ToolPermissionsSchema,
+  toExtendedMode,
 } from "./modes.js";
 export {
   buildEnvironmentInfo,
@@ -75,6 +94,15 @@ export {
   SystemPromptConfigSchema,
   type SystemPromptResult,
 } from "./prompt.js";
+// Restrictions (T003)
+export {
+  type FileAccess,
+  FileAccessSchema,
+  type FileRestriction,
+  FileRestrictionSchema,
+  type ToolGroupEntry,
+  ToolGroupEntrySchema,
+} from "./restrictions.js";
 // Graceful Shutdown (T024)
 export {
   GracefulShutdownHandler,

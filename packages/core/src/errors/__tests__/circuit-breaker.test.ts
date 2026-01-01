@@ -485,8 +485,8 @@ describe("CircuitBreaker", () => {
     it("should allow manual success recording", () => {
       breaker = new CircuitBreaker("test", { failureThreshold: 1 });
 
-      // Force to HALF_OPEN by manipulating state
-      breaker.state = "HALF_OPEN";
+      // Force to HALF_OPEN by manipulating state (using type assertion for test access)
+      (breaker as any).state = "HALF_OPEN";
       breaker.recordSuccess();
 
       expect(breaker.getState()).toBe("CLOSED");

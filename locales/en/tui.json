@@ -106,5 +106,14 @@
     "close": "Close",
     "loading": "Loading...",
     "processing": "Processing..."
+  },
+  "language": {
+    "current": "Current language: {{name}}",
+    "available": "Available languages:",
+    "switchedTo": "Switched to {{name}}",
+    "autoDetect": "Language set to auto-detect ({{locale}})",
+    "invalid": "Invalid language code: {{code}}",
+    "invalidHint": "Available: {{codes}}",
+    "saved": "Language preference saved"
   }
 }

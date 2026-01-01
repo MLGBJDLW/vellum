@@ -7,6 +7,8 @@
 
 import { z } from "zod";
 
+import type { AgentLevel } from "../agent/level.js";
+import type { OrchestratorCore } from "../agents/orchestrator/core.js";
 import type { Result } from "./result.js";
 
 // =============================================================================
@@ -80,6 +82,14 @@ export interface ToolContext {
    * @returns Promise resolving to whether the action is permitted
    */
   checkPermission(action: string, resource?: string): Promise<boolean>;
+
+  // Multi-agent context (REQ-036)
+  /** Agent level for enforcing hierarchy constraints (e.g., delegate_task checks this) */
+  agentLevel?: AgentLevel;
+  /** Reference to parent agent for approval routing */
+  parentAgentId?: string;
+  /** Access to orchestration for delegation tools */
+  orchestrator?: OrchestratorCore;
 }
 
 // =============================================================================

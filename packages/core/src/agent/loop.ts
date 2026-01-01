@@ -4,6 +4,9 @@
 
 import { EventEmitter } from "node:events";
 import type { StreamEvent, TokenUsage, ToolDefinition } from "@vellum/provider";
+import type { OrchestratorCore } from "../agents/orchestrator/core.js";
+import type { SubsessionManager } from "../agents/session/subsession-manager.js";
+import { SessionAgentsIntegration } from "../context/agents/session-integration.js";
 import type { LLMLogger } from "../logger/llm-logger.js";
 import type { Logger } from "../logger/logger.js";
 import { classifyError, type ErrorInfo, isFatal, isRetryable } from "../session/errors.js";
@@ -31,6 +34,7 @@ import {
 import type { Result } from "../types/result.js";
 import type { ToolContext } from "../types/tool.js";
 import { CancellationToken } from "./cancellation.js";
+import type { AgentLevel } from "./level.js";
 import { type CombinedLoopResult, detectLoop } from "./loop-detection.js";
 import type { ModeConfig } from "./modes.js";
 import { buildSystemPrompt, type SystemPromptConfig } from "./prompt.js";
@@ -91,6 +95,16 @@ export interface AgentLoopConfig {
   streamProcessorHooks?: StreamProcessorHooks;
   /** Enable StreamProcessor for unified stream handling (T042) - defaults to false for backward compatibility */
   useStreamProcessor?: boolean;
+  /** Subsession manager for spawning subagents (T048) */
+  subsessionManager?: SubsessionManager;
+  /** Orchestrator core for task delegation (T048) */
+  orchestrator?: OrchestratorCore;
+  /** Parent session ID if running in a subsession (T048) */
+  parentSessionId?: string;
+  /** Agent level for hierarchy constraints (T048) */
+  agentLevel?: AgentLevel;
+  /** Enable AGENTS.md protocol integration (optional, defaults to false) */
+  enableAgentsIntegration?: boolean;
 }
 
 /**
@@ -211,6 +225,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** Whether to use StreamProcessor (T042) */
   private readonly useStreamProcessor: boolean;
 
+  /** AGENTS.md integration for tool filtering and prompt sections */
+  private agentsIntegration?: SessionAgentsIntegration;
+
   constructor(config: AgentLoopConfig) {
     super();
     this.config = config;
@@ -243,6 +260,26 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       }
       // Wire up StreamProcessor UI events to existing emitters
       this.streamProcessor.setUiHandler((event) => this.handleUiEvent(event));
+    }
+
+    // Initialize AGENTS.md integration if enabled
+    if (config.enableAgentsIntegration && config.cwd) {
+      this.agentsIntegration = new SessionAgentsIntegration({
+        allowAllIfNoConfig: true, // Don't break existing behavior if no AGENTS.md found
+      });
+      // Initialize asynchronously - errors are logged but don't fail construction
+      this.agentsIntegration
+        .initialize(config.cwd)
+        .then(() => {
+          this.logger?.debug("AGENTS.md integration initialized", {
+            hasConfig: this.agentsIntegration?.getConfig() !== null,
+          });
+        })
+        .catch((error) => {
+          this.logger?.warn("Failed to initialize AGENTS.md integration", { error });
+          // Clear integration on failure to avoid partial state
+          this.agentsIntegration = undefined;
+        });
     }
   }
 
@@ -476,7 +513,18 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         includeRuleFiles: true,
       };
 
-      const { prompt: systemPrompt } = await buildSystemPrompt(systemPromptConfig);
+      let systemPrompt = (await buildSystemPrompt(systemPromptConfig)).prompt;
+
+      // Append AGENTS.md prompt sections if integration is available
+      if (this.agentsIntegration && this.agentsIntegration.getState() === "ready") {
+        const agentsSections = this.agentsIntegration.getSystemPromptStrings();
+        if (agentsSections.length > 0) {
+          systemPrompt += "\n\n" + agentsSections.join("\n\n");
+          this.logger?.debug("Added AGENTS.md sections to system prompt", {
+            sectionCount: agentsSections.length,
+          });
+        }
+      }
 
       // Create abort controller for this stream
       this.abortController = new AbortController();
@@ -762,6 +810,26 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         break;
       }
 
+      // Check AGENTS.md tool allowlist if integration is available
+      if (this.agentsIntegration && this.agentsIntegration.getState() === "ready") {
+        const filter = this.agentsIntegration.getToolFilter();
+        if (!filter.isAllowed(call.name)) {
+          const error = `Tool "${call.name}" is not allowed by AGENTS.md configuration`;
+          this.logger?.warn("Tool blocked by AGENTS.md allowlist", {
+            toolName: call.name,
+            callId: call.id,
+          });
+          this.emit("error", new Error(error));
+          this.emit("toolEnd", call.id, call.name, {
+            result: { success: false, error },
+            timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+            toolName: call.name,
+            callId: call.id,
+          });
+          continue; // Skip to next tool call
+        }
+      }
+
       // Create tool context
       const toolContext = this.createToolContext(call.id);
 
@@ -844,6 +912,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         // Delegate to the ToolExecutor's permission checker
         return true;
       },
+      // Multi-agent context (T048/T049)
+      agentLevel: this.config.agentLevel,
+      parentAgentId: this.config.parentSessionId,
+      orchestrator: this.config.orchestrator,
     };
   }
 
@@ -1174,5 +1246,12 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.cancellation.cancel(reason);
     this.abortController?.abort();
     this.transitionTo("terminated");
+
+    // Dispose AGENTS.md integration
+    if (this.agentsIntegration) {
+      this.agentsIntegration.dispose().catch((error) => {
+        this.logger?.warn("Error disposing AGENTS.md integration", { error });
+      });
+    }
   }
 }

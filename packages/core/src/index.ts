@@ -12,11 +12,24 @@
  */
 
 // ============================================
+// Phase 19: Multi-Agent Orchestration
+// ============================================
+// This section exports all Phase 19 types for multi-agent orchestration:
+// - Mode System (T008): AgentLevel, ExtendedModeConfig, ModeRegistry, ModeLoader
+// - Orchestrator (T016): ./agents/orchestrator/index.js
+// - Protocol (T025): ./agents/protocol/index.js
+// - Session (T034): ./agents/session/index.js
+// - Workers (T041): ./agents/workers/index.js
+
+// ============================================
 // Agent Module (T026-T031)
 // ============================================
 export {
   AGENT_MODES,
   AGENT_STATES,
+  // Agent Level Hierarchy (T001)
+  AgentLevel,
+  AgentLevelSchema,
   // Core Loop
   AgentLoop,
   type AgentLoopConfig,
@@ -36,16 +49,30 @@ export {
   CancelledError,
   type CombinedLoopResult,
   canEdit,
+  canSpawn,
   createLoopDetectionContext,
+  // Mode Loader (T006)
+  createModeLoader,
+  // Mode Registry (T005)
+  createModeRegistry,
   createSnapshot,
   createStateContext,
   createTerminationContext,
   DEFAULT_LOOP_DETECTION_CONFIG,
+  // Extended Mode Config (Multi-Agent)
+  DEFAULT_MAX_CONCURRENT_SUBAGENTS,
   DEFAULT_SESSION_DIR,
   DEFAULT_TERMINATION_LIMITS,
   // Loop Detection
   detectLoop,
   detectLoopAsync,
+  type ExtendedModeConfig,
+  ExtendedModeConfigSchema,
+  // Restrictions (T003)
+  type FileAccess,
+  FileAccessSchema,
+  type FileRestriction,
+  FileRestrictionSchema,
   // State Persistence
   FileStatePersister,
   type FileStatePersisterOptions,
@@ -65,6 +92,11 @@ export {
   MemoryStatePersister,
   MODE_CONFIGS,
   type ModeConfig,
+  ModeConfigSchema,
+  ModeFileNotFoundError,
+  type ModeLoader,
+  type ModeRegistry,
+  ModeValidationError,
   type PendingTool,
   registerShutdownHandler,
   type SessionSnapshot,
@@ -88,13 +120,173 @@ export {
   type TerminationResult,
   type TerminationTokenUsage,
   type ToolCallInfo,
+  type ToolGroupEntry,
+  ToolGroupEntrySchema,
   type ToolPermissions,
+  ToolPermissionsSchema,
+  toExtendedMode,
   VALID_TRANSITIONS,
+  type YamlModeConfig,
+  YamlModeConfigSchema,
 } from "./agent/index.js";
 // ============================================
 // Legacy Exports (Agent/Loop)
 // ============================================
 export { Agent, type ExtendedAgentOptions } from "./agent.js";
+// ============================================
+// Agents Module (Phase 19: Multi-Agent Orchestration)
+// ============================================
+// Exports from:
+// - Orchestrator (T016): ./agents/orchestrator/index.js
+// - Protocol (T025): ./agents/protocol/index.js
+// - Session (T034): ./agents/session/index.js
+// - Workers (T041): ./agents/workers/index.js
+export {
+  // Aggregator exports
+  type AggregatedResult,
+  AggregatedResultSchema,
+  // Approval forwarder exports
+  type ApprovalDecision,
+  ApprovalDecisionSchema,
+  type ApprovalForwarder,
+  type ApprovalRequest,
+  ApprovalRequestSchema,
+  // Session: Approval routing (T034)
+  type ApprovalRoute,
+  type ApprovalRouter,
+  analystWorker,
+  architectWorker,
+  // Workers exports (T027-T041)
+  type BaseWorker,
+  type BaseWorkerConfig,
+  BUILTIN_WORKERS,
+  // Protocol exports (T017)
+  type BuiltinTarget,
+  type BuiltinTargetInferred,
+  BuiltinTargetSchema,
+  // Session: Context isolation (T034)
+  type ContextIsolator,
+  type CreateTaskPacketOptions,
+  type CustomTarget,
+  type CustomTargetInferred,
+  CustomTargetSchema,
+  coderWorker,
+  createApprovalForwarder,
+  // Session factories (T034)
+  createApprovalRouter,
+  createBaseWorker,
+  createContextIsolator,
+  createFilteredToolRegistry,
+  createHandoff,
+  // Core orchestrator exports
+  createOrchestrator,
+  createPermissionInheritance,
+  createResourceQuotaManager,
+  createResultAggregator,
+  createSubsessionManager,
+  // Task chain exports
+  createTaskChainManager,
+  // Decomposer exports
+  createTaskDecomposer,
+  createTaskPacket,
+  // Router exports
+  createTaskRouter,
+  createWorkerFactory,
+  type DecompositionResult,
+  DecompositionResultSchema,
+  type DelegationTarget,
+  type DelegationTargetInferred,
+  DelegationTargetSchema,
+  DuplicateWorkerError,
+  devopsWorker,
+  type EstimatedEffort,
+  EstimatedEffortSchema,
+  // Session: Filtered tool registry (T034)
+  type FilteredToolRegistry,
+  getBuiltinWorkerCapabilities,
+  // Handoff exports (T019)
+  type HandoffRequest,
+  type HandoffRequestInferred,
+  HandoffRequestSchema,
+  type HandoffResult,
+  type HandoffResultInferred,
+  HandoffResultSchema,
+  // Session: Context isolation (T034)
+  type IsolatedContext,
+  isBuiltinTarget,
+  isCustomTarget,
+  isMcpTarget,
+  MAX_DELEGATION_DEPTH,
+  type McpTarget,
+  type McpTargetInferred,
+  McpTargetSchema,
+  type OrchestratorConfig,
+  type OrchestratorCore,
+  type OrchestratorEvent,
+  type OrchestratorEventHandler,
+  type OrchestratorEventType,
+  type PartialFailureStrategy,
+  PartialFailureStrategySchema,
+  // Session: Permission inheritance (T034)
+  type PermissionInheritance,
+  type PermissionSet,
+  // Session: Resource quota (T034)
+  type QuotaStatus,
+  qaWorker,
+  type ResourceQuota,
+  type ResourceQuotaManager,
+  type ResourceUsage,
+  type ResultAggregator,
+  type RouteCandidate,
+  type RouteResult,
+  type RoutingRule,
+  registerBuiltinWorkers,
+  researcherWorker,
+  type SpawnOptions,
+  type SubagentHandle,
+  // Session: Subsession management (T034)
+  type Subsession,
+  type SubsessionCreateConfig,
+  type SubsessionManager,
+  type SubsessionStatus,
+  type SubtaskDefinition,
+  SubtaskDefinitionSchema,
+  type SubtaskDependency,
+  SubtaskDependencySchema,
+  securityWorker,
+  type TaskAnalysis,
+  TaskAnalysisSchema,
+  type TaskChain,
+  type TaskChainManager,
+  type TaskChainNode,
+  type TaskComplexity,
+  TaskComplexitySchema,
+  type TaskConstraints,
+  type TaskConstraintsInferred,
+  TaskConstraintsSchema,
+  type TaskContext,
+  type TaskContextInferred,
+  TaskContextSchema,
+  type TaskDecomposer,
+  // TaskPacket exports (T018)
+  type TaskPacket,
+  type TaskPacketInferred,
+  TaskPacketSchema,
+  type TaskResult,
+  TaskResultSchema,
+  type TaskRouter,
+  type TaskStatus,
+  TaskStatusSchema,
+  UnknownWorkerError,
+  // Session: Filtered tool registry constant (T034)
+  WORKER_BLOCKED_TOOLS,
+  type WorkerCapabilities,
+  type WorkerContext,
+  type WorkerFactory,
+  type WorkerMetadata,
+  type WorkerResult,
+  writerWorker,
+} from "./agents/index.js";
 
 // ============================================
 // Builtin Tools (T117)

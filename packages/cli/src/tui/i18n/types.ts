@@ -119,6 +119,15 @@ export interface TUITranslations {
     loading: string;
     processing: string;
   };
+  language: {
+    current: string;
+    available: string;
+    switchedTo: string;
+    autoDetect: string;
+    invalid: string;
+    invalidHint: string;
+    saved: string;
+  };
 }
 
 /**

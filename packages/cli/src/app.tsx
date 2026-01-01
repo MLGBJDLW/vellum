@@ -154,7 +154,7 @@ export function App({ model, provider }: AppProps) {
           if (result.message) {
             setMessages((prev) => [
               ...prev,
-              { role: "assistant" as const, content: result.message },
+              { role: "assistant" as const, content: result.message ?? "" },
             ]);
           }
           if (result.clearScreen) {

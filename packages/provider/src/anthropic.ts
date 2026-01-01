@@ -326,7 +326,9 @@ export class AnthropicProvider implements Provider {
       const request = this.buildRequest(params);
       const stream = this.client?.messages.stream(request);
 
-      yield* this.processStream(stream);
+      if (stream) {
+        yield* this.processStream(stream);
+      }
     } catch (error) {
       throw this.handleError(error, "Streaming request failed");
     }
@@ -355,7 +357,7 @@ export class AnthropicProvider implements Provider {
         messages: this.convertMessages(messages),
       });
 
-      return result.input_tokens;
+      return result?.input_tokens ?? 0;
     } catch (_error) {
       // Fall back to estimation if token counting fails
       const text =

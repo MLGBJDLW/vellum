@@ -74,6 +74,27 @@ export {
 } from "./core/index.js";
 
 // =============================================================================
+// Language Command (i18n T011-T013)
+// =============================================================================
+
+export { languageCommand } from "./language.js";
+
+// =============================================================================
+// Session Commands (T032)
+// =============================================================================
+
+export {
+  createResumeCommand,
+  findSessionById,
+  getMostRecentSession,
+  type ResumeSessionEventData,
+  resumeCommand,
+  type SessionLookupOptions,
+  type SessionLookupResult,
+  SHORT_ID_LENGTH,
+} from "./session/index.js";
+
+// =============================================================================
 // Credential Management (T022)
 // =============================================================================
 
@@ -261,3 +282,31 @@ export {
   type PipeSegment,
   type PipeSegmentType,
 } from "./parser/pipe-parser.js";
+
+// =============================================================================
+// Init Command (T039-T041)
+// =============================================================================
+
+export {
+  executeInit,
+  generateAgentsMd,
+  generateMinimalAgentsMd,
+  type InitOptions,
+  type InitResult,
+  initSlashCommand,
+  type ProjectInfo,
+} from "./init.js";
+
+// =============================================================================
+// Agents Command Group (T042)
+// =============================================================================
+
+export {
+  type AgentsGenerateOptions,
+  type AgentsShowOptions,
+  type AgentsSubcommand,
+  type AgentsValidateOptions,
+  agentsCommand,
+  executeAgents,
+  getAgentsHelp,
+} from "./agents/index.js";

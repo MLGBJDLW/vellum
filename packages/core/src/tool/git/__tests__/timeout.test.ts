@@ -43,7 +43,7 @@ describe("withTimeout", () => {
 
     it("should pass through operation errors", async () => {
       // Create operation with proper error handling setup
-      let rejectFn: (error: Error) => void;
+      let rejectFn!: (error: Error) => void;
       const operation = new Promise<string>((_, reject) => {
         rejectFn = reject;
       });
@@ -218,7 +218,7 @@ describe("withTimeout", () => {
     it("should clean up timeout when operation fails", async () => {
       const clearTimeoutSpy = vi.spyOn(global, "clearTimeout");
       // Create operation with proper error handling
-      let rejectFn: (error: Error) => void;
+      let rejectFn!: (error: Error) => void;
       const operation = new Promise<string>((_, reject) => {
         rejectFn = reject;
       });

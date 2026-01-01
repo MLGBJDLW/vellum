@@ -29,6 +29,9 @@ console.warn(
     "See the migration guide at packages/core/MIGRATION.md"
 );
 
+// Agent tools (multi-agent orchestration)
+export * from "./agent/index.js";
+
 export { executeCommandTool } from "./builtin/execute-command.js";
 // Built-in tools
 export { readFileTool } from "./builtin/read-file.js";

@@ -122,6 +122,15 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
     loading: "Loading...",
     processing: "Processing...",
   },
+  language: {
+    current: "Current language: {{name}}",
+    available: "Available languages:",
+    switchedTo: "Switched to {{name}}",
+    autoDetect: "Language set to auto-detect ({{locale}})",
+    invalid: "Invalid language code: {{code}}",
+    invalidHint: "Available: {{codes}}",
+    saved: "Language preference saved",
+  },
 };
 
 /**
@@ -235,6 +244,15 @@ const ZH_TRANSLATIONS: Record<string, unknown> = {
     close: "关闭",
     loading: "加载中...",
     processing: "处理中...",
+  },
+  language: {
+    current: "当前语言: {{name}}",
+    available: "可用语言:",
+    switchedTo: "已切换到 {{name}}",
+    autoDetect: "语言设置为自动检测 ({{locale}})",
+    invalid: "无效的语言代码: {{code}}",
+    invalidHint: "可用: {{codes}}",
+    saved: "语言偏好已保存",
   },
 };
 

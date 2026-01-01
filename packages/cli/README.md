@@ -115,6 +115,7 @@ The CLI provides a powerful slash command system for quick actions and configura
 | `/login [provider]` | `/signin` | Add credential for a provider |
 | `/logout [provider]` | `/signout` | Remove credential for a provider |
 | `/credentials` | | Show credential status |
+| `/language [code]` | `/lang` | Show or change UI language |
 
 ### Command Syntax
 
@@ -136,6 +137,129 @@ The CLI provides a powerful slash command system for quick actions and configura
 # Mixed positional and named arguments
 /config theme --value dark --global
 ```
+
+## AGENTS.md Commands
+
+The CLI provides commands for managing AGENTS.md configuration files, which control AI assistant behavior.
+
+### `vellum init`
+
+Create a new AGENTS.md file in the current directory.
+
+```bash
+# Interactive wizard (default)
+vellum init
+
+# Skip wizard, use minimal defaults
+vellum init --minimal
+
+# Overwrite existing file
+vellum init --force
+
+# Non-interactive mode for CI
+vellum init --non-interactive
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--minimal` | Skip prompts, create minimal template |
+| `--force`, `-f` | Overwrite existing AGENTS.md |
+| `--non-interactive` | Disable interactive prompts (for CI) |
+
+### `vellum agents show`
+
+Display the merged AGENTS.md configuration.
+
+```bash
+# Show current configuration
+vellum agents show
+
+# Output as JSON
+vellum agents show --json
+
+# Show all details including sources
+vellum agents show --verbose
+
+# Show config for specific scope
+vellum agents show --scope ./src
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output configuration as JSON |
+| `--verbose`, `-v` | Show all details including merge config |
+| `--scope <path>` | Show config for specific directory |
+
+### `vellum agents validate`
+
+Validate AGENTS.md files for syntax and structural errors.
+
+```bash
+# Validate all AGENTS.md files in project
+vellum agents validate
+
+# Validate specific file
+vellum agents validate ./AGENTS.md
+
+# JSON output (for CI)
+vellum agents validate --json
+
+# Verbose output with warnings
+vellum agents validate --verbose
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output validation results as JSON |
+| `--verbose`, `-v` | Show detailed validation info |
+
+**Exit Codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | All files valid |
+| `1` | Validation errors found |
+
+### `vellum agents generate`
+
+Generate an AGENTS.md file based on project analysis.
+
+```bash
+# Generate from project analysis
+vellum agents generate
+
+# Preview without writing file
+vellum agents generate --dry-run
+
+# Write to custom path
+vellum agents generate --output ./config/AGENTS.md
+
+# Merge with existing file
+vellum agents generate --merge
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Preview generated content without writing |
+| `--output <path>` | Custom output file path |
+| `--merge` | Merge with existing AGENTS.md |
+
+**Detection Features:**
+
+- Project name and description from `package.json`
+- Language detection (TypeScript, JavaScript, Python, etc.)
+- Framework detection (React, Vue, Next.js, etc.)
+- Build tool detection (Vite, Webpack, esbuild)
+- Test framework detection (Vitest, Jest, Playwright)
+- Package manager detection (npm, pnpm, yarn, bun)
 
 ### Autocomplete
 
@@ -204,6 +328,64 @@ Commands return one of four result types:
 | `error` | Command failed with error code and message |
 | `interactive` | Command needs user input to continue |
 | `pending` | Command started an async operation |
+
+## Internationalization (i18n)
+
+The CLI supports multiple languages for UI text.
+
+### Supported Languages
+
+| Code | Language |
+|------|----------|
+| `en` | English (default) |
+| `zh` | 中文 (Chinese) |
+
+### Setting Language
+
+**Using the `/language` command:**
+
+```bash
+# Show current language and available options
+/language
+
+# Switch to Chinese
+/language zh
+
+# Switch to English
+/language en
+
+# Clear preference (use auto-detection)
+/language auto
+```
+
+**Using the `--language` CLI flag:**
+
+```bash
+# Start with Chinese UI
+vellum --language zh
+vellum -l zh
+
+# Start with English UI
+vellum --language en
+```
+
+**Using environment variable:**
+
+```bash
+# Set default language via environment
+export VELLUM_LANGUAGE=zh
+vellum
+```
+
+### Language Priority
+
+Language is resolved in the following order (highest priority first):
+
+1. `--language` / `-l` CLI flag
+2. `VELLUM_LANGUAGE` environment variable
+3. Saved preference (from `/language` command)
+4. System locale detection
+5. Default (`en`)
 
 ## Development
 

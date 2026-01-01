@@ -315,6 +315,14 @@ export class GoogleProvider implements Provider {
         config,
       });
 
+      if (!response) {
+        throw new ProviderError("No response from Google API", {
+          code: ErrorCode.API_ERROR,
+          category: "api_error",
+          retryable: true,
+        });
+      }
+
       return this.normalizeResponse(response);
     } catch (error) {
       throw this.handleError(error, "Completion request failed");
@@ -340,7 +348,9 @@ export class GoogleProvider implements Provider {
         config,
       });
 
-      yield* this.processStream(stream);
+      if (stream) {
+        yield* this.processStream(stream);
+      }
     } catch (error) {
       throw this.handleError(error, "Streaming request failed");
     }
@@ -370,7 +380,7 @@ export class GoogleProvider implements Provider {
         contents,
       });
 
-      return result.totalTokens ?? 0;
+      return result?.totalTokens ?? 0;
     } catch (_error) {
       // Fall back to estimation if token counting fails
       const text =
