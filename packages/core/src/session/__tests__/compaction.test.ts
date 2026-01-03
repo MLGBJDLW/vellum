@@ -131,7 +131,7 @@ describe("CompactionService", () => {
       expect(result.prunedOutputs).toBe(0);
 
       // Original content should be preserved
-      const toolResult1 = pruned.messages[2]!.parts[0]! as { content: string };
+      const toolResult1 = pruned.messages[2]?.parts[0]! as { content: string };
       expect(toolResult1.content.length).toBe(500);
     });
 
@@ -143,11 +143,11 @@ describe("CompactionService", () => {
       expect(result.prunedOutputs).toBe(2);
 
       // First output should be unchanged (500 < 1000)
-      const toolResult1 = pruned.messages[2]!.parts[0]! as { content: string };
+      const toolResult1 = pruned.messages[2]?.parts[0]! as { content: string };
       expect(toolResult1.content.length).toBe(500);
 
       // Second output should be truncated
-      const toolResult2 = pruned.messages[3]!.parts[0]! as { content: string };
+      const toolResult2 = pruned.messages[3]?.parts[0]! as { content: string };
       expect(toolResult2.content).toContain(DEFAULT_COMPACTION_CONFIG.prunedMarker);
       expect(toolResult2.content.length).toBeLessThan(2000);
     });
@@ -180,7 +180,7 @@ describe("CompactionService", () => {
       });
 
       const { session: pruned } = service.pruneToolOutputs(session);
-      const toolResult = pruned.messages[1]!.parts[0]! as { content: string };
+      const toolResult = pruned.messages[1]?.parts[0]! as { content: string };
 
       expect(toolResult.content).toContain("STARTSTART"); // Beginning preserved
       expect(toolResult.content).toContain("ENDEND"); // End preserved
@@ -190,12 +190,12 @@ describe("CompactionService", () => {
     it("should be immutable - not modify original session", () => {
       const service = new CompactionService({ maxToolOutputLength: 100 });
       const session = createSessionWithToolResults([500]);
-      const originalContent = (session.messages[2]!.parts[0]! as { content: string }).content;
+      const originalContent = (session.messages[2]?.parts[0]! as { content: string }).content;
 
       service.pruneToolOutputs(session);
 
       // Original should be unchanged
-      const afterContent = (session.messages[2]!.parts[0]! as { content: string }).content;
+      const afterContent = (session.messages[2]?.parts[0]! as { content: string }).content;
       expect(afterContent).toBe(originalContent);
     });
 
@@ -219,7 +219,7 @@ describe("CompactionService", () => {
       const session = createSessionWithToolResults([500]);
       const { session: pruned } = service.pruneToolOutputs(session);
 
-      const toolResult = pruned.messages[2]!.parts[0]! as { content: string };
+      const toolResult = pruned.messages[2]?.parts[0]! as { content: string };
       expect(toolResult.content).toContain("[CUSTOM MARKER]");
     });
   });
@@ -266,12 +266,12 @@ describe("CompactionService", () => {
       const { session: truncated } = service.truncateMiddle(session);
 
       // First 2 messages
-      expect(truncated.messages[0]!.id).toBe("msg-0");
-      expect(truncated.messages[1]!.id).toBe("msg-1");
+      expect(truncated.messages[0]?.id).toBe("msg-0");
+      expect(truncated.messages[1]?.id).toBe("msg-1");
 
       // Last 2 messages (after marker at index 2)
-      expect(truncated.messages[3]!.id).toBe("msg-8");
-      expect(truncated.messages[4]!.id).toBe("msg-9");
+      expect(truncated.messages[3]?.id).toBe("msg-8");
+      expect(truncated.messages[4]?.id).toBe("msg-9");
     });
 
     it("should use custom truncatedMarker with count placeholder", () => {
@@ -442,20 +442,20 @@ describe("CompactionService", () => {
       const { session: truncated } = service.truncateMiddle(session);
 
       // Check preserved message IDs
-      expect(truncated.messages[0]!.id).toBe("msg-0");
-      expect(truncated.messages[1]!.id).toBe("msg-1");
-      expect(truncated.messages[3]!.id).toBe("msg-8");
-      expect(truncated.messages[4]!.id).toBe("msg-9");
+      expect(truncated.messages[0]?.id).toBe("msg-0");
+      expect(truncated.messages[1]?.id).toBe("msg-1");
+      expect(truncated.messages[3]?.id).toBe("msg-8");
+      expect(truncated.messages[4]?.id).toBe("msg-9");
     });
 
     it("should preserve message timestamps", () => {
       const service = new CompactionService({ maxToolOutputLength: 100 });
       const session = createSessionWithToolResults([500]);
-      const originalTimestamp = session.messages[0]!.metadata.createdAt;
+      const originalTimestamp = session.messages[0]?.metadata.createdAt;
 
       const { session: pruned } = service.pruneToolOutputs(session);
 
-      expect(pruned.messages[0]!.metadata.createdAt).toBe(originalTimestamp);
+      expect(pruned.messages[0]?.metadata.createdAt).toBe(originalTimestamp);
     });
 
     it("should preserve checkpoints", () => {
@@ -473,7 +473,7 @@ describe("CompactionService", () => {
       const { session: pruned } = service.pruneToolOutputs(session);
 
       expect(pruned.checkpoints).toHaveLength(1);
-      expect(pruned.checkpoints[0]!.id).toBe("cp-1");
+      expect(pruned.checkpoints[0]?.id).toBe("cp-1");
     });
   });
 

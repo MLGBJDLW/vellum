@@ -4,7 +4,6 @@
 // T020: Implement VibeModeHandler class
 // ============================================
 
-import type { CodingModeConfig } from "../coding-modes.js";
 import type { AgentLevel } from "../level.js";
 import { BaseModeHandler } from "./base.js";
 import type { HandlerResult, ToolAccessConfig, UserMessage } from "./types.js";
@@ -39,15 +38,6 @@ import type { HandlerResult, ToolAccessConfig, UserMessage } from "./types.js";
  * ```
  */
 export class VibeModeHandler extends BaseModeHandler {
-  /**
-   * Create a new VibeModeHandler.
-   *
-   * @param config - The coding mode configuration (should be VIBE_MODE)
-   */
-  constructor(config: CodingModeConfig) {
-    super(config);
-  }
-
   /**
    * Process an incoming user message.
    *

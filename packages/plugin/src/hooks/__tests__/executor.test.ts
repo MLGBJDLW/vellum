@@ -11,9 +11,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   executeHooks,
   executeSingleHook,
+  type HookContext,
   HookErrorCode,
   HookExecutionError,
-  type HookContext,
   HookTimeoutError,
   type PermissionBridge,
 } from "../executor.js";
@@ -91,11 +91,7 @@ describe("executeHooks - permission check flow", () => {
 
     await executeHooks("PreToolUse", context, [rule]);
 
-    expect(bridge.checkPermission).toHaveBeenCalledWith(
-      "test-plugin",
-      "prompt",
-      "PreToolUse"
-    );
+    expect(bridge.checkPermission).toHaveBeenCalledWith("test-plugin", "prompt", "PreToolUse");
   });
 
   it("should deny hook execution when permission denied", async () => {
@@ -106,7 +102,7 @@ describe("executeHooks - permission check flow", () => {
     const result = await executeHooks("PreToolUse", context, [rule]);
 
     expect(result.allowed).toBe(false);
-    expect(result.results[0]!.allowed).toBe(false);
+    expect(result.results[0]?.allowed).toBe(false);
   });
 
   it("should allow execution when no permission bridge provided", async () => {
@@ -227,7 +223,7 @@ describe("executeHooks - timeout handling", () => {
 
     const result = await executeHooks("PreToolUse", context, [rule]);
 
-    expect(result.results[0]!.executionTime).toBeGreaterThanOrEqual(0);
+    expect(result.results[0]?.executionTime).toBeGreaterThanOrEqual(0);
     expect(result.totalExecutionTime).toBeGreaterThanOrEqual(0);
   });
 
@@ -242,8 +238,8 @@ describe("executeHooks - timeout handling", () => {
     const result = await executeHooks("PreToolUse", context, rules);
 
     expect(result.results).toHaveLength(2);
-    expect(result.results[0]!.executionTime).toBeGreaterThanOrEqual(0);
-    expect(result.results[1]!.executionTime).toBeGreaterThanOrEqual(0);
+    expect(result.results[0]?.executionTime).toBeGreaterThanOrEqual(0);
+    expect(result.results[1]?.executionTime).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -321,8 +317,8 @@ describe("executeHooks - short-circuit on allow: false", () => {
 
     expect(result.allowed).toBe(false);
     expect(result.results).toHaveLength(2); // First allowed, second denied
-    expect(result.results[0]!.allowed).toBe(true);
-    expect(result.results[1]!.allowed).toBe(false);
+    expect(result.results[0]?.allowed).toBe(true);
+    expect(result.results[1]?.allowed).toBe(false);
   });
 
   it("should return original input when no hooks match", async () => {
@@ -411,8 +407,8 @@ describe("executeHooks - modified input passing", () => {
 
     const result = await executeHooks("PreToolUse", context, rules);
 
-    expect(result.results[0]!.modifiedInput).toBeDefined();
-    expect(result.results[0]!.modifiedInput).toHaveProperty("injectedPrompt", "Content A");
+    expect(result.results[0]?.modifiedInput).toBeDefined();
+    expect(result.results[0]?.modifiedInput).toHaveProperty("injectedPrompt", "Content A");
   });
 });
 
@@ -537,10 +533,7 @@ describe("executeHooks - error handling", () => {
   });
 
   it("should have proper error code for execution failure", () => {
-    const error = new HookExecutionError(
-      "Execution failed",
-      HookErrorCode.HOOK_EXECUTION_FAILED
-    );
+    const error = new HookExecutionError("Execution failed", HookErrorCode.HOOK_EXECUTION_FAILED);
 
     expect(error.code).toBe(HookErrorCode.HOOK_EXECUTION_FAILED);
   });
@@ -564,11 +557,9 @@ describe("executeHooks - error handling", () => {
 
   it("should include cause in error JSON when present", () => {
     const cause = new Error("Original error");
-    const error = new HookExecutionError(
-      "Wrapper error",
-      HookErrorCode.HOOK_EXECUTION_FAILED,
-      { cause }
-    );
+    const error = new HookExecutionError("Wrapper error", HookErrorCode.HOOK_EXECUTION_FAILED, {
+      cause,
+    });
 
     const json = error.toJSON();
 
@@ -634,9 +625,9 @@ describe("executeHooks - hook name generation", () => {
 
     const result = await executeHooks("PreToolUse", context, [rule]);
 
-    expect(result.results[0]!.hookName).toContain("PreToolUse");
-    expect(result.results[0]!.hookName).toContain("command");
-    expect(result.results[0]!.hookName).toContain("eslint");
+    expect(result.results[0]?.hookName).toContain("PreToolUse");
+    expect(result.results[0]?.hookName).toContain("command");
+    expect(result.results[0]?.hookName).toContain("eslint");
   });
 
   it("should include index in hook name", async () => {
@@ -648,7 +639,7 @@ describe("executeHooks - hook name generation", () => {
 
     const result = await executeHooks("PreToolUse", context, rules);
 
-    expect(result.results[0]!.hookName).toContain("[0]");
-    expect(result.results[1]!.hookName).toContain("[1]");
+    expect(result.results[0]?.hookName).toContain("[0]");
+    expect(result.results[1]?.hookName).toContain("[1]");
   });
 });

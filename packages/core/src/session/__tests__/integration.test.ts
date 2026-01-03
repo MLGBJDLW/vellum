@@ -662,7 +662,7 @@ describe("Multi-Session Operations", () => {
       });
       await addMessagesToSession(3);
       await persistenceManager.save();
-      
+
       // Reload session to get saved state and index it
       const saved = await storageManager.load(session.metadata.id);
       if (saved) {
@@ -707,7 +707,7 @@ describe("Multi-Session Operations", () => {
     // Delete sessions
     if (sessions[0]) {
       await storageManager.delete(sessions[0].metadata.id);
-      
+
       // Verify deletion - load should throw error
       let deleted = null;
       try {

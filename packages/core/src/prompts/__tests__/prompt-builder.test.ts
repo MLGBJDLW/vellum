@@ -364,7 +364,7 @@ describe("PromptBuilder - Size Validation", () => {
     // Use variable that makes it oversized
     const baseContent = "x".repeat(MAX_PROMPT_SIZE - 5);
     const builder = new PromptBuilder()
-      .withBase(baseContent + "{{VAR}}")
+      .withBase(`${baseContent}{{VAR}}`)
       .setVariable("VAR", "toolong"); // 7 chars, exceeds limit
 
     expect(() => builder.build()).toThrow(PromptSizeError);

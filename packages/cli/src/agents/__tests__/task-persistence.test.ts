@@ -186,8 +186,8 @@ describe("TaskPersistence", () => {
 
       const result = await persistence.listResumable();
 
-      expect(result[0]!.chainId).toBe("newer");
-      expect(result[1]!.chainId).toBe("older");
+      expect(result[0]?.chainId).toBe("newer");
+      expect(result[1]?.chainId).toBe("older");
     });
 
     it("should include status and savedAt in results", async () => {
@@ -201,8 +201,8 @@ describe("TaskPersistence", () => {
 
       const result = await persistence.listResumable();
 
-      expect(result[0]!.status).toBe("paused");
-      expect(result[0]!.savedAt).toBeInstanceOf(Date);
+      expect(result[0]?.status).toBe("paused");
+      expect(result[0]?.savedAt).toBeInstanceOf(Date);
     });
   });
 

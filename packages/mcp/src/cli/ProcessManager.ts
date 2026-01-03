@@ -312,11 +312,7 @@ export class ProcessManager {
 
     const results = await Promise.allSettled(
       this.cleanupHandlers.map(async (handler) => {
-        try {
-          await handler();
-        } catch (error) {
-          throw error;
-        }
+        await handler();
       })
     );
 

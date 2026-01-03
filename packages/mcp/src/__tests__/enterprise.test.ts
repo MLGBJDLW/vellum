@@ -480,7 +480,7 @@ describe("ServerValidator", () => {
 
       expect(result.allowed).toHaveLength(3); // 2 approved + 1 stdio
       expect(result.blocked).toHaveLength(1);
-      expect(result.blocked[0]!.server.name).toBe("blocked-server");
+      expect(result.blocked[0]?.server.name).toBe("blocked-server");
     });
   });
 
@@ -622,7 +622,7 @@ describe("AuditLogger", () => {
       expect(mockOpen).toHaveBeenCalledWith("/var/log/audit.log", "a");
       expect(mockHandle.write).toHaveBeenCalled();
 
-      const writtenData = mockHandle.write.mock.calls[0]![0];
+      const writtenData = mockHandle.write.mock.calls[0]?.[0];
       const parsed = JSON.parse(writtenData.trim());
       expect(parsed.eventType).toBe("tool_call");
       expect(parsed.serverName).toBe("test-server");
@@ -657,7 +657,7 @@ describe("AuditLogger", () => {
 
       await logger.logToolCall("server", "tool", { secret: "password" });
 
-      const writtenData = mockHandle.write.mock.calls[0]![0];
+      const writtenData = mockHandle.write.mock.calls[0]?.[0];
       const parsed = JSON.parse(writtenData.trim());
       expect(parsed.arguments).toBeUndefined();
     });
@@ -688,7 +688,7 @@ describe("AuditLogger", () => {
 
       await logger.logToolCall("server", "tool", { key: "value" });
 
-      const writtenData = mockHandle.write.mock.calls[0]![0];
+      const writtenData = mockHandle.write.mock.calls[0]?.[0];
       const parsed = JSON.parse(writtenData.trim());
       expect(parsed.arguments).toEqual({ key: "value" });
     });
@@ -724,8 +724,8 @@ describe("AuditLogger", () => {
 
       const fetchCall = mockFetch.mock.calls[0]!;
       expect(fetchCall[0]).toBe("https://logs.example.com");
-      expect(fetchCall[1]!.method).toBe("POST");
-      expect(fetchCall[1]!.headers["Content-Type"]).toBe("application/x-ndjson");
+      expect(fetchCall[1]?.method).toBe("POST");
+      expect(fetchCall[1]?.headers["Content-Type"]).toBe("application/x-ndjson");
     });
 
     it("should include custom headers in http requests", async () => {
@@ -756,7 +756,7 @@ describe("AuditLogger", () => {
       await logger.logToolCall("server", "tool");
 
       const fetchCall = mockFetch.mock.calls[0]!;
-      expect(fetchCall[1]!.headers.Authorization).toBe("Bearer token123");
+      expect(fetchCall[1]?.headers.Authorization).toBe("Bearer token123");
     });
 
     it("should re-buffer events on http failure", async () => {

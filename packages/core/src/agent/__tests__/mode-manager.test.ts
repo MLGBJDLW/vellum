@@ -310,7 +310,7 @@ describe("ModeManager", () => {
         await manager.switchMode("plan");
 
         expect(listener).toHaveBeenCalledTimes(1);
-        const event = listener.mock.calls[0]![0] as ModeChangedEvent;
+        const event = listener.mock.calls[0]?.[0] as ModeChangedEvent;
         expect(event.previousMode).toBe("vibe");
         expect(event.currentMode).toBe("plan");
         expect(event.timestamp).toBeDefined();
@@ -342,7 +342,7 @@ describe("ModeManager", () => {
         await blockedManager.switchMode("plan");
 
         expect(listener).toHaveBeenCalledTimes(1);
-        const event = listener.mock.calls[0]![0] as ModeSwitchFailedEvent;
+        const event = listener.mock.calls[0]?.[0] as ModeSwitchFailedEvent;
         expect(event.attemptedMode).toBe("plan");
         expect(event.reason).toContain("file operation");
       });
@@ -356,7 +356,7 @@ describe("ModeManager", () => {
         await manager.switchMode("spec");
 
         expect(listener).toHaveBeenCalledTimes(1);
-        const event = listener.mock.calls[0]![0] as SpecConfirmationRequiredEvent;
+        const event = listener.mock.calls[0]?.[0] as SpecConfirmationRequiredEvent;
         expect(event.currentMode).toBe("vibe");
         expect(event.timestamp).toBeDefined();
       });

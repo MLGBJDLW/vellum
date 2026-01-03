@@ -120,10 +120,7 @@ export class PermissionBridge {
    * const bridgeWithChecker = new PermissionBridge(trustManager, corePermissionChecker);
    * ```
    */
-  constructor(
-    trustManager: TrustedPluginsManager,
-    permissionChecker?: PermissionChecker
-  ) {
+  constructor(trustManager: TrustedPluginsManager, permissionChecker?: PermissionChecker) {
     this.trustManager = trustManager;
     this.permissionChecker = permissionChecker;
   }
@@ -209,10 +206,7 @@ export class PermissionBridge {
    * }
    * ```
    */
-  async requestCapability(
-    pluginName: string,
-    capability: PluginCapability
-  ): Promise<boolean> {
+  async requestCapability(pluginName: string, capability: PluginCapability): Promise<boolean> {
     // First check if plugin already has the capability
     if (this.trustManager.hasCapability(pluginName, capability)) {
       return true;
@@ -220,10 +214,7 @@ export class PermissionBridge {
 
     // If external permission checker available, delegate to it
     if (this.permissionChecker) {
-      return this.permissionChecker.checkPermission(
-        `capability:${capability}`,
-        pluginName
-      );
+      return this.permissionChecker.checkPermission(`capability:${capability}`, pluginName);
     }
 
     // No external checker and capability not granted

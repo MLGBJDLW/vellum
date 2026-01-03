@@ -340,7 +340,7 @@ describe("SpecWorkflowEngine", () => {
       );
 
       // Clean up
-      resolveFirstPhase!();
+      resolveFirstPhase?.();
       await firstRun;
     });
   });
@@ -615,7 +615,7 @@ describe("SpecWorkflowEngine", () => {
       await engine.executePhase("research");
 
       expect(receivedContext).toBeDefined();
-      expect(receivedContext!.specDir).toBe(defaultConfig.specDir);
+      expect(receivedContext?.specDir).toBe(defaultConfig.specDir);
     });
 
     it("should run beforeExecute hook", async () => {

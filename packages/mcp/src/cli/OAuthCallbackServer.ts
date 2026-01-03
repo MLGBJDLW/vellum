@@ -269,7 +269,7 @@ export class OAuthCallbackServer {
   async stop(): Promise<void> {
     if (this.server) {
       return new Promise<void>((resolve, reject) => {
-        this.server!.close((err) => {
+        this.server?.close((err) => {
           this.server = null;
           this.isRunning = false;
           if (err) {

@@ -5,7 +5,7 @@
  * Supports GitHub-style checkboxes and comma-separated fallback format.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { nanoid } from "nanoid";
 import type { TodoItem, TodoStatus } from "./types.js";
 

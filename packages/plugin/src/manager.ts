@@ -372,7 +372,7 @@ export class PluginManager {
 
     // Look up in discovered plugins
     let discovered = this.discovered.get(name);
-    
+
     // If not discovered yet, try re-scanning to support dynamic plugins
     if (!discovered) {
       const freshDiscovery = await discoverPlugins(this.searchPaths);
@@ -381,7 +381,7 @@ export class PluginManager {
       }
       discovered = this.discovered.get(name);
     }
-    
+
     if (!discovered) {
       throw new PluginManagerError(
         `Plugin '${name}' not found`,
@@ -396,7 +396,7 @@ export class PluginManager {
         throw new Error("Full load returned partial plugin");
       }
       this.plugins.set(name, loaded);
-      
+
       // Auto-trust if enabled
       if (this._autoTrust && !this.trustManager.isTrusted(name)) {
         const allCapabilities: PluginCapability[] = [
@@ -407,7 +407,7 @@ export class PluginManager {
         const hash = "0".repeat(64);
         this.trustManager.trustPlugin(name, allCapabilities, hash);
       }
-      
+
       this.invalidateCaches();
       return loaded;
     } catch (error) {
@@ -664,7 +664,7 @@ export class PluginManager {
     try {
       const plugin = await loadPlugin(discovered, { fullLoad: this.eagerLoad });
       this.plugins.set(discovered.name, plugin);
-      
+
       // Auto-trust if enabled
       if (this._autoTrust && !this.trustManager.isTrusted(discovered.name)) {
         const allCapabilities: PluginCapability[] = [

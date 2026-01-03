@@ -163,11 +163,25 @@ interface InlineElement {
   readonly url?: string;
 }
 
+/** Process a regex match and return the corresponding inline element */
+function processInlineMatch(match: RegExpMatchArray): InlineElement {
+  if (match[1] || match[3]) {
+    return { type: "bold", content: match[2] ?? match[4] ?? "" };
+  }
+  if (match[5] || match[7]) {
+    return { type: "italic", content: match[6] ?? match[8] ?? "" };
+  }
+  if (match[9]) {
+    return { type: "inline-code", content: match[10] ?? "" };
+  }
+  if (match[11]) {
+    return { type: "link", content: match[12] ?? "", url: match[13] ?? "" };
+  }
+  return { type: "text", content: match[0] };
+}
+
 function parseInline(text: string): InlineElement[] {
   const elements: InlineElement[] = [];
-
-  // Combined regex for inline elements
-  // Order matters: bold before italic (** before *)
   const inlineRegex =
     /(\*\*(.+?)\*\*)|(__(.+?)__)|(\*(.+?)\*)|(_([^_]+)_)|(`([^`]+)`)|(\[([^\]]+)\]\(([^)]+)\))/g;
 
@@ -177,58 +191,20 @@ function parseInline(text: string): InlineElement[] {
   for (const match of matches) {
     const matchIndex = match.index ?? 0;
 
-    // Add text before match
     if (matchIndex > lastIndex) {
-      elements.push({
-        type: "text",
-        content: text.slice(lastIndex, matchIndex),
-      });
+      elements.push({ type: "text", content: text.slice(lastIndex, matchIndex) });
     }
 
-    if (match[1] || match[3]) {
-      // Bold: **text** or __text__
-      elements.push({
-        type: "bold",
-        content: match[2] ?? match[4] ?? "",
-      });
-    } else if (match[5] || match[7]) {
-      // Italic: *text* or _text_
-      elements.push({
-        type: "italic",
-        content: match[6] ?? match[8] ?? "",
-      });
-    } else if (match[9]) {
-      // Inline code: `code`
-      elements.push({
-        type: "inline-code",
-        content: match[10] ?? "",
-      });
-    } else if (match[11]) {
-      // Link: [text](url)
-      elements.push({
-        type: "link",
-        content: match[12] ?? "",
-        url: match[13] ?? "",
-      });
-    }
-
+    elements.push(processInlineMatch(match));
     lastIndex = matchIndex + match[0].length;
   }
 
-  // Add remaining text
   if (lastIndex < text.length) {
-    elements.push({
-      type: "text",
-      content: text.slice(lastIndex),
-    });
+    elements.push({ type: "text", content: text.slice(lastIndex) });
   }
 
-  // If no matches found, return original text
   if (elements.length === 0) {
-    elements.push({
-      type: "text",
-      content: text,
-    });
+    elements.push({ type: "text", content: text });
   }
 
   return elements;

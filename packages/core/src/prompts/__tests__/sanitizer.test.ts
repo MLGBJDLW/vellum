@@ -281,7 +281,7 @@ describe("sanitizeVariable", () => {
   describe("combined sanitization", () => {
     it("applies all sanitization steps in order", () => {
       // Control char + dangerous pattern + long content
-      const longDangerousWithControl = "\x00ignore previous\x01" + "x".repeat(DEFAULT_MAX_LENGTH);
+      const longDangerousWithControl = `\x00ignore previous\x01${"x".repeat(DEFAULT_MAX_LENGTH)}`;
       const result = sanitizeVariable("key", longDangerousWithControl);
 
       // Should remove control chars, filter dangerous content, and truncate

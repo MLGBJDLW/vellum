@@ -126,95 +126,72 @@ const CI_ENV_VARS = [
 // Terminal Type Detection
 // =============================================================================
 
+interface TerminalEnvVars {
+  termProgram: string;
+  term: string;
+  lcTerminal: string;
+  wtSession: string | undefined;
+  kitty: string | undefined;
+  wezterm: string | undefined;
+  alacritty: string | undefined;
+  conemu: string | undefined;
+  vscodeTerminal: boolean;
+}
+
+/** Extract terminal-related environment variables */
+function extractTerminalEnvVars(env: Record<string, string | undefined>): TerminalEnvVars {
+  return {
+    termProgram: env.TERM_PROGRAM?.toLowerCase() ?? "",
+    term: env.TERM?.toLowerCase() ?? "",
+    lcTerminal: env.LC_TERMINAL?.toLowerCase() ?? "",
+    wtSession: env.WT_SESSION,
+    kitty: env.KITTY_WINDOW_ID,
+    wezterm: env.WEZTERM_PANE,
+    alacritty: env.ALACRITTY_WINDOW_ID,
+    conemu: env.ConEmuANSI,
+    vscodeTerminal: Boolean(env.VSCODE_INJECTION || env.TERM_PROGRAM === "vscode"),
+  };
+}
+
+/** Detect modern GUI terminal emulators */
+function detectModernTerminal(vars: TerminalEnvVars): TerminalType | null {
+  if (vars.termProgram === "iterm.app" || vars.lcTerminal === "iterm2") return "iterm2";
+  if (vars.kitty || vars.termProgram === "kitty" || vars.term === "xterm-kitty") return "kitty";
+  if (vars.wezterm || vars.termProgram === "wezterm") return "wezterm";
+  if (vars.wtSession) return "windows-terminal";
+  if (vars.vscodeTerminal || vars.termProgram === "vscode") return "vscode";
+  if (vars.alacritty || vars.termProgram === "alacritty") return "alacritty";
+  if (vars.termProgram === "hyper") return "hyper";
+  return null;
+}
+
+/** Detect platform-specific terminals */
+function detectPlatformTerminal(
+  vars: TerminalEnvVars,
+  env: Record<string, string | undefined>
+): TerminalType | null {
+  if (vars.termProgram === "apple_terminal") return "terminal-app";
+  if (env.GNOME_TERMINAL_SCREEN || env.VTE_VERSION) return "gnome-terminal";
+  if (env.KONSOLE_VERSION) return "konsole";
+  if (vars.conemu) return "conemu";
+  if (vars.term.includes("mintty") || env.MSYSTEM) return "mintty";
+  if (vars.term.includes("xterm")) return "xterm";
+  if (env.PROMPT && !env.SHELL) return "cmd";
+  if (env.PSModulePath && !vars.wtSession) return "powershell";
+  return null;
+}
+
 /**
  * Detect the terminal type from environment variables.
  */
 function detectTerminalType(env: Record<string, string | undefined>): TerminalType {
-  // Check specific terminal programs
-  const termProgram = env.TERM_PROGRAM?.toLowerCase() ?? "";
-  const term = env.TERM?.toLowerCase() ?? "";
-  const lcTerminal = env.LC_TERMINAL?.toLowerCase() ?? "";
-  const wtSession = env.WT_SESSION;
-  const kitty = env.KITTY_WINDOW_ID;
-  const wezterm = env.WEZTERM_PANE;
-  const alacritty = env.ALACRITTY_WINDOW_ID;
-  const conemu = env.ConEmuANSI;
-  const vscodeTerminal = env.VSCODE_INJECTION || env.TERM_PROGRAM === "vscode";
+  const vars = extractTerminalEnvVars(env);
 
-  // iTerm2
-  if (termProgram === "iterm.app" || lcTerminal === "iterm2") {
-    return "iterm2";
-  }
+  const modernTerminal = detectModernTerminal(vars);
+  if (modernTerminal) return modernTerminal;
 
-  // Kitty
-  if (kitty || termProgram === "kitty" || term === "xterm-kitty") {
-    return "kitty";
-  }
-
-  // WezTerm
-  if (wezterm || termProgram === "wezterm") {
-    return "wezterm";
-  }
-
-  // Windows Terminal
-  if (wtSession) {
-    return "windows-terminal";
-  }
-
-  // VS Code integrated terminal
-  if (vscodeTerminal || termProgram === "vscode") {
-    return "vscode";
-  }
-
-  // Alacritty
-  if (alacritty || termProgram === "alacritty") {
-    return "alacritty";
-  }
-
-  // Hyper
-  if (termProgram === "hyper") {
-    return "hyper";
-  }
-
-  // macOS Terminal.app
-  if (termProgram === "apple_terminal") {
-    return "terminal-app";
-  }
-
-  // GNOME Terminal
-  if (env.GNOME_TERMINAL_SCREEN || env.VTE_VERSION) {
-    return "gnome-terminal";
-  }
-
-  // Konsole
-  if (env.KONSOLE_VERSION) {
-    return "konsole";
-  }
-
-  // ConEmu
-  if (conemu) {
-    return "conemu";
-  }
-
-  // Mintty (Git Bash, Cygwin)
-  if (term.includes("mintty") || env.MSYSTEM) {
-    return "mintty";
-  }
-
-  // xterm
-  if (term.includes("xterm")) {
-    return "xterm";
-  }
-
-  // Windows cmd.exe
-  if (env.PROMPT && !env.SHELL) {
-    return "cmd";
-  }
-
-  // PowerShell (when not in Windows Terminal)
-  if (env.PSModulePath && !wtSession) {
-    return "powershell";
-  }
+  const platformTerminal = detectPlatformTerminal(vars, env);
+  if (platformTerminal) return platformTerminal;
 
   return "unknown";
 }
@@ -222,6 +199,71 @@ function detectTerminalType(env: Record<string, string | undefined>): TerminalTy
 // =============================================================================
 // Color Support Detection
 // =============================================================================
+
+/** Check forced color settings from environment */
+function checkForcedColorLevel(env: Record<string, string | undefined>): 0 | 1 | 2 | 3 | null {
+  if ("NO_COLOR" in env) return 0;
+
+  const forceColor = env.FORCE_COLOR;
+  if (forceColor === "0" || forceColor === "false") return 0;
+  if (forceColor === "1" || forceColor === "true") return 1;
+  if (forceColor === "2") return 2;
+  if (forceColor === "3") return 3;
+
+  const colorTerm = env.COLORTERM?.toLowerCase() ?? "";
+  if (colorTerm === "truecolor" || colorTerm === "24bit") return 3;
+
+  return null;
+}
+
+/** Get color level for specific terminal type */
+function getTerminalColorLevel(
+  terminalType: TerminalType,
+  env: Record<string, string | undefined>
+): 0 | 1 | 2 | 3 {
+  // Modern terminals with true color
+  const trueColorTerminals: TerminalType[] = [
+    "iterm2",
+    "kitty",
+    "wezterm",
+    "windows-terminal",
+    "vscode",
+    "alacritty",
+    "hyper",
+    "mintty",
+    "conemu",
+  ];
+  if (trueColorTerminals.includes(terminalType)) return 3;
+
+  // VTE-based terminals
+  if (terminalType === "gnome-terminal" || terminalType === "konsole") {
+    const vteVersion = parseInt(env.VTE_VERSION ?? "0", 10);
+    return vteVersion >= 3600 ? 3 : 2;
+  }
+
+  if (terminalType === "terminal-app") return 2;
+
+  if (terminalType === "xterm") {
+    const term = env.TERM ?? "";
+    if (term.includes("256color")) return 2;
+    if (term.includes("truecolor") || term.includes("24bit")) return 3;
+    return 1;
+  }
+
+  if (terminalType === "cmd" || terminalType === "powershell") {
+    return process.platform === "win32" ? 2 : 1;
+  }
+
+  return 0;
+}
+
+/** Fallback color detection from TERM variable */
+function detectColorFromTerm(env: Record<string, string | undefined>): 0 | 1 | 2 | 3 {
+  const term = env.TERM ?? "";
+  if (term.includes("256color")) return 2;
+  if (term.includes("color")) return 1;
+  return 0;
+}
 
 /**
  * Detect color support level.
@@ -231,71 +273,14 @@ function detectColorLevel(
   env: Record<string, string | undefined>,
   terminalType: TerminalType
 ): 0 | 1 | 2 | 3 {
-  // Check for NO_COLOR (https://no-color.org/)
-  if ("NO_COLOR" in env) {
-    return 0;
+  const forcedLevel = checkForcedColorLevel(env);
+  if (forcedLevel !== null) return forcedLevel;
+
+  if (terminalType !== "unknown") {
+    return getTerminalColorLevel(terminalType, env);
   }
 
-  // Check FORCE_COLOR
-  const forceColor = env.FORCE_COLOR;
-  if (forceColor !== undefined) {
-    if (forceColor === "0" || forceColor === "false") return 0;
-    if (forceColor === "1" || forceColor === "true") return 1;
-    if (forceColor === "2") return 2;
-    if (forceColor === "3") return 3;
-  }
-
-  // Check COLORTERM for true color
-  const colorTerm = env.COLORTERM?.toLowerCase() ?? "";
-  if (colorTerm === "truecolor" || colorTerm === "24bit") {
-    return 3;
-  }
-
-  // Terminal-specific detection
-  switch (terminalType) {
-    case "iterm2":
-    case "kitty":
-    case "wezterm":
-    case "windows-terminal":
-    case "vscode":
-    case "alacritty":
-    case "hyper":
-      return 3; // All modern terminals support true color
-
-    case "gnome-terminal":
-    case "konsole": {
-      // Check VTE version for GNOME Terminal true color support
-      const vteVersion = parseInt(env.VTE_VERSION ?? "0", 10);
-      return vteVersion >= 3600 ? 3 : 2;
-    }
-
-    case "terminal-app":
-      return 2; // macOS Terminal.app supports 256 colors
-
-    case "mintty":
-    case "conemu":
-      return 3;
-
-    case "xterm": {
-      const term = env.TERM ?? "";
-      if (term.includes("256color")) return 2;
-      if (term.includes("truecolor") || term.includes("24bit")) return 3;
-      return 1;
-    }
-
-    case "cmd":
-    case "powershell":
-      // Windows 10+ cmd supports colors via ANSI
-      return process.platform === "win32" ? 2 : 1;
-
-    default: {
-      // Fall back to TERM check
-      const defaultTerm = env.TERM ?? "";
-      if (defaultTerm.includes("256color")) return 2;
-      if (defaultTerm.includes("color")) return 1;
-      return 0;
-    }
-  }
+  return detectColorFromTerm(env);
 }
 
 // =============================================================================

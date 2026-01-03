@@ -46,7 +46,10 @@ function createTrustedPlugin(overrides: Partial<TrustedPlugin> = {}): TrustedPlu
  * Creates a temporary directory for test files
  */
 async function createTempDir(): Promise<string> {
-  const tmpDir = path.join(os.tmpdir(), `vellum-trust-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const tmpDir = path.join(
+    os.tmpdir(),
+    `vellum-trust-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
   await fs.mkdir(tmpDir, { recursive: true });
   return tmpDir;
 }
@@ -108,18 +111,27 @@ describe("TrustStore - trust persists across sessions", () => {
     const store1 = new TrustStore(trustFilePath);
     await store1.load();
 
-    store1.set("plugin-a", createTrustedPlugin({
-      pluginName: "plugin-a",
-      capabilities: ["execute-hooks"],
-    }));
-    store1.set("plugin-b", createTrustedPlugin({
-      pluginName: "plugin-b",
-      capabilities: ["network-access"],
-    }));
-    store1.set("plugin-c", createTrustedPlugin({
-      pluginName: "plugin-c",
-      capabilities: ["mcp-servers"],
-    }));
+    store1.set(
+      "plugin-a",
+      createTrustedPlugin({
+        pluginName: "plugin-a",
+        capabilities: ["execute-hooks"],
+      })
+    );
+    store1.set(
+      "plugin-b",
+      createTrustedPlugin({
+        pluginName: "plugin-b",
+        capabilities: ["network-access"],
+      })
+    );
+    store1.set(
+      "plugin-c",
+      createTrustedPlugin({
+        pluginName: "plugin-c",
+        capabilities: ["mcp-servers"],
+      })
+    );
     await store1.save();
 
     // Session 2: Verify all plugins persisted
@@ -136,19 +148,28 @@ describe("TrustStore - trust persists across sessions", () => {
     const store1 = new TrustStore(trustFilePath);
     await store1.load();
 
-    store1.set("full-trust", createTrustedPlugin({
-      pluginName: "full-trust",
-      trustLevel: "full",
-    }));
-    store1.set("limited-trust", createTrustedPlugin({
-      pluginName: "limited-trust",
-      trustLevel: "limited",
-    }));
-    store1.set("no-trust", createTrustedPlugin({
-      pluginName: "no-trust",
-      trustLevel: "none",
-      capabilities: [],
-    }));
+    store1.set(
+      "full-trust",
+      createTrustedPlugin({
+        pluginName: "full-trust",
+        trustLevel: "full",
+      })
+    );
+    store1.set(
+      "limited-trust",
+      createTrustedPlugin({
+        pluginName: "limited-trust",
+        trustLevel: "limited",
+      })
+    );
+    store1.set(
+      "no-trust",
+      createTrustedPlugin({
+        pluginName: "no-trust",
+        trustLevel: "none",
+        capabilities: [],
+      })
+    );
     await store1.save();
 
     const store2 = new TrustStore(trustFilePath);
@@ -185,10 +206,13 @@ describe("TrustStore - trust persists across sessions", () => {
     // Session 1: Create initial trust
     const store1 = new TrustStore(trustFilePath);
     await store1.load();
-    store1.set("updateable-plugin", createTrustedPlugin({
-      pluginName: "updateable-plugin",
-      capabilities: ["execute-hooks"],
-    }));
+    store1.set(
+      "updateable-plugin",
+      createTrustedPlugin({
+        pluginName: "updateable-plugin",
+        capabilities: ["execute-hooks"],
+      })
+    );
     await store1.save();
 
     // Session 2: Update trust
@@ -197,10 +221,13 @@ describe("TrustStore - trust persists across sessions", () => {
     const existing = store2.get("updateable-plugin");
     expect(existing?.capabilities).toEqual(["execute-hooks"]);
 
-    store2.set("updateable-plugin", createTrustedPlugin({
-      pluginName: "updateable-plugin",
-      capabilities: ["execute-hooks", "network-access", "mcp-servers"],
-    }));
+    store2.set(
+      "updateable-plugin",
+      createTrustedPlugin({
+        pluginName: "updateable-plugin",
+        capabilities: ["execute-hooks", "network-access", "mcp-servers"],
+      })
+    );
     await store2.save();
 
     // Session 3: Verify update persisted
@@ -459,7 +486,10 @@ describe("TrustStore - file corruption handling", () => {
 
     // Check backup was created
     const backupPath = `${trustFilePath}.backup`;
-    const backupExists = await fs.access(backupPath).then(() => true).catch(() => false);
+    const backupExists = await fs
+      .access(backupPath)
+      .then(() => true)
+      .catch(() => false);
     expect(backupExists).toBe(true);
 
     const backupContent = await fs.readFile(backupPath, "utf-8");
@@ -593,7 +623,10 @@ describe("TrustStore - additional operations", () => {
     await store.save();
 
     // Verify file was created
-    const fileExists = await fs.access(nestedPath).then(() => true).catch(() => false);
+    const fileExists = await fs
+      .access(nestedPath)
+      .then(() => true)
+      .catch(() => false);
     expect(fileExists).toBe(true);
   });
 });

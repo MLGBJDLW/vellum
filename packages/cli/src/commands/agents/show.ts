@@ -141,7 +141,7 @@ function formatConfigDisplay(result: AgentsLoadResult, cwd: string, verbose: boo
       config.instructions.length > 200
         ? config.instructions.slice(0, 200) + chalk.gray("...")
         : config.instructions;
-    lines.push(chalk.gray("  " + instructionPreview.split("\n").join("\n  ")));
+    lines.push(chalk.gray(`  ${instructionPreview.split("\n").join("\n  ")}`));
     lines.push("");
   }
 

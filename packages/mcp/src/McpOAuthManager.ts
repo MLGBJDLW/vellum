@@ -178,8 +178,6 @@ export interface OAuthRefreshTimer {
  */
 export class VellumOAuthClientProvider implements OAuthClientProvider {
   private readonly serverName: string;
-  // @ts-expect-error - serverUrl is used for generating serverId
-  private readonly serverUrl: string;
   private readonly serverId: string;
   private readonly config: McpOAuthManagerConfig;
   private readonly credentialManager?: OAuthCredentialManager;

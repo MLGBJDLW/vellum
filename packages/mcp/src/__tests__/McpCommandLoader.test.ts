@@ -163,12 +163,12 @@ describe("McpCommandLoader", () => {
       expect(translate?.positionalArgs).toHaveLength(2);
 
       const [textArg, langArg] = translate?.positionalArgs ?? [];
-      expect(textArg!.name).toBe("text");
-      expect(textArg!.required).toBe(true);
-      expect(textArg!.type).toBe("string");
+      expect(textArg?.name).toBe("text");
+      expect(textArg?.required).toBe(true);
+      expect(textArg?.type).toBe("string");
 
-      expect(langArg!.name).toBe("language");
-      expect(langArg!.required).toBe(false);
+      expect(langArg?.name).toBe("language");
+      expect(langArg?.required).toBe(false);
     });
 
     it("should handle servers with no prompts", async () => {
@@ -192,7 +192,7 @@ describe("McpCommandLoader", () => {
       // Should not throw, should return prompts from working server
       const commands = await loader.load();
       expect(commands).toHaveLength(1);
-      expect(commands[0]!.name).toBe("mcp:prompt-server:qa");
+      expect(commands[0]?.name).toBe("mcp:prompt-server:qa");
     });
 
     it("should return empty array after disposal", async () => {
@@ -282,7 +282,7 @@ describe("McpCommandLoader", () => {
       const summarize = commands.find((cmd) => cmd.name === "mcp:test-server:summarize");
       expect(summarize).toBeDefined();
 
-      const result = await summarize!.execute({
+      const result = await summarize?.execute({
         parsedArgs: { positional: [], named: {} },
         mcpHub: mockHub,
       });
@@ -389,7 +389,7 @@ describe("McpCommandLoader", () => {
       });
 
       const commands = await specialLoader.load();
-      expect(commands[0]!.name).toBe("mcp:my-server:test-prompt-1");
+      expect(commands[0]?.name).toBe("mcp:my-server:test-prompt-1");
 
       specialLoader.dispose();
     });

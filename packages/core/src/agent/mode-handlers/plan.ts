@@ -4,7 +4,6 @@
 // T022: Implement PlanModeHandler class
 // ============================================
 
-import type { CodingModeConfig } from "../coding-modes.js";
 import type { AgentLevel } from "../level.js";
 import { BaseModeHandler } from "./base.js";
 import type { HandlerResult, ToolAccessConfig, UserMessage } from "./types.js";
@@ -56,15 +55,6 @@ export class PlanModeHandler extends BaseModeHandler {
    * Flag indicating if execution has been approved.
    */
   private _executionApproved = false;
-
-  /**
-   * Create a new PlanModeHandler.
-   *
-   * @param config - The coding mode configuration (should be PLAN_MODE)
-   */
-  constructor(config: CodingModeConfig) {
-    super(config);
-  }
 
   /**
    * Process an incoming user message.

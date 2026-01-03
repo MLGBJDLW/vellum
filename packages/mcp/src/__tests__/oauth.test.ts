@@ -147,10 +147,10 @@ describe("VellumOAuthClientProvider", () => {
       const tokens = await provider.tokens();
 
       expect(tokens).toBeDefined();
-      expect(tokens!.access_token).toBe("access-token-123");
-      expect(tokens!.refresh_token).toBe("refresh-token-123");
-      expect(tokens!.token_type).toBe("Bearer");
-      expect(tokens!.scope).toBe("read write");
+      expect(tokens?.access_token).toBe("access-token-123");
+      expect(tokens?.refresh_token).toBe("refresh-token-123");
+      expect(tokens?.token_type).toBe("Bearer");
+      expect(tokens?.scope).toBe("read write");
     });
 
     it("should return expired tokens if refresh token exists", async () => {
@@ -172,8 +172,8 @@ describe("VellumOAuthClientProvider", () => {
       const tokens = await provider.tokens();
 
       expect(tokens).toBeDefined();
-      expect(tokens!.access_token).toBe("expired-token");
-      expect(tokens!.refresh_token).toBe("refresh-token");
+      expect(tokens?.access_token).toBe("expired-token");
+      expect(tokens?.refresh_token).toBe("refresh-token");
     });
 
     it("should return undefined for expired tokens without refresh token", async () => {

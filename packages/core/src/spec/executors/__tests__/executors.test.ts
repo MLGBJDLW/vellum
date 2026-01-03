@@ -262,7 +262,7 @@ describe("RequirementsExecutor", () => {
     expect(executor.beforeExecute).toBeDefined();
 
     // Should not throw
-    await executor.beforeExecute!(createMockContext());
+    await executor.beforeExecute?.(createMockContext());
   });
 });
 

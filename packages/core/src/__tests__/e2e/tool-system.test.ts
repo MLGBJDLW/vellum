@@ -101,7 +101,8 @@ export { greet };
       await writeFile(targetFile, initialContent);
 
       // Step 1: Read the file
-      const readTool = registry.get("read_file")!;
+      const readTool = registry.get("read_file");
+      if (!readTool) throw new Error("read_file tool not found");
       const readResult = await readTool.execute({ path: targetFile }, ctx);
 
       expect(readResult.success).toBe(true);
@@ -111,7 +112,8 @@ export { greet };
 
       // Step 2: Edit the file (change string concatenation to template literal)
       // Note: search_and_replace expects pattern, replacement, paths[]
-      const editTool = registry.get("search_and_replace")!;
+      const editTool = registry.get("search_and_replace");
+      if (!editTool) throw new Error("search_and_replace tool not found");
       const editResult = await editTool.execute(
         {
           pattern: '"Hello, " \\+ name',
@@ -142,7 +144,8 @@ export { greet };
 `;
 
       // Write new file
-      const writeTool = registry.get("write_file")!;
+      const writeTool = registry.get("write_file");
+      if (!writeTool) throw new Error("write_file tool not found");
       const writeResult = await writeTool.execute({ path: newFile, content }, ctx);
 
       expect(writeResult.success).toBe(true);
@@ -162,7 +165,8 @@ const c = 3;
 `
       );
 
-      const editTool = registry.get("search_and_replace")!;
+      const editTool = registry.get("search_and_replace");
+      if (!editTool) throw new Error("search_and_replace tool not found");
 
       // Edit 1: change a
       const r1 = await editTool.execute(
@@ -212,7 +216,8 @@ const c = 3;
     });
 
     it("should handle file not found gracefully", async () => {
-      const readTool = registry.get("read_file")!;
+      const readTool = registry.get("read_file");
+      if (!readTool) throw new Error("read_file tool not found");
       const result = await readTool.execute({ path: join(testDir, "nonexistent.txt") }, ctx);
 
       expect(result.success).toBe(false);
@@ -225,7 +230,8 @@ const c = 3;
       const testFile = join(testDir, "no-match.txt");
       await writeFile(testFile, "original content");
 
-      const editTool = registry.get("search_and_replace")!;
+      const editTool = registry.get("search_and_replace");
+      if (!editTool) throw new Error("search_and_replace tool not found");
       const result = await editTool.execute(
         {
           pattern: "this text does not exist",
@@ -264,7 +270,8 @@ const c = 3;
         })
       );
 
-      const readTool = registry.get("read_file")!;
+      const readTool = registry.get("read_file");
+      if (!readTool) throw new Error("read_file tool not found");
 
       // Read all concurrently
       const results = await Promise.all(files.map((path) => readTool.execute({ path }, ctx)));
@@ -282,7 +289,8 @@ const c = 3;
   describe("Tool Context Usage", () => {
     it("should provide context to tools", async () => {
       // list_dir uses workingDir for relative paths
-      const listTool = registry.get("list_dir")!;
+      const listTool = registry.get("list_dir");
+      if (!listTool) throw new Error("list_dir tool not found");
       const result = await listTool.execute({ path: "." }, ctx);
 
       expect(result.success).toBe(true);

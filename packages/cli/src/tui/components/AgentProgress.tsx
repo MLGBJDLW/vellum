@@ -86,7 +86,6 @@ function getStatusColor(
       return theme.semantic.status.error;
     case "running":
       return theme.semantic.status.running;
-    case "pending":
     default:
       return theme.semantic.text.muted;
   }
@@ -114,7 +113,7 @@ function buildTree(chain: TaskChain): TreeNode[] {
   for (const [, treeNode] of nodeMap) {
     const parentId = treeNode.node.parentTaskId;
     if (parentId && nodeMap.has(parentId)) {
-      nodeMap.get(parentId)!.children.push(treeNode);
+      nodeMap.get(parentId)?.children.push(treeNode);
     } else {
       // Root node (no parent)
       roots.push(treeNode);
@@ -150,7 +149,8 @@ function flattenTree(
   const result: FlattenedNode[] = [];
 
   for (let i = 0; i < roots.length; i++) {
-    const treeNode = roots[i]!;
+    const treeNode = roots[i];
+    if (!treeNode) continue;
     const isLast = i === roots.length - 1;
 
     result.push({

@@ -106,7 +106,7 @@ describe("Security - BASE_PROMPT Safety Section Validation", () => {
     const safetyMatch = BASE_PROMPT.match(/# Safety Guardrails[\s\S]*?(?=\n# |$)/);
 
     expect(safetyMatch).not.toBeNull();
-    expect(safetyMatch![0].length).toBeGreaterThan(100); // Non-trivial content
+    expect(safetyMatch?.[0].length).toBeGreaterThan(100); // Non-trivial content
   });
 
   it("safety section contains numbered rules", () => {

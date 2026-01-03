@@ -75,16 +75,21 @@ function TestHarness({ options, onHookReturn }: TestHarnessProps): React.ReactEl
 function renderHook(options?: UseInputHistoryOptions) {
   let hookReturn: UseInputHistoryReturn | null = null;
 
+  const setHookReturn = (r: UseInputHistoryReturn) => {
+    hookReturn = r;
+  };
+
   const { rerender, unmount } = render(
-    <TestHarness options={options} onHookReturn={(r) => (hookReturn = r)} />
+    <TestHarness options={options} onHookReturn={setHookReturn} />
   );
 
   return {
     get current() {
-      return hookReturn!;
+      if (!hookReturn) throw new Error("Hook not initialized");
+      return hookReturn;
     },
     rerender: (newOptions?: UseInputHistoryOptions) => {
-      rerender(<TestHarness options={newOptions} onHookReturn={(r) => (hookReturn = r)} />);
+      rerender(<TestHarness options={newOptions} onHookReturn={setHookReturn} />);
     },
     unmount,
   };

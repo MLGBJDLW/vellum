@@ -7,7 +7,7 @@
  * @module trust/manager
  */
 
-import { TrustStore } from "./store.js";
+import type { TrustStore } from "./store.js";
 import type { PluginCapability, TrustedPlugin, TrustLevel } from "./types.js";
 
 /**
@@ -134,11 +134,7 @@ export class TrustedPluginsManager {
    * await store.save(); // Persist changes
    * ```
    */
-  trustPlugin(
-    pluginName: string,
-    capabilities: PluginCapability[],
-    hash: string
-  ): void {
+  trustPlugin(pluginName: string, capabilities: PluginCapability[], hash: string): void {
     const trustLevel = this.determineTrustLevel(capabilities);
 
     const trustEntry: TrustedPlugin = {

@@ -708,10 +708,10 @@ describe("Snapshot", () => {
       expect(isOk(result)).toBe(true);
       if (isOk(result)) {
         expect(result.value).toHaveLength(2);
-        expect(result.value[0]!.hash).toBe(hash1);
-        expect(result.value[0]!.message).toBe("first snapshot");
-        expect(result.value[1]!.hash).toBe(hash2);
-        expect(result.value[1]!.message).toBe("second snapshot");
+        expect(result.value[0]?.hash).toBe(hash1);
+        expect(result.value[0]?.message).toBe("first snapshot");
+        expect(result.value[1]?.hash).toBe(hash2);
+        expect(result.value[1]?.message).toBe("second snapshot");
       }
     });
 
@@ -757,7 +757,7 @@ describe("Snapshot", () => {
 
       expect(isOk(result)).toBe(true);
       if (isOk(result)) {
-        expect(result.value[0]!.message).toBe("message|with|pipes");
+        expect(result.value[0]?.message).toBe("message|with|pipes");
       }
     });
   });

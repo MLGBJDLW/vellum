@@ -54,9 +54,9 @@ describe("parseHooksConfig - valid config parsing", () => {
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
     expect(config).toHaveLength(1);
-    expect(config[0]!.event).toBe("PreToolUse");
-    expect(config[0]!.action.type).toBe("command");
-    expect((config[0]!.action as { command: string }).command).toBe("lint");
+    expect(config[0]?.event).toBe("PreToolUse");
+    expect(config[0]?.action.type).toBe("command");
+    expect((config[0]?.action as { command: string }).command).toBe("lint");
   });
 
   it("should parse script action with path expansion", () => {
@@ -73,8 +73,8 @@ describe("parseHooksConfig - valid config parsing", () => {
     const ctx = createPathContext({ pluginRoot: "/home/user/plugins/my-plugin" });
     const config = parseHooksConfig("/hooks.json", content, ctx);
 
-    expect(config[0]!.action.type).toBe("script");
-    expect((config[0]!.action as { path: string }).path).toBe(
+    expect(config[0]?.action.type).toBe("script");
+    expect((config[0]?.action as { path: string }).path).toBe(
       "/home/user/plugins/my-plugin/scripts/init.py"
     );
   });
@@ -89,8 +89,8 @@ describe("parseHooksConfig - valid config parsing", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.action.type).toBe("prompt");
-    expect((config[0]!.action as { content: string }).content).toBe(
+    expect(config[0]?.action.type).toBe("prompt");
+    expect((config[0]?.action as { content: string }).content).toBe(
       "Remember the coding guidelines."
     );
   });
@@ -105,7 +105,7 @@ describe("parseHooksConfig - valid config parsing", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.timeout).toBe(DEFAULT_HOOK_TIMEOUT);
+    expect(config[0]?.timeout).toBe(DEFAULT_HOOK_TIMEOUT);
   });
 
   it("should apply default failBehavior when not specified", () => {
@@ -118,7 +118,7 @@ describe("parseHooksConfig - valid config parsing", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.failBehavior).toBe("open");
+    expect(config[0]?.failBehavior).toBe("open");
   });
 
   it("should preserve explicit timeout value", () => {
@@ -132,7 +132,7 @@ describe("parseHooksConfig - valid config parsing", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.timeout).toBe(5000);
+    expect(config[0]?.timeout).toBe(5000);
   });
 
   it("should preserve explicit failBehavior", () => {
@@ -146,7 +146,7 @@ describe("parseHooksConfig - valid config parsing", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.failBehavior).toBe("closed");
+    expect(config[0]?.failBehavior).toBe("closed");
   });
 
   it("should parse multiple rules", () => {
@@ -159,9 +159,9 @@ describe("parseHooksConfig - valid config parsing", () => {
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
     expect(config).toHaveLength(3);
-    expect(config[0]!.event).toBe("SessionStart");
-    expect(config[1]!.event).toBe("PreToolUse");
-    expect(config[2]!.event).toBe("BeforeCommit");
+    expect(config[0]?.event).toBe("SessionStart");
+    expect(config[1]?.event).toBe("PreToolUse");
+    expect(config[2]?.event).toBe("BeforeCommit");
   });
 
   it("should parse command action with args", () => {
@@ -174,7 +174,7 @@ describe("parseHooksConfig - valid config parsing", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect((config[0]!.action as { args?: string[] }).args).toEqual(["--fix", "./src"]);
+    expect((config[0]?.action as { args?: string[] }).args).toEqual(["--fix", "./src"]);
   });
 
   it("should parse script action with interpreter", () => {
@@ -187,7 +187,7 @@ describe("parseHooksConfig - valid config parsing", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect((config[0]!.action as { interpreter?: string }).interpreter).toBe("python3");
+    expect((config[0]?.action as { interpreter?: string }).interpreter).toBe("python3");
   });
 });
 
@@ -220,7 +220,7 @@ describe("parseHooksConfig - all 11 hook events supported", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.event).toBe(event);
+    expect(config[0]?.event).toBe(event);
   });
 
   it("should have exactly 11 supported events", () => {
@@ -258,7 +258,7 @@ describe("parseHooksConfig - matcher regex validation", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.matcher).toBe("^write_file$");
+    expect(config[0]?.matcher).toBe("^write_file$");
   });
 
   it("should parse matcher with alternation", () => {
@@ -272,7 +272,7 @@ describe("parseHooksConfig - matcher regex validation", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.matcher).toBe("^(read_file|write_file|delete_file)$");
+    expect(config[0]?.matcher).toBe("^(read_file|write_file|delete_file)$");
   });
 
   it("should parse matcher with character classes", () => {
@@ -286,7 +286,7 @@ describe("parseHooksConfig - matcher regex validation", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.matcher).toBe("^dangerous_[a-z]+$");
+    expect(config[0]?.matcher).toBe("^dangerous_[a-z]+$");
   });
 
   it("should reject invalid regex in matcher", () => {
@@ -327,7 +327,7 @@ describe("parseHooksConfig - matcher regex validation", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect(config[0]!.matcher).toBeUndefined();
+    expect(config[0]?.matcher).toBeUndefined();
   });
 });
 
@@ -543,7 +543,7 @@ describe("parseHooksConfigRaw", () => {
     const config = parseHooksConfigRaw("/hooks.json", content);
 
     // Path should NOT be expanded
-    expect((config[0]!.action as { path: string }).path).toBe(
+    expect((config[0]?.action as { path: string }).path).toBe(
       "${VELLUM_PLUGIN_ROOT}/scripts/init.py"
     );
   });
@@ -558,8 +558,8 @@ describe("parseHooksConfigRaw", () => {
 
     const config = parseHooksConfigRaw("/hooks.json", content);
 
-    expect(config[0]!.timeout).toBe(DEFAULT_HOOK_TIMEOUT);
-    expect(config[0]!.failBehavior).toBe("open");
+    expect(config[0]?.timeout).toBe(DEFAULT_HOOK_TIMEOUT);
+    expect(config[0]?.failBehavior).toBe("open");
   });
 
   it("should reject invalid config same as parseHooksConfig", () => {

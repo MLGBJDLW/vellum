@@ -253,15 +253,13 @@ describe("Plugin System E2E Workflow", () => {
 
     // Verify commands
     const commands = manager.getCommands();
-    const cmdPlugin = Array.from(commands.values()).find((cmd) =>
-      cmd.source === "cmd-plugin"
-    );
+    const cmdPlugin = Array.from(commands.values()).find((cmd) => cmd.source === "cmd-plugin");
     expect(cmdPlugin).toBeDefined();
 
     // Verify agents
     const agents = manager.getAgents();
-    const agentPlugin = Array.from(agents.values()).find((agent) =>
-      agent.pluginName === "agent-plugin"
+    const agentPlugin = Array.from(agents.values()).find(
+      (agent) => agent.pluginName === "agent-plugin"
     );
     expect(agentPlugin).toBeDefined();
   });
@@ -321,9 +319,12 @@ describe("Plugin System E2E Workflow", () => {
     await trustStore1.save();
 
     // DEBUG: Verify file was created and contains data
-    const fileExists = await fs.access(trustStorePath).then(() => true).catch(() => false);
+    const fileExists = await fs
+      .access(trustStorePath)
+      .then(() => true)
+      .catch(() => false);
     expect(fileExists).toBe(true);
-    const fileContent = await fs.readFile(trustStorePath, 'utf-8');
+    const fileContent = await fs.readFile(trustStorePath, "utf-8");
     const parsed = JSON.parse(fileContent);
     expect(parsed.plugins).toBeDefined();
     expect(parsed.plugins["persistent-plugin"]).toBeDefined();
@@ -438,7 +439,7 @@ describe("Plugin System E2E Workflow", () => {
     await manager.initialize();
 
     // Verify initial state
-    let plugin = manager.getPlugin("updatable-plugin");
+    const plugin = manager.getPlugin("updatable-plugin");
     expect(plugin?.manifest.version).toBe("1.0.0");
 
     // Update the plugin manifest
@@ -477,7 +478,11 @@ describe("Plugin System E2E Workflow", () => {
       entrypoint: "./index.js",
     };
 
-    await fs.writeFile(path.join(metaDir, "plugin.json"), JSON.stringify(manifest, null, 2), "utf8");
+    await fs.writeFile(
+      path.join(metaDir, "plugin.json"),
+      JSON.stringify(manifest, null, 2),
+      "utf8"
+    );
 
     // Create entrypoint file
     const entrypoint = path.join(pluginRoot, "index.js");

@@ -22,9 +22,9 @@ describe("parseMarkdownTodos", () => {
       title: "Pending task",
       status: "pending",
     });
-    expect(todos[0]!.id).toBeDefined();
-    expect(todos[0]!.createdAt).toBeDefined();
-    expect(todos[0]!.completedAt).toBeUndefined();
+    expect(todos[0]?.id).toBeDefined();
+    expect(todos[0]?.createdAt).toBeDefined();
+    expect(todos[0]?.completedAt).toBeUndefined();
   });
 
   it("parses done checkbox (lowercase x)", () => {
@@ -36,7 +36,7 @@ describe("parseMarkdownTodos", () => {
       title: "Done task",
       status: "done",
     });
-    expect(todos[0]!.completedAt).toBeDefined();
+    expect(todos[0]?.completedAt).toBeDefined();
   });
 
   it("parses done checkbox (uppercase X)", () => {
@@ -48,7 +48,7 @@ describe("parseMarkdownTodos", () => {
       title: "Done task uppercase",
       status: "done",
     });
-    expect(todos[0]!.completedAt).toBeDefined();
+    expect(todos[0]?.completedAt).toBeDefined();
   });
 
   it("parses skipped checkbox (dash)", () => {
@@ -60,7 +60,7 @@ describe("parseMarkdownTodos", () => {
       title: "Skipped task dash",
       status: "skipped",
     });
-    expect(todos[0]!.completedAt).toBeDefined();
+    expect(todos[0]?.completedAt).toBeDefined();
   });
 
   it("parses skipped checkbox (tilde)", () => {
@@ -72,7 +72,7 @@ describe("parseMarkdownTodos", () => {
       title: "Skipped task tilde",
       status: "skipped",
     });
-    expect(todos[0]!.completedAt).toBeDefined();
+    expect(todos[0]?.completedAt).toBeDefined();
   });
 
   it("handles multiple checkboxes", () => {
@@ -135,7 +135,7 @@ describe("parseMarkdownTodos", () => {
     const todos = parseMarkdownTodos(markdown);
 
     expect(todos).toHaveLength(1);
-    expect(todos[0]!.title).toBe("Title with extra spaces");
+    expect(todos[0]?.title).toBe("Title with extra spaces");
   });
 
   it("handles mixed content with non-checkbox lines", () => {
@@ -181,7 +181,7 @@ More text at the end.
       const todos2 = parseMarkdownTodos(markdown, { useContentHash: true });
 
       // Same content should produce same ID (idempotent)
-      expect(todos1[0]!.id).toBe(todos2[0]!.id);
+      expect(todos1[0]?.id).toBe(todos2[0]?.id);
     });
 
     it("generates different IDs for different content", () => {
@@ -191,14 +191,14 @@ More text at the end.
       const todos1 = parseMarkdownTodos(markdown1, { useContentHash: true });
       const todos2 = parseMarkdownTodos(markdown2, { useContentHash: true });
 
-      expect(todos1[0]!.id).not.toBe(todos2[0]!.id);
+      expect(todos1[0]?.id).not.toBe(todos2[0]?.id);
     });
 
     it("generates 8-character hex IDs", () => {
       const markdown = "- [ ] Test task";
       const todos = parseMarkdownTodos(markdown, { useContentHash: true });
 
-      expect(todos[0]!.id).toMatch(/^[a-f0-9]{8}$/);
+      expect(todos[0]?.id).toMatch(/^[a-f0-9]{8}$/);
     });
 
     it("uses random nanoid when useContentHash is false or not provided", () => {
@@ -209,7 +209,7 @@ More text at the end.
       const todos2 = parseMarkdownTodos(markdown);
 
       // Random IDs should be different
-      expect(todos1[0]!.id).not.toBe(todos2[0]!.id);
+      expect(todos1[0]?.id).not.toBe(todos2[0]?.id);
     });
 
     it("handles multiple todos with content hash", () => {
@@ -253,9 +253,9 @@ describe("parseCommaSeparated", () => {
     const todos = parseCommaSeparated(input);
 
     expect(todos).toHaveLength(3);
-    expect(todos[0]!.title).toBe("Task one");
-    expect(todos[1]!.title).toBe("Task two");
-    expect(todos[2]!.title).toBe("Task three");
+    expect(todos[0]?.title).toBe("Task one");
+    expect(todos[1]?.title).toBe("Task two");
+    expect(todos[2]?.title).toBe("Task three");
   });
 
   it("handles empty input", () => {
@@ -273,9 +273,9 @@ describe("parseCommaSeparated", () => {
     const todos = parseCommaSeparated(input);
 
     expect(todos).toHaveLength(3);
-    expect(todos[0]!.title).toBe("Task one");
-    expect(todos[1]!.title).toBe("Task two");
-    expect(todos[2]!.title).toBe("Task three");
+    expect(todos[0]?.title).toBe("Task one");
+    expect(todos[1]?.title).toBe("Task two");
+    expect(todos[2]?.title).toBe("Task three");
   });
 
   it("handles single item without comma", () => {
@@ -313,15 +313,15 @@ describe("parseCommaSeparated", () => {
       const todos2 = parseCommaSeparated(input, { useContentHash: true });
 
       // Same content should produce same IDs
-      expect(todos1[0]!.id).toBe(todos2[0]!.id);
-      expect(todos1[1]!.id).toBe(todos2[1]!.id);
+      expect(todos1[0]?.id).toBe(todos2[0]?.id);
+      expect(todos1[1]?.id).toBe(todos2[1]?.id);
     });
 
     it("generates 8-character hex IDs", () => {
       const input = "Test task";
       const todos = parseCommaSeparated(input, { useContentHash: true });
 
-      expect(todos[0]!.id).toMatch(/^[a-f0-9]{8}$/);
+      expect(todos[0]?.id).toMatch(/^[a-f0-9]{8}$/);
     });
   });
 });

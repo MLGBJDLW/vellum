@@ -120,7 +120,7 @@ describe("saveTodoData", () => {
     saveTodoData(ctx, { todos: [testTodo] });
 
     expect(ctx.sessionData).toBeDefined();
-    expect(ctx.sessionData!["vellum:todos"]).toEqual({ todos: [testTodo] });
+    expect(ctx.sessionData?.["vellum:todos"]).toEqual({ todos: [testTodo] });
   });
 
   it("creates sessionData if it does not exist", () => {
@@ -130,7 +130,7 @@ describe("saveTodoData", () => {
     saveTodoData(ctx, { todos: [testTodo] });
 
     expect(ctx.sessionData).toBeDefined();
-    expect(ctx.sessionData!["vellum:todos"]).toEqual({ todos: [testTodo] });
+    expect(ctx.sessionData?.["vellum:todos"]).toEqual({ todos: [testTodo] });
   });
 
   it("overwrites existing todo data", () => {
@@ -142,8 +142,8 @@ describe("saveTodoData", () => {
 
     const data = getTodoData(ctx);
     expect(data.todos).toHaveLength(1);
-    expect(data.todos[0]!.id).toBe("new");
-    expect(data.todos[0]!.title).toBe("New task");
+    expect(data.todos[0]?.id).toBe("new");
+    expect(data.todos[0]?.title).toBe("New task");
   });
 
   it("preserves other session data", () => {
@@ -152,7 +152,7 @@ describe("saveTodoData", () => {
 
     saveTodoData(ctx, { todos: [testTodo] });
 
-    expect(ctx.sessionData!["otherKey"]).toBe("preserved value");
+    expect(ctx.sessionData?.otherKey).toBe("preserved value");
   });
 
   it("allows saving empty todos array", () => {
@@ -160,7 +160,7 @@ describe("saveTodoData", () => {
 
     saveTodoData(ctx, { todos: [] });
 
-    expect(ctx.sessionData!["vellum:todos"]).toEqual({ todos: [] });
+    expect(ctx.sessionData?.["vellum:todos"]).toEqual({ todos: [] });
   });
 });
 
@@ -200,7 +200,7 @@ describe("clearTodoData", () => {
 
     clearTodoData(ctx);
 
-    expect(ctx.sessionData!["otherKey"]).toBe("should remain");
+    expect(ctx.sessionData?.otherKey).toBe("should remain");
     expect(getTodoData(ctx).todos).toHaveLength(0);
   });
 });

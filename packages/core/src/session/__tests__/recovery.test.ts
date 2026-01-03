@@ -668,7 +668,7 @@ describe("RecoveryManager", () => {
       await recovery.updateRecoveryLogStatus(session.metadata.id, "crashed");
 
       const updatedLog = await recovery.getRecoveryLog(session.metadata.id);
-      expect(updatedLog?.timestamp.getTime()).toBeGreaterThan(originalTimestamp!.getTime());
+      expect(updatedLog?.timestamp.getTime()).toBeGreaterThan(originalTimestamp?.getTime());
     });
 
     it("should throw RecoveryError.notFound for missing log", async () => {

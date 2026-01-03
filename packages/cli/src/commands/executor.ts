@@ -65,19 +65,9 @@ export interface CommandContextProvider {
 // =============================================================================
 
 /**
- * Calculate Levenshtein distance between two strings
- *
- * Used for finding similar command names when a command is not found.
- *
- * @param a - First string
- * @param b - Second string
- * @returns Edit distance (minimum edits to transform a to b)
+ * Initialize Levenshtein distance matrix
  */
-function levenshtein(a: string, b: string): number {
-  const rows = a.length + 1;
-  const cols = b.length + 1;
-
-  // Initialize matrix with proper typing
+function initLevenshteinMatrix(rows: number, cols: number): number[][] {
   const matrix: number[][] = [];
   for (let i = 0; i < rows; i++) {
     const row: number[] = [];
@@ -92,6 +82,15 @@ function levenshtein(a: string, b: string): number {
     }
     matrix.push(row);
   }
+  return matrix;
+}
+
+/**
+ * Fill Levenshtein distance matrix with computed values
+ */
+function fillLevenshteinMatrix(matrix: number[][], a: string, b: string): void {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
 
   for (let i = 1; i < rows; i++) {
     const currentRow = matrix[i];
@@ -106,6 +105,23 @@ function levenshtein(a: string, b: string): number {
       currentRow[j] = Math.min(deletion, insertion, substitution);
     }
   }
+}
+
+/**
+ * Calculate Levenshtein distance between two strings
+ *
+ * Used for finding similar command names when a command is not found.
+ *
+ * @param a - First string
+ * @param b - Second string
+ * @returns Edit distance (minimum edits to transform a to b)
+ */
+function levenshtein(a: string, b: string): number {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+
+  const matrix = initLevenshteinMatrix(rows, cols);
+  fillLevenshteinMatrix(matrix, a, b);
 
   return matrix[a.length]?.[b.length] ?? 0;
 }

@@ -137,7 +137,7 @@ export class AgentsPromptBuilder {
     }
 
     // Build main instructions section
-    if (config.instructions && config.instructions.trim()) {
+    if (config.instructions?.trim()) {
       const instructionsSection = this.buildInstructionsSection(config);
       if (instructionsSection) {
         sections.push(instructionsSection);

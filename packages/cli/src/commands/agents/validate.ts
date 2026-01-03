@@ -256,7 +256,7 @@ function formatSummary(summary: ValidationSummary, cwd: string, verbose: boolean
   if (summary.total === 0) {
     lines.push(chalk.yellow("No AGENTS.md files found in the project hierarchy."));
     lines.push("");
-    lines.push(chalk.gray("Run " + chalk.cyan("/init") + " to create one."));
+    lines.push(chalk.gray(`Run ${chalk.cyan("/init")} to create one.`));
     return lines.join("\n");
   }
 

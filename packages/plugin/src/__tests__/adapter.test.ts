@@ -301,8 +301,8 @@ describe("adaptCommands", () => {
     const commands = adaptCommands(parsed, "my-plugin", existing);
 
     expect(commands).toHaveLength(2);
-    expect(commands[0]!.name).toBe("cmd1");
-    expect(commands[1]!.name).toBe("cmd2");
+    expect(commands[0]?.name).toBe("cmd1");
+    expect(commands[1]?.name).toBe("cmd2");
   });
 
   it("should resolve name collisions with namespacing", () => {
@@ -312,8 +312,8 @@ describe("adaptCommands", () => {
 
     const commands = adaptCommands(parsed, "my-plugin", existing);
 
-    expect(commands[0]!.name).toBe("my-plugin:init"); // Namespaced
-    expect(commands[1]!.name).toBe("deploy"); // No collision
+    expect(commands[0]?.name).toBe("my-plugin:init"); // Namespaced
+    expect(commands[1]?.name).toBe("deploy"); // No collision
   });
 
   it("should set kind: plugin for all commands", () => {
@@ -359,11 +359,11 @@ describe("adaptCommands", () => {
     const existing = new Map<string, SlashCommand>();
     const commands = adaptCommands(parsed, "my-plugin", existing);
 
-    expect(commands[0]!.name).toBe("review");
-    expect(commands[0]!.description).toBe("Review code");
-    expect(commands[0]!.argumentHint).toBe("<branch>");
-    expect(commands[0]!.kind).toBe("plugin");
-    expect(commands[0]!.category).toBe("plugin");
-    expect(commands[0]!.source).toBe("my-plugin");
+    expect(commands[0]?.name).toBe("review");
+    expect(commands[0]?.description).toBe("Review code");
+    expect(commands[0]?.argumentHint).toBe("<branch>");
+    expect(commands[0]?.kind).toBe("plugin");
+    expect(commands[0]?.category).toBe("plugin");
+    expect(commands[0]?.source).toBe("my-plugin");
   });
 });

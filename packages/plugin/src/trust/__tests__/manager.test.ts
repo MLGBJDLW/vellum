@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TrustedPluginsManager } from "../manager.js";
-import { TrustStore } from "../store.js";
+import type { TrustStore } from "../store.js";
 import type { PluginCapability, TrustedPlugin } from "../types.js";
 
 // =============================================================================
@@ -122,8 +122,8 @@ describe("TrustedPluginsManager - hash verification", () => {
     });
 
     it("should detect single character hash difference", () => {
-      const hash1 = "a".repeat(63) + "0";
-      const hash2 = "a".repeat(63) + "1";
+      const hash1 = `${"a".repeat(63)}0`;
+      const hash2 = `${"a".repeat(63)}1`;
       const plugin = createTrustedPlugin({
         pluginName: "subtle-plugin",
         contentHash: hash1,

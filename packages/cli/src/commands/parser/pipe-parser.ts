@@ -9,7 +9,7 @@
  * @module cli/commands/parser/pipe-parser
  */
 
-import type { CommandResult } from "../types.js";
+import type { CommandErrorCode, CommandResult } from "../types.js";
 
 // =============================================================================
 // T054: Pipe Operator Types
@@ -332,6 +332,104 @@ export class PipedCommandExecutor {
     this.writeFileFn = writeFileFn;
   }
 
+  /** Create an error result for pipe execution */
+  private createErrorResult(
+    code: CommandErrorCode,
+    message: string,
+    output: string,
+    executedCount: number,
+    totalCount: number
+  ): PipeExecutionResult {
+    return {
+      result: { kind: "error", code, message },
+      output,
+      executedCount,
+      totalCount,
+      completed: false,
+    };
+  }
+
+  /** Execute command segments in sequence */
+  private async executeCommandSequence(
+    commandSegments: PipeSegment[],
+    signal?: AbortSignal
+  ): Promise<{ result: CommandResult; output: string; executedCount: number; aborted: boolean }> {
+    let currentOutput = "";
+    let lastResult: CommandResult = { kind: "success", message: "" };
+    let executedCount = 0;
+
+    for (let i = 0; i < commandSegments.length; i++) {
+      if (signal?.aborted) {
+        return {
+          result: {
+            kind: "error",
+            code: "COMMAND_ABORTED",
+            message: "Pipe execution was cancelled",
+          },
+          output: currentOutput,
+          executedCount,
+          aborted: true,
+        };
+      }
+
+      const segment = commandSegments[i];
+      if (!segment) continue;
+
+      const pipeInput = i > 0 ? currentOutput : undefined;
+      const { result, output } = await this.executeFn(segment.value, pipeInput, signal);
+
+      lastResult = result;
+      currentOutput = output;
+      executedCount++;
+
+      if (result.kind === "error") {
+        return { result, output: currentOutput, executedCount, aborted: false };
+      }
+    }
+
+    return { result: lastResult, output: currentOutput, executedCount, aborted: false };
+  }
+
+  /** Handle file redirection after command execution */
+  private async handleFileRedirection(
+    parsed: PipeParseResult,
+    output: string,
+    executedCount: number
+  ): Promise<{ success: boolean; writtenFile?: string; error?: PipeExecutionResult }> {
+    if (!parsed.hasRedirect || !parsed.redirectTarget || !parsed.redirectMode) {
+      return { success: true };
+    }
+
+    if (!this.writeFileFn) {
+      return {
+        success: false,
+        error: this.createErrorResult(
+          "INTERNAL_ERROR",
+          "File redirection not supported: no file writer configured",
+          output,
+          executedCount,
+          parsed.segments.length
+        ),
+      };
+    }
+
+    try {
+      await this.writeFileFn(parsed.redirectTarget, output, parsed.redirectMode);
+      return { success: true, writtenFile: parsed.redirectTarget };
+    } catch (err) {
+      return {
+        success: false,
+        error: this.createErrorResult(
+          "INTERNAL_ERROR",
+          `Failed to write to file '${parsed.redirectTarget}': ${err instanceof Error ? err.message : String(err)}`,
+          output,
+          executedCount,
+          parsed.segments.length
+        ),
+      };
+    }
+  }
+
   /**
    * Execute a piped command string
    *
@@ -343,107 +441,40 @@ export class PipedCommandExecutor {
     const parsed = PipeParser.parse(input);
 
     if (!parsed.isPiped || parsed.segments.length === 0) {
-      // Single command or empty - execute directly
       const command = parsed.segments[0]?.value ?? input;
       const { result, output } = await this.executeFn(command, undefined, signal);
+      return { result, output, executedCount: 1, totalCount: 1, completed: true };
+    }
 
+    const commandSegments = parsed.segments.filter((s) => s.type === "command");
+    const seqResult = await this.executeCommandSequence(commandSegments, signal);
+
+    if (seqResult.aborted || seqResult.result.kind === "error") {
       return {
-        result,
-        output,
-        executedCount: 1,
-        totalCount: 1,
-        completed: true,
+        result: seqResult.result,
+        output: seqResult.output,
+        executedCount: seqResult.executedCount,
+        totalCount: parsed.segments.length,
+        completed: false,
       };
     }
 
-    let currentOutput = "";
-    let lastResult: CommandResult = { kind: "success", message: "" };
-    let executedCount = 0;
-
-    // Execute command segments (not file segments)
-    const commandSegments = parsed.segments.filter((s) => s.type === "command");
-
-    for (let i = 0; i < commandSegments.length; i++) {
-      // Check for abort
-      if (signal?.aborted) {
-        return {
-          result: {
-            kind: "error",
-            code: "COMMAND_ABORTED",
-            message: "Pipe execution was cancelled",
-          },
-          output: currentOutput,
-          executedCount,
-          totalCount: parsed.segments.length,
-          completed: false,
-        };
-      }
-
-      const segment = commandSegments[i];
-      if (!segment) continue;
-
-      // Execute with previous output as input
-      const pipeInput = i > 0 ? currentOutput : undefined;
-      const { result, output } = await this.executeFn(segment.value, pipeInput, signal);
-
-      lastResult = result;
-      currentOutput = output;
-      executedCount++;
-
-      // Stop on error
-      if (result.kind === "error") {
-        return {
-          result,
-          output: currentOutput,
-          executedCount,
-          totalCount: parsed.segments.length,
-          completed: false,
-        };
-      }
-    }
-
-    // Handle file redirection
-    let writtenFile: string | undefined;
-    if (parsed.hasRedirect && parsed.redirectTarget && parsed.redirectMode) {
-      if (!this.writeFileFn) {
-        return {
-          result: {
-            kind: "error",
-            code: "INTERNAL_ERROR",
-            message: "File redirection not supported: no file writer configured",
-          },
-          output: currentOutput,
-          executedCount,
-          totalCount: parsed.segments.length,
-          completed: false,
-        };
-      }
-
-      try {
-        await this.writeFileFn(parsed.redirectTarget, currentOutput, parsed.redirectMode);
-        writtenFile = parsed.redirectTarget;
-      } catch (err) {
-        return {
-          result: {
-            kind: "error",
-            code: "INTERNAL_ERROR",
-            message: `Failed to write to file '${parsed.redirectTarget}': ${err instanceof Error ? err.message : String(err)}`,
-          },
-          output: currentOutput,
-          executedCount,
-          totalCount: parsed.segments.length,
-          completed: false,
-        };
-      }
+    const redirectResult = await this.handleFileRedirection(
+      parsed,
+      seqResult.output,
+      seqResult.executedCount
+    );
+    if (!redirectResult.success && redirectResult.error) {
+      return redirectResult.error;
     }
 
     return {
-      result: lastResult,
-      output: currentOutput,
-      executedCount,
+      result: seqResult.result,
+      output: seqResult.output,
+      executedCount: seqResult.executedCount,
       totalCount: parsed.segments.length,
       completed: true,
-      writtenFile,
+      writtenFile: redirectResult.writtenFile,
     };
   }
 }

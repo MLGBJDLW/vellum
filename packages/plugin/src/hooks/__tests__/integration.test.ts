@@ -7,15 +7,10 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-
-import {
-  executeHooks,
-  type HookContext,
-  type PermissionBridge,
-} from "../executor.js";
+import type { PathContext } from "../../utils/path-expansion.js";
+import { executeHooks, type HookContext, type PermissionBridge } from "../executor.js";
 import { parseHooksConfig } from "../parser.js";
 import type { HookAction, HookEvent, HooksConfig } from "../types.js";
-import type { PathContext } from "../../utils/path-expansion.js";
 
 // =============================================================================
 // Test Utilities
@@ -136,7 +131,7 @@ describe("integration - permission denial blocks hook", () => {
 
     expect(result.allowed).toBe(false);
     expect(bridge.requests).toHaveLength(1);
-    expect(bridge.requests[0]!.event).toBe("PreToolUse");
+    expect(bridge.requests[0]?.event).toBe("PreToolUse");
   });
 
   it("should block model call when BeforeModel hook denied", async () => {
@@ -199,8 +194,8 @@ describe("integration - permission denial blocks hook", () => {
     const result = await executeHooks("PreToolUse", context, config);
 
     expect(result.results).toHaveLength(1);
-    expect(result.results[0]!.allowed).toBe(false);
-    expect(result.results[0]!.hookName).toContain("PreToolUse");
+    expect(result.results[0]?.allowed).toBe(false);
+    expect(result.results[0]?.hookName).toContain("PreToolUse");
   });
 });
 
@@ -271,9 +266,24 @@ describe("integration - trust level 'none' blocks all operations", () => {
 
   it("should block multiple hooks in sequence with trust level none", async () => {
     const config: HooksConfig = [
-      { event: "PreToolUse", action: { type: "prompt", content: "First" }, timeout: 30000, failBehavior: "open" },
-      { event: "PreToolUse", action: { type: "prompt", content: "Second" }, timeout: 30000, failBehavior: "open" },
-      { event: "PreToolUse", action: { type: "prompt", content: "Third" }, timeout: 30000, failBehavior: "open" },
+      {
+        event: "PreToolUse",
+        action: { type: "prompt", content: "First" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
+      {
+        event: "PreToolUse",
+        action: { type: "prompt", content: "Second" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
+      {
+        event: "PreToolUse",
+        action: { type: "prompt", content: "Third" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
     ];
 
     const bridge = createTrackingBridge(false);
@@ -393,7 +403,7 @@ describe("integration - hook + phase 10 integration", () => {
 
     // Only write-check should be called (matcher filtering)
     expect(bridge.requests).toHaveLength(1);
-    expect(bridge.requests[0]!.action).toBe("prompt");
+    expect(bridge.requests[0]?.action).toBe("prompt");
   });
 
   it("should support path expansion in script actions", async () => {
@@ -413,15 +423,25 @@ describe("integration - hook + phase 10 integration", () => {
     const config = parseHooksConfig("/hooks.json", configJson, pathContext);
 
     // Verify path was expanded
-    expect((config[0]!.action as { path: string }).path).toBe(
+    expect((config[0]?.action as { path: string }).path).toBe(
       "/home/user/.vellum/plugins/security/scripts/init.py"
     );
   });
 
   it("should track all permission requests for audit", async () => {
     const config: HooksConfig = [
-      { event: "SessionStart", action: { type: "prompt", content: "Init" }, timeout: 30000, failBehavior: "open" },
-      { event: "PreToolUse", action: { type: "command", command: "validate" }, timeout: 30000, failBehavior: "closed" },
+      {
+        event: "SessionStart",
+        action: { type: "prompt", content: "Init" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
+      {
+        event: "PreToolUse",
+        action: { type: "command", command: "validate" },
+        timeout: 30000,
+        failBehavior: "closed",
+      },
     ];
 
     const bridge = createTrackingBridge(true);
@@ -443,19 +463,49 @@ describe("integration - hook + phase 10 integration", () => {
 
     // Verify all requests tracked
     expect(bridge.requests).toHaveLength(2);
-    expect(bridge.requests[0]!.event).toBe("SessionStart");
-    expect(bridge.requests[1]!.event).toBe("PreToolUse");
+    expect(bridge.requests[0]?.event).toBe("SessionStart");
+    expect(bridge.requests[1]?.event).toBe("PreToolUse");
     expect(bridge.requests.every((r) => r.pluginName === "audit-plugin")).toBe(true);
   });
 
   it("should support sequential hook execution across lifecycle", async () => {
     const config: HooksConfig = [
-      { event: "SessionStart", action: { type: "prompt", content: "Session started" }, timeout: 30000, failBehavior: "open" },
-      { event: "BeforeModel", action: { type: "prompt", content: "Before model call" }, timeout: 30000, failBehavior: "open" },
-      { event: "PreToolUse", action: { type: "prompt", content: "Before tool" }, timeout: 30000, failBehavior: "open" },
-      { event: "PostToolResult", action: { type: "prompt", content: "After tool" }, timeout: 30000, failBehavior: "open" },
-      { event: "AfterModel", action: { type: "prompt", content: "After model" }, timeout: 30000, failBehavior: "open" },
-      { event: "SessionEnd", action: { type: "prompt", content: "Session ended" }, timeout: 30000, failBehavior: "open" },
+      {
+        event: "SessionStart",
+        action: { type: "prompt", content: "Session started" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
+      {
+        event: "BeforeModel",
+        action: { type: "prompt", content: "Before model call" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
+      {
+        event: "PreToolUse",
+        action: { type: "prompt", content: "Before tool" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
+      {
+        event: "PostToolResult",
+        action: { type: "prompt", content: "After tool" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
+      {
+        event: "AfterModel",
+        action: { type: "prompt", content: "After model" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
+      {
+        event: "SessionEnd",
+        action: { type: "prompt", content: "Session ended" },
+        timeout: 30000,
+        failBehavior: "open",
+      },
     ];
 
     const bridge = createTrackingBridge(true);
@@ -504,8 +554,8 @@ describe("integration - hook + phase 10 integration", () => {
     const config = parseHooksConfig("/hooks.json", configJson, createPathContext());
 
     // Verify defaults applied
-    expect(config[0]!.timeout).toBe(30000); // DEFAULT_HOOK_TIMEOUT
-    expect(config[0]!.failBehavior).toBe("open");
+    expect(config[0]?.timeout).toBe(30000); // DEFAULT_HOOK_TIMEOUT
+    expect(config[0]?.failBehavior).toBe("open");
   });
 });
 

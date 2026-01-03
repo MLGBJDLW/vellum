@@ -191,7 +191,7 @@ export class DynamicClientRegistration {
       }
 
       return metadata;
-    } catch (error) {
+    } catch (_error) {
       // Try alternative path (.well-known/openid-configuration)
       return this.tryAlternativeDiscovery(normalizedUrl);
     }
@@ -283,7 +283,7 @@ export class DynamicClientRegistration {
     };
 
     if (initialAccessToken) {
-      headers["Authorization"] = `Bearer ${initialAccessToken}`;
+      headers.Authorization = `Bearer ${initialAccessToken}`;
     }
 
     const response = await this.fetchWithTimeout(metadata.registration_endpoint, {

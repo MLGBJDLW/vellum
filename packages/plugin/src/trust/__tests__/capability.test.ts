@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TrustedPluginsManager } from "../manager.js";
-import { TrustStore } from "../store.js";
+import type { TrustStore } from "../store.js";
 import type { PluginCapability, TrustedPlugin } from "../types.js";
 import { PLUGIN_CAPABILITIES } from "../types.js";
 
@@ -301,7 +301,11 @@ describe("TrustedPluginsManager - capability modification", () => {
       const hash = createValidHash();
 
       // Initial trust with multiple capabilities
-      manager.trustPlugin("downgradeable-plugin", ["execute-hooks", "network-access", "mcp-servers"], hash);
+      manager.trustPlugin(
+        "downgradeable-plugin",
+        ["execute-hooks", "network-access", "mcp-servers"],
+        hash
+      );
 
       // Re-trust with fewer capabilities
       manager.trustPlugin("downgradeable-plugin", ["execute-hooks"], hash);
@@ -406,7 +410,7 @@ describe("TrustedPluginsManager - capability modification", () => {
 
       manager.trustPlugin("timestamp-plugin", ["execute-hooks"], hash);
 
-      const firstCall = (store.set as ReturnType<typeof vi.fn>).mock.calls[0]![1] as TrustedPlugin;
+      const firstCall = (store.set as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as TrustedPlugin;
       const firstTimestamp = new Date(firstCall.trustedAt).getTime();
 
       expect(firstTimestamp).toBeGreaterThanOrEqual(beforeFirst);
@@ -433,11 +437,7 @@ describe("TrustedPluginsManager - capability edge cases", () => {
     const hash = createValidHash();
 
     // Trust with duplicates (should be handled by caller, but test behavior)
-    manager.trustPlugin(
-      "dupe-plugin",
-      ["execute-hooks", "execute-hooks", "network-access"],
-      hash
-    );
+    manager.trustPlugin("dupe-plugin", ["execute-hooks", "execute-hooks", "network-access"], hash);
 
     // The manager passes through what it receives
     expect(store.set).toHaveBeenCalledWith(

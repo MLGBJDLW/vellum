@@ -367,6 +367,100 @@ export async function handleSkillList(options: SkillListOptions = {}): Promise<C
 // Show Command (T035)
 // =============================================================================
 
+/** Format skill data as JSON output */
+function formatSkillShowJson(
+  scan: SkillScan,
+  loaded: Awaited<ReturnType<ReturnType<typeof createSkillManager>["loadSkill"]>> | null,
+  options: SkillShowOptions
+): SkillShowJson {
+  return {
+    success: true,
+    skill: {
+      name: scan.name,
+      description: scan.description,
+      source: scan.source,
+      path: scan.path,
+      version: scan.version,
+      priority: scan.priority,
+      tags: scan.tags,
+      dependencies: scan.dependencies,
+      triggers: scan.triggers.map((t: SkillTrigger) => ({
+        type: t.type,
+        pattern: t.pattern,
+      })),
+      content: options.content ? loaded?.raw : undefined,
+      sections: loaded
+        ? {
+            rules: loaded.rules || undefined,
+            patterns: loaded.patterns || undefined,
+            antiPatterns: loaded.antiPatterns || undefined,
+            examples: loaded.examples || undefined,
+            references: loaded.referencesSection || undefined,
+          }
+        : undefined,
+    },
+  };
+}
+
+/** Format skill metadata lines */
+function formatSkillMetadataLines(scan: SkillScan): string[] {
+  const lines: string[] = [];
+  lines.push(chalk.bold.cyan(`\n📖 Skill: ${scan.name}\n`));
+  lines.push(`${chalk.white("Description:")} ${scan.description}`);
+  lines.push(`${chalk.white("Source:")} ${formatSource(scan.source)}`);
+  lines.push(`${chalk.white("Path:")} ${chalk.gray(scan.path)}`);
+  lines.push(`${chalk.white("Priority:")} ${scan.priority}`);
+
+  if (scan.version) {
+    lines.push(`${chalk.white("Version:")} ${scan.version}`);
+  }
+  if (scan.tags.length > 0) {
+    lines.push(`${chalk.white("Tags:")} ${scan.tags.map((t: string) => chalk.cyan(t)).join(", ")}`);
+  }
+  if (scan.dependencies.length > 0) {
+    lines.push(
+      chalk.white("Dependencies:") +
+        " " +
+        scan.dependencies.map((d: string) => chalk.yellow(d)).join(", ")
+    );
+  }
+  return lines;
+}
+
+/** Format skill triggers as lines */
+function formatSkillTriggersLines(triggers: SkillTrigger[]): string[] {
+  const lines: string[] = [chalk.white("\nTriggers:")];
+  for (const trigger of triggers) {
+    if (trigger.type === "always") {
+      lines.push(chalk.gray("  • always active"));
+    } else {
+      lines.push(chalk.gray(`  • ${trigger.type}: ${trigger.pattern}`));
+    }
+  }
+  return lines;
+}
+
+/** Format skill content/sections as lines */
+function formatSkillContentLines(
+  loaded: Awaited<ReturnType<ReturnType<typeof createSkillManager>["loadSkill"]>> | null,
+  showContent: boolean
+): string[] {
+  const lines: string[] = [];
+  if (showContent && loaded) {
+    lines.push(chalk.white("\n─── SKILL.md Content ───\n"));
+    lines.push(loaded.raw);
+  } else if (loaded) {
+    lines.push(chalk.white("\nSections:"));
+    if (loaded.rules) lines.push(chalk.gray("  • Rules (✓)"));
+    if (loaded.patterns) lines.push(chalk.gray("  • Patterns (✓)"));
+    if (loaded.antiPatterns) lines.push(chalk.gray("  • Anti-Patterns (✓)"));
+    if (loaded.examples) lines.push(chalk.gray("  • Examples (✓)"));
+    if (loaded.referencesSection) lines.push(chalk.gray("  • References (✓)"));
+    lines.push(chalk.gray("\nUse --content to show full SKILL.md content"));
+  }
+  return lines;
+}
+
 /**
  * Execute skill show command
  */
@@ -380,8 +474,6 @@ export async function handleSkillShow(
     });
 
     await manager.initialize();
-
-    // Find skill by name
     const scan = manager.getSkill(name);
 
     if (!scan) {
@@ -392,93 +484,17 @@ export async function handleSkillShow(
       return error("RESOURCE_NOT_FOUND", chalk.red(`Skill not found: ${name}`));
     }
 
-    // Load full skill content
     const loaded = await manager.loadSkill(name);
 
-    // JSON output
     if (options.json) {
-      const output: SkillShowJson = {
-        success: true,
-        skill: {
-          name: scan.name,
-          description: scan.description,
-          source: scan.source,
-          path: scan.path,
-          version: scan.version,
-          priority: scan.priority,
-          tags: scan.tags,
-          dependencies: scan.dependencies,
-          triggers: scan.triggers.map((t: SkillTrigger) => ({
-            type: t.type,
-            pattern: t.pattern,
-          })),
-          content: options.content ? loaded?.raw : undefined,
-          sections: loaded
-            ? {
-                rules: loaded.rules || undefined,
-                patterns: loaded.patterns || undefined,
-                antiPatterns: loaded.antiPatterns || undefined,
-                examples: loaded.examples || undefined,
-                references: loaded.referencesSection || undefined,
-              }
-            : undefined,
-        },
-      };
-      return success(JSON.stringify(output, null, 2));
+      return success(JSON.stringify(formatSkillShowJson(scan, loaded, options), null, 2));
     }
 
-    // Formatted output
-    const lines: string[] = [];
-    lines.push(chalk.bold.cyan(`\n📖 Skill: ${scan.name}\n`));
-
-    lines.push(`${chalk.white("Description:")} ${scan.description}`);
-    lines.push(`${chalk.white("Source:")} ${formatSource(scan.source)}`);
-    lines.push(`${chalk.white("Path:")} ${chalk.gray(scan.path)}`);
-    lines.push(`${chalk.white("Priority:")} ${scan.priority}`);
-
-    if (scan.version) {
-      lines.push(`${chalk.white("Version:")} ${scan.version}`);
-    }
-
-    if (scan.tags.length > 0) {
-      lines.push(
-        `${chalk.white("Tags:")} ${scan.tags.map((t: string) => chalk.cyan(t)).join(", ")}`
-      );
-    }
-
-    if (scan.dependencies.length > 0) {
-      lines.push(
-        chalk.white("Dependencies:") +
-          " " +
-          scan.dependencies.map((d: string) => chalk.yellow(d)).join(", ")
-      );
-    }
-
-    // Triggers
-    lines.push(chalk.white("\nTriggers:"));
-    for (const trigger of scan.triggers) {
-      if (trigger.type === "always") {
-        lines.push(chalk.gray("  • always active"));
-      } else {
-        lines.push(chalk.gray(`  • ${trigger.type}: ${trigger.pattern}`));
-      }
-    }
-
-    // Show full content if requested
-    if (options.content && loaded) {
-      lines.push(chalk.white("\n─── SKILL.md Content ───\n"));
-      lines.push(loaded.raw);
-    } else if (loaded) {
-      // Show section summaries
-      lines.push(chalk.white("\nSections:"));
-      if (loaded.rules) lines.push(chalk.gray("  • Rules (✓)"));
-      if (loaded.patterns) lines.push(chalk.gray("  • Patterns (✓)"));
-      if (loaded.antiPatterns) lines.push(chalk.gray("  • Anti-Patterns (✓)"));
-      if (loaded.examples) lines.push(chalk.gray("  • Examples (✓)"));
-      if (loaded.referencesSection) lines.push(chalk.gray("  • References (✓)"));
-
-      lines.push(chalk.gray("\nUse --content to show full SKILL.md content"));
-    }
+    const lines: string[] = [
+      ...formatSkillMetadataLines(scan),
+      ...formatSkillTriggersLines(scan.triggers),
+      ...formatSkillContentLines(loaded, options.content ?? false),
+    ];
 
     return success(lines.join("\n"));
   } catch (err) {
@@ -659,6 +675,57 @@ async function validateSingleSkill(
   }
 }
 
+/** Calculate validation summary from results */
+function calculateValidationSummary(results: SkillValidationResult[]) {
+  return {
+    total: results.length,
+    valid: results.filter((r) => r.valid).length,
+    invalid: results.filter((r) => !r.valid).length,
+    warnings: results.reduce((acc, r) => acc + r.warnings.length, 0),
+  };
+}
+
+/** Format validation results as text lines */
+function formatValidationResultLines(results: SkillValidationResult[]): string[] {
+  const lines: string[] = [];
+  for (const result of results) {
+    const icon = result.valid ? chalk.green("✅") : chalk.red("❌");
+    lines.push(`${icon} ${chalk.white(result.name)}`);
+    lines.push(chalk.gray(`   ${result.path}`));
+
+    for (const err of result.errors) {
+      lines.push(chalk.red(`   ✗ ${err}`));
+    }
+    for (const warn of result.warnings) {
+      lines.push(chalk.yellow(`   ⚠ ${warn}`));
+    }
+    lines.push("");
+  }
+  return lines;
+}
+
+/** Format validation summary as text lines */
+function formatValidationSummaryLines(
+  summary: ReturnType<typeof calculateValidationSummary>
+): string[] {
+  const lines: string[] = [];
+  lines.push(chalk.gray("─".repeat(50)));
+  lines.push(
+    `${chalk.white("Total:")} ${summary.total}  ` +
+      `${chalk.green("Valid:")} ${summary.valid}  ` +
+      `${chalk.red("Invalid:")} ${summary.invalid}  ` +
+      `${chalk.yellow("Warnings:")} ${summary.warnings}`
+  );
+
+  const allValid = summary.invalid === 0;
+  lines.push(
+    allValid
+      ? chalk.green("\n✅ All skills are valid!")
+      : chalk.red("\n❌ Some skills have errors.")
+  );
+  return lines;
+}
+
 /**
  * Execute skill validate command
  */
@@ -668,13 +735,11 @@ export async function handleSkillValidate(
   try {
     const workspacePath = process.cwd();
     const parser = new SkillParser();
+    const discovery = new SkillDiscovery({ workspacePath });
+    const discovered = await discovery.discoverAll();
     const results: SkillValidationResult[] = [];
 
     if (options.skill) {
-      // Validate single skill by name
-      const discovery = new SkillDiscovery({ workspacePath });
-      const discovered = await discovery.discoverAll();
-
       const skillLocation = discovered.deduplicated.find(
         (loc: SkillLocation) => path.basename(loc.path) === options.skill
       );
@@ -691,81 +756,35 @@ export async function handleSkillValidate(
         return error("RESOURCE_NOT_FOUND", chalk.red(`Skill not found: ${options.skill}`));
       }
 
-      const result = await validateSingleSkill(skillLocation.path, parser, options.strict ?? false);
-      results.push(result);
+      results.push(await validateSingleSkill(skillLocation.path, parser, options.strict ?? false));
     } else {
-      // Validate all skills
-      const discovery = new SkillDiscovery({ workspacePath });
-      const discovered = await discovery.discoverAll();
-
       for (const location of discovered.deduplicated) {
-        const result = await validateSingleSkill(location.path, parser, options.strict ?? false);
-        results.push(result);
+        results.push(await validateSingleSkill(location.path, parser, options.strict ?? false));
       }
     }
 
-    // Calculate summary
-    const summary = {
-      total: results.length,
-      valid: results.filter((r) => r.valid).length,
-      invalid: results.filter((r) => !r.valid).length,
-      warnings: results.reduce((acc, r) => acc + r.warnings.length, 0),
-    };
+    const summary = calculateValidationSummary(results);
 
-    // JSON output
     if (options.json) {
-      const output: SkillValidateJson = {
-        success: summary.invalid === 0,
-        results,
-        summary,
-      };
+      const output: SkillValidateJson = { success: summary.invalid === 0, results, summary };
       return summary.invalid === 0
         ? success(JSON.stringify(output, null, 2))
         : error("INVALID_ARGUMENT", JSON.stringify(output, null, 2));
     }
 
-    // Formatted output
-    const lines: string[] = [];
-    lines.push(chalk.bold.cyan("\n🔍 Skill Validation Results\n"));
+    const lines: string[] = [chalk.bold.cyan("\n🔍 Skill Validation Results\n")];
 
     if (results.length === 0) {
       lines.push(chalk.yellow("No skills found to validate."));
       return success(lines.join("\n"));
     }
 
-    for (const result of results) {
-      const icon = result.valid ? chalk.green("✅") : chalk.red("❌");
-      lines.push(`${icon} ${chalk.white(result.name)}`);
-      lines.push(chalk.gray(`   ${result.path}`));
+    lines.push(...formatValidationResultLines(results));
+    lines.push(...formatValidationSummaryLines(summary));
 
-      for (const err of result.errors) {
-        lines.push(chalk.red(`   ✗ ${err}`));
-      }
-
-      for (const warn of result.warnings) {
-        lines.push(chalk.yellow(`   ⚠ ${warn}`));
-      }
-
-      lines.push("");
-    }
-
-    // Summary
-    lines.push(chalk.gray("─".repeat(50)));
-    lines.push(
-      `${chalk.white("Total:")} ${summary.total}  ` +
-        `${chalk.green("Valid:")} ${summary.valid}  ` +
-        `${chalk.red("Invalid:")} ${summary.invalid}  ` +
-        `${chalk.yellow("Warnings:")} ${summary.warnings}`
-    );
-
-    const allValid = summary.invalid === 0;
-    lines.push(
-      allValid
-        ? chalk.green("\n✅ All skills are valid!")
-        : chalk.red("\n❌ Some skills have errors.")
-    );
-
-    return allValid ? success(lines.join("\n")) : error("INVALID_ARGUMENT", lines.join("\n"));
+    return summary.invalid === 0
+      ? success(lines.join("\n"))
+      : error("INVALID_ARGUMENT", lines.join("\n"));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return error("INTERNAL_ERROR", `Failed to validate skills: ${message}`);

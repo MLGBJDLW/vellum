@@ -481,8 +481,8 @@ export async function handleAgentsGenerate(options: AgentsGenerateOptions): Prom
       "",
       chalk.gray("Next steps:"),
       chalk.gray("  • Review and customize the generated AGENTS.md"),
-      chalk.gray("  • Run " + chalk.cyan("/agents validate") + " to check syntax"),
-      chalk.gray("  • Run " + chalk.cyan("/agents show") + " to view merged config"),
+      chalk.gray(`  • Run ${chalk.cyan("/agents validate")} to check syntax`),
+      chalk.gray(`  • Run ${chalk.cyan("/agents show")} to view merged config`),
     ].join("\n");
 
     return success(successMsg, { filePath: outputPath });

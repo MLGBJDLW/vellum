@@ -153,7 +153,7 @@ export class AuditLogger {
       delete fullEvent.result;
     }
 
-    const line = JSON.stringify(fullEvent) + "\n";
+    const line = `${JSON.stringify(fullEvent)}\n`;
 
     // Write to all destinations
     await Promise.all([

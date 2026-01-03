@@ -29,14 +29,19 @@ function TestHarness({ onHookReturn }: TestHarnessProps): React.ReactElement {
 function renderVimHook() {
   let hookReturn: UseVimReturn | null = null;
 
-  const { rerender, unmount } = render(<TestHarness onHookReturn={(r) => (hookReturn = r)} />);
+  const setHookReturn = (r: UseVimReturn) => {
+    hookReturn = r;
+  };
+
+  const { rerender, unmount } = render(<TestHarness onHookReturn={setHookReturn} />);
 
   return {
     get current() {
-      return hookReturn!;
+      if (!hookReturn) throw new Error("Hook not initialized");
+      return hookReturn;
     },
     rerender: () => {
-      rerender(<TestHarness onHookReturn={(r) => (hookReturn = r)} />);
+      rerender(<TestHarness onHookReturn={setHookReturn} />);
     },
     unmount,
   };

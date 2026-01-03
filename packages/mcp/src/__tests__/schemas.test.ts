@@ -352,7 +352,7 @@ describe("validateMcpSettings", () => {
 
     expect(result.success).toBe(false);
     expect(result.errors).toBeDefined();
-    expect(result.errors!.length).toBeGreaterThan(0);
+    expect(result.errors?.length).toBeGreaterThan(0);
   });
 });
 
@@ -378,7 +378,7 @@ describe("validateServerConfig", () => {
     const result = validateServerConfig(config, "my-server");
 
     expect(result.success).toBe(false);
-    expect(result.errors!.some((e) => e.includes("my-server"))).toBe(true);
+    expect(result.errors?.some((e) => e.includes("my-server"))).toBe(true);
   });
 });
 

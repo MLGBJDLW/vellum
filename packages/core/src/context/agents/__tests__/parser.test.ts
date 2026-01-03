@@ -57,8 +57,8 @@ Project context here.`;
     const result = parseSections(content);
 
     expect(result.sections).toHaveLength(2);
-    expect(result.sections[0]!.title).toBe("Instructions");
-    expect(result.sections[1]!.title).toBe("Context");
+    expect(result.sections[0]?.title).toBe("Instructions");
+    expect(result.sections[1]?.title).toBe("Context");
   });
 
   it("should parse nested sections", () => {
@@ -74,11 +74,11 @@ Even deeper.`;
     const result = parseSections(content);
 
     expect(result.sections).toHaveLength(1);
-    expect(result.sections[0]!.title).toBe("Instructions");
-    expect(result.sections[0]!.children).toHaveLength(1);
-    expect(result.sections[0]!.children[0]!.title).toBe("Sub-section");
-    expect(result.sections[0]!.children[0]!.children).toHaveLength(1);
-    expect(result.sections[0]!.children[0]!.children[0]!.title).toBe("Deep section");
+    expect(result.sections[0]?.title).toBe("Instructions");
+    expect(result.sections[0]?.children).toHaveLength(1);
+    expect(result.sections[0]?.children[0]?.title).toBe("Sub-section");
+    expect(result.sections[0]?.children[0]?.children).toHaveLength(1);
+    expect(result.sections[0]?.children[0]?.children[0]?.title).toBe("Deep section");
   });
 
   it("should handle h2 without parent h1", () => {
@@ -88,8 +88,8 @@ Some content.`;
     const result = parseSections(content);
 
     expect(result.sections).toHaveLength(1);
-    expect(result.sections[0]!.level).toBe(2);
-    expect(result.sections[0]!.title).toBe("Standalone Section");
+    expect(result.sections[0]?.level).toBe(2);
+    expect(result.sections[0]?.title).toBe("Standalone Section");
   });
 
   it("should preserve content including blank lines", () => {
@@ -100,7 +100,7 @@ Line 3`;
 
     const result = parseSections(content);
 
-    expect(result.sections[0]!.content).toBe("Line 1\n\nLine 3");
+    expect(result.sections[0]?.content).toBe("Line 1\n\nLine 3");
   });
 
   it("should handle all heading levels h1-h6", () => {
@@ -116,8 +116,8 @@ Line 3`;
     expect(result.sections).toHaveLength(1);
     const h1 = result.sections[0]!;
     expect(h1.level).toBe(1);
-    expect(h1.children[0]!.level).toBe(2);
-    expect(h1.children[0]!.children[0]!.level).toBe(3);
+    expect(h1.children[0]?.level).toBe(2);
+    expect(h1.children[0]?.children[0]?.level).toBe(3);
   });
 });
 
@@ -147,19 +147,19 @@ describe("findSection", () => {
   it("should find top-level section by title", () => {
     const found = findSection(sections, "Instructions");
     expect(found).toBeDefined();
-    expect(found!.title).toBe("Instructions");
+    expect(found?.title).toBe("Instructions");
   });
 
   it("should find nested section", () => {
     const found = findSection(sections, "Sub-section");
     expect(found).toBeDefined();
-    expect(found!.title).toBe("Sub-section");
+    expect(found?.title).toBe("Sub-section");
   });
 
   it("should be case-insensitive", () => {
     const found = findSection(sections, "INSTRUCTIONS");
     expect(found).toBeDefined();
-    expect(found!.title).toBe("Instructions");
+    expect(found?.title).toBe("Instructions");
   });
 
   it("should return null for non-existent section", () => {
@@ -308,8 +308,8 @@ describe("parsePermissions", () => {
     const result = parsePermissions(section);
 
     expect(result).toHaveLength(2);
-    expect(result[0]!.pattern).toBe("read_file");
-    expect(result[1]!.pattern).toBe("write_file");
+    expect(result[0]?.pattern).toBe("read_file");
+    expect(result[1]?.pattern).toBe("write_file");
   });
 
   it("should ignore non-list content", () => {
@@ -373,8 +373,8 @@ describe("parseAllowedToolsFromFrontmatter", () => {
     const result = parseAllowedToolsFromFrontmatter(["  read_file  ", " write_file"]);
 
     expect(result).toHaveLength(2);
-    expect(result[0]!.pattern).toBe("read_file");
-    expect(result[1]!.pattern).toBe("write_file");
+    expect(result[0]?.pattern).toBe("read_file");
+    expect(result[1]?.pattern).toBe("write_file");
   });
 });
 
@@ -412,8 +412,8 @@ More details here.
       const result = parser.parseSync(content, "/test/AGENTS.md");
 
       expect(result.frontmatter).toBeDefined();
-      expect(result.frontmatter!.version).toBe("1.0.0");
-      expect(result.frontmatter!.name).toBe("Test Config");
+      expect(result.frontmatter?.version).toBe("1.0.0");
+      expect(result.frontmatter?.name).toBe("Test Config");
       expect(result.instructions).toContain("Follow the coding guidelines");
       expect(result.sections).toHaveLength(2);
       expect(result.allowedTools).toHaveLength(4); // 2 from frontmatter + 2 from section
@@ -505,7 +505,7 @@ Test content.`;
       const result = await parser.parseContent(content, "/test/AGENTS.md", "/test");
 
       expect(result.frontmatter).toBeDefined();
-      expect(result.frontmatter!.version).toBe("1.0.0");
+      expect(result.frontmatter?.version).toBe("1.0.0");
       expect(result.instructions).toContain("Test content");
     });
   });
@@ -524,7 +524,7 @@ Test content.`;
 
       expect(result.frontmatter).toBeNull();
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]!.message).toContain("File not found");
+      expect(result.errors[0]?.message).toContain("File not found");
     });
 
     it("should use provided file system", async () => {
@@ -544,7 +544,7 @@ Mock content.`;
 
       const result = await parser.parse("/mock/AGENTS.md", mockFs);
 
-      expect(result.frontmatter!.version).toBe("2.0.0");
+      expect(result.frontmatter?.version).toBe("2.0.0");
       expect(result.instructions).toContain("Mock content");
     });
   });

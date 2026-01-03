@@ -207,7 +207,7 @@ export class SessionSummaryService {
         title = shortPhrase;
       } else {
         // Truncate with ellipsis
-        title = this.truncateText(title, MAX_TITLE_LENGTH - 3) + "...";
+        title = `${this.truncateText(title, MAX_TITLE_LENGTH - 3)}...`;
       }
     }
 
