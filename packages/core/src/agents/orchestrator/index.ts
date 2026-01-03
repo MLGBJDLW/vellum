@@ -54,6 +54,8 @@ export {
   type RouteCandidate,
   type RouteResult,
   type RoutingRule,
+  registerSpecAgentRoutes,
+  SPEC_ROUTING_RULES,
   type TaskRouter,
 } from "./router.js";
 export {

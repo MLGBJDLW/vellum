@@ -70,7 +70,7 @@ function createBuiltinTarget(slug: string): DelegationTarget {
  */
 function createCustomTarget(slug: string): DelegationTarget {
   return {
-    kind: "custom",
+    kind: "custom-mode",
     slug,
     modeConfig: {
       name: "code" as const,
@@ -579,7 +579,7 @@ describe("delegateTaskTool", () => {
     it("should not require confirmation for custom targets", () => {
       const input = {
         target: {
-          kind: "custom" as const,
+          kind: "custom-mode" as const,
           slug: "analyzer",
           modeConfig: {
             name: "code" as const,
@@ -817,7 +817,7 @@ describe("agent level integration", () => {
     // biome-ignore lint/style/noNonNullAssertion: array length verified above
     expect(capturedPackets[0]!.target.kind).toBe("builtin");
     // biome-ignore lint/style/noNonNullAssertion: array length verified above
-    expect(capturedPackets[1]!.target.kind).toBe("custom");
+    expect(capturedPackets[1]!.target.kind).toBe("custom-mode");
     // biome-ignore lint/style/noNonNullAssertion: array length verified above
     expect(capturedPackets[2]!.target.kind).toBe("mcp");
   });

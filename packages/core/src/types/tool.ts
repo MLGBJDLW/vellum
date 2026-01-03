@@ -24,8 +24,9 @@ import type { Result } from "./result.js";
  * - mcp: Model Context Protocol tools
  * - browser: Web browsing tools
  * - agent: Sub-agent invocation tools
+ * - task: Task/todo management tools
  */
-export const ToolKindSchema = z.enum(["read", "write", "shell", "mcp", "browser", "agent"]);
+export const ToolKindSchema = z.enum(["read", "write", "shell", "mcp", "browser", "agent", "task"]);
 
 /** Inferred type for tool kinds */
 export type ToolKind = z.infer<typeof ToolKindSchema>;
@@ -90,6 +91,10 @@ export interface ToolContext {
   parentAgentId?: string;
   /** Access to orchestration for delegation tools */
   orchestrator?: OrchestratorCore;
+
+  // Session-scoped data storage (REQ-005)
+  /** Session-scoped data storage for tools to persist state across calls */
+  sessionData?: Record<string, unknown>;
 }
 
 // =============================================================================

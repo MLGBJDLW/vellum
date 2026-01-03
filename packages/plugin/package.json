@@ -16,7 +16,9 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vellum/shared": "workspace:*"
+    "@vellum/core": "workspace:*",
+    "@vellum/shared": "workspace:*",
+    "zod": "^3.25"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

@@ -310,3 +310,64 @@ export {
   executeAgents,
   getAgentsHelp,
 } from "./agents/index.js";
+
+// =============================================================================
+// Custom Agents Command Group (T020-T024, T025)
+// =============================================================================
+
+export {
+  type CreateOptions as CustomAgentsCreateOptions,
+  type CustomAgentsSubcommand,
+  customAgentsCommand,
+  type ExportOptions as CustomAgentsExportOptions,
+  executeCustomAgents,
+  getCustomAgentsHelp,
+  type ImportOptions as CustomAgentsImportOptions,
+  type InfoOptions as CustomAgentsInfoOptions,
+  type ListOptions as CustomAgentsListOptions,
+  type ValidateOptions as CustomAgentsValidateOptions,
+} from "./custom-agents/index.js";
+
+// =============================================================================
+// Skill Commands (T033-T037)
+// =============================================================================
+
+export {
+  executeSkillCreate,
+  executeSkillList,
+  executeSkillShow,
+  executeSkillValidate,
+  handleSkillCreate,
+  handleSkillList,
+  handleSkillShow,
+  handleSkillValidate,
+  type SkillCreateOptions,
+  type SkillListOptions,
+  type SkillShowOptions,
+  type SkillValidateOptions,
+} from "./skill.js";
+
+// =============================================================================
+// Mode Commands (T041)
+// =============================================================================
+
+export {
+  getModeCommandsManager,
+  modeCommand,
+  modeSlashCommands,
+  planCommand,
+  setModeCommandsManager,
+  specCommand,
+  vibeCommand,
+} from "./mode.js";
+
+// =============================================================================
+// Spec Workflow Commands (T034)
+// =============================================================================
+
+export {
+  executeSpec,
+  type SpecOptions,
+  type SpecResult,
+  specSlashCommand,
+} from "./spec.js";

@@ -9,6 +9,7 @@ import type { SubsessionManager } from "../agents/session/subsession-manager.js"
 import { SessionAgentsIntegration } from "../context/agents/session-integration.js";
 import type { LLMLogger } from "../logger/llm-logger.js";
 import type { Logger } from "../logger/logger.js";
+import type { PromptBuilder } from "../prompts/prompt-builder.js";
 import { classifyError, type ErrorInfo, isFatal, isRetryable } from "../session/errors.js";
 import {
   LLM,
@@ -17,6 +18,9 @@ import {
   toModelMessages,
 } from "../session/index.js";
 import { RetryAbortedError } from "../session/retry.js";
+import { SkillManager, type SkillManagerOptions } from "../skill/manager.js";
+import type { MatchContext } from "../skill/matcher.js";
+import type { SkillConfig, SkillLoaded } from "../skill/types.js";
 import {
   StreamProcessor,
   type StreamProcessorConfig,
@@ -37,7 +41,7 @@ import { CancellationToken } from "./cancellation.js";
 import type { AgentLevel } from "./level.js";
 import { type CombinedLoopResult, detectLoop } from "./loop-detection.js";
 import type { ModeConfig } from "./modes.js";
-import { buildSystemPrompt, type SystemPromptConfig } from "./prompt.js";
+import { buildSystemPrompt, fromPromptBuilder, type SystemPromptConfig } from "./prompt.js";
 import type { AgentState, StateContext } from "./state.js";
 import { createStateContext, isValidTransition } from "./state.js";
 import {
@@ -105,6 +109,16 @@ export interface AgentLoopConfig {
   agentLevel?: AgentLevel;
   /** Enable AGENTS.md protocol integration (optional, defaults to false) */
   enableAgentsIntegration?: boolean;
+  /** Enable Skills System integration (T053) */
+  enableSkillsIntegration?: boolean;
+  /** Skill manager options for Skills System (T053) */
+  skillManagerOptions?: SkillManagerOptions;
+  /** Skill configuration for permissions and limits (T053) */
+  skillConfig?: SkillConfig;
+  /** Optional PromptBuilder for new prompt system (T029) */
+  promptBuilder?: PromptBuilder;
+  /** ModeManager for coding mode integration (T057) */
+  modeManager?: import("./mode-manager.js").ModeManager;
 }
 
 /**
@@ -228,6 +242,15 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** AGENTS.md integration for tool filtering and prompt sections */
   private agentsIntegration?: SessionAgentsIntegration;
 
+  /** SkillManager for skills system integration (T053) */
+  private skillManager?: SkillManager;
+
+  /** Currently active skills for this session (T053) */
+  private activeSkills: SkillLoaded[] = [];
+
+  /** ModeManager for coding mode integration (T057) */
+  private readonly modeManager?: import("./mode-manager.js").ModeManager;
+
   constructor(config: AgentLoopConfig) {
     super();
     this.config = config;
@@ -281,6 +304,48 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           this.agentsIntegration = undefined;
         });
     }
+
+    // Initialize Skills System integration if enabled (T053)
+    if (config.enableSkillsIntegration && config.cwd) {
+      this.skillManager = new SkillManager({
+        ...config.skillManagerOptions,
+        logger: this.logger,
+        config: config.skillConfig,
+        loader: {
+          ...config.skillManagerOptions?.loader,
+          discovery: {
+            ...config.skillManagerOptions?.loader?.discovery,
+            workspacePath: config.cwd,
+          },
+        },
+      });
+
+      // Initialize asynchronously - errors are logged but don't fail construction
+      this.skillManager
+        .initialize()
+        .then((count) => {
+          this.logger?.debug("Skills System initialized", {
+            skillCount: count,
+          });
+        })
+        .catch((error) => {
+          this.logger?.warn("Failed to initialize Skills System", { error });
+          // Clear manager on failure to avoid partial state
+          this.skillManager = undefined;
+        });
+    }
+
+    // Initialize ModeManager integration if provided (T057)
+    this.modeManager = config.modeManager;
+    if (this.modeManager) {
+      // Listen for mode changes to update internal state
+      this.modeManager.on("mode-changed", (event) => {
+        this.logger?.debug("Mode changed via ModeManager", {
+          previousMode: event.previousMode,
+          currentMode: event.currentMode,
+        });
+      });
+    }
   }
 
   /**
@@ -323,6 +388,47 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    */
   addMessage(message: SessionMessage): void {
     this.messages.push(message);
+  }
+
+  /**
+   * Gets the ModeManager instance if configured (T057).
+   *
+   * @returns The ModeManager instance or undefined
+   */
+  getModeManager(): import("./mode-manager.js").ModeManager | undefined {
+    return this.modeManager;
+  }
+
+  /**
+   * Processes a user message through the ModeManager handler (T057).
+   *
+   * If a ModeManager is configured, this method delegates message processing
+   * to the active mode's handler, enabling mode-specific behavior.
+   *
+   * @param content - The user message content
+   * @returns Handler result or undefined if no ModeManager configured
+   */
+  async processUserMessage(
+    content: string
+  ): Promise<import("./mode-handlers/types.js").HandlerResult | undefined> {
+    if (!this.modeManager) {
+      return undefined;
+    }
+
+    const message: import("./mode-handlers/types.js").UserMessage = {
+      content,
+      timestamp: Date.now(),
+    };
+
+    const result = await this.modeManager.processMessage(message);
+
+    this.logger?.debug("Processed message through ModeManager", {
+      mode: this.modeManager.getCurrentMode(),
+      shouldContinue: result.shouldContinue,
+      requiresCheckpoint: result.requiresCheckpoint,
+    });
+
+    return result;
   }
 
   /**
@@ -502,27 +608,65 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     });
 
     try {
-      // Build system prompt
-      const systemPromptConfig: SystemPromptConfig = {
-        cwd: this.config.cwd,
-        projectRoot: this.config.projectRoot,
-        mode: this.config.mode.name,
-        modePrompt: this.config.mode.prompt,
-        providerType: this.config.providerType,
-        includeEnvironment: true,
-        includeRuleFiles: true,
-      };
+      // Build system prompt - use PromptBuilder if provided (T029)
+      let systemPrompt: string;
 
-      let systemPrompt = (await buildSystemPrompt(systemPromptConfig)).prompt;
+      if (this.config.promptBuilder) {
+        // Use new PromptBuilder system
+        const result = fromPromptBuilder(this.config.promptBuilder);
+        systemPrompt = result.prompt;
+        this.logger?.debug("Using PromptBuilder for system prompt", {
+          layerCount: this.config.promptBuilder.getLayers().length,
+          promptSize: systemPrompt.length,
+        });
+      } else {
+        // Use legacy buildSystemPrompt
+        const systemPromptConfig: SystemPromptConfig = {
+          cwd: this.config.cwd,
+          projectRoot: this.config.projectRoot,
+          mode: this.config.mode.name,
+          modePrompt: this.config.mode.prompt,
+          providerType: this.config.providerType,
+          includeEnvironment: true,
+          includeRuleFiles: true,
+        };
+
+        systemPrompt = (await buildSystemPrompt(systemPromptConfig)).prompt;
+      }
 
       // Append AGENTS.md prompt sections if integration is available
       if (this.agentsIntegration && this.agentsIntegration.getState() === "ready") {
         const agentsSections = this.agentsIntegration.getSystemPromptStrings();
         if (agentsSections.length > 0) {
-          systemPrompt += "\n\n" + agentsSections.join("\n\n");
+          systemPrompt += `\n\n${agentsSections.join("\n\n")}`;
           this.logger?.debug("Added AGENTS.md sections to system prompt", {
             sectionCount: agentsSections.length,
           });
+        }
+      }
+
+      // Match and load skills based on context (T053)
+      if (this.skillManager?.isInitialized()) {
+        try {
+          // Build match context from current session
+          const matchContext = this.buildSkillMatchContext();
+
+          // Get matching skills
+          this.activeSkills = await this.skillManager.getActiveSkills(matchContext);
+
+          if (this.activeSkills.length > 0) {
+            // Build and append skill prompt sections
+            const skillPrompt = this.skillManager.buildCombinedPrompt(this.activeSkills);
+            if (skillPrompt) {
+              systemPrompt += `\n\n## Active Skills\n\n${skillPrompt}`;
+              this.logger?.debug("Added skill sections to system prompt", {
+                skillCount: this.activeSkills.length,
+                skillNames: this.activeSkills.map((s) => s.name),
+              });
+            }
+          }
+        } catch (error) {
+          this.logger?.warn("Failed to match skills", { error });
         }
       }
 
@@ -902,16 +1046,55 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @returns ToolContext instance
    */
   private createToolContext(callId: string): ToolContext {
+    const checkPermission = async (action: string, resource?: string): Promise<boolean> => {
+      if (!this.config.permissionChecker) {
+        return true;
+      }
+
+      const lowerAction = action.toLowerCase();
+      const params: Record<string, unknown> = { action };
+
+      if (resource) {
+        if (
+          lowerAction.includes("bash") ||
+          lowerAction.includes("shell") ||
+          lowerAction.includes("exec")
+        ) {
+          params.command = resource;
+        } else if (
+          lowerAction.includes("browser") ||
+          lowerAction.includes("web") ||
+          lowerAction.includes("fetch") ||
+          lowerAction.includes("network")
+        ) {
+          params.url = resource;
+        } else {
+          params.path = resource;
+        }
+      }
+
+      const decision = await this.config.permissionChecker.checkPermission(action, params, {
+        workingDir: this.config.cwd,
+        sessionId: this.config.sessionId,
+        messageId: this.context.messageId,
+        callId,
+        abortSignal: this.abortController?.signal ?? new AbortController().signal,
+        checkPermission,
+        agentLevel: this.config.agentLevel,
+        parentAgentId: this.config.parentSessionId,
+        orchestrator: this.config.orchestrator,
+      });
+
+      return decision !== "deny";
+    };
+
     return {
       workingDir: this.config.cwd,
       sessionId: this.config.sessionId,
       messageId: this.context.messageId,
       callId,
       abortSignal: this.abortController?.signal ?? new AbortController().signal,
-      checkPermission: async (_action: string, _resource?: string) => {
-        // Delegate to the ToolExecutor's permission checker
-        return true;
-      },
+      checkPermission,
       // Multi-agent context (T048/T049)
       agentLevel: this.config.agentLevel,
       parentAgentId: this.config.parentSessionId,
@@ -1230,6 +1413,81 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    */
   getStreamProcessor(): StreamProcessor | undefined {
     return this.streamProcessor;
+  }
+
+  // ============================================
+  // Skills System Integration (T053)
+  // ============================================
+
+  /**
+   * Returns the SkillManager instance if enabled.
+   */
+  getSkillManager(): SkillManager | undefined {
+    return this.skillManager;
+  }
+
+  /**
+   * Returns currently active skills for this session.
+   */
+  getActiveSkills(): SkillLoaded[] {
+    return [...this.activeSkills];
+  }
+
+  /**
+   * Build match context from current session state.
+   * Used to match skills against the current request.
+   */
+  private buildSkillMatchContext(): MatchContext {
+    // Extract the last user message as the request
+    const lastUserMessage = [...this.messages].reverse().find((m) => m.role === "user");
+
+    // Extract text from parts
+    const request =
+      lastUserMessage?.parts
+        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join(" ") ?? "";
+
+    // Extract file paths from tool results (if any files were read/written)
+    const files: string[] = [];
+    for (const msg of this.messages) {
+      if (msg.role === "assistant") {
+        // Look for tool parts in assistant messages
+        for (const part of msg.parts) {
+          if (part.type === "tool") {
+            const input = part.input as Record<string, unknown>;
+            if (input.path && typeof input.path === "string") {
+              files.push(input.path);
+            }
+            if (input.paths && Array.isArray(input.paths)) {
+              files.push(...input.paths.filter((p): p is string => typeof p === "string"));
+            }
+          }
+        }
+      }
+    }
+
+    // Extract slash command if present
+    const command = request.startsWith("/") ? request.split(/\s/)[0]?.slice(1) : undefined;
+
+    return {
+      request,
+      files,
+      command,
+      projectContext: {}, // Could be populated from config or context detection
+    };
+  }
+
+  /**
+   * Get tool restrictions from active skills.
+   * Returns allowed and denied tool lists based on skill compatibility settings.
+   */
+  getSkillToolRestrictions(): { allowed: string[]; denied: string[] } {
+    if (!this.skillManager || this.activeSkills.length === 0) {
+      return { allowed: [], denied: [] };
+    }
+
+    return this.skillManager.getToolRestrictions(this.activeSkills);
   }
 
   /**

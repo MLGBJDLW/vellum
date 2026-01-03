@@ -15,6 +15,13 @@ export * from "./Input/index.js";
 // Layout
 export { Layout, type LayoutProps, useTerminalSize } from "./Layout.js";
 export * from "./Messages/index.js";
+// Mode components (T043-T047)
+export { ModeIndicator, type ModeIndicatorProps } from "./ModeIndicator.js";
+export { ModeSelector, type ModeSelectorProps } from "./ModeSelector.js";
+export {
+  PhaseProgressIndicator,
+  type PhaseProgressIndicatorProps,
+} from "./PhaseProgressIndicator.js";
 export {
   AdaptiveLayout,
   type AdaptiveLayoutProps,

@@ -1,0 +1,60 @@
+// ============================================
+// Skill Module Barrel Export
+// ============================================
+
+// Discovery
+export type {
+  ModeSkillDiscoveryOptions,
+  SkillDiscoveryOptions,
+  SkillDiscoveryResult,
+} from "./discovery.js";
+export {
+  discoverModeSkills,
+  ROO_CODE_MODE_MAPPINGS,
+  SkillDiscovery,
+  skillDiscovery,
+} from "./discovery.js";
+// Loader
+export type { SkillCacheEntry, SkillLoaderOptions } from "./loader.js";
+export { SkillLoader, skillLoader } from "./loader.js";
+// Manager
+export type { SkillManagerOptions, SkillPromptSection } from "./manager.js";
+export { createSkillManager, SkillManager } from "./manager.js";
+// Matcher
+export type { MatchContext } from "./matcher.js";
+export { SkillMatcher, skillMatcher } from "./matcher.js";
+// Parser
+export {
+  SKILL_MANIFEST_FILENAME,
+  SKILL_SECTION_NAMES,
+  SkillParser,
+  skillParser,
+} from "./parser.js";
+// Types
+export type {
+  Skill,
+  SkillAccessed,
+  SkillConfig,
+  SkillExecutionResult,
+  SkillFrontmatter,
+  SkillLoaded,
+  SkillLocation,
+  SkillMatch,
+  SkillParseResult,
+  SkillPermission,
+  SkillPermissionRule,
+  SkillResource,
+  SkillResultMetadata,
+  SkillScan,
+  SkillSource,
+  SkillTrigger,
+  SkillTriggerType,
+} from "./types.js";
+export { SKILL_SOURCE_PRIORITY, TRIGGER_TYPE_MULTIPLIERS } from "./types.js";
+// Watcher
+export type {
+  SkillChangeEvent,
+  SkillWatcherEvents,
+  SkillWatcherOptions,
+} from "./watcher.js";
+export { SkillWatcher, skillWatcher } from "./watcher.js";

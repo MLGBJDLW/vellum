@@ -357,3 +357,54 @@ export function buildEnvironmentSection(cwd: string, isGitRepo = false, fileTree
     fileTree,
   });
 }
+
+// =============================================================================
+// PromptBuilder Bridge (T028)
+// =============================================================================
+
+/**
+ * Converts a PromptBuilder output to the existing SystemPromptResult format.
+ *
+ * This bridge function allows the new PromptBuilder system to integrate
+ * seamlessly with existing code that expects SystemPromptResult.
+ *
+ * @param builder - The PromptBuilder instance to convert
+ * @param includedFiles - Optional list of files included in the prompt
+ * @returns A SystemPromptResult compatible with existing code
+ *
+ * @example
+ * ```typescript
+ * import { PromptBuilder } from '../prompts/index.js';
+ * import { fromPromptBuilder } from './prompt.js';
+ *
+ * const builder = new PromptBuilder()
+ *   .withBase("System instructions")
+ *   .withRole("coder", "Coding rules");
+ *
+ * const result = fromPromptBuilder(builder);
+ * console.log(result.prompt);
+ * ```
+ */
+export function fromPromptBuilder(
+  builder: {
+    build: () => string;
+    getLayers: () => readonly { content: string; priority: number; source: string }[];
+  },
+  includedFiles: string[] = []
+): SystemPromptResult {
+  const prompt = builder.build();
+  const layers = builder.getLayers();
+
+  // Extract sections from layers, maintaining order
+  const sections = layers
+    .slice()
+    .sort((a, b) => a.priority - b.priority)
+    .map((layer) => layer.content)
+    .filter((content) => content.length > 0);
+
+  return {
+    sections,
+    prompt,
+    includedFiles,
+  };
+}

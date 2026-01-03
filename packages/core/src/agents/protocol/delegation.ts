@@ -39,8 +39,8 @@ export interface BuiltinTarget {
  *
  * @example
  * ```typescript
- * const target: CustomTarget = {
- *   kind: 'custom',
+ * const target: CustomModeTarget = {
+ *   kind: 'custom-mode',
  *   slug: 'specialized-analyzer',
  *   modeConfig: {
  *     name: 'code',
@@ -52,13 +52,36 @@ export interface BuiltinTarget {
  * };
  * ```
  */
-export interface CustomTarget {
+export interface CustomModeTarget {
   /** Discriminator field */
-  kind: "custom";
+  kind: "custom-mode";
   /** Unique slug for this custom agent */
   slug: string;
   /** Full mode configuration for the custom agent */
   modeConfig: ExtendedModeConfig;
+}
+
+/**
+ * Custom agent target for delegation.
+ *
+ * References a user-defined custom agent by its slug.
+ * Custom agents are loaded from agent definition files (.yaml, .yml, .md)
+ * and managed by the CustomAgentRegistry.
+ *
+ * @see REQ-011
+ * @example
+ * ```typescript
+ * const target: CustomAgentTarget = {
+ *   kind: 'custom',
+ *   slug: 'test-writer',
+ * };
+ * ```
+ */
+export interface CustomAgentTarget {
+  /** Discriminator field */
+  kind: "custom";
+  /** Slug of the custom agent from the registry */
+  slug: string;
 }
 
 /**
@@ -104,6 +127,9 @@ export interface McpTarget {
  *     case 'custom':
  *       console.log(`Delegating to custom agent: ${target.slug}`);
  *       break;
+ *     case 'custom-mode':
+ *       console.log(`Delegating to custom mode: ${target.slug}`);
+ *       break;
  *     case 'mcp':
  *       console.log(`Delegating to MCP: ${target.serverId}/${target.toolName}`);
  *       break;
@@ -111,7 +137,7 @@ export interface McpTarget {
  * }
  * ```
  */
-export type DelegationTarget = BuiltinTarget | CustomTarget | McpTarget;
+export type DelegationTarget = BuiltinTarget | CustomAgentTarget | CustomModeTarget | McpTarget;
 
 // ============================================
 // Zod Schemas
@@ -128,13 +154,24 @@ export const BuiltinTargetSchema = z.object({
 });
 
 /**
- * Zod schema for CustomTarget validation.
+ * Zod schema for CustomAgentTarget validation.
  *
- * Validates custom mode targets with `kind: 'custom'`.
+ * Validates custom agent targets with `kind: 'custom'`.
+ * @see REQ-011
  */
-export const CustomTargetSchema = z.object({
+export const CustomAgentTargetSchema = z.object({
   kind: z.literal("custom"),
   slug: z.string().min(1, "Custom agent slug cannot be empty"),
+});
+
+/**
+ * Zod schema for CustomModeTarget validation.
+ *
+ * Validates custom mode targets with `kind: 'custom-mode'`.
+ */
+export const CustomModeTargetSchema = z.object({
+  kind: z.literal("custom-mode"),
+  slug: z.string().min(1, "Custom mode slug cannot be empty"),
   modeConfig: ExtendedModeConfigSchema,
 });
 
@@ -174,7 +211,8 @@ export const McpTargetSchema = z.object({
  */
 export const DelegationTargetSchema = z.discriminatedUnion("kind", [
   BuiltinTargetSchema,
-  CustomTargetSchema,
+  CustomAgentTargetSchema,
+  CustomModeTargetSchema,
   McpTargetSchema,
 ]);
 
@@ -188,9 +226,14 @@ export const DelegationTargetSchema = z.discriminatedUnion("kind", [
 export type BuiltinTargetInferred = z.infer<typeof BuiltinTargetSchema>;
 
 /**
- * Inferred type from CustomTargetSchema.
+ * Inferred type from CustomAgentTargetSchema.
  */
-export type CustomTargetInferred = z.infer<typeof CustomTargetSchema>;
+export type CustomAgentTargetInferred = z.infer<typeof CustomAgentTargetSchema>;
+
+/**
+ * Inferred type from CustomModeTargetSchema.
+ */
+export type CustomModeTargetInferred = z.infer<typeof CustomModeTargetSchema>;
 
 /**
  * Inferred type from McpTargetSchema.
@@ -214,10 +257,17 @@ export function isBuiltinTarget(target: DelegationTarget): target is BuiltinTarg
 }
 
 /**
- * Type guard for CustomTarget.
+ * Type guard for CustomAgentTarget.
  */
-export function isCustomTarget(target: DelegationTarget): target is CustomTarget {
+export function isCustomAgentTarget(target: DelegationTarget): target is CustomAgentTarget {
   return target.kind === "custom";
+}
+
+/**
+ * Type guard for CustomModeTarget.
+ */
+export function isCustomModeTarget(target: DelegationTarget): target is CustomModeTarget {
+  return target.kind === "custom-mode";
 }
 
 /**

@@ -52,8 +52,13 @@ export {
   type CredentialType,
   CredentialTypeSchema,
   type CredentialValidationResult,
+  createMcpCredentialProvider,
   // Factory functions
   createStoreError,
+  getMcpServerFromProvider,
+  isMcpCredentialProvider,
+  // T046: MCP credential helpers
+  MCP_CREDENTIAL_PREFIX,
   type StoreAvailability,
 } from "./types.js";
 

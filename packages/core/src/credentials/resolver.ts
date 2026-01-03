@@ -31,6 +31,7 @@ export const STORE_PRIORITIES: Record<CredentialSource, number> = {
   env: 90,
   keychain: 80,
   file: 50,
+  mcp: 40,
   config: 10,
 };
 

@@ -22,6 +22,7 @@
   "dependencies": {
     "@inquirer/prompts": "^7.2.1",
     "@vellum/core": "workspace:*",
+    "gray-matter": "^4.0.3",
     "@vellum/mcp": "workspace:*",
     "@vellum/plugin": "workspace:*",
     "@vellum/provider": "workspace:*",

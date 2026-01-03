@@ -5,14 +5,10 @@
 // Implements REQ-003 (caching), REQ-014 (single entry point), REQ-029 (graceful errors).
 
 import * as path from "node:path";
-import {
-  AgentsFileDiscovery,
-  type AgentsFileDiscoveryOptions,
-  type AgentsFileLocation,
-} from "./discovery.js";
+import { AgentsFileDiscovery, type AgentsFileDiscoveryOptions } from "./discovery.js";
 import { type MergeOptions, mergeConfigs } from "./merge.js";
 import { type AgentsParseResult, AgentsParser, type AgentsParserOptions } from "./parser.js";
-import type { AgentsConfig, AgentsLoadResult, AgentsWarning } from "./types.js";
+import type { AgentsConfig, AgentsFileLocation, AgentsLoadResult, AgentsWarning } from "./types.js";
 
 // ============================================
 // Types

@@ -2,6 +2,9 @@
 // Agents Module - Barrel Export
 // ============================================
 
+// Re-export all custom agent components (T027)
+export * from "./custom/index.js";
+
 // Re-export all orchestrator components
 export {
   // Aggregator exports
@@ -39,6 +42,9 @@ export {
   type RouteCandidate,
   type RouteResult,
   type RoutingRule,
+  // Spec agent routing (T033)
+  registerSpecAgentRoutes,
+  SPEC_ROUTING_RULES,
   type SpawnOptions,
   type SubagentHandle,
   type SubtaskDefinition,
@@ -69,9 +75,12 @@ export {
   // Delegation schemas
   BuiltinTargetSchema,
   type CreateTaskPacketOptions,
-  type CustomTarget,
-  type CustomTargetInferred,
-  CustomTargetSchema,
+  type CustomAgentTarget,
+  type CustomAgentTargetInferred,
+  CustomAgentTargetSchema,
+  type CustomModeTarget,
+  type CustomModeTargetInferred,
+  CustomModeTargetSchema,
   // Handoff factory
   createHandoff,
   // TaskPacket factory
@@ -90,7 +99,8 @@ export {
   HandoffResultSchema,
   // Type guards
   isBuiltinTarget,
-  isCustomTarget,
+  isCustomAgentTarget,
+  isCustomModeTarget,
   isMcpTarget,
   type McpTarget,
   type McpTargetInferred,
@@ -140,7 +150,17 @@ export {
   type SubsessionStatus,
   WORKER_BLOCKED_TOOLS,
 } from "./session/index.js";
-
+// Re-export all spec agent types (T032)
+export {
+  getSpecAgentSlugs,
+  registerSpecAgents,
+  SPEC_SPAWNABLE_AGENTS,
+  specArchitectAgent,
+  specRequirementsAgent,
+  specResearcherAgent,
+  specTasksAgent,
+  specValidatorAgent,
+} from "./spec/index.js";
 // Re-export all worker types
 export {
   analystWorker,

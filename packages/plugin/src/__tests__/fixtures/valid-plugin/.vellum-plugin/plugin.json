@@ -1,0 +1,9 @@
+{
+  "name": "valid-plugin",
+  "version": "1.0.0",
+  "displayName": "Valid Test Plugin",
+  "description": "A valid test plugin for unit tests",
+  "entrypoint": "./dist/index.js",
+  "commands": ["./.vellum-plugin/commands/greet.md"],
+  "agents": ["./.vellum-plugin/agents/helper.md"]
+}

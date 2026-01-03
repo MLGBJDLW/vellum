@@ -45,3 +45,22 @@ export {
   safeParseModeRules,
   triggerPatternSchema,
 } from "./mode-rules.js";
+
+// Skill schemas
+export {
+  DEFAULT_SKILL_FRONTMATTER,
+  type SkillCompatibility,
+  type SkillCompatibilityInput,
+  type SkillFrontmatter,
+  type SkillFrontmatterCompat,
+  type SkillFrontmatterCompatInput,
+  type SkillFrontmatterInput,
+  type SkillTrigger,
+  type SkillTriggerInput,
+  type SkillTriggerType,
+  skillCompatibilitySchema,
+  skillFrontmatterCompatSchema,
+  skillFrontmatterSchema,
+  skillTriggerSchema,
+  skillTriggerTypeSchema,
+} from "./skill.js";

@@ -1,4 +1,12 @@
 #!/usr/bin/env node
+import {
+  APPROVAL_POLICIES,
+  type ApprovalPolicy,
+  CODING_MODES,
+  type CodingMode,
+  SANDBOX_POLICIES,
+  type SandboxPolicy,
+} from "@vellum/core";
 import { Command } from "commander";
 import { render } from "ink";
 import { registerDelegateCommand } from "./agents/commands/index.js";
@@ -12,6 +20,12 @@ import {
   renderCredentialsRemove,
 } from "./commands/credentials.js";
 import { executeInit } from "./commands/init.js";
+import {
+  handleSkillCreate,
+  handleSkillList,
+  handleSkillShow,
+  handleSkillValidate,
+} from "./commands/skill.js";
 import type { CommandResult } from "./commands/types.js";
 import { initI18n } from "./tui/i18n/index.js";
 import { version } from "./version.js";
@@ -75,9 +89,76 @@ export function setShutdownCleanup(cleanup: (() => void) | null): void {
   shutdownCleanup = cleanup;
 }
 
+// =============================================================================
+// T037-T040: Mode CLI Flag Interfaces
+// =============================================================================
+
+/**
+ * Chat command options including mode flags.
+ */
+export interface ChatOptions {
+  /** Model to use for AI responses */
+  model: string;
+  /** Provider to use (anthropic, openai, etc.) */
+  provider: string;
+  /** Language/locale for UI */
+  language?: string;
+  /** Coding mode (vibe, plan, spec) */
+  mode: CodingMode;
+  /** Approval policy override */
+  approval?: ApprovalPolicy;
+  /** Sandbox policy override */
+  sandbox?: SandboxPolicy;
+  /** Full-auto shortcut flag */
+  fullAuto?: boolean;
+}
+
+/**
+ * Parse mode flag with validation.
+ * @param value - User input value
+ * @returns Validated CodingMode
+ */
+function parseMode(value: string): CodingMode {
+  const valid = CODING_MODES as readonly string[];
+  if (!valid.includes(value)) {
+    throw new Error(`Invalid mode: ${value}. Valid options: ${valid.join(", ")}`);
+  }
+  return value as CodingMode;
+}
+
+/**
+ * Parse approval policy flag with validation.
+ * @param value - User input value
+ * @returns Validated ApprovalPolicy
+ */
+function parseApproval(value: string): ApprovalPolicy {
+  const valid = APPROVAL_POLICIES as readonly string[];
+  if (!valid.includes(value)) {
+    throw new Error(`Invalid approval: ${value}. Valid options: ${valid.join(", ")}`);
+  }
+  return value as ApprovalPolicy;
+}
+
+/**
+ * Parse sandbox policy flag with validation.
+ * @param value - User input value
+ * @returns Validated SandboxPolicy
+ */
+function parseSandbox(value: string): SandboxPolicy {
+  const valid = SANDBOX_POLICIES as readonly string[];
+  if (!valid.includes(value)) {
+    throw new Error(`Invalid sandbox: ${value}. Valid options: ${valid.join(", ")}`);
+  }
+  return value as SandboxPolicy;
+}
+
 const program = new Command();
 
 program.name("vellum").description("Next-generation AI coding agent").version(version);
+
+// =============================================================================
+// T037-T040: Chat Command with Mode Flags
+// =============================================================================
 
 program
   .command("chat", { isDefault: true })
@@ -85,10 +166,39 @@ program
   .option("-m, --model <model>", "Model to use", "claude-sonnet-4-20250514")
   .option("-p, --provider <provider>", "Provider to use", "anthropic")
   .option("-l, --language <locale>", "Language/locale to use (e.g., en, zh)")
-  .action((options) => {
+  // T037: --mode flag
+  .option("--mode <mode>", `Set coding mode (${CODING_MODES.join("|")})`, parseMode, "vibe")
+  // T038: --approval flag
+  .option(
+    "--approval <policy>",
+    `Set approval policy (${APPROVAL_POLICIES.join("|")})`,
+    parseApproval
+  )
+  // T039: --sandbox flag
+  .option("--sandbox <policy>", `Set sandbox policy (${SANDBOX_POLICIES.join("|")})`, parseSandbox)
+  // T040: --full-auto shortcut
+  .option("--full-auto", "Shortcut for --mode=vibe --approval=full-auto", false)
+  .action((options: ChatOptions) => {
+    // T040: Apply --full-auto shortcut
+    let effectiveMode = options.mode;
+    let effectiveApproval = options.approval;
+
+    if (options.fullAuto) {
+      effectiveMode = "vibe";
+      effectiveApproval = "full-auto";
+    }
+
     // Initialize i18n before rendering (T019)
     initI18n({ cliLanguage: options.language });
-    render(<App model={options.model} provider={options.provider} />);
+    render(
+      <App
+        model={options.model}
+        provider={options.provider}
+        mode={effectiveMode}
+        approval={effectiveApproval}
+        sandbox={options.sandbox}
+      />
+    );
   });
 
 program
@@ -203,6 +313,73 @@ agentsCmd
       output: options.output,
       merge: options.merge,
       dryRun: options.dryRun,
+    });
+    console.log(getResultMessage(result));
+    process.exit(result.kind === "success" ? 0 : 1);
+  });
+
+// =============================================================================
+// Skill Command Group (T033-T037)
+// =============================================================================
+
+const skillCmd = program.command("skill").description("Manage skills for AI context");
+
+skillCmd
+  .command("list", { isDefault: true })
+  .description("List all available skills")
+  .option("-s, --source <source>", "Filter by source (workspace, user, global, builtin)")
+  .option("-j, --json", "Output as JSON")
+  .option("-v, --verbose", "Show full descriptions and triggers")
+  .action(async (options) => {
+    const result = await handleSkillList({
+      source: options.source,
+      json: options.json,
+      verbose: options.verbose,
+    });
+    console.log(getResultMessage(result));
+    process.exit(result.kind === "success" ? 0 : 1);
+  });
+
+skillCmd
+  .command("show <name>")
+  .description("Show details of a specific skill")
+  .option("-c, --content", "Show full SKILL.md content")
+  .option("-j, --json", "Output as JSON")
+  .action(async (name, options) => {
+    const result = await handleSkillShow(name, {
+      content: options.content,
+      json: options.json,
+    });
+    console.log(getResultMessage(result));
+    process.exit(result.kind === "success" ? 0 : 1);
+  });
+
+skillCmd
+  .command("create <name>")
+  .description("Create a new skill from template")
+  .option("-l, --location <location>", "Location: workspace, user, or global")
+  .option("-f, --force", "Overwrite if skill already exists")
+  .option("-n, --non-interactive", "Non-interactive mode (use defaults)")
+  .action(async (name, options) => {
+    const result = await handleSkillCreate(name, {
+      location: options.location,
+      force: options.force,
+      nonInteractive: options.nonInteractive,
+    });
+    process.exit(result.exitCode);
+  });
+
+skillCmd
+  .command("validate")
+  .description("Validate skill(s)")
+  .option("-s, --skill <name>", "Validate single skill by name")
+  .option("--strict", "Treat warnings as errors")
+  .option("-j, --json", "Output as JSON")
+  .action(async (options) => {
+    const result = await handleSkillValidate({
+      skill: options.skill,
+      strict: options.strict,
+      json: options.json,
     });
     console.log(getResultMessage(result));
     process.exit(result.kind === "success" ? 0 : 1);

@@ -1,3 +1,4 @@
+import type { ApprovalPolicy, CodingMode, SandboxPolicy } from "@vellum/core";
 import { Box, useApp, useInput } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -10,6 +11,7 @@ import {
   helpCommand,
   setHelpRegistry,
 } from "./commands/index.js";
+import { modeSlashCommands } from "./commands/mode.js";
 import { Header } from "./components/header.js";
 import { Input } from "./components/input.js";
 import { MessageList } from "./components/message-list.js";
@@ -17,9 +19,21 @@ import { StatusBar } from "./components/status-bar.js";
 import { setShutdownCleanup } from "./index.js";
 import { RootProvider } from "./tui/context/RootProvider.js";
 
+/**
+ * Props for the App component.
+ * Extended with coding mode options (T037-T040).
+ */
 interface AppProps {
+  /** Model to use for AI responses */
   model: string;
+  /** Provider to use (anthropic, openai, etc.) */
   provider: string;
+  /** Initial coding mode (T037) */
+  mode?: CodingMode;
+  /** Approval policy override (T038) */
+  approval?: ApprovalPolicy;
+  /** Sandbox policy override (T039) */
+  sandbox?: SandboxPolicy;
 }
 
 interface Message {
@@ -56,13 +70,27 @@ function createCommandRegistry(): CommandRegistry {
     registry.register(cmd);
   }
 
+  // T041: Register mode slash commands
+  for (const cmd of modeSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // T041: Plugin commands will be registered by PluginManager
+  // at runtime after discovery (kind: 'plugin')
+
   // Wire up help command to access registry
   setHelpRegistry(registry);
 
   return registry;
 }
 
-export function App({ model, provider }: AppProps) {
+export function App({
+  model,
+  provider,
+  mode: _mode = "vibe",
+  approval: _approval,
+  sandbox: _sandbox,
+}: AppProps) {
   const { exit } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -251,7 +279,7 @@ export function App({ model, provider }: AppProps) {
   return (
     <RootProvider theme="dark">
       <Box flexDirection="column" padding={1}>
-        <Header model={model} provider={provider} />
+        <Header model={model} provider={provider} mode={_mode} />
         <MessageList messages={messages} />
         <Input value={input} onChange={setInput} onSubmit={handleSubmit} isLoading={isLoading} />
         <StatusBar isLoading={isLoading} />

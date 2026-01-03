@@ -1,0 +1,7 @@
+{
+  "name": "minimal-plugin",
+  "version": "1.0.0",
+  "displayName": "Minimal Plugin",
+  "description": "A minimal test plugin with only required fields",
+  "entrypoint": "./index.js"
+}

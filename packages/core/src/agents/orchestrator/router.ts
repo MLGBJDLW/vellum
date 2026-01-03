@@ -1,6 +1,7 @@
 // ============================================
 // Task Router for Multi-Agent Orchestration
 // ============================================
+// T033: Add routing rules for spec-* agents
 
 import type { AgentLevel } from "../../agent/level.js";
 import type { ModeRegistry } from "../../agent/mode-registry.js";
@@ -404,4 +405,71 @@ class TaskRouterImpl implements TaskRouter {
  */
 export function createTaskRouter(modeRegistry: ModeRegistry): TaskRouter {
   return new TaskRouterImpl(modeRegistry);
+}
+
+// ============================================
+// Spec Agent Routing Rules (T033)
+// ============================================
+
+/**
+ * Routing rules for spec workflow agents.
+ *
+ * These rules map task descriptions to specialized spec agents:
+ * - spec-researcher: Project analysis and context gathering
+ * - spec-requirements: EARS requirements definition
+ * - spec-architect: Architecture and design decisions
+ * - spec-tasks: Task breakdown and planning
+ * - spec-validator: Specification validation
+ */
+export const SPEC_ROUTING_RULES: readonly RoutingRule[] = [
+  {
+    pattern: /spec[-\s]?research|project\s+analysis|gather\s+context|codebase\s+analysis/i,
+    agentSlug: "spec-researcher",
+    priority: 150,
+  },
+  {
+    pattern: /spec[-\s]?requirements?|ears\s+requirements?|define\s+requirements?/i,
+    agentSlug: "spec-requirements",
+    priority: 150,
+  },
+  {
+    pattern: /spec[-\s]?architect|architecture\s+design|design\s+decision|adr/i,
+    agentSlug: "spec-architect",
+    priority: 150,
+  },
+  {
+    pattern: /spec[-\s]?tasks?|task\s+breakdown|create\s+tasks|plan\s+tasks/i,
+    agentSlug: "spec-tasks",
+    priority: 150,
+  },
+  {
+    pattern: /spec[-\s]?validat|validate\s+spec|verify\s+spec|check\s+spec/i,
+    agentSlug: "spec-validator",
+    priority: 150,
+  },
+] as const;
+
+/**
+ * Register spec agent routing rules with a TaskRouter.
+ *
+ * Adds rules that enable the router to correctly route spawn requests
+ * for spec-researcher, spec-requirements, spec-architect, spec-tasks,
+ * and spec-validator agents.
+ *
+ * @param router - The TaskRouter to register rules with
+ *
+ * @example
+ * ```typescript
+ * const router = createTaskRouter(modeRegistry);
+ * registerSpecAgentRoutes(router);
+ *
+ * // Now the router can route spec agent tasks
+ * const result = router.route("research the codebase", AgentLevel.worker);
+ * // result.selectedAgent === "spec-researcher"
+ * ```
+ */
+export function registerSpecAgentRoutes(router: TaskRouter): void {
+  for (const rule of SPEC_ROUTING_RULES) {
+    router.addRule(rule);
+  }
 }

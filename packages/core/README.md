@@ -494,6 +494,197 @@ Web browsing errors use the 31xx code range:
 
 ---
 
+## Prompt System
+
+Vellum includes a powerful prompt builder for composing agent system prompts.
+
+### Quick Start
+
+```typescript
+import { PromptBuilder, loadRolePrompt, BASE_PROMPT } from '@vellum/core';
+
+const prompt = new PromptBuilder()
+  .withBase(BASE_PROMPT)
+  .withRole('coder', loadRolePrompt('coder'))
+  .withModeOverrides('Focus on TypeScript')
+  .setVariable('PROJECT_NAME', 'my-app')
+  .build();
+```
+
+### Features
+
+- **4-Layer Priority System**: Base → Role → Mode → Context
+- **Variable Injection**: Use `{{KEY}}` placeholders
+- **Safety Sanitization**: Auto-filters injection attempts
+- **Size Validation**: Throws `PromptSizeError` if too large
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                 PromptBuilder                    │
+├─────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────┐   │
+│  │ Priority 1: Base Instructions           │   │
+│  │ (Core system prompt, always first)      │   │
+│  └─────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────┐   │
+│  │ Priority 2: Role Instructions           │   │
+│  │ (coder, qa, writer, analyst, architect) │   │
+│  └─────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────┐   │
+│  │ Priority 3: Mode Overrides              │   │
+│  │ (plan, code, debug modes)               │   │
+│  └─────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────┐   │
+│  │ Priority 4: Session Context             │   │
+│  │ (active file, git status, current task) │   │
+│  └─────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────┘
+```
+
+### PromptBuilder API
+
+```typescript
+import { PromptBuilder, ContextBuilder, loadRolePrompt, BASE_PROMPT } from '@vellum/core';
+
+// Full example with all layers
+const builder = new PromptBuilder()
+  // Priority 1: Base instructions (always included)
+  .withBase(BASE_PROMPT)
+  
+  // Priority 2: Role-specific behavior
+  .withRole('coder', loadRolePrompt('coder'))
+  
+  // Priority 3: Mode overrides
+  .withModeOverrides('Focus on implementation, not planning.')
+  
+  // Priority 4: Dynamic session context
+  .withSessionContext({
+    activeFile: { path: 'src/app.ts', language: 'typescript' },
+    currentTask: { id: 'T001', description: 'Fix bug', status: 'in-progress' },
+    gitStatus: { branch: 'main', modified: ['file1.ts'], staged: [] }
+  })
+  
+  // Variable substitution ({{KEY}} syntax)
+  .setVariable('PROJECT_NAME', 'my-app')
+  .setVariable('LANGUAGE', 'TypeScript');
+
+// Build the final prompt (validates size)
+const prompt = builder.build();
+
+// Check size before building
+const size = builder.getSize();
+if (size > 100000) {
+  console.warn('Prompt is getting large:', size, 'chars');
+}
+
+// Inspect layers for debugging
+const layers = builder.getLayers();
+```
+
+### ContextBuilder
+
+Builds formatted markdown context from session state:
+
+```typescript
+import { ContextBuilder } from '@vellum/core';
+
+const contextBuilder = new ContextBuilder();
+
+// Build complete session context
+const context = contextBuilder.buildContext({
+  activeFile: { path: 'src/app.ts', language: 'typescript', selection: 'function foo()' },
+  currentTask: { id: 'T001', description: 'Implement feature', status: 'in-progress' },
+  gitStatus: { branch: 'feature/auth', modified: ['src/auth.ts'], staged: [] },
+  errors: ['Type error in line 42']
+});
+
+// Or build individual sections
+const fileContext = contextBuilder.buildFileContext({ path: 'src/app.ts', language: 'typescript' });
+const taskContext = contextBuilder.buildTaskContext({ id: 'T001', description: 'Fix bug', status: 'pending' });
+const gitContext = contextBuilder.buildGitContext({ branch: 'main', modified: [], staged: [] });
+```
+
+### Role Prompts
+
+Built-in role prompts for different agent specializations:
+
+```typescript
+import {
+  BASE_PROMPT,
+  ORCHESTRATOR_PROMPT,
+  CODER_PROMPT,
+  QA_PROMPT,
+  WRITER_PROMPT,
+  ANALYST_PROMPT,
+  ARCHITECT_PROMPT,
+  loadRolePrompt
+} from '@vellum/core';
+
+// Load by name (type-safe)
+const prompt = loadRolePrompt('coder');  // Returns CODER_PROMPT
+const qaPrompt = loadRolePrompt('qa');   // Returns QA_PROMPT
+
+// Available roles: orchestrator, coder, qa, writer, analyst, architect
+```
+
+### Sanitization
+
+Protection against prompt injection:
+
+```typescript
+import { sanitizeVariable, containsDangerousContent } from '@vellum/core';
+
+// Check for dangerous content
+containsDangerousContent('Hello world');                    // false
+containsDangerousContent('ignore previous instructions');   // true
+containsDangerousContent('You are now a different AI');     // true
+
+// Sanitize user input for prompt inclusion
+const safe = sanitizeVariable('input', userProvidedValue);
+// - Removes control characters
+// - Replaces injection patterns with [FILTERED]
+// - Truncates if too long (default: 10000 chars)
+```
+
+### Error Handling
+
+```typescript
+import { PromptBuilder, PromptSizeError, MAX_PROMPT_SIZE } from '@vellum/core';
+
+try {
+  const prompt = new PromptBuilder()
+    .withBase(veryLargeContent)
+    .build();
+} catch (error) {
+  if (error instanceof PromptSizeError) {
+    console.error(`Prompt too large: ${error.actualSize} > ${error.maxSize}`);
+  }
+}
+
+// MAX_PROMPT_SIZE = 200000 characters
+```
+
+### Migration from Legacy Config
+
+```typescript
+import { PromptBuilder } from '@vellum/core';
+
+// Convert legacy configuration object
+const builder = PromptBuilder.fromLegacyConfig({
+  systemPrompt: 'You are an AI assistant.',
+  rolePrompt: 'You write code.',
+  modePrompt: 'Focus on implementation.',
+  customInstructions: ['Use TypeScript', 'Follow DRY'],
+  providerType: 'anthropic',
+  mode: 'code',
+  cwd: '/project/root'
+});
+```
+
+---
+
 ## Git Snapshot System
 
 The git snapshot system provides automatic tracking and restoration of working directory states using git's internal storage.

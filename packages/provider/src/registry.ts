@@ -8,15 +8,21 @@
  */
 
 import { AnthropicProvider } from "./anthropic.js";
+import { BaichuanProvider } from "./baichuan.js";
+import { CopilotProvider } from "./copilot.js";
 import { DeepSeekProvider } from "./deepseek.js";
 import { GoogleProvider } from "./google.js";
 import { GroqProvider } from "./groq.js";
 import { LMStudioProvider, OllamaProvider } from "./local.js";
+import { MistralProvider } from "./mistral.js";
+import { MoonshotProvider } from "./moonshot.js";
 import { OpenAIProvider } from "./openai.js";
 import { OpenRouterProvider } from "./openrouter.js";
 import { QwenProvider } from "./qwen.js";
 import type { Provider, ProviderCredential, ProviderType } from "./types.js";
 import { XAIProvider } from "./xai.js";
+import { YiProvider } from "./yi.js";
+import { ZhipuProvider } from "./zhipu.js";
 
 // =============================================================================
 // Types
@@ -114,6 +120,8 @@ function createProviderInstance(type: ProviderType): Provider {
       return new AnthropicProvider();
     case "openai":
       return new OpenAIProvider();
+    case "copilot":
+      return new CopilotProvider();
     case "google":
       return new GoogleProvider();
     case "deepseek":
@@ -130,6 +138,16 @@ function createProviderInstance(type: ProviderType): Provider {
       return new OllamaProvider();
     case "lmstudio":
       return new LMStudioProvider();
+    case "zhipu":
+      return new ZhipuProvider();
+    case "moonshot":
+      return new MoonshotProvider();
+    case "mistral":
+      return new MistralProvider();
+    case "yi":
+      return new YiProvider();
+    case "baichuan":
+      return new BaichuanProvider();
     default:
       throw new Error(`Unknown provider: ${type}`);
   }

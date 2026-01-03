@@ -55,6 +55,7 @@ export {
   createToolRegistry,
   type GetDefinitionsFilter,
   type LLMToolDefinition,
+  type McpToolDefinition,
   type ToolRegistry,
 } from "./registry.js";
 

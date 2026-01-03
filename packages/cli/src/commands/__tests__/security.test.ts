@@ -17,12 +17,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type CommandSecurityPolicy,
   createDefaultHandler,
   createPermissionChecker,
   InputSanitizer,
   PermissionChecker,
   SensitiveDataHandler,
-  type CommandSecurityPolicy,
 } from "../security/index.js";
 
 // =============================================================================

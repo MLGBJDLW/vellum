@@ -26,7 +26,14 @@ export {
   type ToggleVimModeAction,
   useApp,
 } from "./AppContext.js";
-
+// T047: MCP Context
+export {
+  type McpContextState,
+  McpProvider,
+  type McpProviderProps,
+  useMcp,
+  useMcpHub,
+} from "./McpContext.js";
 // Messages state context
 export {
   type AddMessageAction,
@@ -46,6 +53,7 @@ export {
   type UpdateMessageAction,
   useMessages,
 } from "./MessagesContext.js";
+
 // Root provider composition
 export { RootProvider, type RootProviderProps } from "./RootProvider.js";
 // Tools state context

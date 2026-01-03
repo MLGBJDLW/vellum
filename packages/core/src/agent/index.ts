@@ -2,12 +2,33 @@
 // Agent Module - Barrel Export
 // ============================================
 
+// Prompt System (T027)
+export * from "../prompts/index.js";
 export {
   type CancelCallback,
   CancellationToken,
   CancelledError,
   type PendingTool,
 } from "./cancellation.js";
+// Coding Modes (T004, T005, T010-T016)
+export {
+  BUILTIN_CODING_MODES,
+  CODING_MODES,
+  type CodingMode,
+  type CodingModeConfig,
+  CodingModeConfigSchema,
+  CodingModeSchema,
+  codingModeToCore,
+  PLAN_MODE,
+  SPEC_MODE,
+  SPEC_PHASE_CONFIG,
+  SPEC_PHASES,
+  type SpecPhase,
+  type SpecPhaseConfig,
+  SpecPhaseSchema,
+  type SpecPhaseToolAccess,
+  VIBE_MODE,
+} from "./coding-modes.js";
 // Context Integration (T403)
 export {
   type ContextIntegration,
@@ -32,6 +53,19 @@ export {
   serializeToolCall,
   type ToolCall,
 } from "./doom.js";
+// Legacy Mode Mapping (T049-T053)
+export {
+  emitDeprecationWarning,
+  getLegacyTemperature,
+  InvalidModeError,
+  isLegacyMode,
+  isValidCodingMode,
+  LEGACY_MODE_MAP,
+  LEGACY_MODES,
+  legacyToNewMode,
+  type NormalizationResult,
+  normalizeMode,
+} from "./legacy-modes.js";
 // Agent Level Hierarchy (T001)
 export { AgentLevel, AgentLevelSchema, canSpawn } from "./level.js";
 export {
@@ -52,6 +86,35 @@ export {
   type LoopDetectionContext,
   type LoopType,
 } from "./loop-detection.js";
+// Mode Detection (T028, T029)
+export {
+  ComplexityAnalyzer,
+  type ComplexityAnalyzerConfig,
+  type ComplexityLevel,
+  type ComplexityResult,
+  ComplexityResultSchema,
+  createComplexityAnalyzer,
+  createModeDetector,
+  type DetectionResult,
+  DetectionResultSchema,
+  ModeDetector,
+  type ModeDetectorConfig,
+} from "./mode-detection.js";
+// Mode Handlers (T018-T027)
+export {
+  BaseModeHandler,
+  type HandlerResult,
+  type ModeHandler,
+  type PhaseValidationResult,
+  PlanModeHandler,
+  type PlanPhase,
+  SpecModeHandler,
+  type SpecModeState,
+  type ToolAccessConfig,
+  type ToolGroup,
+  type UserMessage,
+  VibeModeHandler,
+} from "./mode-handlers/index.js";
 // Mode Loader (T006)
 export {
   createModeLoader,
@@ -61,8 +124,31 @@ export {
   type YamlModeConfig,
   YamlModeConfigSchema,
 } from "./mode-loader.js";
+// Mode Manager (T035)
+export {
+  createModeManager,
+  type ModeChangedEvent,
+  ModeManager,
+  type ModeManagerConfig,
+  type ModeManagerEvents,
+  type ModeSwitchFailedEvent,
+  type SpecConfirmationRequiredEvent,
+  TypedEventEmitter,
+} from "./mode-manager.js";
 // Mode Registry (T005)
 export { createModeRegistry, type ModeRegistry } from "./mode-registry.js";
+// Mode Switching (T031, T032, T033, T034)
+export {
+  type ActivityTracker,
+  createActivityTracker,
+  createModeSwitcher,
+  ModeSwitcher,
+  type ModeSwitcherConfig,
+  type ModeSwitchResult,
+  ModeSwitchResultSchema,
+  NoOpActivityTracker,
+  SimpleActivityTracker,
+} from "./mode-switching.js";
 export {
   AGENT_MODES,
   type AgentMode,
@@ -81,6 +167,17 @@ export {
   ToolPermissionsSchema,
   toExtendedMode,
 } from "./modes.js";
+// Policies (T006, T007, T008, T009)
+export {
+  APPROVAL_POLICIES,
+  type ApprovalPolicy,
+  ApprovalPolicySchema,
+  policyToTrustPreset,
+  SANDBOX_POLICIES,
+  type SandboxPolicy,
+  SandboxPolicySchema,
+  sandboxToRestrictions,
+} from "./policies.js";
 export {
   buildEnvironmentInfo,
   buildEnvironmentSection,
@@ -88,6 +185,7 @@ export {
   buildSystemPrompt,
   findGlobalRuleFiles,
   findLocalRuleFiles,
+  fromPromptBuilder,
   getProviderHeader,
   readRuleFile,
   type SystemPromptConfig,

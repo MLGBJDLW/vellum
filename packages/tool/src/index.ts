@@ -39,5 +39,6 @@ export { searchFilesTool } from "./builtin/search-files.js";
 export { writeFileTool } from "./builtin/write-file.js";
 export { defineTool } from "./define.js";
 export { ToolRegistry } from "./registry.js";
-
+// Todo tools (task management)
+export * from "./tools/todo/index.js";
 export type { ToolDefinition, ToolHandler } from "./types.js";

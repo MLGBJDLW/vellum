@@ -328,11 +328,25 @@ describe("TaskPacket Protocol", () => {
       expect(result.success).toBe(true);
     });
 
-    it("validates packet with custom target", () => {
+    it("validates packet with custom agent target", () => {
       const packet = {
         ...validPacket,
         target: {
           kind: "custom",
+          slug: "test-writer",
+        },
+      };
+
+      const result = TaskPacketSchema.safeParse(packet);
+
+      expect(result.success).toBe(true);
+    });
+
+    it("validates packet with custom mode target", () => {
+      const packet = {
+        ...validPacket,
+        target: {
+          kind: "custom-mode",
           slug: "custom-analyzer",
           modeConfig: {
             name: "plan",
@@ -507,6 +521,17 @@ describe("TaskPacket Protocol", () => {
     it("sets target correctly", () => {
       const customTarget: DelegationTarget = {
         kind: "custom",
+        slug: "test-writer",
+      };
+
+      const packet = createTaskPacket("Test", customTarget, "orchestrator");
+
+      expect(packet.target).toEqual(customTarget);
+    });
+
+    it("sets target correctly with custom mode", () => {
+      const customModeTarget: DelegationTarget = {
+        kind: "custom-mode",
         slug: "custom-worker",
         modeConfig: {
           name: "code",
@@ -517,9 +542,9 @@ describe("TaskPacket Protocol", () => {
         },
       };
 
-      const packet = createTaskPacket("Test", customTarget, "orchestrator");
+      const packet = createTaskPacket("Test", customModeTarget, "orchestrator");
 
-      expect(packet.target).toEqual(customTarget);
+      expect(packet.target).toEqual(customModeTarget);
     });
 
     it("sets createdBy correctly", () => {

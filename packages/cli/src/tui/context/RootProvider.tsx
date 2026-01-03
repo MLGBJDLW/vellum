@@ -7,12 +7,14 @@
  * @module tui/context/RootProvider
  */
 
+import type { ToolExecutor, ToolRegistry } from "@vellum/core";
 import type { ThemePreset, VellumTheme } from "@vellum/shared";
 import type React from "react";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "../theme/provider.js";
 import { AppProvider, type AppState } from "./AppContext.js";
+import { McpProvider } from "./McpContext.js";
 import { type Message, MessagesProvider } from "./MessagesContext.js";
 import { ToolsProvider } from "./ToolsContext.js";
 
@@ -47,6 +49,16 @@ export interface RootProviderProps {
    * Initial messages to populate the conversation
    */
   readonly initialMessages?: readonly Message[];
+
+  /**
+   * Optional tool registry for MCP tool registration
+   */
+  readonly toolRegistry?: ToolRegistry;
+
+  /**
+   * Optional tool executor for MCP tool execution
+   */
+  readonly toolExecutor?: ToolExecutor;
 }
 
 // =============================================================================
@@ -89,13 +101,17 @@ export function RootProvider({
   theme = "dark",
   initialAppState,
   initialMessages,
+  toolRegistry,
+  toolExecutor,
 }: RootProviderProps): React.JSX.Element {
   return (
     <ThemeProvider theme={theme}>
       <AppProvider initialState={initialAppState}>
-        <MessagesProvider initialMessages={initialMessages}>
-          <ToolsProvider>{children}</ToolsProvider>
-        </MessagesProvider>
+        <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
+          <MessagesProvider initialMessages={initialMessages}>
+            <ToolsProvider>{children}</ToolsProvider>
+          </MessagesProvider>
+        </McpProvider>
       </AppProvider>
     </ThemeProvider>
   );

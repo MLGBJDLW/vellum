@@ -55,6 +55,12 @@ export {
   type UseInputHistoryReturn,
   useInputHistory,
 } from "./useInputHistory.js";
+// Mode shortcuts hook (T046)
+export {
+  type UseModeShortcutsOptions,
+  type UseModeShortcutsReturn,
+  useModeShortcuts,
+} from "./useModeShortcuts.js";
 export {
   type PendingPermission,
   type UsePermissionHandlerReturn,

@@ -20,6 +20,7 @@ export type LanguageModel = never;
 export type ProviderType =
   | "anthropic"
   | "openai"
+  | "copilot"
   | "google"
   | "deepseek"
   | "qwen"

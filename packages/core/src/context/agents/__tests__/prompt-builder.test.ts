@@ -178,7 +178,9 @@ describe("AgentsPromptBuilder", () => {
 
       // Metadata has higher priority than instructions
       if (result.sections.length >= 2) {
-        expect(result.sections[0]?.priority).toBeGreaterThanOrEqual(result.sections[1]?.priority);
+        const firstPriority = result.sections[0]?.priority ?? 0;
+        const secondPriority = result.sections[1]?.priority ?? 0;
+        expect(firstPriority).toBeGreaterThanOrEqual(secondPriority);
       }
     });
 

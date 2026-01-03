@@ -7,6 +7,10 @@
  *
  * Session management for the agent loop.
  * Provides LLM streaming, message handling, and thinking support.
+ *
+ * T045: PluginManager should be initialized after permission setup
+ * in the session startup flow. Integration point is in the TUI/CLI layer
+ * where session creation occurs.
  */
 
 // Checkpoint-Snapshot Integration (T026)

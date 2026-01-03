@@ -175,6 +175,16 @@ export {
   shellParamsSchema,
   shellTool,
 } from "./shell.js";
+// Skill tools
+export {
+  getSkillManager,
+  type SkillOutput,
+  type SkillParams,
+  setSkillConfig,
+  setSkillManager,
+  skillParamsSchema,
+  skillTool,
+} from "./skill-tool.js";
 export {
   type SmartEditOutput,
   type SmartEditParams,
@@ -251,6 +261,7 @@ export const ALL_BUILTIN_TOOLS = [
   searchAndReplaceTool,
   searchFilesTool,
   shellTool,
+  skillTool,
   smartEditTool,
   todoManageTool,
   webFetchTool,
@@ -301,6 +312,7 @@ import { saveMemoryTool } from "./save-memory.js";
 import { searchAndReplaceTool } from "./search-and-replace.js";
 import { searchFilesTool } from "./search-files.js";
 import { shellTool } from "./shell.js";
+import { skillTool } from "./skill-tool.js";
 import { smartEditTool } from "./smart-edit-tool.js";
 import { todoManageTool } from "./todo-manage.js";
 import { webFetchTool } from "./web-fetch.js";

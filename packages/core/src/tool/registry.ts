@@ -2,10 +2,27 @@
 // Tool Registry - T005, T006, T007
 // ============================================
 
-import type { z } from "zod";
+import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 import type { Tool, ToolKind } from "../types/tool.js";
+
+// =============================================================================
+// MCP Tool Integration (T044)
+// =============================================================================
+
+/**
+ * MCP tool definition from McpHub.
+ * This is the structure returned by MCP servers.
+ */
+export interface McpToolDefinition {
+  /** Tool name as provided by MCP server */
+  name: string;
+  /** Tool description */
+  description?: string;
+  /** JSON Schema for input parameters */
+  inputSchema: Record<string, unknown>;
+}
 
 // =============================================================================
 // T007: ToolDefinition for LLM Context
@@ -106,6 +123,55 @@ export interface ToolRegistry {
    * Get the count of registered tools.
    */
   readonly size: number;
+
+  // ===========================================================================
+  // T044: MCP Tool Registration
+  // ===========================================================================
+
+  /**
+   * Register an MCP tool from an external MCP server.
+   *
+   * Creates a tool wrapper with the name format `mcp:<serverKey>/<toolName>`.
+   * The serverKey is the short unique identifier assigned by McpHub.
+   *
+   * @param serverKey - Short unique server identifier (e.g., 'c1a2b3')
+   * @param tool - MCP tool definition from the server
+   * @param executor - Function to execute the tool via McpHub
+   *
+   * @example
+   * ```typescript
+   * registry.registerMcpTool('c1a2b3', {
+   *   name: 'readFile',
+   *   description: 'Read a file from the filesystem',
+   *   inputSchema: { type: 'object', properties: { path: { type: 'string' } } }
+   * }, async (params) => {
+   *   return await mcpHub.callTool('myServer', 'readFile', params);
+   * });
+   * // Registers as: mcp:c1a2b3/readFile
+   * ```
+   */
+  registerMcpTool(
+    serverKey: string,
+    tool: McpToolDefinition,
+    executor: (params: Record<string, unknown>) => Promise<unknown>
+  ): void;
+
+  /**
+   * Unregister all MCP tools from a specific server.
+   *
+   * @param serverKey - Short unique server identifier
+   * @returns Number of tools unregistered
+   */
+  unregisterMcpTools(serverKey: string): number;
+
+  /**
+   * List all MCP tools registered from a specific server.
+   *
+   * @param serverKey - Short unique server identifier
+   * @returns Array of tools from the specified server
+   */
+  // biome-ignore lint/suspicious/noExplicitAny: Tools have varying input/output types
+  listMcpTools(serverKey?: string): Tool<z.ZodType, any>[];
 }
 
 /**
@@ -283,6 +349,85 @@ class ToolRegistryImpl implements ToolRegistry {
    */
   get size(): number {
     return this.tools.size;
+  }
+
+  // ===========================================================================
+  // T044: MCP Tool Registration Implementation
+  // ===========================================================================
+
+  /**
+   * Register an MCP tool from an external MCP server.
+   *
+   * Creates a tool wrapper with the name format `mcp:<serverKey>/<toolName>`.
+   */
+  registerMcpTool(
+    serverKey: string,
+    tool: McpToolDefinition,
+    executor: (params: Record<string, unknown>) => Promise<unknown>
+  ): void {
+    // Create the namespaced tool name
+    const toolName = `mcp:${serverKey}/${tool.name}`;
+    const normalizedName = toolName.toLowerCase();
+
+    // Create a dynamic Zod schema from JSON Schema
+    // For MCP tools, we accept any object as input and validate on the server side
+    const inputSchema = z.record(z.string(), z.unknown());
+
+    // Create a Tool wrapper for the MCP tool
+    // biome-ignore lint/suspicious/noExplicitAny: MCP tools have dynamic schemas
+    const mcpTool: Tool<z.ZodType, any> = {
+      definition: {
+        name: toolName,
+        description: tool.description ?? `MCP tool: ${tool.name}`,
+        kind: "mcp",
+        parameters: inputSchema,
+        enabled: true,
+      },
+      execute: async (params, _context) => {
+        try {
+          const result = await executor(params as unknown as Record<string, unknown>);
+          return { success: true as const, output: result };
+        } catch (error) {
+          return {
+            success: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    };
+
+    this.tools.set(normalizedName, mcpTool);
+    this.originalNames.set(normalizedName, toolName);
+  }
+
+  /**
+   * Unregister all MCP tools from a specific server.
+   */
+  unregisterMcpTools(serverKey: string): number {
+    const prefix = `mcp:${serverKey}/`.toLowerCase();
+    let count = 0;
+
+    for (const [name] of this.tools) {
+      if (name.startsWith(prefix)) {
+        this.tools.delete(name);
+        this.originalNames.delete(name);
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * List all MCP tools registered from a specific server.
+   */
+  // biome-ignore lint/suspicious/noExplicitAny: Tools have varying input/output types
+  listMcpTools(serverKey?: string): Tool<z.ZodType, any>[] {
+    const prefix = serverKey ? `mcp:${serverKey}/`.toLowerCase() : "mcp:";
+
+    return Array.from(this.tools.entries())
+      .filter(([name]) => name.startsWith(prefix))
+      .map(([, tool]) => tool);
   }
 }
 

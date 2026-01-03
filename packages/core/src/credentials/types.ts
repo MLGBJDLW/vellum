@@ -48,11 +48,75 @@ export type CredentialType = z.infer<typeof CredentialTypeSchema>;
  * - keychain: OS-native keychain (most secure persistent)
  * - file: Encrypted file fallback
  * - config: Config file (least secure, not recommended)
+ * - mcp: MCP OAuth credentials (managed by McpOAuthManager)
  */
-export const CredentialSourceSchema = z.enum(["runtime", "env", "keychain", "file", "config"]);
+export const CredentialSourceSchema = z.enum([
+  "runtime",
+  "env",
+  "keychain",
+  "file",
+  "config",
+  "mcp",
+]);
 
 /** Inferred type for credential sources */
 export type CredentialSource = z.infer<typeof CredentialSourceSchema>;
+
+// =============================================================================
+// T046: MCP Credential Provider Pattern
+// =============================================================================
+
+/**
+ * MCP credential provider pattern.
+ *
+ * For MCP OAuth credentials, the provider field follows the format:
+ * - `mcp:<serverName>` - OAuth credentials for a specific MCP server
+ *
+ * @example
+ * ```typescript
+ * // OAuth credential for an MCP server named "github-mcp"
+ * {
+ *   provider: "mcp:github-mcp",
+ *   type: "oauth",
+ *   value: { accessToken: "...", refreshToken: "...", expiresAt: ... },
+ *   source: "mcp",
+ * }
+ * ```
+ */
+export const MCP_CREDENTIAL_PREFIX = "mcp:" as const;
+
+/**
+ * Check if a provider string represents an MCP credential.
+ *
+ * @param provider - Provider string to check
+ * @returns true if provider is an MCP credential (starts with 'mcp:')
+ */
+export function isMcpCredentialProvider(provider: string): boolean {
+  return provider.startsWith(MCP_CREDENTIAL_PREFIX);
+}
+
+/**
+ * Extract the server name from an MCP credential provider string.
+ *
+ * @param provider - MCP credential provider (e.g., 'mcp:github-mcp')
+ * @returns Server name (e.g., 'github-mcp'), or undefined if not an MCP credential
+ */
+export function getMcpServerFromProvider(provider: string): string | undefined {
+  if (!isMcpCredentialProvider(provider)) {
+    return undefined;
+  }
+  return provider.slice(MCP_CREDENTIAL_PREFIX.length);
+}
+
+/**
+ * Create an MCP credential provider string from a server name.
+ *
+ * @param serverName - MCP server name
+ * @returns MCP credential provider string (e.g., 'mcp:github-mcp')
+ */
+export function createMcpCredentialProvider(serverName: string): string {
+  return `${MCP_CREDENTIAL_PREFIX}${serverName}`;
+}
 
 // =============================================================================
 // T002: CredentialMetadata Schema

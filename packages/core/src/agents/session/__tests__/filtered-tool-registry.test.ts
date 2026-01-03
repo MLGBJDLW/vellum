@@ -80,6 +80,10 @@ function createMockRegistry(
     get size() {
       return toolMap.size;
     },
+    // T044: MCP tool methods (no-op for test mock)
+    registerMcpTool: () => {},
+    unregisterMcpTools: () => 0,
+    listMcpTools: () => [],
   };
 }
 

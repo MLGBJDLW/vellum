@@ -25,6 +25,8 @@
 // Agent Module (T026-T031)
 // ============================================
 export {
+  // Mode Switching (T031-T034)
+  type ActivityTracker,
   AGENT_MODES,
   AGENT_STATES,
   // Agent Level Hierarchy (T001)
@@ -40,6 +42,13 @@ export {
   type AgentState,
   // State Machine
   AgentStateSchema,
+  APPROVAL_POLICIES,
+  // Coding Modes (Phase 23: T004-T016)
+  type ApprovalPolicy,
+  ApprovalPolicySchema,
+  // Mode Handlers (T018-T027)
+  BaseModeHandler,
+  BUILTIN_CODING_MODES,
   buildEnvironmentSection,
   buildModePrompt,
   buildSystemPrompt,
@@ -47,14 +56,32 @@ export {
   CancellationToken,
   // Cancellation
   CancelledError,
+  CODING_MODES,
+  type CodingMode,
+  type CodingModeConfig,
+  CodingModeConfigSchema,
+  CodingModeSchema,
   type CombinedLoopResult,
+  // Mode Detection (T028-T029)
+  ComplexityAnalyzer,
+  type ComplexityAnalyzerConfig,
+  type ComplexityLevel,
+  type ComplexityResult,
+  ComplexityResultSchema,
   canEdit,
   canSpawn,
+  codingModeToCore,
+  createActivityTracker,
+  createComplexityAnalyzer,
   createLoopDetectionContext,
+  createModeDetector,
   // Mode Loader (T006)
   createModeLoader,
+  // Mode Manager (T035)
+  createModeManager,
   // Mode Registry (T005)
   createModeRegistry,
+  createModeSwitcher,
   createSnapshot,
   createStateContext,
   createTerminationContext,
@@ -63,11 +90,15 @@ export {
   DEFAULT_MAX_CONCURRENT_SUBAGENTS,
   DEFAULT_SESSION_DIR,
   DEFAULT_TERMINATION_LIMITS,
+  type DetectionResult,
+  DetectionResultSchema,
   // Loop Detection
   detectLoop,
   detectLoopAsync,
   type ExtendedModeConfig,
   ExtendedModeConfigSchema,
+  // Legacy Mode Mapping (T049-T053)
+  emitDeprecationWarning,
   // Restrictions (T003)
   type FileAccess,
   FileAccessSchema,
@@ -80,30 +111,72 @@ export {
   GracefulShutdownHandler,
   type GracefulShutdownHandlerOptions,
   getBashPermission,
+  getLegacyTemperature,
   getLoopWarningLevel,
   getModeConfig,
   getTemperature,
+  type HandlerResult,
+  InvalidModeError,
+  isLegacyMode,
+  isValidCodingMode,
   isValidSnapshot,
   isValidTransition,
+  LEGACY_MODE_MAP,
+  LEGACY_MODES,
   type LoopAction,
   type LoopDetectionConfig,
   type LoopDetectionContext,
   type LoopType,
+  legacyToNewMode,
   MemoryStatePersister,
   MODE_CONFIGS,
+  type ModeChangedEvent,
   type ModeConfig,
   ModeConfigSchema,
+  ModeDetector,
+  type ModeDetectorConfig,
   ModeFileNotFoundError,
+  type ModeHandler,
   type ModeLoader,
+  ModeManager,
+  type ModeManagerConfig,
+  type ModeManagerEvents,
   type ModeRegistry,
+  ModeSwitcher,
+  type ModeSwitcherConfig,
+  type ModeSwitchFailedEvent,
+  type ModeSwitchResult,
+  ModeSwitchResultSchema,
   ModeValidationError,
+  NoOpActivityTracker,
+  type NormalizationResult,
+  normalizeMode,
   type PendingTool,
+  type PhaseValidationResult,
+  PLAN_MODE,
+  PlanModeHandler,
+  type PlanPhase,
+  policyToTrustPreset,
   registerShutdownHandler,
+  SANDBOX_POLICIES,
+  type SandboxPolicy,
+  SandboxPolicySchema,
   type SessionSnapshot,
   type ShutdownResult,
   type ShutdownSignal,
+  SimpleActivityTracker,
   SNAPSHOT_VERSION,
   type SnapshotContext,
+  SPEC_MODE,
+  SPEC_PHASE_CONFIG,
+  SPEC_PHASES,
+  type SpecConfirmationRequiredEvent,
+  SpecModeHandler,
+  type SpecModeState,
+  type SpecPhase,
+  type SpecPhaseConfig,
+  SpecPhaseSchema,
+  type SpecPhaseToolAccess,
   type StateContext,
   type StatePersister,
   type StateTransitionEvent,
@@ -111,6 +184,7 @@ export {
   // System Prompt
   SystemPromptConfigSchema,
   type SystemPromptResult,
+  sandboxToRestrictions,
   // Termination
   TerminationChecker,
   type TerminationContext,
@@ -119,13 +193,19 @@ export {
   TerminationReason,
   type TerminationResult,
   type TerminationTokenUsage,
+  type ToolAccessConfig,
   type ToolCallInfo,
+  type ToolGroup,
   type ToolGroupEntry,
   ToolGroupEntrySchema,
   type ToolPermissions,
   ToolPermissionsSchema,
+  TypedEventEmitter,
   toExtendedMode,
+  type UserMessage,
   VALID_TRANSITIONS,
+  VIBE_MODE,
+  VibeModeHandler,
   type YamlModeConfig,
   YamlModeConfigSchema,
 } from "./agent/index.js";
@@ -133,6 +213,96 @@ export {
 // Legacy Exports (Agent/Loop)
 // ============================================
 export { Agent, type ExtendedAgentOptions } from "./agent.js";
+// ============================================
+// Custom Agents Module (T004-T016)
+// ============================================
+export {
+  AgentCircularInheritanceError,
+  // Type exports
+  type AgentCoordination,
+  AgentCoordinationSchema,
+  AgentDiscovery,
+  // Discovery exports
+  type AgentDiscoveryEvents,
+  type AgentDiscoveryOptions,
+  AgentError,
+  AgentErrorCode,
+  // Error exports
+  type AgentErrorOptions,
+  type AgentHooks,
+  AgentHooksSchema,
+  // Loader exports
+  type AgentLoadError,
+  AgentLoader,
+  AgentNotFoundError,
+  AgentParseError,
+  // Resolver exports
+  type AgentRegistry as CustomAgentRegistryInterface,
+  type AgentRestrictions as CustomAgentRestrictions,
+  AgentRestrictionsSchema as CustomAgentRestrictionsSchema,
+  AgentRouter,
+  type AgentSettings,
+  AgentSettingsSchema,
+  AgentValidationError,
+  type CustomAgentDefinition,
+  CustomAgentDefinitionSchema,
+  CustomAgentRegistry as CustomAgentRegistryClass,
+  type CustomTrigger,
+  createAgentDiscovery,
+  createAgentLoader,
+  createAgentRegistry as createCustomAgentRegistry,
+  createAgentRouter,
+  createInheritanceResolver,
+  DEFAULT_DEBOUNCE_MS,
+  type DiscoveredAgent,
+  DiscoverySource,
+  type FileRestriction as CustomFileRestriction,
+  fromZodError,
+  getInheritanceDepth,
+  getSlugFromFilePath,
+  hasNoCycles,
+  InheritanceResolver,
+  isAgentCircularInheritanceError,
+  isAgentError,
+  isAgentNotFoundError,
+  isAgentParseError,
+  isAgentValidationError,
+  isSupportedAgentFile,
+  isValidSlug,
+  type LoadResult,
+  MAX_DESCRIPTION_LENGTH,
+  MAX_INHERITANCE_DEPTH,
+  MAX_NAME_LENGTH,
+  MAX_SLUG_LENGTH,
+  MIN_ROUTING_SCORE,
+  // Registry exports
+  type RegistryEvents,
+  type RegistryOptions,
+  type ResolutionError,
+  type ResolvedAgent,
+  type ResolveResult,
+  ROUTING_WEIGHTS,
+  // Router exports
+  type RouterOptions,
+  type RoutingContext,
+  type RoutingResult as CustomRoutingResult,
+  type RoutingWeights,
+  type ScoreBreakdown,
+  type ScoredCandidate,
+  SLUG_PATTERN,
+  SUPPORTED_EXTENSIONS,
+  type SupportedExtension,
+  type ToolGroupEntry as CustomToolGroupEntry,
+  type TriggerPattern,
+  TriggerPatternSchema,
+  TriggerPatternTypeSchema,
+  // Schema exports
+  type ValidatedCustomAgentDefinition,
+  type ValidationIssue,
+  validateAgentDefinition,
+  type WhenToUse,
+  WhenToUseSchema,
+} from "./agents/custom/index.js";
 // ============================================
 // Agents Module (Phase 19: Multi-Agent Orchestration)
 // ============================================
@@ -167,9 +337,12 @@ export {
   // Session: Context isolation (T034)
   type ContextIsolator,
   type CreateTaskPacketOptions,
-  type CustomTarget,
-  type CustomTargetInferred,
-  CustomTargetSchema,
+  type CustomAgentTarget,
+  type CustomAgentTargetInferred,
+  CustomAgentTargetSchema,
+  type CustomModeTarget,
+  type CustomModeTargetInferred,
+  CustomModeTargetSchema,
   coderWorker,
   createApprovalForwarder,
   // Session factories (T034)
@@ -204,6 +377,7 @@ export {
   // Session: Filtered tool registry (T034)
   type FilteredToolRegistry,
   getBuiltinWorkerCapabilities,
+  getSpecAgentSlugs,
   // Handoff exports (T019)
   type HandoffRequest,
   type HandoffRequestInferred,
@@ -214,7 +388,8 @@ export {
   // Session: Context isolation (T034)
   type IsolatedContext,
   isBuiltinTarget,
-  isCustomTarget,
+  isCustomAgentTarget,
+  isCustomModeTarget,
   isMcpTarget,
   MAX_DELEGATION_DEPTH,
   type McpTarget,
@@ -240,8 +415,16 @@ export {
   type RouteCandidate,
   type RouteResult,
   type RoutingRule,
+  // Builtin agent registration (T032)
+  registerBuiltinAgents,
   registerBuiltinWorkers,
+  // Spec agent routing (T033)
+  registerSpecAgentRoutes,
+  // Spec agent registration (T032)
+  registerSpecAgents,
   researcherWorker,
+  SPEC_ROUTING_RULES,
+  SPEC_SPAWNABLE_AGENTS,
   type SpawnOptions,
   type SubagentHandle,
   // Session: Subsession management (T034)
@@ -254,6 +437,12 @@ export {
   type SubtaskDependency,
   SubtaskDependencySchema,
   securityWorker,
+  // Spec agents (T032)
+  specArchitectAgent,
+  specRequirementsAgent,
+  specResearcherAgent,
+  specTasksAgent,
+  specValidatorAgent,
   type TaskAnalysis,
   TaskAnalysisSchema,
   type TaskChain,
@@ -287,7 +476,6 @@ export {
   type WorkerResult,
   writerWorker,
 } from "./agents/index.js";
-
 // ============================================
 // Builtin Tools (T117)
 // ============================================
@@ -505,6 +693,47 @@ export * from "./privacy/index.js";
 // Session (LLM, Messages, Thinking)
 // ============================================
 export * from "./session/index.js";
+// ============================================
+// Skill System
+// ============================================
+export * from "./skill/index.js";
+// ============================================
+// Spec Workflow Module (T030-T034)
+// ============================================
+export {
+  CHECKPOINT_DIR,
+  // Checkpoint Manager
+  type Checkpoint,
+  CheckpointManager,
+  type CheckpointReason,
+  DEFAULT_KEEP_COUNT,
+  // Handoff Executor
+  HandoffExecutor,
+  type ImplementationResult,
+  // State Machine
+  PHASE_EXECUTION_MODE,
+  // Template Loader
+  PHASE_TEMPLATES,
+  PHASE_TRANSITIONS,
+  // Types
+  type PhaseResult,
+  type PhaseState,
+  type PhaseStatus,
+  SKIPPABLE_PHASES,
+  type SpecHandoffPacket,
+  // Workflow Engine
+  SpecWorkflowEngine,
+  type SpecWorkflowEngineConfig,
+  type SpecWorkflowState,
+  type SpecWorkflowStatus,
+  StateMachine,
+  TEMPLATE_SEARCH_PATHS,
+  TemplateLoader,
+  // Workflow Events
+  type WorkflowEvents,
+  type WorkflowResult,
+  type WorkflowStatus,
+} from "./spec/index.js";
 // ============================================
 // Streaming (T005-T008)
 // ============================================

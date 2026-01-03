@@ -7,11 +7,13 @@ import { describe, expect, it } from "vitest";
 import { AgentLevel } from "../../../agent/level.js";
 import {
   BuiltinTargetSchema,
-  CustomTargetSchema,
+  CustomAgentTargetSchema,
+  CustomModeTargetSchema,
   type DelegationTarget,
   DelegationTargetSchema,
   isBuiltinTarget,
-  isCustomTarget,
+  isCustomAgentTarget,
+  isCustomModeTarget,
   isMcpTarget,
   McpTargetSchema,
 } from "../delegation.js";
@@ -82,9 +84,43 @@ describe("Delegation Protocol", () => {
   });
 
   // ============================================
-  // CustomTargetSchema Tests
+  // CustomAgentTargetSchema Tests (REQ-011)
   // ============================================
-  describe("CustomTargetSchema", () => {
+  describe("CustomAgentTargetSchema", () => {
+    it("validates correct custom agent target", () => {
+      const target = {
+        kind: "custom",
+        slug: "test-writer",
+      };
+
+      const result = CustomAgentTargetSchema.safeParse(target);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.kind).toBe("custom");
+        expect(result.data.slug).toBe("test-writer");
+      }
+    });
+
+    it("rejects empty slug", () => {
+      const target = {
+        kind: "custom",
+        slug: "",
+      };
+
+      const result = CustomAgentTargetSchema.safeParse(target);
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toContain("cannot be empty");
+      }
+    });
+  });
+
+  // ============================================
+  // CustomModeTargetSchema Tests
+  // ============================================
+  describe("CustomModeTargetSchema", () => {
     const validModeConfig = {
       name: "code",
       description: "Custom analyzer mode",
@@ -93,25 +129,25 @@ describe("Delegation Protocol", () => {
       level: AgentLevel.worker,
     };
 
-    it("validates correct custom target with ExtendedModeConfig", () => {
+    it("validates correct custom mode target with ExtendedModeConfig", () => {
       const target = {
-        kind: "custom",
+        kind: "custom-mode",
         slug: "custom-analyzer",
         modeConfig: validModeConfig,
       };
 
-      const result = CustomTargetSchema.safeParse(target);
+      const result = CustomModeTargetSchema.safeParse(target);
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.kind).toBe("custom");
+        expect(result.data.kind).toBe("custom-mode");
         expect(result.data.slug).toBe("custom-analyzer");
         expect(result.data.modeConfig.name).toBe("code");
         expect(result.data.modeConfig.level).toBe(AgentLevel.worker);
       }
     });
 
-    it("validates custom target with full modeConfig options", () => {
+    it("validates custom mode target with full modeConfig options", () => {
       const fullModeConfig = {
         ...validModeConfig,
         canSpawnAgents: ["sub-worker-1", "sub-worker-2"],
@@ -121,12 +157,12 @@ describe("Delegation Protocol", () => {
       };
 
       const target = {
-        kind: "custom",
+        kind: "custom-mode",
         slug: "full-custom",
         modeConfig: fullModeConfig,
       };
 
-      const result = CustomTargetSchema.safeParse(target);
+      const result = CustomModeTargetSchema.safeParse(target);
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -137,12 +173,12 @@ describe("Delegation Protocol", () => {
 
     it("rejects empty slug", () => {
       const target = {
-        kind: "custom",
+        kind: "custom-mode",
         slug: "",
         modeConfig: validModeConfig,
       };
 
-      const result = CustomTargetSchema.safeParse(target);
+      const result = CustomModeTargetSchema.safeParse(target);
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -152,18 +188,18 @@ describe("Delegation Protocol", () => {
 
     it("rejects missing modeConfig", () => {
       const target = {
-        kind: "custom",
+        kind: "custom-mode",
         slug: "custom-agent",
       };
 
-      const result = CustomTargetSchema.safeParse(target);
+      const result = CustomModeTargetSchema.safeParse(target);
 
       expect(result.success).toBe(false);
     });
 
     it("rejects invalid modeConfig", () => {
       const target = {
-        kind: "custom",
+        kind: "custom-mode",
         slug: "custom-agent",
         modeConfig: {
           name: "invalid-mode", // Invalid mode name
@@ -174,7 +210,7 @@ describe("Delegation Protocol", () => {
         },
       };
 
-      const result = CustomTargetSchema.safeParse(target);
+      const result = CustomModeTargetSchema.safeParse(target);
 
       expect(result.success).toBe(false);
     });
@@ -311,9 +347,26 @@ describe("Delegation Protocol", () => {
       }
     });
 
-    it("discriminates custom target by kind", () => {
+    it("discriminates custom agent target by kind", () => {
       const target = {
         kind: "custom",
+        slug: "test-writer",
+      };
+
+      const result = DelegationTargetSchema.safeParse(target);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.kind).toBe("custom");
+        if (result.data.kind === "custom") {
+          expect(result.data.slug).toBe("test-writer");
+        }
+      }
+    });
+
+    it("discriminates custom mode target by kind", () => {
+      const target = {
+        kind: "custom-mode",
         slug: "custom-agent",
         modeConfig: {
           name: "code",
@@ -328,8 +381,8 @@ describe("Delegation Protocol", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.kind).toBe("custom");
-        if (result.data.kind === "custom") {
+        expect(result.data.kind).toBe("custom-mode");
+        if (result.data.kind === "custom-mode") {
           expect(result.data.modeConfig).toBeDefined();
         }
       }
@@ -382,8 +435,9 @@ describe("Delegation Protocol", () => {
     it("validates all target types in sequence", () => {
       const targets = [
         { kind: "builtin", slug: "qa" },
+        { kind: "custom", slug: "test-writer" },
         {
-          kind: "custom",
+          kind: "custom-mode",
           slug: "analyzer",
           modeConfig: {
             name: "plan",
@@ -414,9 +468,18 @@ describe("Delegation Protocol", () => {
         expect(isBuiltinTarget(target)).toBe(true);
       });
 
-      it("returns false for custom target", () => {
+      it("returns false for custom agent target", () => {
         const target: DelegationTarget = {
           kind: "custom",
+          slug: "test-writer",
+        };
+
+        expect(isBuiltinTarget(target)).toBe(false);
+      });
+
+      it("returns false for custom mode target", () => {
+        const target: DelegationTarget = {
+          kind: "custom-mode",
           slug: "custom",
           modeConfig: {
             name: "code",
@@ -451,10 +514,25 @@ describe("Delegation Protocol", () => {
       });
     });
 
-    describe("isCustomTarget", () => {
-      it("returns true for custom target", () => {
+    describe("isCustomAgentTarget", () => {
+      it("returns true for custom agent target", () => {
         const target: DelegationTarget = {
           kind: "custom",
+          slug: "test-writer",
+        };
+
+        expect(isCustomAgentTarget(target)).toBe(true);
+      });
+
+      it("returns false for builtin target", () => {
+        const target: DelegationTarget = { kind: "builtin", slug: "coder" };
+
+        expect(isCustomAgentTarget(target)).toBe(false);
+      });
+
+      it("returns false for custom mode target", () => {
+        const target: DelegationTarget = {
+          kind: "custom-mode",
           slug: "custom",
           modeConfig: {
             name: "code",
@@ -465,13 +543,7 @@ describe("Delegation Protocol", () => {
           },
         };
 
-        expect(isCustomTarget(target)).toBe(true);
-      });
-
-      it("returns false for builtin target", () => {
-        const target: DelegationTarget = { kind: "builtin", slug: "coder" };
-
-        expect(isCustomTarget(target)).toBe(false);
+        expect(isCustomAgentTarget(target)).toBe(false);
       });
 
       it("returns false for MCP target", () => {
@@ -481,12 +553,66 @@ describe("Delegation Protocol", () => {
           toolName: "tool",
         };
 
-        expect(isCustomTarget(target)).toBe(false);
+        expect(isCustomAgentTarget(target)).toBe(false);
+      });
+
+      it("enables type narrowing to access slug", () => {
+        const target: DelegationTarget = {
+          kind: "custom",
+          slug: "test-writer",
+        };
+
+        if (isCustomAgentTarget(target)) {
+          expect(target.slug).toBe("test-writer");
+        }
+      });
+    });
+
+    describe("isCustomModeTarget", () => {
+      it("returns true for custom mode target", () => {
+        const target: DelegationTarget = {
+          kind: "custom-mode",
+          slug: "custom",
+          modeConfig: {
+            name: "code",
+            description: "Test",
+            tools: { edit: true, bash: true },
+            prompt: "Test",
+            level: AgentLevel.worker,
+          },
+        };
+
+        expect(isCustomModeTarget(target)).toBe(true);
+      });
+
+      it("returns false for builtin target", () => {
+        const target: DelegationTarget = { kind: "builtin", slug: "coder" };
+
+        expect(isCustomModeTarget(target)).toBe(false);
+      });
+
+      it("returns false for custom agent target", () => {
+        const target: DelegationTarget = {
+          kind: "custom",
+          slug: "test-writer",
+        };
+
+        expect(isCustomModeTarget(target)).toBe(false);
+      });
+
+      it("returns false for MCP target", () => {
+        const target: DelegationTarget = {
+          kind: "mcp",
+          serverId: "server",
+          toolName: "tool",
+        };
+
+        expect(isCustomModeTarget(target)).toBe(false);
       });
 
       it("enables type narrowing to access modeConfig", () => {
         const target: DelegationTarget = {
-          kind: "custom",
+          kind: "custom-mode",
           slug: "custom",
           modeConfig: {
             name: "code",
@@ -497,7 +623,7 @@ describe("Delegation Protocol", () => {
           },
         };
 
-        if (isCustomTarget(target)) {
+        if (isCustomModeTarget(target)) {
           expect(target.modeConfig.prompt).toBe("Test prompt");
         }
       });
@@ -520,9 +646,18 @@ describe("Delegation Protocol", () => {
         expect(isMcpTarget(target)).toBe(false);
       });
 
-      it("returns false for custom target", () => {
+      it("returns false for custom agent target", () => {
         const target: DelegationTarget = {
           kind: "custom",
+          slug: "test-writer",
+        };
+
+        expect(isMcpTarget(target)).toBe(false);
+      });
+
+      it("returns false for custom mode target", () => {
+        const target: DelegationTarget = {
+          kind: "custom-mode",
           slug: "custom",
           modeConfig: {
             name: "code",

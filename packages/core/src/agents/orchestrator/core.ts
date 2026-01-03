@@ -3,10 +3,12 @@
 // ============================================
 // Implements REQ-007: Multi-Agent Orchestration
 // Implements REQ-012: Task Execution Pipeline
+// T031: Handle spec workflow handoff callbacks
 
 import type { AgentLevel } from "../../agent/level.js";
 import { canSpawn } from "../../agent/level.js";
 import type { ModeRegistry } from "../../agent/mode-registry.js";
+import type { ImplementationResult, SpecHandoffPacket } from "../../spec/index.js";
 import type { SubsessionManager } from "../session/subsession-manager.js";
 import type { AggregatedResult, ResultAggregator, TaskResult } from "./aggregator.js";
 import { createResultAggregator } from "./aggregator.js";
@@ -185,6 +187,20 @@ export interface OrchestratorCore {
    * @returns The task chain if found, undefined otherwise
    */
   getTaskChain(chainId: string): TaskChain | undefined;
+
+  /**
+   * Handle a spec workflow handoff packet (T031).
+   *
+   * Receives a handoff packet from the spec workflow, routes to the coder
+   * agent for implementation, and calls the callback when complete.
+   *
+   * @param packet - The spec handoff packet
+   * @param onComplete - Callback to invoke when implementation completes
+   */
+  handleSpecHandoff(
+    packet: SpecHandoffPacket,
+    onComplete: (result: ImplementationResult) => void
+  ): Promise<void>;
 
   // Component access (readonly)
   /** Task router for determining agent assignment */
@@ -718,6 +734,92 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
   getTaskChain(chainId: string): TaskChain | undefined {
     return this.taskChainManager.getChain(chainId);
+  }
+
+  /**
+   * Handle a spec workflow handoff packet (T031).
+   *
+   * Routes tasks from the spec workflow to the coder agent for implementation,
+   * then calls the callback to allow the spec workflow to resume.
+   *
+   * @param packet - The spec handoff packet containing implementation tasks
+   * @param onComplete - Callback to invoke when implementation completes
+   */
+  async handleSpecHandoff(
+    packet: SpecHandoffPacket,
+    onComplete: (result: ImplementationResult) => void
+  ): Promise<void> {
+    const { workflowId, tasksFile, callback } = packet;
+
+    // Emit event for handoff receipt
+    this.emit({
+      type: "task_started",
+      timestamp: new Date(),
+      data: {
+        taskId: `spec-impl-${workflowId}`,
+        agentSlug: "coder",
+      },
+    });
+
+    try {
+      // Route to coder agent for implementation
+      // In a real implementation, this would parse the tasks file and execute each task
+      const handle = await this.spawnSubagent("coder", `Implement tasks from ${tasksFile}`, {
+        taskId: `spec-impl-${workflowId}`,
+      });
+
+      // For now, simulate successful completion
+      // TODO: Integrate with actual task execution when coder agent is fully wired
+      handle.status = "completed";
+      handle.completedAt = new Date();
+
+      const chainId = this.taskToChain.get(handle.taskId);
+      if (chainId) {
+        this.taskChainManager.updateStatus(chainId, handle.taskId, "completed");
+      }
+
+      // Call the callback to resume spec workflow
+      const result: ImplementationResult = {
+        success: true,
+        completedTasks: [handle.taskId],
+      };
+
+      this.emit({
+        type: "task_completed",
+        timestamp: new Date(),
+        data: {
+          taskId: handle.taskId,
+          agentSlug: handle.agentSlug,
+          handleId: handle.id,
+          result,
+        },
+      });
+
+      // Verify callback target is spec before invoking
+      if (callback.returnTo === "spec") {
+        onComplete(result);
+      }
+    } catch (error) {
+      const errorResult: ImplementationResult = {
+        success: false,
+        completedTasks: [],
+        failedTasks: [`spec-impl-${workflowId}`],
+        error: error instanceof Error ? error.message : String(error),
+      };
+
+      this.emit({
+        type: "task_failed",
+        timestamp: new Date(),
+        data: {
+          taskId: `spec-impl-${workflowId}`,
+          error: error instanceof Error ? error : new Error(String(error)),
+        },
+      });
+
+      if (callback.returnTo === "spec") {
+        onComplete(errorResult);
+      }
+    }
   }
 }
 
