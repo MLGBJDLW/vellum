@@ -259,6 +259,8 @@ export function useHotkeys(
         rightArrow: key.toLowerCase() === "right",
         pageUp: key.toLowerCase() === "pageup",
         pageDown: key.toLowerCase() === "pagedown",
+        home: key.toLowerCase() === "home",
+        end: key.toLowerCase() === "end",
       };
 
       for (const hotkey of resolvedHotkeys) {

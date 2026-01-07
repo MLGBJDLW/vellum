@@ -195,7 +195,7 @@ export function ThemeProvider({
     [currentTheme, setTheme, toggleMode]
   );
 
-  return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>;
+  return <ThemeContext value={contextValue}>{children}</ThemeContext>;
 }
 
 // =============================================================================

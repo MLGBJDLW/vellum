@@ -339,7 +339,7 @@ export function AppProvider({
     [state, reset]
   );
 
-  return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
+  return <AppContext value={contextValue}>{children}</AppContext>;
 }
 
 // =============================================================================

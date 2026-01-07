@@ -498,7 +498,7 @@ export function ToolsProvider({
     ]
   );
 
-  return <ToolsContext.Provider value={contextValue}>{children}</ToolsContext.Provider>;
+  return <ToolsContext value={contextValue}>{children}</ToolsContext>;
 }
 
 // =============================================================================

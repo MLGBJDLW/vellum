@@ -264,7 +264,7 @@ export function McpProvider({
     [hub, isInitialized, isInitializing, error, reinitialize]
   );
 
-  return <McpContext.Provider value={contextValue}>{children}</McpContext.Provider>;
+  return <McpContext value={contextValue}>{children}</McpContext>;
 }
 
 // =============================================================================

@@ -423,7 +423,7 @@ export function MessagesProvider({
     [state, addMessage, updateMessage, appendToMessage, clearMessages]
   );
 
-  return <MessagesContext.Provider value={contextValue}>{children}</MessagesContext.Provider>;
+  return <MessagesContext value={contextValue}>{children}</MessagesContext>;
 }
 
 // =============================================================================

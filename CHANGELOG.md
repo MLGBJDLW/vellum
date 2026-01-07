@@ -15,3 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Test UUIDs: RFC 4122 compliant format required
   - Schema defaults: Explicit default handling for partial schemas
   - Error messages: Updated assertions for Zod v4 error format
+- Upgraded React from 18.3.1 to 19.2.3
+- Upgraded Ink from 5.1.0 to 6.6.0
+- Upgraded @types/react from 18.3.12 to 19.0.0
+- Migrated all context providers to React 19 simplified Context API pattern
+  (removed `.Provider` in favor of direct context component usage)
+
+### Internal
+
+- Updated 5 context provider files to use `<Context value={...}>` pattern:
+  - AppContext.tsx
+  - MessagesContext.tsx
+  - McpContext.tsx
+  - ToolsContext.tsx
+  - theme/provider.tsx
