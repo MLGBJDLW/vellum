@@ -307,8 +307,10 @@ describe("Phase 3: Advanced Features", () => {
         await compressor.compress(messages, { start: 0, end: 5 });
 
         expect(mockClient.summarize).toHaveBeenCalledTimes(1);
-        const [calledMessages, calledPrompt] = (mockClient.summarize as ReturnType<typeof vi.fn>)
-          .mock.calls[0]!;
+        const mockCalls = (mockClient.summarize as ReturnType<typeof vi.fn>).mock.calls;
+        const firstCall = mockCalls[0];
+        if (!firstCall) throw new Error("Test setup error");
+        const [calledMessages, calledPrompt] = firstCall;
         expect(calledMessages).toHaveLength(5);
         expect(calledPrompt).toContain("## 1. Task Overview");
       });
@@ -409,8 +411,12 @@ describe("Phase 3: Advanced Features", () => {
         const checkpointContent = checkpoint.messages[0]?.content as ContentBlock[];
 
         expect(checkpointContent).not.toBe(originalContent);
-        expect((checkpointContent[0] as any).input).not.toBe((originalContent[0] as any).input);
-        expect((checkpointContent[0] as any).input).toEqual((originalContent[0] as any).input);
+        expect((checkpointContent[0] as unknown as Record<string, unknown>).input).not.toBe(
+          (originalContent[0] as unknown as Record<string, unknown>).input
+        );
+        expect((checkpointContent[0] as unknown as Record<string, unknown>).input).toEqual(
+          (originalContent[0] as unknown as Record<string, unknown>).input
+        );
       });
 
       it("should deep copy metadata", () => {

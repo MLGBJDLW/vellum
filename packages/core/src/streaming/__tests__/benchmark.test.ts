@@ -306,6 +306,7 @@ describe("Performance Benchmarks", () => {
   // ===========================================================================
 
   describe("Combined System Throughput", () => {
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Integration benchmark requires multiple test paths
     it("should handle full pipeline efficiently", async () => {
       const collector = new StreamCollector();
       const gate = new NewlineGate();

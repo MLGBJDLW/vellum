@@ -22,6 +22,7 @@ describe("credential-adapter", () => {
         _credentials: credentials,
         resolve: vi.fn(async (provider: string) => {
           const cred = credentials.get(provider);
+          // biome-ignore lint/suspicious/noExplicitAny: Mock implementation
           return { ok: true, value: (cred ?? null) as any };
         }),
         store: vi.fn(async (input) => {

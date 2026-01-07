@@ -233,6 +233,7 @@ export function hasToolBlocks(content: string | ContentBlock[]): boolean {
  * // analysis.pairedMessageIndices.has(1) === true
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Tool pairing requires comprehensive block analysis
 export function analyzeToolPairs(messages: ContextMessage[]): ToolPairAnalysis {
   // Map from toolId to tool_use info
   const useMap = new Map<string, ToolUseInfo>();
@@ -242,11 +243,13 @@ export function analyzeToolPairs(messages: ContextMessage[]): ToolPairAnalysis {
 
   // First pass: collect all tool_use and tool_result blocks
   for (let msgIndex = 0; msgIndex < messages.length; msgIndex++) {
-    const message = messages[msgIndex]!;
+    const message = messages[msgIndex];
+    if (!message) continue;
     const blocks = getContentBlocks(message.content);
 
     for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
-      const block = blocks[blockIndex]!;
+      const block = blocks[blockIndex];
+      if (!block) continue;
 
       if (isToolUseBlock(block)) {
         useMap.set(block.id, {

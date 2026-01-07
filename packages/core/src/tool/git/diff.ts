@@ -66,6 +66,7 @@ export interface GitDiffResult {
  * @param diff - Raw unified diff output
  * @returns Array of parsed diff hunks
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Parser requires branching for diff format
 export function parseDiffOutput(diff: string): DiffHunk[] {
   const hunks: DiffHunk[] = [];
   const lines = diff.split("\n");
@@ -190,6 +191,7 @@ export const gitDiffTool = defineTool({
   kind: "read",
   category: "git",
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git diff requires multiple conditional paths
   async execute(
     input,
     ctx
@@ -284,6 +286,7 @@ export function createGitDiffTool(gitOpsFactory: typeof createGitOps = createGit
     kind: "read",
     category: "git",
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git diff requires multiple conditional paths
     async execute(
       input,
       ctx

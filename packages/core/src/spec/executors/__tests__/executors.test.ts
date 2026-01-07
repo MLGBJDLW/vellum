@@ -172,6 +172,7 @@ describe("ResearchExecutor", () => {
     expect(result.error).toBeUndefined();
 
     // Verify file was written
+    // biome-ignore lint/style/noNonNullAssertion: outputFile verified by expect above
     const content = await fs.readFile(result.outputFile!, "utf-8");
     expect(content).toBe(mockOutput);
   });
@@ -228,6 +229,7 @@ describe("RequirementsExecutor", () => {
     expect(result.phase).toBe("requirements");
     expect(result.outputFile).toBe(path.join(specDir, "requirements.md"));
 
+    // biome-ignore lint/style/noNonNullAssertion: outputFile verified by expect above
     const content = await fs.readFile(result.outputFile!, "utf-8");
     expect(content).toBe(mockOutput);
   });
@@ -251,6 +253,7 @@ describe("RequirementsExecutor", () => {
     await executor.execute(context);
 
     // Verify the spawner was called with prompt containing previous output
+    // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by expect toHaveBeenCalled
     const call = mockSpawner.mock.calls[0]!;
     expect(call[1]).toContain("Previous research content");
   });
@@ -302,6 +305,7 @@ describe("DesignExecutor", () => {
 
     await executor.execute(createMockContext());
 
+    // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by test setup
     const call = mockSpawner.mock.calls[0]!;
     expect(call[1]).toContain("Requirements from file");
   });
@@ -324,6 +328,7 @@ describe("TasksExecutor", () => {
     expect(result.phase).toBe("tasks");
     expect(result.outputFile).toBe(path.join(specDir, "tasks.md"));
 
+    // biome-ignore lint/style/noNonNullAssertion: outputFile verified by expect above
     const content = await fs.readFile(result.outputFile!, "utf-8");
     expect(content).toBe(mockOutput);
   });
@@ -346,6 +351,7 @@ describe("TasksExecutor", () => {
 
     await executor.execute(createMockContext());
 
+    // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by test setup
     const call = mockSpawner.mock.calls[0]!;
     expect(call[1]).toContain("Design content here");
   });
@@ -368,6 +374,7 @@ describe("ValidationExecutor", () => {
     expect(result.phase).toBe("validation");
     expect(result.outputFile).toBe(path.join(specDir, "validation-report.md"));
 
+    // biome-ignore lint/style/noNonNullAssertion: outputFile verified by expect above
     const content = await fs.readFile(result.outputFile!, "utf-8");
     expect(content).toBe(mockOutput);
   });
@@ -420,6 +427,7 @@ describe("ValidationExecutor", () => {
 
     // Verify spawner was called (artifacts would be in the prompt)
     expect(mockSpawner).toHaveBeenCalled();
+    // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by expect above
     const call = mockSpawner.mock.calls[0]!;
     expect(call[1]).toContain("research.md");
   });
@@ -472,6 +480,7 @@ describe("Output File Paths", () => {
       );
 
       // Verify file exists
+      // biome-ignore lint/style/noNonNullAssertion: outputFile verified by expect above
       const stats = await fs.stat(result.outputFile!);
       expect(stats.isFile(), `${name} should create a file`).toBe(true);
     }

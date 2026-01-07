@@ -508,6 +508,7 @@ describe("ExportService", () => {
       const calls = vi.mocked(fs.writeFile).mock.calls[0];
       const content = calls?.[1] as string | undefined;
       expect(content).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: content verified as defined above
       expect(() => JSON.parse(content!)).not.toThrow();
     });
 

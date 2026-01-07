@@ -162,7 +162,7 @@ describe("CheckpointManager", () => {
 
       const content = checkpoint.messages[0]?.content;
       expect(Array.isArray(content)).toBe(true);
-      const block = (content as any[])[0];
+      const block = (content as unknown[])[0];
       expect(block).toEqual({
         type: "tool_result",
         tool_use_id: "tool-1",
@@ -191,7 +191,7 @@ describe("CheckpointManager", () => {
 
       const checkpoint = manager.create(messages);
 
-      const content = checkpoint.messages[0]?.content as any[];
+      const content = checkpoint.messages[0]?.content as unknown[];
       expect(content[0]).toEqual({
         type: "image",
         source: { type: "base64", data: "abc123", media_type: "image/png" },
@@ -222,10 +222,12 @@ describe("CheckpointManager", () => {
 
       const checkpoint = manager.create(messages);
 
-      const content = checkpoint.messages[0]?.content as any[];
-      expect(content[0].content).toEqual([{ type: "text", text: "Nested text" }]);
-      expect(content[0].is_error).toBe(false);
-      expect(content[0].compactedAt).toBe(12345);
+      const content = checkpoint.messages[0]?.content as unknown[];
+      expect((content[0] as Record<string, unknown>).content).toEqual([
+        { type: "text", text: "Nested text" },
+      ]);
+      expect((content[0] as Record<string, unknown>).is_error).toBe(false);
+      expect((content[0] as Record<string, unknown>).compactedAt).toBe(12345);
     });
 
     it("should deep-copy message metadata", () => {

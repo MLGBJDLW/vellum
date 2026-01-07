@@ -222,7 +222,8 @@ describe("analyzeToolPairs", () => {
       const analysis = analyzeToolPairs(messages);
 
       expect(analysis.pairs).toHaveLength(1);
-      const pair = analysis.pairs[0]!;
+      const pair = analysis.pairs[0];
+      if (!pair) throw new Error("Test setup error");
       expect(pair.toolId).toBe("tool-1");
       expect(pair.useMessageIndex).toBe(0);
       expect(pair.useBlockIndex).toBe(0);

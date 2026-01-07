@@ -313,8 +313,17 @@ export class ModeDetector {
     ];
 
     scores.sort((a, b) => b.score - a.score);
-    const winner = scores[0]!; // Array always has 3 elements
-    const secondPlace = scores[1]!;
+    // scores array always has exactly 3 elements (vibe, plan, spec)
+    const winner = scores[0] ?? {
+      mode: this.config.defaultMode as CodingMode,
+      score: 0,
+      keywords: [],
+    };
+    const secondPlace = scores[1] ?? {
+      mode: this.config.defaultMode as CodingMode,
+      score: 0,
+      keywords: [],
+    };
 
     // Calculate confidence based on margin over second place
     const margin = winner.score - secondPlace.score;

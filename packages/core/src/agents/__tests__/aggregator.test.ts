@@ -281,6 +281,7 @@ describe("ResultAggregator", () => {
     });
 
     it("should throw on invalid strategy", () => {
+      // biome-ignore lint/suspicious/noExplicitAny: testing invalid input rejection
       expect(() => aggregator.handlePartialFailure("invalid" as any)).toThrow();
     });
 

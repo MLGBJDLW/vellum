@@ -99,6 +99,7 @@ export function extractEnvironmentVariables(value: string): string[] {
   // Create new regex to avoid state issues with global flag
   const pattern = /\$\{env:(\w+)\}/g;
 
+  // biome-ignore lint/suspicious/noAssignInExpressions: Standard regex iteration pattern
   while ((match = pattern.exec(value)) !== null) {
     const varName = match[1];
     if (varName !== undefined) {

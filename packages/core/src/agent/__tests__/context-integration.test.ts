@@ -290,6 +290,7 @@ describe("createContextIntegration", () => {
       const integration = createContextIntegration({
         model: "invalid-model-that-will-cause-issues",
         enabled: true,
+        // biome-ignore lint/suspicious/noExplicitAny: mock logger for test
         logger: mockLogger as any,
       });
 

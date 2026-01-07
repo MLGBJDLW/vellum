@@ -363,6 +363,7 @@ export function createSSEParser(maxBufferSize: number = DEFAULT_MAX_BUFFER_SIZE)
      * @param chunk - Raw bytes or string to parse
      * @returns Array of complete events parsed from this chunk
      */
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: SSE parsing requires handling multiple field types and event boundaries
     parse(chunk: Uint8Array | string): SSEEvent[] {
       const text = typeof chunk === "string" ? chunk : textDecoder.decode(chunk);
       buffer += text;

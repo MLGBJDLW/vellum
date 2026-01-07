@@ -421,7 +421,10 @@ export class AutoContextManager {
     const checkpoints = this.checkpointManager.list();
 
     if (checkpoints.length > 0) {
-      const latestCheckpoint = checkpoints[0]!;
+      const latestCheckpoint = checkpoints[0];
+      if (!latestCheckpoint) {
+        return { type: "aggressive_truncate", targetPercent: AGGRESSIVE_TRUNCATE_TARGET };
+      }
       // Use rollback if checkpoint is reasonable (not too old)
       const checkpointAge = Date.now() - latestCheckpoint.createdAt;
       const maxCheckpointAge = 10 * 60 * 1000; // 10 minutes

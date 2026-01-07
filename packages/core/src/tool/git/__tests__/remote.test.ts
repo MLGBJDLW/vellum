@@ -1,6 +1,7 @@
 // ============================================
 // Git Network Tools Tests - T018
 // ============================================
+// biome-ignore-all lint/suspicious/noExplicitAny: Test file - mock and partial type assertions
 
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { ToolContext } from "../../../types/tool.js";

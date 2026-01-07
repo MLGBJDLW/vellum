@@ -190,6 +190,7 @@ describe("Security - Injection Attempts in Variables Filtered", () => {
   it("filters template/code injection attempts", () => {
     const codeAttempts = [
       "{{ malicious.code }}",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Testing template detection
       "${ process.env.SECRET }",
       "<% execute() %>",
       "}}{{ injection",
@@ -332,6 +333,7 @@ describe("Security - containsDangerousContent() Catches All Patterns", () => {
 
     it("catches '${' template literal", () => {
       expect(containsDangerousContent("${")).toBe(true);
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Testing template detection
       expect(containsDangerousContent("${variable}")).toBe(true);
     });
 

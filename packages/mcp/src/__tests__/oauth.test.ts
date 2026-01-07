@@ -244,6 +244,7 @@ describe("VellumOAuthClientProvider", () => {
       const authUrl = new URL("https://auth.example.com/authorize");
       await provider.redirectToAuthorization(authUrl);
 
+      // biome-ignore lint/style/noNonNullAssertion: state verified by getOAuthState not returning undefined
       const state = provider.getOAuthState()!;
       const isValid = provider.validateAndClearState(state);
 
@@ -270,6 +271,7 @@ describe("VellumOAuthClientProvider", () => {
       await provider.redirectToAuthorization(authUrl);
 
       // Make state expired
+      // biome-ignore lint/style/noNonNullAssertion: state verified by getOAuthState after redirectToAuthorization
       const state = provider.getOAuthState()!;
       (
         provider as unknown as { providerData: { oauthStateTimestamp: number } }
@@ -512,6 +514,7 @@ describe("McpOAuthManager", () => {
       )) as VellumOAuthClientProvider;
       await provider.redirectToAuthorization(new URL("https://auth.example.com"));
 
+      // biome-ignore lint/style/noNonNullAssertion: state verified by getOAuthState after redirectToAuthorization
       const state = provider.getOAuthState()!;
       const isValid = manager.validateOAuthState(serverName, serverUrl, state);
 

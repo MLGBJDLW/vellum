@@ -663,6 +663,7 @@ export class AnthropicProvider implements Provider {
   /**
    * Process streaming response and yield normalized events
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Stream processing requires handling multiple event types and state transitions
   private async *processStream(
     stream: ReturnType<Anthropic["messages"]["stream"]>
   ): AsyncIterable<StreamEvent> {
@@ -742,6 +743,7 @@ export class AnthropicProvider implements Provider {
   /**
    * Process a single stream event and yield normalized events
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Event processing requires handling multiple content block types
   private *processStreamEvent(
     event: RawMessageStreamEvent,
     toolCallState: Map<number, { id: string; name: string; inputJson: string }>

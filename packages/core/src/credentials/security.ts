@@ -194,7 +194,9 @@ export class SecureString implements Disposable {
     // Constant-time comparison
     let result = 0;
     for (let i = 0; i < this.buffer.length; i++) {
-      result |= this.buffer[i]! ^ other.buffer[i]!;
+      const a = this.buffer[i] ?? 0;
+      const b = other.buffer[i] ?? 0;
+      result |= a ^ b;
     }
     return result === 0;
   }
@@ -353,7 +355,9 @@ export function constantTimeEquals(a: string, b: string): boolean {
     const dummy = Buffer.alloc(bufA.length);
     let result = 0;
     for (let i = 0; i < bufA.length; i++) {
-      result |= bufA[i]! ^ dummy[i]!;
+      const a = bufA[i] ?? 0;
+      const d = dummy[i] ?? 0;
+      result |= a ^ d;
     }
     // Always false but timing is consistent
     return false && result === 0;
@@ -361,7 +365,9 @@ export function constantTimeEquals(a: string, b: string): boolean {
 
   let result = 0;
   for (let i = 0; i < bufA.length; i++) {
-    result |= bufA[i]! ^ bufB[i]!;
+    const a = bufA[i] ?? 0;
+    const b = bufB[i] ?? 0;
+    result |= a ^ b;
   }
   return result === 0;
 }

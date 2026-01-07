@@ -282,8 +282,9 @@ describe("InheritanceResolver", () => {
       const registry = createRegistry(agents);
 
       // Try to resolve the deepest agent
-      const deepestAgent = agents[agents.length - 1];
-      const result = await resolver.resolve(deepestAgent!, registry);
+      const deepestAgent = agents.at(-1);
+      if (!deepestAgent) return;
+      const result = await resolver.resolve(deepestAgent, registry);
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -304,8 +305,9 @@ describe("InheritanceResolver", () => {
       }
       const registry = createRegistry(agents);
 
-      const deepestAgent = agents[agents.length - 1];
-      const result = await resolver.resolve(deepestAgent!, registry);
+      const deepestAgent = agents.at(-1);
+      if (!deepestAgent) return;
+      const result = await resolver.resolve(deepestAgent, registry);
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -544,7 +546,8 @@ describe("InheritanceResolver", () => {
         }
         const registry = createRegistry(agents);
 
-        const deepAgent = agents[agents.length - 1]!;
+        const deepAgent = agents.at(-1);
+        if (!deepAgent) return;
         const depth = getInheritanceDepth(deepAgent, registry);
 
         expect(depth).toBeLessThanOrEqual(MAX_INHERITANCE_DEPTH);

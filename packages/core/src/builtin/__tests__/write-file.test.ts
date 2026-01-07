@@ -2,6 +2,7 @@
  * Tests for write_file tool
  */
 
+import type { Stats } from "node:fs";
 import * as fs from "node:fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ToolContext } from "../../types/tool.js";
@@ -75,7 +76,7 @@ describe("writeFileTool", () => {
 
     it("should overwrite existing file", async () => {
       // File exists
-      vi.mocked(fs.stat).mockResolvedValue({} as any);
+      vi.mocked(fs.stat).mockResolvedValue({} as Stats);
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
       vi.mocked(fs.writeFile).mockResolvedValue(undefined);
 

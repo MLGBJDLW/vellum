@@ -346,6 +346,7 @@ export class IgnoreManager {
           regexStr += pattern.slice(i, closeIdx + 1);
           i = closeIdx + 1;
         }
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Intentional pattern for regex special chars
       } else if (".+^${}|()\\".includes(char)) {
         // Escape regex special characters
         regexStr += `\\${char}`;

@@ -435,16 +435,16 @@ Examples:
 
       switch (source) {
         case "mdn":
-          result = await lookupMDN(query!, maxLength);
+          result = await lookupMDN(query ?? "", maxLength);
           break;
         case "npm":
-          result = await lookupNPM(packageName!, maxLength);
+          result = await lookupNPM(packageName ?? "", maxLength);
           break;
         case "pypi":
-          result = await lookupPyPI(packageName!, maxLength);
+          result = await lookupPyPI(packageName ?? "", maxLength);
           break;
         case "github":
-          result = await lookupGitHub(repo!, maxLength);
+          result = await lookupGitHub(repo ?? "", maxLength);
           break;
       }
 

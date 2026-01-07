@@ -139,7 +139,9 @@ describe("containsDangerousContent", () => {
     });
 
     it("detects '${' pattern", () => {
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Testing template detection
       expect(containsDangerousContent("${variable}")).toBe(true);
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Testing template detection
       expect(containsDangerousContent("Template ${string}")).toBe(true);
     });
 
@@ -207,6 +209,7 @@ describe("sanitizeVariable", () => {
       expect(sanitizeVariable("key", "Use {{ template }}")).toBe(
         "Use [FILTERED] template [FILTERED]"
       );
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Testing template detection
       expect(sanitizeVariable("key", "${variable}")).toBe("[FILTERED]variable}");
     });
   });

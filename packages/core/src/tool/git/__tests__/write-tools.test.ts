@@ -580,6 +580,7 @@ describe("snapshot integration", () => {
     const execOrder = execMock.mock.invocationCallOrder[1];
     expect(trackOrder).toBeDefined();
     expect(execOrder).toBeDefined();
+    // biome-ignore lint/style/noNonNullAssertion: values verified as defined above
     expect(trackOrder!).toBeLessThan(execOrder!);
   });
 

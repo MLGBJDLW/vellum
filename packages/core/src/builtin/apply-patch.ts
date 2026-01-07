@@ -183,6 +183,7 @@ export const applyPatchTool = defineTool({
   kind: "write",
   category: "filesystem",
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Patch application with comprehensive validation and error handling
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {
@@ -231,7 +232,9 @@ export const applyPatchTool = defineTool({
 
       // Apply each block in order
       for (let i = 0; i < blocks.length; i++) {
-        const result = applyPatchBlock(content, blocks[i]!);
+        const block = blocks[i];
+        if (!block) continue;
+        const result = applyPatchBlock(content, block);
         if (result.success) {
           content = result.content;
           appliedCount++;

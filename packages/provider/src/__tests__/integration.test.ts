@@ -14,6 +14,7 @@
  *
  * @module @vellum/provider/integration
  */
+// biome-ignore-all lint/style/noNonNullAssertion: Integration test file - env vars verified by hasApiKey guard
 
 import { describe, expect, it } from "vitest";
 import { AnthropicProvider } from "../anthropic.js";

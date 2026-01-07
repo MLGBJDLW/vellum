@@ -272,6 +272,7 @@ describe("Handoff Integration Tests", () => {
 
       // Verify handoff occurred
       expect(handoffPacket).not.toBeNull();
+      // biome-ignore lint/style/noNonNullAssertion: handoffPacket verified not null above
       const pkt = handoffPacket!;
       expect(pkt.type).toBe("spec_handoff");
       expect(pkt.callback.returnTo).toBe("spec");
@@ -358,6 +359,7 @@ describe("Handoff Integration Tests", () => {
       await engine.start("Checkpoint Test", "Verify checkpoint in handoff");
 
       expect(capturedPacket).not.toBeNull();
+      // biome-ignore lint/style/noNonNullAssertion: capturedPacket verified not null above
       const pkt = capturedPacket!;
       expect(pkt.callback).toEqual({
         returnTo: "spec",

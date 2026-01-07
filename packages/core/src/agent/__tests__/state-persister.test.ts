@@ -281,7 +281,9 @@ describe("State Persister (T023)", () => {
       await persister.save(snapshot);
 
       const loaded = await persister.load("session-123");
-      loaded!.state = "streaming";
+      if (loaded) {
+        loaded.state = "streaming";
+      }
 
       const reloaded = await persister.load("session-123");
       expect(reloaded?.state).toBe("idle");

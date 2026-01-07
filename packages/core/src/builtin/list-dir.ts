@@ -85,6 +85,7 @@ function isHidden(name: string): boolean {
 /**
  * Recursively list directory contents
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Directory traversal with filtering requires comprehensive conditionals
 async function listDirectory(
   basePath: string,
   currentPath: string,

@@ -39,7 +39,8 @@ describe("Logger", () => {
       logger.trace("trace message", { traceData: true });
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("trace");
       expect(entry.message).toBe("trace message");
       expect(entry.data).toEqual({ traceData: true });
@@ -52,7 +53,8 @@ describe("Logger", () => {
       logger.debug("debug message", { key: "value" });
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("debug");
       expect(entry.message).toBe("debug message");
       expect(entry.data).toEqual({ key: "value" });
@@ -65,7 +67,8 @@ describe("Logger", () => {
       logger.info("info message", 42);
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("info");
       expect(entry.message).toBe("info message");
       expect(entry.data).toBe(42);
@@ -78,7 +81,8 @@ describe("Logger", () => {
       logger.warn("warn message", ["item1", "item2"]);
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("warn");
       expect(entry.message).toBe("warn message");
       expect(entry.data).toEqual(["item1", "item2"]);
@@ -92,7 +96,8 @@ describe("Logger", () => {
       logger.error("error message", error);
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("error");
       expect(entry.message).toBe("error message");
       expect(entry.data).toBe(error);
@@ -105,7 +110,8 @@ describe("Logger", () => {
       logger.fatal("fatal message", { critical: true });
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("fatal");
       expect(entry.message).toBe("fatal message");
       expect(entry.data).toEqual({ critical: true });
@@ -391,7 +397,8 @@ describe("Logger", () => {
       logger.info("test");
       const after = new Date();
 
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.timestamp).toBeInstanceOf(Date);
       expect(entry.timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
       expect(entry.timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
@@ -515,7 +522,8 @@ describe("Logger", () => {
       timer.end();
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("debug");
       expect(entry.message).toBe("test-operation completed");
       expect(entry.data).toHaveProperty("label", "test-operation");
@@ -596,7 +604,8 @@ describe("Logger", () => {
       tracer.startActiveSpan("test-span", (span) => {
         logger.info("log within span");
 
-        const entry = transport.entries[0]!;
+        const entry = transport.entries[0];
+        if (!entry) throw new Error("Test setup error");
         expect(entry.traceId).toBeDefined();
         expect(entry.spanId).toBeDefined();
         expect(entry.traceId).toHaveLength(32);
@@ -612,7 +621,8 @@ describe("Logger", () => {
 
       logger.info("log without span");
 
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.traceId).toBeUndefined();
       expect(entry.spanId).toBeUndefined();
     });
@@ -634,8 +644,9 @@ describe("Logger", () => {
       });
 
       expect(transport.entries).toHaveLength(2);
-      const parentEntry = transport.entries[0]!;
-      const childEntry = transport.entries[1]!;
+      const parentEntry = transport.entries[0];
+      const childEntry = transport.entries[1];
+      if (!parentEntry || !childEntry) throw new Error("Test setup error");
 
       // Same trace
       expect(parentEntry.traceId).toBe(childEntry.traceId);

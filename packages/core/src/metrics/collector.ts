@@ -106,6 +106,8 @@ export class MetricsCollector {
     if (!this.counters.has(name)) {
       this.counters.set(name, new Map());
     }
+    // Map always exists after set above
+    // biome-ignore lint/style/noNonNullAssertion: Map is guaranteed to exist
     const counterMap = this.counters.get(name)!;
 
     return {
@@ -136,6 +138,8 @@ export class MetricsCollector {
     if (!this.histograms.has(name)) {
       this.histograms.set(name, new Map());
     }
+    // Map always exists after set above
+    // biome-ignore lint/style/noNonNullAssertion: Map is guaranteed to exist
     const histMap = this.histograms.get(name)!;
 
     return {
@@ -152,8 +156,9 @@ export class MetricsCollector {
         }
         const sorted = [...values].sort((a, b) => a - b);
         const sum = values.reduce((a, b) => a + b, 0);
-        const min = sorted[0]!;
-        const max = sorted[sorted.length - 1]!;
+        // Array is non-empty (checked above), so min/max exist
+        const min = sorted[0] ?? 0;
+        const max = sorted[sorted.length - 1] ?? 0;
         return {
           count: values.length,
           sum,
@@ -184,6 +189,8 @@ export class MetricsCollector {
     if (!this.gauges.has(name)) {
       this.gauges.set(name, new Map());
     }
+    // Map always exists after set above
+    // biome-ignore lint/style/noNonNullAssertion: Map is guaranteed to exist
     const gaugeMap = this.gauges.get(name)!;
 
     return {
@@ -225,6 +232,6 @@ export class MetricsCollector {
    */
   private percentile(sorted: number[], p: number): number {
     const idx = Math.ceil((p / 100) * sorted.length) - 1;
-    return sorted[Math.max(0, idx)]!;
+    return sorted[Math.max(0, idx)] ?? 0;
   }
 }

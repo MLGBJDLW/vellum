@@ -206,9 +206,9 @@ describe("KeychainStore (with mocked keytar)", () => {
     constructor() {
       super();
       // Inject mock keytar directly by accessing private field
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: Test requires access to private fields
       (this as any).keytarModule = mockKeytar;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: Test requires access to private fields
       (this as any).keytarLoadAttempted = true;
     }
   }
@@ -333,7 +333,7 @@ describe("KeychainStore (with mocked keytar)", () => {
       // Verify stored data
       const storedJson = mockKeychainStorage.get("anthropic");
       expect(storedJson).toBeDefined();
-      const stored = JSON.parse(storedJson!);
+      const stored = JSON.parse(storedJson ?? "{}");
       expect(stored.value).toBe("sk-ant-test123");
     });
 
@@ -352,7 +352,7 @@ describe("KeychainStore (with mocked keytar)", () => {
       expect(result.ok).toBe(true);
 
       const storedJson = mockKeychainStorage.get("openai");
-      const stored = JSON.parse(storedJson!);
+      const stored = JSON.parse(storedJson ?? "{}");
       expect(stored.metadata.label).toBe("Production API Key");
       expect(stored.expiresAt).toBe("2025-01-01T00:00:00.000Z");
     });
@@ -449,8 +449,8 @@ describe("KeychainStore (with mocked keytar)", () => {
         expect(result.value.map((r) => r.provider).sort()).toEqual(["anthropic", "openai"]);
         // Values should be masked
         expect(result.value[0]?.maskedHint).toBeDefined();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        expect((result.value[0]! as any).value).toBeUndefined();
+        // biome-ignore lint/suspicious/noExplicitAny: Test assertion requires type assertion
+        expect((result.value[0] as any)?.value).toBeUndefined();
       }
     });
 

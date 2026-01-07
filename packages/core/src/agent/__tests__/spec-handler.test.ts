@@ -386,7 +386,8 @@ describe("SpecModeHandler", () => {
       await handler.onEnter();
 
       for (let i = 0; i < phases.length; i++) {
-        const phase = phases[i]!;
+        const phase = phases.at(i);
+        if (!phase) continue;
         expect(handler.currentPhase).toBe(phase);
         expect(handler.phaseNumber).toBe(i + 1);
 

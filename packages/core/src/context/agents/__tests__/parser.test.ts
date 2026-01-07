@@ -114,7 +114,8 @@ Line 3`;
     const result = parseSections(content);
 
     expect(result.sections).toHaveLength(1);
-    const h1 = result.sections[0]!;
+    const h1 = result.sections[0];
+    if (!h1) throw new Error("Test setup error");
     expect(h1.level).toBe(1);
     expect(h1.children[0]?.level).toBe(2);
     expect(h1.children[0]?.children[0]?.level).toBe(3);

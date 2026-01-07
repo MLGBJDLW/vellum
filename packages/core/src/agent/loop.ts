@@ -566,6 +566,176 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   }
 
   /**
+   * Builds the system prompt for a run, combining base prompt with AGENTS.md and skills.
+   */
+  private async buildSystemPromptForRun(): Promise<string> {
+    let systemPrompt: string;
+
+    if (this.config.promptBuilder) {
+      const result = fromPromptBuilder(this.config.promptBuilder);
+      systemPrompt = result.prompt;
+      this.logger?.debug("Using PromptBuilder for system prompt", {
+        layerCount: this.config.promptBuilder.getLayers().length,
+        promptSize: systemPrompt.length,
+      });
+    } else {
+      const systemPromptConfig: SystemPromptConfig = {
+        cwd: this.config.cwd,
+        projectRoot: this.config.projectRoot,
+        mode: this.config.mode.name,
+        modePrompt: this.config.mode.prompt,
+        providerType: this.config.providerType,
+        includeEnvironment: true,
+        includeRuleFiles: true,
+      };
+      systemPrompt = (await buildSystemPrompt(systemPromptConfig)).prompt;
+    }
+
+    // Append AGENTS.md prompt sections
+    if (this.agentsIntegration?.getState() === "ready") {
+      const agentsSections = this.agentsIntegration.getSystemPromptStrings();
+      if (agentsSections.length > 0) {
+        systemPrompt += `\n\n${agentsSections.join("\n\n")}`;
+        this.logger?.debug("Added AGENTS.md sections to system prompt", {
+          sectionCount: agentsSections.length,
+        });
+      }
+    }
+
+    // Match and load skills
+    if (this.skillManager?.isInitialized()) {
+      try {
+        const matchContext = this.buildSkillMatchContext();
+        this.activeSkills = await this.skillManager.getActiveSkills(matchContext);
+
+        if (this.activeSkills.length > 0) {
+          const skillPrompt = this.skillManager.buildCombinedPrompt(this.activeSkills);
+          if (skillPrompt) {
+            systemPrompt += `\n\n## Active Skills\n\n${skillPrompt}`;
+            this.logger?.debug("Added skill sections to system prompt", {
+              skillCount: this.activeSkills.length,
+              skillNames: this.activeSkills.map((s) => s.name),
+            });
+          }
+        }
+      } catch (error) {
+        this.logger?.warn("Failed to match skills", { error });
+      }
+    }
+
+    return systemPrompt;
+  }
+
+  /**
+   * Processes the LLM stream and collects tool calls.
+   */
+  private async processStreamResponse(
+    stream: AsyncIterable<StreamEvent>,
+    pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
+  ): Promise<void> {
+    if (this.useStreamProcessor && this.streamProcessor) {
+      const wrappedStream = this.wrapStreamForProcessor(stream);
+      const result = await this.streamProcessor.processStream(wrappedStream);
+
+      if (result.ok) {
+        for (const part of result.value.parts) {
+          if (part.type === "tool") {
+            pendingToolCalls.push({
+              id: part.id,
+              name: part.name,
+              input: part.arguments,
+            });
+          }
+        }
+      }
+      this.streamProcessor.reset();
+    } else {
+      for await (const event of stream) {
+        if (this.cancellation.isCancelled) {
+          break;
+        }
+        await this.handleStreamEvent(event, pendingToolCalls);
+      }
+    }
+  }
+
+  /**
+   * Handles errors during run with classification and retry logic.
+   * @returns true if error was handled (retried or terminated), false if should rethrow
+   */
+  private async handleRunError(error: unknown): Promise<boolean> {
+    const err = error instanceof Error ? error : new Error(String(error));
+    const durationMs = this.llmRequestStartTime ? Date.now() - this.llmRequestStartTime : 0;
+
+    this.llmLogger?.logRequestError({
+      provider: this.config.providerType,
+      model: this.config.model,
+      requestId: this.currentRequestId ?? "unknown",
+      durationMs,
+      error: err,
+    });
+
+    this.logger?.error("LLM stream error", {
+      requestId: this.currentRequestId,
+      error: err.message,
+      durationMs,
+    });
+
+    if (error instanceof RetryAbortedError) {
+      this.logger?.debug("Retry aborted, terminating");
+      this.transitionTo("terminated");
+      return true;
+    }
+
+    const errorInfo = classifyError(err);
+
+    if (isFatal(errorInfo)) {
+      this.logger?.error("Fatal error encountered", { errorInfo });
+      this.emit("error", err);
+      if (this.state !== "terminated" && this.state !== "shutdown") {
+        this.transitionTo("recovering");
+      }
+      return false; // Signal to rethrow
+    }
+
+    if (isRetryable(errorInfo) && this.shouldRetry(errorInfo)) {
+      this.retryAttempt++;
+      const delay = errorInfo.retryDelay ?? this.calculateRetryDelay(this.retryAttempt);
+
+      this.logger?.debug("Retrying after error", {
+        attempt: this.retryAttempt,
+        delay,
+        errorType: errorInfo.severity,
+      });
+
+      this.emit("retry", this.retryAttempt, err, delay);
+      this.transitionTo("recovering");
+
+      try {
+        await this.retryDelay(delay);
+        await this.run();
+        return true;
+      } catch (retryError) {
+        if (retryError instanceof RetryAbortedError) {
+          this.transitionTo("terminated");
+          return true;
+        }
+        throw retryError;
+      }
+    }
+
+    // Non-retryable or retries exhausted
+    this.emit("error", err);
+    if (this.retryAttempt > 0) {
+      this.emit("retryExhausted", err, this.retryAttempt);
+    }
+    if (this.state !== "terminated" && this.state !== "shutdown") {
+      this.transitionTo("recovering");
+    }
+    return true;
+  }
+
+  /**
    * Runs the agent loop.
    *
    * This is the main entry point for starting the agent.
@@ -608,76 +778,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     });
 
     try {
-      // Build system prompt - use PromptBuilder if provided (T029)
-      let systemPrompt: string;
-
-      if (this.config.promptBuilder) {
-        // Use new PromptBuilder system
-        const result = fromPromptBuilder(this.config.promptBuilder);
-        systemPrompt = result.prompt;
-        this.logger?.debug("Using PromptBuilder for system prompt", {
-          layerCount: this.config.promptBuilder.getLayers().length,
-          promptSize: systemPrompt.length,
-        });
-      } else {
-        // Use legacy buildSystemPrompt
-        const systemPromptConfig: SystemPromptConfig = {
-          cwd: this.config.cwd,
-          projectRoot: this.config.projectRoot,
-          mode: this.config.mode.name,
-          modePrompt: this.config.mode.prompt,
-          providerType: this.config.providerType,
-          includeEnvironment: true,
-          includeRuleFiles: true,
-        };
-
-        systemPrompt = (await buildSystemPrompt(systemPromptConfig)).prompt;
-      }
-
-      // Append AGENTS.md prompt sections if integration is available
-      if (this.agentsIntegration && this.agentsIntegration.getState() === "ready") {
-        const agentsSections = this.agentsIntegration.getSystemPromptStrings();
-        if (agentsSections.length > 0) {
-          systemPrompt += `\n\n${agentsSections.join("\n\n")}`;
-          this.logger?.debug("Added AGENTS.md sections to system prompt", {
-            sectionCount: agentsSections.length,
-          });
-        }
-      }
-
-      // Match and load skills based on context (T053)
-      if (this.skillManager?.isInitialized()) {
-        try {
-          // Build match context from current session
-          const matchContext = this.buildSkillMatchContext();
-
-          // Get matching skills
-          this.activeSkills = await this.skillManager.getActiveSkills(matchContext);
-
-          if (this.activeSkills.length > 0) {
-            // Build and append skill prompt sections
-            const skillPrompt = this.skillManager.buildCombinedPrompt(this.activeSkills);
-            if (skillPrompt) {
-              systemPrompt += `\n\n## Active Skills\n\n${skillPrompt}`;
-              this.logger?.debug("Added skill sections to system prompt", {
-                skillCount: this.activeSkills.length,
-                skillNames: this.activeSkills.map((s) => s.name),
-              });
-            }
-          }
-        } catch (error) {
-          this.logger?.warn("Failed to match skills", { error });
-        }
-      }
+      const systemPrompt = await this.buildSystemPromptForRun();
 
       // Create abort controller for this stream
       this.abortController = new AbortController();
-
-      // Register cancellation handler
-      const onCancel = () => {
-        this.abortController?.abort();
-      };
-      this.cancellation.onCancel(onCancel);
+      this.cancellation.onCancel(() => this.abortController?.abort());
 
       // Convert session messages to provider format
       const providerMessages = toModelMessages(this.messages);
@@ -706,42 +811,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           )
         : baseStream;
 
-      // Track pending tool calls for Phase 3
+      // Track and process pending tool calls
       const pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> =
         [];
-
-      // Process stream based on configuration (T042)
-      if (this.useStreamProcessor && this.streamProcessor) {
-        // Use unified StreamProcessor pipeline
-        const wrappedStream = this.wrapStreamForProcessor(stream);
-        const result = await this.streamProcessor.processStream(wrappedStream);
-
-        // Collect tool calls from result for execution
-        if (result.ok) {
-          for (const part of result.value.parts) {
-            if (part.type === "tool") {
-              pendingToolCalls.push({
-                id: part.id,
-                name: part.name,
-                input: part.arguments,
-              });
-            }
-          }
-        }
-        // Reset processor for next run
-        this.streamProcessor.reset();
-      } else {
-        // Legacy stream handling - iterate over stream events
-        for await (const event of stream) {
-          // Check for cancellation
-          if (this.cancellation.isCancelled) {
-            break;
-          }
-
-          // Handle event by type
-          await this.handleStreamEvent(event, pendingToolCalls);
-        }
-      }
+      await this.processStreamResponse(stream, pendingToolCalls);
 
       // Calculate duration (T041)
       const durationMs = this.llmRequestStartTime ? Date.now() - this.llmRequestStartTime : 0;
@@ -767,96 +840,18 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       if (this.cancellation.isCancelled) {
         this.transitionTo("terminated");
       } else if (pendingToolCalls.length > 0) {
-        // Transition to tool_executing for Phase 3
         this.transitionTo("tool_executing");
-        // Execute pending tool calls (T014)
         await this.executeToolCalls(pendingToolCalls);
       } else {
-        // No tool calls, transition back to idle (task complete)
         this.transitionTo("idle");
         this.emit("complete");
       }
     } catch (error) {
-      // Handle errors with retry logic (T025)
-      const err = error instanceof Error ? error : new Error(String(error));
-      const durationMs = this.llmRequestStartTime ? Date.now() - this.llmRequestStartTime : 0;
-
-      // Log LLM request error (T041)
-      this.llmLogger?.logRequestError({
-        provider: this.config.providerType,
-        model: this.config.model,
-        requestId: this.currentRequestId ?? "unknown",
-        durationMs,
-        error: err,
-      });
-
-      this.logger?.error("LLM stream error", {
-        requestId: this.currentRequestId,
-        error: err.message,
-        durationMs,
-      });
-
-      // Check if aborted - don't retry
-      if (error instanceof RetryAbortedError) {
-        this.logger?.debug("Retry aborted, terminating");
-        this.transitionTo("terminated");
-        return;
-      }
-
-      // Classify the error to determine handling strategy
-      const errorInfo = classifyError(err);
-
-      // Fatal errors throw immediately
-      if (isFatal(errorInfo)) {
-        this.logger?.error("Fatal error encountered", { errorInfo });
-        this.emit("error", err);
-        if (this.state !== "terminated" && this.state !== "shutdown") {
-          this.transitionTo("recovering");
-        }
-        throw err;
-      }
-
-      // Transient/retryable errors trigger retry logic
-      if (isRetryable(errorInfo) && this.shouldRetry(errorInfo)) {
-        this.retryAttempt++;
-        const delay = errorInfo.retryDelay ?? this.calculateRetryDelay(this.retryAttempt);
-
-        this.logger?.debug("Retrying after error", {
-          attempt: this.retryAttempt,
-          delay,
-          errorType: errorInfo.severity,
-        });
-
-        this.emit("retry", this.retryAttempt, err, delay);
-        this.transitionTo("recovering");
-
-        // Wait before retry (respects cancellation)
-        try {
-          await this.retryDelay(delay);
-          // Retry the run
-          await this.run();
-          return;
-        } catch (retryError) {
-          if (retryError instanceof RetryAbortedError) {
-            this.transitionTo("terminated");
-            return;
-          }
-          throw retryError;
-        }
-      }
-
-      // Non-retryable error or retries exhausted
-      this.emit("error", err);
-      if (this.retryAttempt > 0) {
-        this.emit("retryExhausted", err, this.retryAttempt);
-      }
-
-      // Transition to recovering state
-      if (this.state !== "terminated" && this.state !== "shutdown") {
-        this.transitionTo("recovering");
+      const handled = await this.handleRunError(error);
+      if (!handled) {
+        throw error;
       }
     } finally {
-      // Cleanup abort controller
       this.abortController = null;
     }
   }
@@ -1434,6 +1429,31 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   }
 
   /**
+   * Extracts file paths from tool invocations in messages.
+   * Used by buildSkillMatchContext to determine files involved in the session.
+   */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Message traversal requires nested conditionals
+  private extractFilePathsFromMessages(): string[] {
+    const files: string[] = [];
+    for (const msg of this.messages) {
+      if (msg.role === "assistant") {
+        for (const part of msg.parts) {
+          if (part.type === "tool") {
+            const input = part.input as Record<string, unknown>;
+            if (input.path && typeof input.path === "string") {
+              files.push(input.path);
+            }
+            if (input.paths && Array.isArray(input.paths)) {
+              files.push(...input.paths.filter((p): p is string => typeof p === "string"));
+            }
+          }
+        }
+      }
+    }
+    return files;
+  }
+
+  /**
    * Build match context from current session state.
    * Used to match skills against the current request.
    */
@@ -1448,24 +1468,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         .map((p) => p.text)
         .join(" ") ?? "";
 
-    // Extract file paths from tool results (if any files were read/written)
-    const files: string[] = [];
-    for (const msg of this.messages) {
-      if (msg.role === "assistant") {
-        // Look for tool parts in assistant messages
-        for (const part of msg.parts) {
-          if (part.type === "tool") {
-            const input = part.input as Record<string, unknown>;
-            if (input.path && typeof input.path === "string") {
-              files.push(input.path);
-            }
-            if (input.paths && Array.isArray(input.paths)) {
-              files.push(...input.paths.filter((p): p is string => typeof p === "string"));
-            }
-          }
-        }
-      }
-    }
+    // Extract file paths from tool results
+    const files = this.extractFilePathsFromMessages();
 
     // Extract slash command if present
     const command = request.startsWith("/") ? request.split(/\s/)[0]?.slice(1) : undefined;

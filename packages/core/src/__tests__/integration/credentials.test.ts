@@ -569,6 +569,7 @@ model = "claude-3"
 
         const result = await credentialManager.store({
           provider: "anthropic",
+          // biome-ignore lint/suspicious/noExplicitAny: testing invalid type rejection
           type: "invalid_type" as any,
           value: "test-value",
           metadata: {},
@@ -589,6 +590,7 @@ model = "claude-3"
           type: "api_key",
           value: "sk-test",
           metadata: {},
+          // biome-ignore lint/suspicious/noExplicitAny: testing schema validation with missing field
         } as any);
 
         // Empty provider is technically valid per schema, so this tests the store behavior
@@ -605,6 +607,7 @@ model = "claude-3"
           // type is missing
           value: "sk-test",
           metadata: {},
+          // biome-ignore lint/suspicious/noExplicitAny: testing schema validation with missing type field
         } as any);
 
         expect(result.ok).toBe(false);

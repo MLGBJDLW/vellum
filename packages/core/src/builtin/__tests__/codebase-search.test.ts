@@ -99,7 +99,7 @@ describe("codebaseSearchTool", () => {
       if (result.success) {
         const highRanked = result.output.results.find((r) => r.file === "high.ts");
         const lowRanked = result.output.results.find((r) => r.file === "low.ts");
-        expect(highRanked!).toBeDefined();
+        expect(highRanked).toBeDefined();
         expect(lowRanked).toBeUndefined();
       }
     });

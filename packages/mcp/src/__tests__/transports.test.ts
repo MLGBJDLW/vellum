@@ -13,6 +13,7 @@ const createMockTransport = () => ({
 
 // Mock the MCP SDK transports with class constructors
 vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+  // biome-ignore lint/suspicious/noExplicitAny: Mock implementation requires flexible types
   StdioClientTransport: vi.fn().mockImplementation(function (this: any, options: any) {
     Object.assign(this, createMockTransport());
     this._options = options;
@@ -22,8 +23,11 @@ vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
 
 vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: vi.fn().mockImplementation(function (
+    // biome-ignore lint/suspicious/noExplicitAny: Mock implementation requires flexible types
     this: any,
+    // biome-ignore lint/suspicious/noExplicitAny: Mock implementation requires flexible types
     url: any,
+    // biome-ignore lint/suspicious/noExplicitAny: Mock implementation requires flexible types
     options: any
   ) {
     Object.assign(this, createMockTransport());
@@ -33,6 +37,7 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
 }));
 
 vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
+  // biome-ignore lint/suspicious/noExplicitAny: Mock implementation requires flexible types
   SSEClientTransport: vi.fn().mockImplementation(function (this: any, url: any, options: any) {
     Object.assign(this, createMockTransport());
     this._url = url;
@@ -87,6 +92,7 @@ describe("StdioAdapter", () => {
         command: "node",
         args: ["server.js"],
         env: {
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional template test
           CUSTOM_VAR: "${env:TEST_VAR}",
         },
       };

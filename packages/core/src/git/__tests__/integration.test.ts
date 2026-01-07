@@ -211,7 +211,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "original.txt", "original\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Add new file and stage
       await createFile(tempDir, "new-file.txt", "new content\n");
@@ -232,7 +232,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "file.txt", "content\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // No changes, same tree
       const patchResult = await service.patch(snapshotHash);
@@ -246,7 +246,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "file.txt", "content\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       const patchResult = await service.patch(snapshotHash);
       expect(patchResult.ok).toBe(true);
@@ -268,7 +268,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "file.txt", "line 1\nline 2\nline 3\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Modify file
       await createFile(tempDir, "file.txt", "line 1\nline 2 modified\nline 3\n");
@@ -292,7 +292,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "file.txt", "content\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // No changes - diff() compares tree to working directory
       // After track(), working directory matches tree if nothing changed
@@ -307,7 +307,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "existing.txt", "existing\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Add new file - diff will see it as an untracked file
       // For diff to show added files, they must be staged
@@ -328,7 +328,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "existing.txt", "existing\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Add new file and stage it
       await createFile(tempDir, "new.txt", "new content\n");
@@ -346,7 +346,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "to-delete.txt", "old content\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Delete file
       await fs.unlink(path.join(tempDir, "to-delete.txt"));
@@ -372,7 +372,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "file.txt", "original content\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Modify file
       await createFile(tempDir, "file.txt", "modified content\n");
@@ -393,7 +393,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "original.txt", "original\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Add new file
       await createFile(tempDir, "new-file.txt", "new content\n");
@@ -413,7 +413,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "important.txt", "important content\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Delete file
       await fs.unlink(path.join(tempDir, "important.txt"));
@@ -436,7 +436,7 @@ describe("GitSnapshotService Integration", () => {
       await createFile(tempDir, "src/index.ts", "export {};\n");
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Modify all files
       await createFile(tempDir, "file1.txt", "modified 1\n");
@@ -469,7 +469,7 @@ describe("GitSnapshotService Integration", () => {
       // Step 2: Take snapshot
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
       expect(snapshotHash).toHaveLength(40);
 
       // Step 3: Make changes
@@ -518,7 +518,7 @@ describe("GitSnapshotService Integration", () => {
       // Snapshot
       const trackResult = await service.track();
       expect(trackResult.ok).toBe(true);
-      const snapshotHash = trackResult.ok ? trackResult.value! : "";
+      const snapshotHash = trackResult.ok ? (trackResult.value ?? "") : "";
 
       // Modify nested files
       await createFile(

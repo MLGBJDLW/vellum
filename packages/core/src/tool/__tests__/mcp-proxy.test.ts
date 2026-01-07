@@ -713,6 +713,7 @@ describe("MCPProxy Tool Discovery", () => {
 
     it("should convert JSON Schema to Zod parameters", async () => {
       const tools = await proxy.discoverTools();
+      // biome-ignore lint/style/noNonNullAssertion: tools[0] verified by test setup
       const searchTool = tools[0]!;
 
       // Test parameter validation
@@ -728,6 +729,7 @@ describe("MCPProxy Tool Discovery", () => {
 
     it("should handle tools without inputSchema", async () => {
       const tools = await proxy.discoverTools();
+      // biome-ignore lint/style/noNonNullAssertion: tools[2] verified by test setup
       const noParamsTool = tools[2]!;
 
       // Should accept empty object
@@ -834,6 +836,7 @@ describe("MCPProxy Tool Execution", () => {
   describe("Tool execute function via discoverTools", () => {
     it("should execute tool and return success result", async () => {
       const tools = await proxy.discoverTools();
+      // biome-ignore lint/style/noNonNullAssertion: tools[0] verified by test setup
       const echoTool = tools[0]!;
       const ctx = createMockContext();
 
@@ -857,6 +860,7 @@ describe("MCPProxy Tool Execution", () => {
       await proxy.connect();
 
       const tools = await proxy.discoverTools();
+      // biome-ignore lint/style/noNonNullAssertion: tools[0] verified by test setup
       const failingTool = tools[0]!;
       const ctx = createMockContext();
 
@@ -870,6 +874,7 @@ describe("MCPProxy Tool Execution", () => {
 
     it("should return failure result on connection error", async () => {
       const tools = await proxy.discoverTools();
+      // biome-ignore lint/style/noNonNullAssertion: tools[0] verified by test setup
       const echoTool = tools[0]!;
       const ctx = createMockContext();
 

@@ -53,6 +53,7 @@ describe("AgentDiscovery", () => {
   describe("constructor and options", () => {
     it("uses default debounce delay", () => {
       discovery = new AgentDiscovery();
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).options.debounceMs).toBe(DEFAULT_DEBOUNCE_MS);
     });
 
@@ -60,6 +61,7 @@ describe("AgentDiscovery", () => {
       discovery = new AgentDiscovery({
         debounceMs: 500,
       });
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).options.debounceMs).toBe(500);
     });
 
@@ -68,6 +70,7 @@ describe("AgentDiscovery", () => {
       discovery = new AgentDiscovery({
         paths: customPaths,
       });
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).options.paths).toEqual(customPaths);
     });
 
@@ -76,11 +79,13 @@ describe("AgentDiscovery", () => {
       discovery = new AgentDiscovery({
         loader: customLoader,
       });
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).loader).toBe(customLoader);
     });
 
     it("defaults watchEnabled to true", () => {
       discovery = new AgentDiscovery();
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).options.watchEnabled).toBe(true);
     });
 
@@ -88,6 +93,7 @@ describe("AgentDiscovery", () => {
       discovery = new AgentDiscovery({
         watchEnabled: false,
       });
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).options.watchEnabled).toBe(false);
     });
   });
@@ -105,6 +111,7 @@ describe("AgentDiscovery", () => {
         watchEnabled: false,
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const getSourceFromPath = (discovery as any).getSourceFromPath.bind(discovery);
 
       expect(getSourceFromPath(path.join(cwd, ".vellum", "agents", "test.yaml"))).toBe(
@@ -121,6 +128,7 @@ describe("AgentDiscovery", () => {
         watchEnabled: false,
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const getSourcePriority = (discovery as any).getSourcePriority.bind(discovery);
 
       // Implementation uses: ratio = index / totalPaths
@@ -257,6 +265,7 @@ describe("AgentDiscovery", () => {
         watchEnabled: false,
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const normalizedPath = (discovery as any).normalizePath(windowsPath);
       // Should be normalized (no double backslashes)
       expect(normalizedPath).not.toContain("\\\\");
@@ -270,6 +279,7 @@ describe("AgentDiscovery", () => {
         watchEnabled: false,
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const normalizedPath = (discovery as any).normalizePath(mixedPath);
       expect(normalizedPath).toBeDefined();
     });
@@ -288,9 +298,11 @@ describe("AgentDiscovery", () => {
       });
 
       // Simulate file events using private method
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const handleFileEvent = (discovery as any).handleFileEvent.bind(discovery);
       handleFileEvent(path.join(tempDir, "agents", "test.yaml"), "add");
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).pendingChanges.size).toBe(1);
     });
 
@@ -301,6 +313,7 @@ describe("AgentDiscovery", () => {
         watchEnabled: false,
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const handleFileEvent = (discovery as any).handleFileEvent.bind(discovery);
       const testFile = path.join(tempDir, "agents", "test.yaml");
 
@@ -309,9 +322,12 @@ describe("AgentDiscovery", () => {
       handleFileEvent(testFile, "change");
 
       // Should still be just 1 pending change
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).pendingChanges.size).toBe(1);
       // Latest type should be 'change'
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       const pending = (discovery as any).pendingChanges.get(
+        // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
         (discovery as any).normalizePath(testFile)
       );
       expect(pending?.type).toBe("change");
@@ -326,9 +342,11 @@ describe("AgentDiscovery", () => {
         watchEnabled: false,
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const handleFileEvent = (discovery as any).handleFileEvent.bind(discovery);
       handleFileEvent(path.join(tempDir, "agents", "test.yaml"), "add");
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).debounceTimer).not.toBeNull();
 
       vi.useRealTimers();
@@ -343,14 +361,17 @@ describe("AgentDiscovery", () => {
         watchEnabled: false,
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const handleFileEvent = (discovery as any).handleFileEvent.bind(discovery);
       handleFileEvent(path.join(tempDir, "agents", "test.yaml"), "add");
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).pendingChanges.size).toBe(1);
 
       // Advance past debounce period
       await vi.advanceTimersByTimeAsync(100);
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).pendingChanges.size).toBe(0);
 
       vi.useRealTimers();
@@ -397,17 +418,21 @@ describe("AgentDiscovery", () => {
       });
 
       // Manually set isWatching to true so stop() processes cleanup
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       (discovery as any).isWatching = true;
 
       // Queue a change to create timer
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const handleFileEvent = (discovery as any).handleFileEvent.bind(discovery);
       handleFileEvent(path.join(tempDir, "agents", "test.yaml"), "add");
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).pendingChanges.size).toBe(1);
 
       await discovery.stop();
 
       // stop() clears pendingChanges when isWatching was true
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((discovery as any).pendingChanges.size).toBe(0);
 
       vi.useRealTimers();
@@ -489,7 +514,9 @@ describe("AgentDiscovery", () => {
         watchEnabled: false,
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((newDiscovery as any).options.debounceMs).toBe(500);
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private property for test verification
       expect((newDiscovery as any).options.watchEnabled).toBe(false);
     });
   });
@@ -525,6 +552,7 @@ describe("AgentDiscovery", () => {
         watchEnabled: false,
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: accessing private method for test verification
       const getDefaultPaths = (discovery as any).getDefaultPaths.bind(discovery);
       const paths = getDefaultPaths();
 

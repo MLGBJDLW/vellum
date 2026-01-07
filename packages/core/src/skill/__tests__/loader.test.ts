@@ -434,6 +434,7 @@ describe("SkillLoader", () => {
 
       expect(secondAccess).toBeDefined();
       expect(firstAccess).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: both values verified as defined above
       expect(secondAccess!.getTime()).toBeGreaterThanOrEqual(firstAccess!.getTime());
     });
   });

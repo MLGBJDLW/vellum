@@ -668,6 +668,7 @@ describe("RecoveryManager", () => {
       await recovery.updateRecoveryLogStatus(session.metadata.id, "crashed");
 
       const updatedLog = await recovery.getRecoveryLog(session.metadata.id);
+      // biome-ignore lint/style/noNonNullAssertion: originalTimestamp verified non-null above
       expect(updatedLog?.timestamp.getTime()).toBeGreaterThan(originalTimestamp!.getTime());
     });
 

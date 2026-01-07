@@ -382,8 +382,10 @@ async function searchFile(
     const lineScores: Array<{ index: number; score: number; matched: Set<string> }> = [];
 
     for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line === undefined) continue;
       const matched = new Set<string>();
-      const score = calculateScore(lines[i]!, tokens, matched);
+      const score = calculateScore(line, tokens, matched);
 
       if (score > 0) {
         lineScores.push({ index: i, score, matched });

@@ -139,7 +139,8 @@ export class ProviderFallbackChain<T> {
     }
 
     // Move preferred to front while preserving relative order of others
-    const preferred = this.providers[this.preferredIndex]!;
+    const preferred = this.providers[this.preferredIndex];
+    if (!preferred) return this.providers;
     const others = this.providers.filter((_, i) => i !== this.preferredIndex);
     return [preferred, ...others];
   }

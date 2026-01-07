@@ -500,6 +500,7 @@ interface ToolCallAccumulator {
  * }
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Stream processing requires handling multiple block types and state transitions
 export async function processMultiBlockStream(
   stream: AsyncIterable<Result<StreamEvent, Error>>
 ): Promise<Result<AssistantMessage, Error>> {

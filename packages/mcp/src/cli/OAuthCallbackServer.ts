@@ -157,6 +157,7 @@ export class OAuthCallbackServer {
       }, timeout);
 
       // Create HTTP server
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: OAuth callback requires handling multiple response states and error conditions
       this.server = http.createServer((req, res) => {
         // Only handle GET requests to callback path
         if (!req.url || req.method !== "GET") {

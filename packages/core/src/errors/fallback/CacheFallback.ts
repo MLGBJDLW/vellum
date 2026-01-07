@@ -82,7 +82,8 @@ export class CacheFallback<T> {
 
     // Try stale-while-revalidate if enabled and we have cached data
     if (this.options.staleWhileRevalidate && this.has(key)) {
-      const cached = this.cache.get(key)!;
+      const cached = this.cache.get(key);
+      if (!cached) throw new Error("Cache inconsistency");
       attempts++;
 
       // Return stale data immediately, revalidate in background
@@ -121,7 +122,8 @@ export class CacheFallback<T> {
 
     // Primary failed, try cache fallback
     if (this.has(key)) {
-      const cached = this.cache.get(key)!;
+      const cached = this.cache.get(key);
+      if (!cached) throw new Error("Cache inconsistency");
 
       // Allow stale cache on primary failure (graceful degradation)
       return {

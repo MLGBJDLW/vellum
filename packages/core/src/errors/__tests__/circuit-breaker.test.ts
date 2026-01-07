@@ -486,6 +486,7 @@ describe("CircuitBreaker", () => {
       breaker = new CircuitBreaker("test", { failureThreshold: 1 });
 
       // Force to HALF_OPEN by manipulating state (using type assertion for test access)
+      // biome-ignore lint/suspicious/noExplicitAny: Test requires access to private state
       (breaker as any).state = "HALF_OPEN";
       breaker.recordSuccess();
 

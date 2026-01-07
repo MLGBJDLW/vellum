@@ -6,6 +6,7 @@
  *
  * @module @vellum/provider/__tests__/chinese-providers
  */
+// biome-ignore-all lint/style/noNonNullAssertion: Test file - array access patterns verified by test setup
 
 import { describe, expect, it, vi } from "vitest";
 import { BaichuanProvider } from "../baichuan.js";

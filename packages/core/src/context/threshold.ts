@@ -304,8 +304,8 @@ export function matchesModelPattern(model: string, pattern: string): boolean {
 function findModelConfig(model: string): ModelThresholdConfig | undefined {
   // Search custom thresholds first (most recent takes precedence)
   for (let i = customModelThresholds.length - 1; i >= 0; i--) {
-    const config = customModelThresholds[i]!;
-    if (matchesModelPattern(model, config.model)) {
+    const config = customModelThresholds[i];
+    if (config && matchesModelPattern(model, config.model)) {
       return config;
     }
   }

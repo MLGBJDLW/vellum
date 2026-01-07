@@ -126,13 +126,12 @@ function generateCompressedMessages(count: number): ContextMessage[] {
         j < messages.length - 1;
         j++
       ) {
-        const msg = messages[j]!;
-        if (!msg.isSummary) {
-          messages[j] = {
-            ...msg,
-            condenseParent: condenseId,
-          } as ContextMessage;
-        }
+        const msg = messages[j];
+        if (!msg || msg.isSummary) continue;
+        messages[j] = {
+          ...msg,
+          condenseParent: condenseId,
+        } as ContextMessage;
       }
     }
 

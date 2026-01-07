@@ -392,13 +392,14 @@ export function reorderToolResult(
       continue;
     }
 
-    result.push(messages[i]!);
+    const msg = messages[i];
+    if (msg) result.push(msg);
 
     // Insert result after use (accounting for removed element)
     // Since we skipped resultIndex, useIndex in new array is useIndex - 1 if resultIndex < useIndex
     const adjustedUseIndex = resultIndex < useIndex ? useIndex - 1 : useIndex;
-    if (result.length - 1 === adjustedUseIndex) {
-      result.push(resultMessage!);
+    if (result.length - 1 === adjustedUseIndex && resultMessage) {
+      result.push(resultMessage);
     }
   }
 

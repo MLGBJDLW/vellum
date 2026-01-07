@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noNonNullAssertion: Test file - array access patterns verified by test setup
 import { SpanStatusCode } from "@opentelemetry/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TelemetryInstrumentor } from "../instrumentor.js";

@@ -5,6 +5,7 @@
  *
  * @module plugin/hooks/__tests__/parser.test
  */
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: Test file - intentional template strings for path expansion testing
 
 import { describe, expect, it } from "vitest";
 

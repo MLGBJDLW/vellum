@@ -251,7 +251,8 @@ export function assignPriorities(
   const totalMessages = messages.length;
 
   for (let i = 0; i < messages.length; i++) {
-    const message = messages[i]!;
+    const message = messages[i];
+    if (!message) continue;
     const priority = calculatePriority(message, i, totalMessages, recentCount, toolPairAnalysis);
 
     // Mutate the priority field (as per interface contract)
@@ -288,7 +289,8 @@ export function getTruncationCandidates(
   const totalMessages = messages.length;
 
   for (let i = 0; i < messages.length; i++) {
-    const message = messages[i]!;
+    const message = messages[i];
+    if (!message) continue;
     const priority = calculatePriority(message, i, totalMessages, recentCount, toolPairAnalysis);
 
     // Skip SYSTEM and ANCHOR - they should never be removed
@@ -461,10 +463,12 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
 
         for (const idx of linkedIndices) {
           if (!indicesToRemove.has(idx)) {
-            pairTokens += tokenizer(messages[idx]!);
-            const msgId = messages[idx]?.id;
-            if (msgId) {
-              pairIds.push(msgId);
+            const msg = messages[idx];
+            if (msg) {
+              pairTokens += tokenizer(msg);
+              if (msg.id) {
+                pairIds.push(msg.id);
+              }
             }
           }
         }
@@ -472,7 +476,8 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
         // Only remove if removing the entire pair helps
         // and all parts can be removed (none are protected)
         const allRemovable = linkedIndices.every((idx) => {
-          const msg = messages[idx]!;
+          const msg = messages[idx];
+          if (!msg) return false;
           const priority = calculatePriority(
             msg,
             idx,
@@ -508,7 +513,8 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
   const resultMessages: ContextMessage[] = [];
   for (let i = 0; i < messages.length; i++) {
     if (!indicesToRemove.has(i)) {
-      resultMessages.push(messages[i]!);
+      const msg = messages[i];
+      if (msg) resultMessages.push(msg);
     }
   }
 

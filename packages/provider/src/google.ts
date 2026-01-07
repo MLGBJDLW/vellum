@@ -674,6 +674,7 @@ export class GoogleProvider implements Provider {
   /**
    * Process streaming response and yield normalized events
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Stream processing requires handling multiple content types and tool calls
   private async *processStream(
     stream: AsyncIterable<GenerateContentResponse>
   ): AsyncIterable<StreamEvent> {

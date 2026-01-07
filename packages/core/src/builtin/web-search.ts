@@ -76,6 +76,7 @@ export interface WebSearchOutput {
 /**
  * Parse DuckDuckGo HTML search results
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: HTML parsing requires comprehensive pattern matching
 function parseDuckDuckGoResults(html: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = [];
 
@@ -94,6 +95,7 @@ function parseDuckDuckGoResults(html: string, maxResults: number): SearchResult[
 
   // Reset regex state
   resultRegex.lastIndex = 0;
+  // biome-ignore lint/suspicious/noAssignInExpressions: Standard regex iteration pattern
   while ((match = resultRegex.exec(html)) !== null && position < maxResults) {
     position++;
     const [, url, title, snippet] = match;
@@ -110,6 +112,7 @@ function parseDuckDuckGoResults(html: string, maxResults: number): SearchResult[
   // If no results, try alternative pattern
   if (results.length === 0) {
     altResultRegex.lastIndex = 0;
+    // biome-ignore lint/suspicious/noAssignInExpressions: Standard regex iteration pattern
     while ((match = altResultRegex.exec(html)) !== null && position < maxResults) {
       position++;
       const [, url, title, snippet] = match;
@@ -130,6 +133,7 @@ function parseDuckDuckGoResults(html: string, maxResults: number): SearchResult[
     linkRegex.lastIndex = 0;
     const seenUrls = new Set<string>();
 
+    // biome-ignore lint/suspicious/noAssignInExpressions: Standard regex iteration pattern
     while ((match = linkRegex.exec(html)) !== null && results.length < maxResults) {
       const [, url, title] = match;
       // Skip DuckDuckGo internal links and duplicates

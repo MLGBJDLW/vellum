@@ -299,8 +299,8 @@ export class CheckpointManager {
     // Return in reverse order (newest first)
     return [...this.checkpointOrder]
       .reverse()
-      .map((id) => this.checkpoints.get(id)!)
-      .filter(Boolean);
+      .map((id) => this.checkpoints.get(id))
+      .filter((cp): cp is Checkpoint => cp !== undefined);
   }
 
   /**

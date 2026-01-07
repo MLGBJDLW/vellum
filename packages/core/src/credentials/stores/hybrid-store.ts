@@ -170,7 +170,10 @@ export class HybridCredentialStore implements CredentialStore {
   private async getBackingStore(): Promise<CredentialStore> {
     await this.initializeStore();
     // After initialization, backingStore is guaranteed to be set
-    return this.backingStore!;
+    if (!this.backingStore) {
+      throw new Error("Failed to initialize backing store");
+    }
+    return this.backingStore;
   }
 
   /**

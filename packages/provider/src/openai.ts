@@ -695,6 +695,7 @@ export class OpenAIProvider {
   /**
    * Convert a single message to OpenAI format
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Message conversion requires handling O-series, tools, and multimodal content
   private convertMessage(
     message: CompletionMessage,
     isOSeries: boolean
@@ -771,7 +772,10 @@ export class OpenAIProvider {
       // Return first tool result; others will need separate messages
       // This is a simplification - in practice, tool results should be
       // passed as separate messages in the conversation
-      const firstResult = toolResults[0]!;
+      const firstResult = toolResults[0];
+      if (!firstResult) {
+        throw new Error("Unexpected empty tool results array");
+      }
       return {
         role: "tool",
         tool_call_id: firstResult.toolCallId,
@@ -829,6 +833,7 @@ export class OpenAIProvider {
   /**
    * Normalize OpenAI response to our CompletionResult format
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Response normalization requires handling O-series reasoning and tool calls
   private normalizeResponse(response: ChatCompletion, isOSeries: boolean): CompletionResult {
     const choice = response.choices[0];
     if (!choice) {
@@ -905,6 +910,7 @@ export class OpenAIProvider {
   /**
    * Process streaming response and yield normalized events
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Stream processing requires handling multiple delta types and tool call accumulation
   private async *processStream(
     stream: AsyncIterable<ChatCompletionChunk>
   ): AsyncIterable<StreamEvent> {
@@ -1089,7 +1095,8 @@ export class OpenAIProvider {
       // Yield tool calls if present
       if (result.toolCalls) {
         for (let index = 0; index < result.toolCalls.length; index++) {
-          const toolCall = result.toolCalls[index]!;
+          const toolCall = result.toolCalls[index];
+          if (!toolCall) continue;
 
           // Emit new format events
           const startEvent: StreamToolCallStartEvent = {

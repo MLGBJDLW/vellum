@@ -25,7 +25,8 @@ describe("LLMLogger", () => {
       llmLogger.logRequestStart("openai", "gpt-4", "req-123");
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("info");
       expect(entry.message).toBe("LLM request started");
 
@@ -65,7 +66,8 @@ describe("LLMLogger", () => {
       });
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("info");
       expect(entry.message).toBe("LLM request completed");
 
@@ -139,7 +141,8 @@ describe("LLMLogger", () => {
       });
 
       expect(transport.entries).toHaveLength(1);
-      const entry = transport.entries[0]!;
+      const entry = transport.entries[0];
+      if (!entry) throw new Error("Test setup error");
       expect(entry.level).toBe("error");
       expect(entry.message).toBe("LLM request failed");
 

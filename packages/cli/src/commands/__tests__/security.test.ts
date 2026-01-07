@@ -67,6 +67,7 @@ describe("InputSanitizer", () => {
 
     it("should remove dollar sign", () => {
       expect(sanitizer.sanitize("echo $HOME")).toBe("echo HOME");
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: testing literal string sanitization, not template
       expect(sanitizer.sanitize("${PATH}")).toBe("PATH");
     });
 

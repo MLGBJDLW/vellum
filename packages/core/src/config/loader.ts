@@ -160,7 +160,8 @@ function setNestedValue(obj: Record<string, unknown>, path: string[], value: unk
 
   let current = obj;
   for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i]!;
+    const key = path[i];
+    if (key === undefined) continue;
     if (!(key in current)) {
       current[key] = {};
     }
@@ -559,6 +560,7 @@ function readTomlFile(filePath: string): Result<Record<string, unknown>, ConfigE
  * });
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Config loading requires comprehensive source merging
 export function loadConfig(options: LoadConfigOptions = {}): Result<Config, ConfigError> {
   const {
     cwd,
@@ -701,6 +703,7 @@ export interface LoadConfigWithCredentialsResult {
  * }
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Credential loading requires comprehensive provider handling
 export async function loadConfigWithCredentials(
   options: LoadConfigOptions = {}
 ): Promise<Result<LoadConfigWithCredentialsResult, ConfigError>> {

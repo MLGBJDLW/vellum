@@ -279,16 +279,22 @@ export class GitOperations {
 
         // Handle renames (R) and copies (C) which have old and new paths
         if ((status === "R" || status === "C") && parts.length >= 3) {
-          entries.push({
-            status,
-            path: parts[2]!,
-            oldPath: parts[1],
-          });
+          const newPath = parts[2];
+          if (newPath) {
+            entries.push({
+              status,
+              path: newPath,
+              oldPath: parts[1],
+            });
+          }
         } else {
-          entries.push({
-            status,
-            path: parts[1]!,
-          });
+          const filePath = parts[1];
+          if (filePath) {
+            entries.push({
+              status,
+              path: filePath,
+            });
+          }
         }
       }
 

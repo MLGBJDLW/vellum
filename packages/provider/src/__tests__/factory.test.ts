@@ -30,6 +30,7 @@ describe("factory", () => {
     });
 
     it("should throw for unknown provider type", async () => {
+      // biome-ignore lint/suspicious/noExplicitAny: Testing invalid input
       await expect(createProvider("unknown" as any)).rejects.toThrow("Unknown provider: unknown");
     });
 
@@ -57,6 +58,7 @@ describe("factory", () => {
 
       const provider = await createProvider(
         { type: "openai" },
+        // biome-ignore lint/suspicious/noExplicitAny: Mock type coercion for test
         { credentialManager: mockCredentialManager as any }
       );
 
@@ -82,6 +84,7 @@ describe("factory", () => {
           type: "anthropic",
           credential: { type: "api_key", value: "sk-ant-api03-direct" },
         },
+        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
         { credentialManager: mockCredentialManager as any }
       );
 
@@ -98,6 +101,7 @@ describe("factory", () => {
 
       const provider = await createProvider(
         { type: "anthropic" },
+        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
         { credentialManager: mockCredentialManager as any }
       );
 
@@ -114,6 +118,7 @@ describe("factory", () => {
 
       const provider = await createProvider(
         { type: "google" },
+        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
         { credentialManager: mockCredentialManager as any }
       );
 
@@ -137,6 +142,7 @@ describe("factory", () => {
       const provider = await createProvider(
         { type: "anthropic" },
         {
+          // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
           credentialManager: mockCredentialManager as any,
           autoConfigureCredential: false,
         }
@@ -164,6 +170,7 @@ describe("factory", () => {
     });
 
     it("should throw for unknown provider", () => {
+      // biome-ignore lint/suspicious/noExplicitAny: Testing invalid input
       expect(() => createProviderSync("unknown" as any)).toThrow("Unknown provider: unknown");
     });
   });
@@ -205,6 +212,7 @@ describe("factory", () => {
 
       const provider = await createProvider(
         { type: "anthropic" },
+        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
         { credentialManager: mockCredentialManager as any }
       );
 
@@ -222,6 +230,7 @@ describe("factory", () => {
 
       const provider = await createProvider(
         { type: "openai" },
+        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
         { credentialManager: mockCredentialManager as any }
       );
 
@@ -239,6 +248,7 @@ describe("factory", () => {
 
       const provider = await createProvider(
         { type: "google" },
+        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
         { credentialManager: mockCredentialManager as any }
       );
 
@@ -258,6 +268,7 @@ describe("factory", () => {
 
       // Should not throw, provider should still be created
       await expect(
+        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
         createProvider({ type: "openai" }, { credentialManager: mockCredentialManager as any })
       ).rejects.toThrow("Network error");
     });

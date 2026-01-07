@@ -239,21 +239,21 @@ describe("SSRF Protection Integration", () => {
         // 2130706433 = 127.0.0.1
         const normalized = normalizeIP("2130706433");
         expect(normalized).toBe("127.0.0.1");
-        expect(isPrivateIP(normalized!)).toBe(true);
+        expect(isPrivateIP(normalized ?? "")).toBe(true);
       });
 
       it("should normalize and detect decimal-encoded 10.0.0.1", () => {
         // 167772161 = 10.0.0.1
         const normalized = normalizeIP("167772161");
         expect(normalized).toBe("10.0.0.1");
-        expect(isPrivateIP(normalized!)).toBe(true);
+        expect(isPrivateIP(normalized ?? "")).toBe(true);
       });
 
       it("should normalize and detect decimal-encoded 192.168.1.1", () => {
         // 3232235777 = 192.168.1.1
         const normalized = normalizeIP("3232235777");
         expect(normalized).toBe("192.168.1.1");
-        expect(isPrivateIP(normalized!)).toBe(true);
+        expect(isPrivateIP(normalized ?? "")).toBe(true);
       });
 
       it("should block decimal-encoded private IP in URL validation", async () => {
@@ -271,14 +271,14 @@ describe("SSRF Protection Integration", () => {
         // 0177.0.0.1 = 127.0.0.1
         const normalized = normalizeIP("0177.0.0.1");
         expect(normalized).toBe("127.0.0.1");
-        expect(isPrivateIP(normalized!)).toBe(true);
+        expect(isPrivateIP(normalized ?? "")).toBe(true);
       });
 
       it("should normalize and detect octal-encoded 10.0.0.1", () => {
         // 012.0.0.1 = 10.0.0.1
         const normalized = normalizeIP("012.0.0.1");
         expect(normalized).toBe("10.0.0.1");
-        expect(isPrivateIP(normalized!)).toBe(true);
+        expect(isPrivateIP(normalized ?? "")).toBe(true);
       });
 
       it("should block octal-encoded private IP in URL validation", async () => {
@@ -294,14 +294,14 @@ describe("SSRF Protection Integration", () => {
         // 0x7f.0x0.0x0.0x1 = 127.0.0.1
         const normalized = normalizeIP("0x7f.0x0.0x0.0x1");
         expect(normalized).toBe("127.0.0.1");
-        expect(isPrivateIP(normalized!)).toBe(true);
+        expect(isPrivateIP(normalized ?? "")).toBe(true);
       });
 
       it("should normalize and detect hex-encoded 192.168.0.1", () => {
         // 0xc0.0xa8.0x0.0x1 = 192.168.0.1
         const normalized = normalizeIP("0xc0.0xa8.0x0.0x1");
         expect(normalized).toBe("192.168.0.1");
-        expect(isPrivateIP(normalized!)).toBe(true);
+        expect(isPrivateIP(normalized ?? "")).toBe(true);
       });
 
       it("should block hex-encoded private IP in URL validation", async () => {

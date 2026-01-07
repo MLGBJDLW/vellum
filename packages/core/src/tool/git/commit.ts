@@ -205,6 +205,7 @@ export function createGitCommitTool(gitOpsFactory: typeof createGitOps = createG
     kind: "write",
     category: "git",
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git commit requires handling staging, message generation, and error conditions
     async execute(
       input,
       ctx

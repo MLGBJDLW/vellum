@@ -170,7 +170,8 @@ describe("E2E: Full Workflow", () => {
       // 4. ROUTE: Test routing by context
       const registry = new CustomAgentRegistry();
       expect(agent).toBeDefined();
-      registry.register(agent!.definition, agent!.source);
+      if (!agent) return; // Guard for type narrowing
+      registry.register(agent.definition, agent.source);
 
       const router = new AgentRouter(registry);
 
@@ -247,8 +248,9 @@ describe("E2E: Full Workflow", () => {
       const resolver = new InheritanceResolver();
       const childAgent = registry.get("ts-dev");
       expect(childAgent).toBeDefined();
+      if (!childAgent) return;
 
-      const resolveResult = await resolver.resolve(childAgent!, registry);
+      const resolveResult = await resolver.resolve(childAgent, registry);
 
       expect(resolveResult.ok).toBe(true);
       if (resolveResult.ok) {
@@ -275,17 +277,18 @@ describe("E2E: Template Workflow", () => {
 
       const template = getTemplate(name as Parameters<typeof getTemplate>[0]);
       expect(template).toBeDefined();
-      expect(template?.slug).toBeDefined();
-      expect(template?.name).toBeDefined();
+      if (!template) continue; // Guard for type narrowing
+      expect(template.slug).toBeDefined();
+      expect(template.name).toBeDefined();
 
       // Validate template produces valid agent
-      const validation = validateAgentDefinition(template!);
+      const validation = validateAgentDefinition(template);
       expect(validation.success).toBe(true);
 
       // Convert to markdown and back
-      const markdown = templateToMarkdown(template!);
-      expect(markdown).toContain(`slug: ${template?.slug}`);
-      expect(markdown).toContain(`name: "${template?.name}"`);
+      const markdown = templateToMarkdown(template);
+      expect(markdown).toContain(`slug: ${template.slug}`);
+      expect(markdown).toContain(`name: "${template.name}"`);
 
       // Load the markdown content
       const loader = new AgentLoader();
@@ -514,8 +517,9 @@ name: "Missing Slug"
     const resolver = new InheritanceResolver();
     const agentA = registry.get("circular-a");
     expect(agentA).toBeDefined();
+    if (!agentA) return;
 
-    const result = await resolver.resolve(agentA!, registry);
+    const result = await resolver.resolve(agentA, registry);
 
     // Should return error for circular inheritance
     expect(result.ok).toBe(false);

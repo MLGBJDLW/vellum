@@ -735,8 +735,11 @@ describe("Phase 2: Core Algorithms", () => {
         const analysis = analyzeToolPairs(messages);
 
         // With recentCount=2, messages at index 3 and 4 should be RECENT
-        const priority4 = calculatePriority(messages[4]!, 4, 5, 2, analysis);
-        const priority3 = calculatePriority(messages[3]!, 3, 5, 2, analysis);
+        const msg4 = messages[4];
+        const msg3 = messages[3];
+        if (!msg4 || !msg3) throw new Error("Test setup error");
+        const priority4 = calculatePriority(msg4, 4, 5, 2, analysis);
+        const priority3 = calculatePriority(msg3, 3, 5, 2, analysis);
 
         expect(priority4).toBe(MessagePriority.RECENT);
         expect(priority3).toBe(MessagePriority.RECENT);
@@ -760,7 +763,9 @@ describe("Phase 2: Core Algorithms", () => {
         ];
         const analysis = analyzeToolPairs(messages);
 
-        const priority = calculatePriority(messages[2]!, 2, 7, 2, analysis);
+        const msg2 = messages[2];
+        if (!msg2) throw new Error("Test setup error");
+        const priority = calculatePriority(msg2, 2, 7, 2, analysis);
 
         expect(priority).toBe(MessagePriority.TOOL_PAIR);
       });
@@ -776,7 +781,9 @@ describe("Phase 2: Core Algorithms", () => {
         const analysis = analyzeToolPairs(messages);
 
         // Message at index 2 is not system, anchor, recent (with recentCount=1), or tool pair
-        const priority = calculatePriority(messages[2]!, 2, 5, 1, analysis);
+        const msg2 = messages[2];
+        if (!msg2) throw new Error("Test setup error");
+        const priority = calculatePriority(msg2, 2, 5, 1, analysis);
 
         expect(priority).toBe(MessagePriority.NORMAL);
       });
@@ -1191,7 +1198,8 @@ describe("Phase 2: Core Algorithms", () => {
           truncationMarker: "[CUSTOM MARKER]",
         });
 
-        const toolResultMsg = result.messages[1]!;
+        const toolResultMsg = result.messages[1];
+        if (!toolResultMsg) throw new Error("Test setup error");
         const content = toolResultMsg.content as ContentBlock[];
         const toolResult = content[0] as ToolResultBlock;
 

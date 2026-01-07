@@ -151,6 +151,7 @@ export const todoManageTool = defineTool({
   kind: "write",
   category: "productivity",
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Todo operations require comprehensive action handling
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

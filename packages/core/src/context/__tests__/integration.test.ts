@@ -884,8 +884,9 @@ describe("Context Management Integration", () => {
 
       // Verify messages are in chronological order
       for (let i = 1; i < result.messages.length; i++) {
-        const prev = result.messages[i - 1]!;
-        const curr = result.messages[i]!;
+        const prev = result.messages[i - 1];
+        const curr = result.messages[i];
+        if (!prev || !curr) continue;
 
         // System messages can be at start without timestamp
         if (prev.role === "system") continue;

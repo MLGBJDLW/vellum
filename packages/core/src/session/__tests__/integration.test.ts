@@ -186,6 +186,7 @@ describe("Full Workflow Integration", () => {
     expect(persistenceManager.currentSession?.messages.length).toBe(5);
 
     // Write recovery log (simulates active session)
+    // biome-ignore lint/style/noNonNullAssertion: currentSession verified non-null above
     await recoveryManager.writeRecoveryLog(persistenceManager.currentSession!);
 
     // Simulate crash by closing without save
@@ -223,6 +224,7 @@ describe("Full Workflow Integration", () => {
     // =========================================================================
     // Step 7: Export to all formats
     // =========================================================================
+    // biome-ignore lint/style/noNonNullAssertion: currentSession verified non-null above
     const sessionToExport = persistenceManager.currentSession!;
 
     // Export to Markdown

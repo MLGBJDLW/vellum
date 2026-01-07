@@ -722,6 +722,7 @@ describe("AuditLogger", () => {
       await logger.logToolCall("server", "tool2");
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
+      // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by expect toHaveBeenCalledTimes
       const fetchCall = mockFetch.mock.calls[0]!;
       expect(fetchCall[0]).toBe("https://logs.example.com");
       expect(fetchCall[1]?.method).toBe("POST");
@@ -755,6 +756,7 @@ describe("AuditLogger", () => {
 
       await logger.logToolCall("server", "tool");
 
+      // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by mockFetch being called
       const fetchCall = mockFetch.mock.calls[0]!;
       expect(fetchCall[1]?.headers.Authorization).toBe("Bearer token123");
     });

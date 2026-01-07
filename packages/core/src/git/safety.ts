@@ -87,6 +87,7 @@ function normalizePath(p: string): string {
  * }
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Path safety checking requires comprehensive pattern matching
 export function checkProtectedPath(targetPath: string): Result<true, VellumError> {
   const normalizedTarget = normalizePath(targetPath);
   const homeDir = normalizePath(os.homedir());

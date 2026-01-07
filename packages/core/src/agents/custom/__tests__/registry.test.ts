@@ -474,6 +474,7 @@ describe("CustomAgentRegistry", () => {
     });
 
     it("accepts options", () => {
+      // biome-ignore lint/suspicious/noExplicitAny: mock logger for test
       const logger = { debug: vi.fn() } as any;
       const newRegistry = createAgentRegistry({ logger });
 

@@ -176,6 +176,7 @@ export const webFetchTool = defineTool({
   kind: "read", // Default kind, actual behavior depends on method
   category: "network",
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: HTTP operations require comprehensive request/response handling
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

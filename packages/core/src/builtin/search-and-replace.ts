@@ -129,6 +129,7 @@ export const searchAndReplaceTool = defineTool({
   kind: "write",
   category: "filesystem",
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multi-file search/replace with comprehensive validation
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

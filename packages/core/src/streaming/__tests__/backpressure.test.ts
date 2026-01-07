@@ -2,6 +2,7 @@
  * @file backpressure.test.ts
  * @description Tests for backpressure controllers and trackers
  */
+// biome-ignore-all lint/suspicious/noExplicitAny: Test file - accessing private members via type casting
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {

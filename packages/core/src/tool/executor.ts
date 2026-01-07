@@ -548,6 +548,7 @@ export class ToolExecutor {
    * @throws ToolNotFoundError if tool doesn't exist
    * @throws PermissionDeniedError if permission is denied
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Tool execution requires handling multiple permission states and error conditions
   async execute(
     name: string,
     params: unknown,
@@ -680,8 +681,8 @@ export class ToolExecutor {
    * @param abortSignal - Optional abort signal
    * @returns Execution result
    */
-  // biome-ignore lint/suspicious/noExplicitAny: Tools have varying input/output types
   private async executeWithTimeoutAndAbort(
+    // biome-ignore lint/suspicious/noExplicitAny: Tools have varying input/output types
     tool: Tool<z.ZodType, any>,
     input: unknown,
     context: ToolContext,

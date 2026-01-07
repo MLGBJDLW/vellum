@@ -486,6 +486,7 @@ export class McpOAuthManager {
     const key = this.getProviderKey(serverName, serverUrl);
 
     if (this.providers.has(key)) {
+      // biome-ignore lint/style/noNonNullAssertion: key verified by has() check above
       return this.providers.get(key)!;
     }
 

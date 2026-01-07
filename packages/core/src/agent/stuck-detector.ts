@@ -190,7 +190,9 @@ export class LLMStuckDetector {
     // Borderline case - consult LLM
     try {
       const recentMessages = messages.slice(-this.config.windowSize);
-      const llmResult = await this.llmJudgmentCallback(recentMessages, result.stats!);
+      // result.stats is always defined when result comes from detect() which calls computeSimilarityStats
+      const stats = result.stats ?? { average: 0, min: 0, max: 0, count: 0, pairCount: 0 };
+      const llmResult = await this.llmJudgmentCallback(recentMessages, stats);
 
       return {
         isStuck: llmResult.isStuck,

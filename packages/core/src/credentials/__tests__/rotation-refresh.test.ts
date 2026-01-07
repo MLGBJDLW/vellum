@@ -132,6 +132,7 @@ describe("RotationManager", () => {
     it("should rotate a credential successfully", async () => {
       // Store initial credential
       const oldCred = createTestCredential("openai", "sk-old-key", "keychain");
+      // biome-ignore lint/suspicious/noExplicitAny: Test requires access to private store method
       await (store as any).set(oldCred);
 
       // Rotate to new value
@@ -155,6 +156,7 @@ describe("RotationManager", () => {
     });
 
     it("should emit credential:rotated event on success", async () => {
+      // biome-ignore lint/suspicious/noExplicitAny: Test event collection
       const events: any[] = [];
       rotator.on((event) => events.push(event));
 
@@ -166,6 +168,7 @@ describe("RotationManager", () => {
     });
 
     it("should fail and emit event when validation fails", async () => {
+      // biome-ignore lint/suspicious/noExplicitAny: Test event collection
       const events: any[] = [];
       rotator.on((event) => events.push(event));
 
@@ -216,7 +219,9 @@ describe("RotationManager", () => {
 
   describe("event handling", () => {
     it("should support multiple listeners", async () => {
+      // biome-ignore lint/suspicious/noExplicitAny: Test event collection
       const events1: any[] = [];
+      // biome-ignore lint/suspicious/noExplicitAny: Test event collection
       const events2: any[] = [];
 
       rotator.on((event) => events1.push(event));
@@ -229,6 +234,7 @@ describe("RotationManager", () => {
     });
 
     it("should support unsubscribe", async () => {
+      // biome-ignore lint/suspicious/noExplicitAny: Test event collection
       const events: any[] = [];
       const unsubscribe = rotator.on((event) => events.push(event));
 

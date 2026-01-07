@@ -131,8 +131,8 @@ describe("CompactionService", () => {
       expect(result.prunedOutputs).toBe(0);
 
       // Original content should be preserved
-      const toolResult1 = pruned.messages[2]?.parts[0]! as { content: string };
-      expect(toolResult1.content.length).toBe(500);
+      const toolResult1 = pruned.messages[2]?.parts[0] as { content: string } | undefined;
+      expect(toolResult1?.content.length).toBe(500);
     });
 
     it("should truncate outputs exceeding maxToolOutputLength", () => {
@@ -143,13 +143,13 @@ describe("CompactionService", () => {
       expect(result.prunedOutputs).toBe(2);
 
       // First output should be unchanged (500 < 1000)
-      const toolResult1 = pruned.messages[2]?.parts[0]! as { content: string };
-      expect(toolResult1.content.length).toBe(500);
+      const toolResult1 = pruned.messages[2]?.parts[0] as { content: string } | undefined;
+      expect(toolResult1?.content.length).toBe(500);
 
       // Second output should be truncated
-      const toolResult2 = pruned.messages[3]?.parts[0]! as { content: string };
-      expect(toolResult2.content).toContain(DEFAULT_COMPACTION_CONFIG.prunedMarker);
-      expect(toolResult2.content.length).toBeLessThan(2000);
+      const toolResult2 = pruned.messages[3]?.parts[0] as { content: string } | undefined;
+      expect(toolResult2?.content).toContain(DEFAULT_COMPACTION_CONFIG.prunedMarker);
+      expect(toolResult2?.content.length).toBeLessThan(2000);
     });
 
     it("should preserve first and last 200 chars when truncating", () => {
@@ -180,22 +180,24 @@ describe("CompactionService", () => {
       });
 
       const { session: pruned } = service.pruneToolOutputs(session);
-      const toolResult = pruned.messages[1]?.parts[0]! as { content: string };
+      const toolResult = pruned.messages[1]?.parts[0] as { content: string } | undefined;
 
-      expect(toolResult.content).toContain("STARTSTART"); // Beginning preserved
-      expect(toolResult.content).toContain("ENDEND"); // End preserved
-      expect(toolResult.content).toContain(DEFAULT_COMPACTION_CONFIG.prunedMarker);
+      expect(toolResult?.content).toContain("STARTSTART"); // Beginning preserved
+      expect(toolResult!.content).toContain("ENDEND"); // End preserved
+      expect(toolResult!.content).toContain(DEFAULT_COMPACTION_CONFIG.prunedMarker);
     });
 
     it("should be immutable - not modify original session", () => {
       const service = new CompactionService({ maxToolOutputLength: 100 });
       const session = createSessionWithToolResults([500]);
-      const originalContent = (session.messages[2]?.parts[0]! as { content: string }).content;
+      const originalContent = (session.messages[2]?.parts[0] as { content: string } | undefined)
+        ?.content;
 
       service.pruneToolOutputs(session);
 
       // Original should be unchanged
-      const afterContent = (session.messages[2]?.parts[0]! as { content: string }).content;
+      const afterContent = (session.messages[2]?.parts[0] as { content: string } | undefined)
+        ?.content;
       expect(afterContent).toBe(originalContent);
     });
 
@@ -219,8 +221,8 @@ describe("CompactionService", () => {
       const session = createSessionWithToolResults([500]);
       const { session: pruned } = service.pruneToolOutputs(session);
 
-      const toolResult = pruned.messages[2]?.parts[0]! as { content: string };
-      expect(toolResult.content).toContain("[CUSTOM MARKER]");
+      const toolResult = pruned.messages[2]?.parts[0] as { content: string } | undefined;
+      expect(toolResult?.content).toContain("[CUSTOM MARKER]");
     });
   });
 
@@ -250,10 +252,11 @@ describe("CompactionService", () => {
       expect(result.truncatedMessages).toBe(14); // 20 - 3 - 3 = 14
 
       // Check marker message
-      const markerMessage = truncated.messages[3]!;
+      const markerMessage = truncated.messages[3];
+      if (!markerMessage) throw new Error("Test setup error");
       expect(markerMessage.role).toBe("system");
-      const markerText = (markerMessage.parts[0]! as { text: string }).text;
-      expect(markerText).toContain("14");
+      const markerPart = markerMessage.parts[0] as { text: string } | undefined;
+      expect(markerPart?.text).toContain("14");
     });
 
     it("should preserve first and last messages correctly", () => {
@@ -283,10 +286,11 @@ describe("CompactionService", () => {
       const session = createTestSession(10);
 
       const { session: truncated } = service.truncateMiddle(session);
-      const markerMessage = truncated.messages[2]!;
-      const markerText = (markerMessage.parts[0]! as { text: string }).text;
+      const markerMessage = truncated.messages[2];
+      if (!markerMessage) throw new Error("Test setup error");
+      const markerPart = markerMessage.parts[0] as { text: string } | undefined;
 
-      expect(markerText).toBe("Removed 6 messages here");
+      expect(markerPart?.text).toBe("Removed 6 messages here");
     });
 
     it("should be immutable - not modify original session", () => {

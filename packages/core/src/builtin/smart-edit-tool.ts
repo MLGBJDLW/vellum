@@ -134,7 +134,7 @@ export const smartEditTool = defineTool({
       const engine = createSmartEditEngine();
 
       // Apply the edit
-      let result;
+      let result: ReturnType<typeof engine.apply>;
       if (input.strategy === "auto") {
         result = engine.apply(content, input.search, input.replace);
       } else {

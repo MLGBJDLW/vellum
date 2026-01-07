@@ -290,7 +290,8 @@ export function findCompactedBlocks(messages: readonly ContextMessage[]): Compac
   const results: CompactedBlockLocation[] = [];
 
   for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
-    const message = messages[messageIndex]!;
+    const message = messages[messageIndex];
+    if (!message) continue;
     const content = message.content;
 
     // Skip string content
@@ -299,7 +300,8 @@ export function findCompactedBlocks(messages: readonly ContextMessage[]): Compac
     }
 
     for (let blockIndex = 0; blockIndex < content.length; blockIndex++) {
-      const block = content[blockIndex]!;
+      const block = content[blockIndex];
+      if (!block) continue;
 
       if (isToolResultBlock(block) && isCompacted(block)) {
         results.push({
@@ -330,6 +332,7 @@ export function findCompactedBlocks(messages: readonly ContextMessage[]): Compac
  * }
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Statistics calculation requires comprehensive iteration
 export function getCompactionStats(messages: readonly ContextMessage[]): CompactionStats {
   let totalToolResults = 0;
   let compactedCount = 0;
@@ -433,6 +436,7 @@ function cloneMessage(message: ContextMessage): ContextMessage {
  * const updated = markBlocksAsCompacted(messages, locations);
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Block marking requires comprehensive message/block iteration
 export function markBlocksAsCompacted(
   messages: readonly ContextMessage[],
   blockLocations: ReadonlyArray<{ messageIndex: number; blockIndex: number }>,
@@ -461,7 +465,8 @@ export function markBlocksAsCompacted(
   const result: ContextMessage[] = [];
 
   for (let i = 0; i < messages.length; i++) {
-    const message = messages[i]!;
+    const message = messages[i];
+    if (!message) continue;
 
     if (!messageIndicesToClone.has(i)) {
       // No changes needed for this message
@@ -480,7 +485,8 @@ export function markBlocksAsCompacted(
 
       for (const blockIndex of Array.from(blocksToMark)) {
         if (blockIndex >= 0 && blockIndex < content.length) {
-          const block = content[blockIndex]!;
+          const block = content[blockIndex];
+          if (!block) continue;
 
           if (isToolResultBlock(block)) {
             content[blockIndex] = markAsCompacted(block, timestamp);
@@ -514,6 +520,7 @@ export function markBlocksAsCompacted(
  * const restored = clearBlocksCompaction(messages, locations);
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Block clearing requires comprehensive message/block iteration
 export function clearBlocksCompaction(
   messages: readonly ContextMessage[],
   blockLocations: ReadonlyArray<{ messageIndex: number; blockIndex: number }>
@@ -541,7 +548,8 @@ export function clearBlocksCompaction(
   const result: ContextMessage[] = [];
 
   for (let i = 0; i < messages.length; i++) {
-    const message = messages[i]!;
+    const message = messages[i];
+    if (!message) continue;
 
     if (!messageIndicesToClone.has(i)) {
       result.push(message);
@@ -559,7 +567,8 @@ export function clearBlocksCompaction(
 
       for (const blockIndex of Array.from(blocksToClear)) {
         if (blockIndex >= 0 && blockIndex < content.length) {
-          const block = content[blockIndex]!;
+          const block = content[blockIndex];
+          if (!block) continue;
 
           if (isToolResultBlock(block)) {
             content[blockIndex] = clearCompactionTimestamp(block);

@@ -672,14 +672,14 @@ describe("Integration: Tool Result → Status Update", () => {
       useEffect(() => {
         const id = addExecution({ toolName: "test_tool", params: {} });
 
-        // Lifecycle simulation
+        // Lifecycle simulation with longer delays to allow React to render each state
         setTimeout(() => {
           approveExecution(id);
-        }, 10);
+        }, 50);
 
         setTimeout(() => {
           updateExecution(id, { status: "running", startedAt: new Date() });
-        }, 20);
+        }, 120);
 
         setTimeout(() => {
           updateExecution(id, {
@@ -687,13 +687,18 @@ describe("Integration: Tool Result → Status Update", () => {
             result: "success",
             completedAt: new Date(),
           });
-        }, 30);
+        }, 200);
       }, [addExecution, approveExecution, updateExecution]);
 
       const exec = executions[0];
-      if (exec) {
-        statusHistory.push(exec.status);
-      }
+      const status = exec?.status;
+
+      // Track status changes via useEffect to capture every state transition
+      useEffect(() => {
+        if (status && !statusHistory.includes(status)) {
+          statusHistory.push(status);
+        }
+      }, [status]);
 
       return <Text>{exec?.status ?? "none"}</Text>;
     }
@@ -704,9 +709,19 @@ describe("Integration: Tool Result → Status Update", () => {
       </RootProvider>
     );
 
-    // Run through lifecycle
+    // Wait for each lifecycle step with individual act() calls to flush renders
+    // pending → approved (50ms) → running (120ms) → complete (200ms)
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
     });
 
     // Verify we went through the states

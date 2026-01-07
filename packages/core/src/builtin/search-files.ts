@@ -231,7 +231,8 @@ async function searchFile(
     const lines = content.split("\n");
 
     for (let i = 0; i < lines.length && matches.length < maxResults; i++) {
-      const line = lines[i]!;
+      const line = lines[i];
+      if (line === undefined) continue;
       // Reset regex lastIndex for each line
       pattern.lastIndex = 0;
 

@@ -275,9 +275,10 @@ export class EventBus {
 
       // Set up timeout if specified
       if (options?.timeout !== undefined && options.timeout > 0) {
+        const timeoutMs = options.timeout;
         timeoutId = setTimeout(() => {
           cleanup();
-          reject(new TimeoutError(options.timeout!, event.name));
+          reject(new TimeoutError(timeoutMs, event.name));
         }, options.timeout);
       }
     });

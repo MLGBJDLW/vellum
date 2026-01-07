@@ -296,7 +296,7 @@ export const gitResolveConflictTool = defineTool({
       case "content": {
         // Write custom content
         const fullPath = resolve(cwd, input.path);
-        await writeFile(fullPath, input.content!, "utf-8");
+        await writeFile(fullPath, input.content ?? "", "utf-8");
         break;
       }
     }
@@ -451,7 +451,7 @@ export function createGitResolveConflictTool(
 
         case "content": {
           const fullPath = resolve(cwd, input.path);
-          await fsOps.writeFile(fullPath, input.content!, "utf-8");
+          await fsOps.writeFile(fullPath, input.content ?? "", "utf-8");
           break;
         }
       }

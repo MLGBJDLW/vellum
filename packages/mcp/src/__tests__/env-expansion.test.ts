@@ -1,6 +1,7 @@
 // ============================================
 // T007: Unit Tests for Environment Variable Expansion
 // ============================================
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: Test file for environment variable expansion patterns like ${env:VAR}
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {

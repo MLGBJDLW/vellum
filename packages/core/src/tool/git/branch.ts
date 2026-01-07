@@ -255,6 +255,7 @@ export const gitBranchTool = defineTool({
     return input.action === "delete";
   },
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git branch operations require handling multiple actions and options
   async execute(input, ctx): Promise<ToolResult<GitBranchResult>> {
     const cwd = input.cwd ?? ctx.workingDir;
     const git = createGitOps(cwd);
@@ -410,6 +411,7 @@ export const gitCheckoutTool = defineTool({
     return input.force === true;
   },
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git checkout requires handling multiple modes and file restoration
   async execute(input, ctx): Promise<ToolResult<GitCheckoutResult>> {
     const cwd = input.cwd ?? ctx.workingDir;
     const git = createGitOps(cwd);
@@ -542,6 +544,7 @@ export const gitMergeTool = defineTool({
     return true;
   },
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git merge requires handling conflict resolution and abort scenarios
   async execute(input, ctx): Promise<ToolResult<GitMergeResult>> {
     const cwd = input.cwd ?? ctx.workingDir;
     const git = createGitOps(cwd);
@@ -664,6 +667,7 @@ export function createGitBranchTool(gitOpsFactory: typeof createGitOps = createG
       return input.action === "delete";
     },
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git branch operations require handling multiple actions and options
     async execute(input, ctx): Promise<ToolResult<GitBranchResult>> {
       const cwd = input.cwd ?? ctx.workingDir;
       const git = gitOpsFactory(cwd);
@@ -816,6 +820,7 @@ export function createGitCheckoutTool(gitOpsFactory: typeof createGitOps = creat
       return input.force === true;
     },
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git checkout requires handling multiple modes and file restoration
     async execute(input, ctx): Promise<ToolResult<GitCheckoutResult>> {
       const cwd = input.cwd ?? ctx.workingDir;
       const git = gitOpsFactory(cwd);
@@ -943,6 +948,7 @@ export function createGitMergeTool(gitOpsFactory: typeof createGitOps = createGi
       return true;
     },
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git merge requires handling conflict resolution and abort scenarios
     async execute(input, ctx): Promise<ToolResult<GitMergeResult>> {
       const cwd = input.cwd ?? ctx.workingDir;
       const git = gitOpsFactory(cwd);

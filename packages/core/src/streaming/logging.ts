@@ -116,7 +116,6 @@ export class StreamLogger {
       const formatted = this.config.timestamps
         ? `[${new Date().toISOString()}] ${message}`
         : message;
-      // biome-ignore lint/suspicious/noConsole: Logger needs console access
       console[level === "trace" ? "debug" : level](formatted);
     }
   }
