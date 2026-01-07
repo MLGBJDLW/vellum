@@ -13,6 +13,17 @@ import { z } from "zod";
 // ============================================
 
 /**
+ * Array of skill trigger type values for runtime access.
+ */
+export const skillTriggerTypes = [
+  "keyword",
+  "file_pattern",
+  "command",
+  "context",
+  "always",
+] as const;
+
+/**
  * Skill trigger types.
  * Each type has different matching semantics:
  * - keyword: Regex pattern match on request text (multiplier: 10)
@@ -21,18 +32,12 @@ import { z } from "zod";
  * - context: Key:value match on project context (multiplier: 3)
  * - always: Always active, lowest priority (multiplier: 1)
  */
-export const skillTriggerTypeSchema = z.enum([
-  "keyword",
-  "file_pattern",
-  "command",
-  "context",
-  "always",
-]);
+export const skillTriggerTypeSchema = z.enum(skillTriggerTypes);
 
 /**
  * Inferred type for skill trigger type.
  */
-export type SkillTriggerType = z.infer<typeof skillTriggerTypeSchema>;
+export type SkillTriggerType = (typeof skillTriggerTypes)[number];
 
 /**
  * Schema for skill trigger patterns.

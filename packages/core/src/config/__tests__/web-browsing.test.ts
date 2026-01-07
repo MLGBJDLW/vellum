@@ -219,8 +219,9 @@ describe("SecurityConfigSchema", () => {
 });
 
 describe("WebBrowsingConfigSchema", () => {
-  it("applies all defaults with empty config", () => {
-    const config = WebBrowsingConfigSchema.parse({});
+  it("applies all defaults with empty config via parseWebBrowsingConfig", () => {
+    // Use parseWebBrowsingConfig to get fully resolved config with nested defaults
+    const config = parseWebBrowsingConfig({});
 
     // Top-level defaults
     expect(config.timeout).toBe(30_000);
@@ -253,8 +254,18 @@ describe("WebBrowsingConfigSchema", () => {
     expect(config.browser.timeout).toBe(30_000);
   });
 
+  it("schema returns undefined for nested configs when not provided", () => {
+    const config = WebBrowsingConfigSchema.parse({});
+    expect(config.security).toBeUndefined();
+    expect(config.domains).toBeUndefined();
+    expect(config.rateLimit).toBeUndefined();
+    expect(config.cache).toBeUndefined();
+    expect(config.browser).toBeUndefined();
+    expect(config.timeout).toBe(30_000); // Top-level default still applies
+  });
+
   it("merges partial config with defaults", () => {
-    const config = WebBrowsingConfigSchema.parse({
+    const config = parseWebBrowsingConfig({
       timeout: 60_000,
       security: {
         maxRedirects: 10,
@@ -351,13 +362,13 @@ describe("WebBrowsingConfigSchema", () => {
 
     expect(config.timeout).toBe(45_000);
     expect(config.maxResponseSize).toBe(5_000_000);
-    expect(config.security.blockPrivateIPs).toBe(false);
-    expect(config.security.maxRedirects).toBe(3);
-    expect(config.domains.whitelist).toEqual(["trusted.com", "api.trusted.com"]);
-    expect(config.domains.blacklist).toEqual(["blocked.com"]);
-    expect(config.rateLimit.maxRequests).toBe(200);
-    expect(config.cache.enabled).toBe(false);
-    expect(config.browser.cdpEndpoint).toBe("http://localhost:9222");
+    expect(config.security?.blockPrivateIPs).toBe(false);
+    expect(config.security?.maxRedirects).toBe(3);
+    expect(config.domains?.whitelist).toEqual(["trusted.com", "api.trusted.com"]);
+    expect(config.domains?.blacklist).toEqual(["blocked.com"]);
+    expect(config.rateLimit?.maxRequests).toBe(200);
+    expect(config.cache?.enabled).toBe(false);
+    expect(config.browser?.cdpEndpoint).toBe("http://localhost:9222");
   });
 });
 

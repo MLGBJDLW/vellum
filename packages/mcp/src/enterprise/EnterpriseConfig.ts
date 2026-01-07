@@ -49,7 +49,7 @@ export const AuditDestinationSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("http"),
     url: z.string().url(),
-    headers: z.record(z.string()).optional(),
+    headers: z.record(z.string(), z.string()).optional(),
     batchSize: z.number().int().positive().default(100),
     flushIntervalMs: z.number().int().positive().default(5000),
   }),

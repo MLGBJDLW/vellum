@@ -746,15 +746,15 @@ describe("Zod parameter validation", () => {
 
     it("should provide descriptive error messages", () => {
       const params = z.object({
-        email: z.string().email("Invalid email format"),
-        age: z.number().min(0, "Age must be non-negative"),
+        email: z.string().email({ error: "Invalid email format" }),
+        age: z.number().min(0, { error: "Age must be non-negative" }),
       });
 
       const result = params.safeParse({ email: "invalid", age: -5 });
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        const errors = result.error.errors;
+        const errors = result.error.issues;
         expect(errors).toHaveLength(2);
         expect(errors[0]?.message).toBe("Invalid email format");
         expect(errors[1]?.message).toBe("Age must be non-negative");

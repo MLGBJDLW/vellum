@@ -287,7 +287,7 @@ describe("McpCommandLoader", () => {
         mcpHub: mockHub,
       });
 
-      expect(result.kind).toBe("success");
+      expect(result?.kind).toBe("success");
       expect(mockGetPrompt).toHaveBeenCalledWith("test-server", "summarize", {});
     });
 

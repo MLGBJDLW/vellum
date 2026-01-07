@@ -79,7 +79,7 @@ export interface DelegateTaskResult {
  */
 const DelegateTaskContextSchema = z.object({
   files: z.array(z.string()).optional(),
-  memory: z.record(z.unknown()).optional(),
+  memory: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**
@@ -382,7 +382,7 @@ export const delegateTaskTool = {
     input: z.infer<typeof DelegateTaskParamsSchema>,
     ctx: DelegateTaskContext
   ): Promise<{ success: true; output: DelegateTaskResult } | { success: false; error: string }> {
-    const result = await executeDelegateTask(input, ctx);
+    const result = await executeDelegateTask(input as DelegateTaskParams, ctx);
 
     if (result.success) {
       return { success: true, output: result };
@@ -401,6 +401,7 @@ export const delegateTaskTool = {
    */
   shouldConfirm(input: z.infer<typeof DelegateTaskParamsSchema>): boolean {
     // MCP delegations may require confirmation
-    return input.target.kind === "mcp";
+    const target = input.target as DelegationTarget;
+    return target.kind === "mcp";
   },
 };

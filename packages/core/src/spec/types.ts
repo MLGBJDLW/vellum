@@ -58,21 +58,7 @@ export type WorkflowStatus = z.infer<typeof WorkflowStatusSchema>;
  * 5. `implementation` - Code implementation (skippable)
  * 6. `validation` - Spec validation and finalization
  */
-export const SpecPhaseSchema = z.enum([
-  "research",
-  "requirements",
-  "design",
-  "tasks",
-  "implementation",
-  "validation",
-]);
-
-export type SpecPhase = z.infer<typeof SpecPhaseSchema>;
-
-/**
- * Ordered array of all spec phases for iteration.
- */
-export const SPEC_PHASES: readonly SpecPhase[] = [
+export const SPEC_PHASES = [
   "research",
   "requirements",
   "design",
@@ -80,6 +66,10 @@ export const SPEC_PHASES: readonly SpecPhase[] = [
   "implementation",
   "validation",
 ] as const;
+
+export const SpecPhaseSchema = z.enum(SPEC_PHASES);
+
+export type SpecPhase = (typeof SPEC_PHASES)[number];
 
 // =============================================================================
 // Phase State Schema

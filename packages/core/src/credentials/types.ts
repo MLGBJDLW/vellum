@@ -139,7 +139,7 @@ export const CredentialMetadataSchema = z.object({
   /** Provider-specific region/location */
   region: z.string().optional(),
   /** Custom tags for organization */
-  tags: z.record(z.string()).optional(),
+  tags: z.record(z.string(), z.string()).optional(),
 });
 
 /** Inferred type for credential metadata */

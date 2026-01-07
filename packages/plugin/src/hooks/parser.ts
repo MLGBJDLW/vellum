@@ -84,7 +84,7 @@ export interface HookRuleValidationResult {
  * @returns Array of formatted error messages
  */
 function formatZodErrors(error: z.ZodError): string[] {
-  return error.errors.map((issue) => {
+  return error.issues.map((issue: z.ZodIssue) => {
     const path = issue.path.length > 0 ? `[${issue.path.join(".")}] ` : "";
     return `${path}${issue.message}`;
   });

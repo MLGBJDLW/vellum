@@ -22,12 +22,12 @@ export const AutoApproveSchema = z.array(z.string()).default([]);
 /**
  * Schema for environment variables record.
  */
-export const EnvRecordSchema = z.record(z.string());
+export const EnvRecordSchema = z.record(z.string(), z.string());
 
 /**
  * Schema for HTTP headers record.
  */
-export const HeadersRecordSchema = z.record(z.string());
+export const HeadersRecordSchema = z.record(z.string(), z.string());
 
 /**
  * Base configuration schema shared by all transport types.
@@ -157,7 +157,7 @@ export const EnterpriseConfigSchema = z.object({
  * Schema for the complete MCP settings file (~/.vellum/mcp.json).
  */
 export const McpSettingsSchema = z.object({
-  mcpServers: z.record(ServerConfigSchema).default({}),
+  mcpServers: z.record(z.string(), ServerConfigSchema).default({}),
   cli: CliConfigSchema.optional(),
   enterprise: EnterpriseConfigSchema.optional(),
 });
@@ -205,7 +205,7 @@ export function validateMcpSettings(config: unknown): McpSettingsValidationResul
   }
 
   // Format Zod errors into readable messages
-  const errors = result.error.errors.map((err) => {
+  const errors = result.error.issues.map((err: z.ZodIssue) => {
     const path = err.path.join(".");
     return path ? `${path}: ${err.message}` : err.message;
   });
@@ -236,7 +236,7 @@ export function validateServerConfig(
     };
   }
 
-  const errors = result.error.errors.map((err) => {
+  const errors = result.error.issues.map((err: z.ZodIssue) => {
     const path = err.path.join(".");
     return path ? `${serverName}.${path}: ${err.message}` : `${serverName}: ${err.message}`;
   });

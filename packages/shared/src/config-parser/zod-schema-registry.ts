@@ -6,7 +6,7 @@
  * @see REQ-032
  */
 
-import type { ZodObject, ZodRawShape, ZodSchema, ZodTypeAny, z } from "zod";
+import type { ZodObject, ZodRawShape, ZodSchema, ZodType, z } from "zod";
 
 /**
  * Options for creating a parser from a registered schema
@@ -113,7 +113,7 @@ export class ZodSchemaRegistry {
    * @returns This registry instance for chaining
    * @throws Error if name is already registered
    */
-  public register<T extends ZodTypeAny>(name: string, schema: T): this {
+  public register<T extends ZodType>(name: string, schema: T): this {
     if (this.schemas.has(name)) {
       throw new Error(`Schema "${name}" is already registered`);
     }
@@ -128,7 +128,7 @@ export class ZodSchemaRegistry {
    * @returns The registered schema
    * @throws Error if schema is not found
    */
-  public get<T extends ZodTypeAny = ZodTypeAny>(name: string): T {
+  public get<T extends ZodType = ZodType>(name: string): T {
     const schema = this.schemas.get(name);
     if (!schema) {
       throw new Error(`Schema "${name}" is not registered`);

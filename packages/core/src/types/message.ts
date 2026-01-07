@@ -268,7 +268,7 @@ export const MessageSchema = z.object({
   /** ISO timestamp when the message was created */
   createdAt: z.string(),
   /** Optional arbitrary metadata */
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 /** Inferred type for messages */

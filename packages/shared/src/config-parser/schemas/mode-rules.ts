@@ -141,8 +141,6 @@ export function parseModeRules(data: unknown): ModeRulesFrontmatter {
  * @param data - Raw frontmatter data
  * @returns Safe parse result with success flag and data/error
  */
-export function safeParseModeRules(
-  data: unknown
-): z.SafeParseReturnType<unknown, ModeRulesFrontmatter> {
+export function safeParseModeRules(data: unknown) {
   return modeRulesSchema.safeParse(data);
 }

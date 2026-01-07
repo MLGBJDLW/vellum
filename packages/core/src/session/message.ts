@@ -42,7 +42,7 @@ export const SessionToolPartSchema = z.object({
   type: z.literal("tool"),
   id: z.string(),
   name: z.string(),
-  input: z.record(z.unknown()),
+  input: z.record(z.string(), z.unknown()),
 });
 
 export type SessionToolPart = z.infer<typeof SessionToolPartSchema>;
@@ -145,7 +145,7 @@ export const SessionMessageMetadataSchema = z.object({
   /** Cost in USD */
   cost: z.number().optional(),
   /** Additional metadata */
-  extra: z.record(z.unknown()).optional(),
+  extra: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type SessionMessageMetadata = z.infer<typeof SessionMessageMetadataSchema>;

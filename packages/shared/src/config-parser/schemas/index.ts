@@ -63,4 +63,5 @@ export {
   skillFrontmatterSchema,
   skillTriggerSchema,
   skillTriggerTypeSchema,
+  skillTriggerTypes,
 } from "./skill.js";

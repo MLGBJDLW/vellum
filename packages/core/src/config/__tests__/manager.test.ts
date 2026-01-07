@@ -163,8 +163,8 @@ model = "some-model"
       expect(result.ok).toBe(true);
       if (result.ok) {
         const agent = result.value.get("agent");
-        expect(agent.maxToolCalls).toBe(50);
-        expect(agent.maxTurns).toBe(100);
+        expect(agent?.maxToolCalls).toBe(50);
+        expect(agent?.maxTurns).toBe(100);
         result.value.dispose();
       }
     });
@@ -176,8 +176,8 @@ model = "some-model"
       expect(result.ok).toBe(true);
       if (result.ok) {
         const permissions = result.value.get("permissions");
-        expect(permissions.fileRead).toBe("ask");
-        expect(permissions.fileWrite).toBe("ask");
+        expect(permissions?.fileRead).toBe("ask");
+        expect(permissions?.fileWrite).toBe("ask");
         result.value.dispose();
       }
     });

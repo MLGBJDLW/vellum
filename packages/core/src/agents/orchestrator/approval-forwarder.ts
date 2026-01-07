@@ -38,7 +38,7 @@ export const ApprovalRequestSchema = z.object({
   subagentId: z.string().min(1),
   parentSessionId: z.string().min(1),
   tool: z.string().min(1),
-  params: z.record(z.unknown()),
+  params: z.record(z.string(), z.unknown()),
   reason: z.string().optional(),
   createdAt: z.date(),
 });

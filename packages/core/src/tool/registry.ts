@@ -3,7 +3,6 @@
 // ============================================
 
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 
 import type { Tool, ToolKind } from "../types/tool.js";
 
@@ -317,10 +316,10 @@ class ToolRegistryImpl implements ToolRegistry {
         continue;
       }
 
-      // Convert Zod schema to JSON Schema
-      const jsonSchema = zodToJsonSchema(tool.definition.parameters, {
-        target: "openApi3",
-        $refStrategy: "none",
+      // Convert Zod schema to JSON Schema using Zod v4 native function
+      const jsonSchema = z.toJSONSchema(tool.definition.parameters, {
+        target: "draft-2020-12",
+        unrepresentable: "any",
       });
 
       definitions.push({

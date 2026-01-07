@@ -44,5 +44,8 @@
     "rimraf": "^6.1.2",
     "tsx": "^4.19.2",
     "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "zod-to-json-schema": "3.25.1"
   }
 }

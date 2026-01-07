@@ -434,8 +434,8 @@ describe("StorageManager", () => {
 
     it("should add multiple entries", async () => {
       const manager = await StorageManager.create({ basePath: tempDir });
-      const metadata1 = createTestMetadata({ id: "11111111-1111-1111-1111-111111111111" });
-      const metadata2 = createTestMetadata({ id: "22222222-2222-2222-2222-222222222222" });
+      const metadata1 = createTestMetadata({ id: "11111111-1111-4111-8111-111111111111" });
+      const metadata2 = createTestMetadata({ id: "22222222-2222-4222-8222-222222222222" });
 
       await manager.updateIndex(metadata1);
       await manager.updateIndex(metadata2);
@@ -484,8 +484,8 @@ describe("StorageManager", () => {
 
     it("should only remove specified entry", async () => {
       const manager = await StorageManager.create({ basePath: tempDir });
-      const metadata1 = createTestMetadata({ id: "11111111-1111-1111-1111-111111111111" });
-      const metadata2 = createTestMetadata({ id: "22222222-2222-2222-2222-222222222222" });
+      const metadata1 = createTestMetadata({ id: "11111111-1111-4111-8111-111111111111" });
+      const metadata2 = createTestMetadata({ id: "22222222-2222-4222-8222-222222222222" });
       await manager.updateIndex(metadata1);
       await manager.updateIndex(metadata2);
 
@@ -926,7 +926,7 @@ describe("StorageManager", () => {
       for (let i = 0; i < 4; i++) {
         const session = createTestSession({
           metadata: createTestMetadata({
-            id: `1111111${i}-1111-1111-1111-111111111111`,
+            id: `1111111${i}-1111-4111-8111-111111111111`,
             lastActive: new Date(Date.now() - (4 - i) * 100000), // Oldest first
           }),
         });
@@ -948,10 +948,10 @@ describe("StorageManager", () => {
       expect(index.size).toBe(2);
 
       // Verify oldest were archived (sessions 0 and 1)
-      expect(index.has(sessions[0]?.metadata.id)).toBe(false);
-      expect(index.has(sessions[1]?.metadata.id)).toBe(false);
-      expect(index.has(sessions[2]?.metadata.id)).toBe(true);
-      expect(index.has(sessions[3]?.metadata.id)).toBe(true);
+      expect(index.has(sessions[0]!.metadata.id)).toBe(false);
+      expect(index.has(sessions[1]!.metadata.id)).toBe(false);
+      expect(index.has(sessions[2]!.metadata.id)).toBe(true);
+      expect(index.has(sessions[3]!.metadata.id)).toBe(true);
     });
 
     it("should move archived files to archived directory", async () => {
@@ -964,13 +964,13 @@ describe("StorageManager", () => {
       // Create 2 sessions
       const oldSession = createTestSession({
         metadata: createTestMetadata({
-          id: "11111110-1111-1111-1111-111111111111",
+          id: "11111110-1111-4111-8111-111111111111",
           lastActive: new Date(Date.now() - 100000),
         }),
       });
       const newSession = createTestSession({
         metadata: createTestMetadata({
-          id: "11111111-1111-1111-1111-111111111111",
+          id: "11111111-1111-4111-8111-111111111111",
           lastActive: new Date(),
         }),
       });
@@ -1125,7 +1125,7 @@ describe("StorageManager", () => {
       for (let i = 0; i < 3; i++) {
         const session = createTestSession({
           metadata: createTestMetadata({
-            id: `1111111${i}-1111-1111-1111-111111111111`,
+            id: `1111111${i}-1111-4111-8111-111111111111`,
           }),
         });
         await manager.save(session);

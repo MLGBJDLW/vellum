@@ -315,7 +315,7 @@ describe("SpecWorkflowEngine", () => {
       };
       const concurrentEngine = new SpecWorkflowEngine(configWithSkip);
 
-      let resolveFirstPhase: () => void;
+      let resolveFirstPhase: () => void = () => {};
       const firstPhasePromise = new Promise<void>((resolve) => {
         resolveFirstPhase = resolve;
       });

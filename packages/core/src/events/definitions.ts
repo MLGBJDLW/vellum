@@ -154,7 +154,7 @@ export const errorEvent = defineEvent(
     /** The error that occurred */
     error: z.instanceof(Error),
     /** Additional context about where/why the error occurred */
-    context: z.record(z.unknown()).optional(),
+    context: z.record(z.string(), z.unknown()).optional(),
   })
 );
 
@@ -311,7 +311,7 @@ export const agentToolStart = defineEvent(
     /** Name of the tool being executed */
     name: z.string(),
     /** Input parameters passed to the tool */
-    input: z.record(z.unknown()),
+    input: z.record(z.string(), z.unknown()),
   })
 );
 

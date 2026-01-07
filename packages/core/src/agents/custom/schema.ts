@@ -338,8 +338,6 @@ export function isValidSlug(slug: string): boolean {
  * @param definition - The definition to validate
  * @returns Validation result with success status and data/error
  */
-export function validateAgentDefinition(
-  definition: unknown
-): z.SafeParseReturnType<unknown, ValidatedCustomAgentDefinition> {
+export function validateAgentDefinition(definition: unknown) {
   return CustomAgentDefinitionSchema.safeParse(definition);
 }

@@ -15,6 +15,16 @@ import {
 } from "../types/tool.js";
 
 // =============================================================================
+// Zod v4 Compatibility Types
+// =============================================================================
+
+/**
+ * Primitive types that can be used with z.literal() in Zod v4.
+ * Note: symbol is no longer supported in Zod v4.
+ */
+type LiteralPrimitive = string | number | boolean | null | undefined | bigint;
+
+// =============================================================================
 // T038: Core Types and Interfaces
 // =============================================================================
 
@@ -259,7 +269,7 @@ export function jsonSchemaToZod(schema: JSONSchema | undefined): z.ZodType {
 
   // Handle const value
   if ("const" in schema && schema.const !== undefined) {
-    return z.literal(schema.const as z.Primitive);
+    return z.literal(schema.const as LiteralPrimitive);
   }
 
   // Handle enum
@@ -268,7 +278,7 @@ export function jsonSchemaToZod(schema: JSONSchema | undefined): z.ZodType {
       throw new Error("Empty enum is not supported");
     }
     // Type assertion for enum values
-    const values = schema.enum as [z.Primitive, ...z.Primitive[]];
+    const values = schema.enum as [LiteralPrimitive, ...LiteralPrimitive[]];
     let zodEnum: z.ZodType = z.literal(values[0]);
     for (let i = 1; i < values.length; i++) {
       zodEnum = zodEnum.or(z.literal(values[i]));
@@ -337,10 +347,12 @@ function applyDescription<T extends z.ZodType>(schema: T, description?: string):
 
 /**
  * Apply default value to a Zod schema if present.
+ * In Zod v4, default value must match the schema's output type.
  */
-function applyDefault<T extends z.ZodType>(schema: T, defaultValue: unknown): z.ZodDefault<T> | T {
-  if (defaultValue !== undefined) {
-    return schema.default(defaultValue) as z.ZodDefault<T>;
+function applyDefault(schema: z.ZodType, defaultValue: unknown): z.ZodType {
+  if (defaultValue !== undefined && defaultValue !== null) {
+    // Use type assertion to bypass Zod v4's stricter default typing
+    return (schema as z.ZodType<unknown>).default(defaultValue as never);
   }
   return schema;
 }
@@ -349,16 +361,16 @@ function applyDefault<T extends z.ZodType>(schema: T, defaultValue: unknown): z.
  * Build a Zod string schema with constraints.
  */
 function buildStringSchema(schema: JSONSchema): z.ZodType {
-  let zodSchema: z.ZodString | z.ZodEffects<z.ZodString, string, string> = z.string();
+  let zodSchema: z.ZodType = z.string();
 
   if (schema.minLength !== undefined) {
-    zodSchema = zodSchema.min(schema.minLength);
+    zodSchema = (zodSchema as z.ZodString).min(schema.minLength);
   }
   if (schema.maxLength !== undefined) {
-    zodSchema = zodSchema.max(schema.maxLength);
+    zodSchema = (zodSchema as z.ZodString).max(schema.maxLength);
   }
   if (schema.pattern) {
-    zodSchema = zodSchema.regex(new RegExp(schema.pattern));
+    zodSchema = (zodSchema as z.ZodString).regex(new RegExp(schema.pattern));
   }
 
   let result: z.ZodType = applyDescription(zodSchema, schema.description);

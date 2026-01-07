@@ -258,6 +258,7 @@ function formatSource(source: SkillSource): string {
     workspace: chalk.green,
     user: chalk.blue,
     global: chalk.yellow,
+    plugin: chalk.magenta,
     builtin: chalk.gray,
   };
   const colorFn = colors[source] ?? chalk.white;

@@ -39,7 +39,10 @@ export const webFetchParamsSchema = z.object({
     .default("GET")
     .describe("HTTP method (default: GET)"),
   /** Custom headers to include in the request */
-  headers: z.record(z.string()).optional().describe("Custom headers as key-value pairs"),
+  headers: z
+    .record(z.string(), z.string())
+    .optional()
+    .describe("Custom headers as key-value pairs"),
   /** Request body for POST/PUT requests */
   body: z.string().optional().describe("Request body for POST/PUT requests"),
   /** Timeout in milliseconds (default: 30000) */

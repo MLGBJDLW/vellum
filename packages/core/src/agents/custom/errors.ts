@@ -122,11 +122,11 @@ export class AgentValidationError extends AgentError {
 }
 
 /**
- * Validation issue structure (compatible with Zod issues).
+ * Validation issue structure (compatible with Zod v4 issues).
  */
 export interface ValidationIssue {
-  /** Path to the invalid field */
-  path: (string | number)[];
+  /** Path to the invalid field (PropertyKey for Zod v4 compatibility) */
+  path: PropertyKey[];
   /** Error message */
   message: string;
   /** Error code */
@@ -255,12 +255,12 @@ export class AgentParseError extends AgentError {
 /**
  * Creates an AgentValidationError from Zod validation result.
  *
- * @param zodError - Zod error object with issues
+ * @param zodError - Zod error object with issues (PropertyKey[] for Zod v4 compatibility)
  * @param agentSlug - Optional agent slug for context
  * @returns AgentValidationError instance
  */
 export function fromZodError(
-  zodError: { issues: Array<{ path: (string | number)[]; message: string; code?: string }> },
+  zodError: { issues: Array<{ path: PropertyKey[]; message: string; code?: string }> },
   agentSlug?: string
 ): AgentValidationError {
   const issues: ValidationIssue[] = zodError.issues.map((issue) => ({

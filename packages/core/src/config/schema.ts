@@ -67,7 +67,7 @@ export const ServiceAccountCredentialSchema = BaseCredentialConfigSchema.extend(
   /** Path to service account JSON file */
   keyFile: z.string().optional(),
   /** Inline JSON credentials */
-  credentials: z.record(z.unknown()).optional(),
+  credentials: z.record(z.string(), z.unknown()).optional(),
   /** Project ID for GCP */
   projectId: z.string().optional(),
 });
@@ -221,15 +221,26 @@ export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 /**
  * T032 - Complete configuration schema combining all sub-schemas
+ *
+ * Note: For Zod v4 compatibility, we don't use .default({}) on nested schemas
+ * because that would bypass the inner defaults. Instead, we use .transform()
+ * to apply defaults after parsing, ensuring inner schema defaults are applied.
  */
-export const ConfigSchema = z.object({
-  llm: LLMProviderSchema,
-  agent: AgentConfigSchema.optional().default({}),
-  permissions: PermissionSchema.optional().default({}),
-  workingDir: z.string().optional(),
-  debug: z.boolean().optional().default(false),
-  logLevel: LogLevelSchema.optional().default("info"),
-});
+export const ConfigSchema = z
+  .object({
+    llm: LLMProviderSchema,
+    agent: AgentConfigSchema.optional(),
+    permissions: PermissionSchema.optional(),
+    workingDir: z.string().optional(),
+    debug: z.boolean().optional().default(false),
+    logLevel: LogLevelSchema.optional().default("info"),
+  })
+  .transform((data) => ({
+    ...data,
+    // Apply inner schema defaults when agent/permissions are omitted
+    agent: data.agent ?? AgentConfigSchema.parse({}),
+    permissions: data.permissions ?? PermissionSchema.parse({}),
+  }));
 
 export type Config = z.infer<typeof ConfigSchema>;
 

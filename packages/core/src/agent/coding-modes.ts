@@ -13,6 +13,21 @@ import {
 } from "./policies.js";
 
 /**
+ * All available coding modes as a readonly array.
+ *
+ * Useful for iteration and UI components.
+ *
+ * @example
+ * ```typescript
+ * CODING_MODES.forEach(mode => {
+ *   console.log(`Mode: ${mode}`);
+ * });
+ * // Output: Mode: vibe, Mode: plan, Mode: spec
+ * ```
+ */
+export const CODING_MODES = ["vibe", "plan", "spec"] as const;
+
+/**
  * Schema for coding mode types.
  *
  * Defines the three primary coding modes:
@@ -35,7 +50,7 @@ import {
  * }
  * ```
  */
-export const CodingModeSchema = z.enum(["vibe", "plan", "spec"]);
+export const CodingModeSchema = z.enum(CODING_MODES);
 
 /**
  * Type for coding modes.
@@ -65,21 +80,6 @@ export const CodingModeSchema = z.enum(["vibe", "plan", "spec"]);
  * ```
  */
 export type CodingMode = z.infer<typeof CodingModeSchema>;
-
-/**
- * All available coding modes as a readonly array.
- *
- * Useful for iteration and UI components.
- *
- * @example
- * ```typescript
- * CODING_MODES.forEach(mode => {
- *   console.log(`Mode: ${mode}`);
- * });
- * // Output: Mode: vibe, Mode: plan, Mode: spec
- * ```
- */
-export const CODING_MODES = CodingModeSchema.options;
 
 // ============================================
 // CodingModeConfig Interface (T010)
@@ -374,24 +374,21 @@ export const BUILTIN_CODING_MODES = {
  * SpecPhaseSchema.parse('invalid');     // ❌ Throws ZodError
  * ```
  */
-export const SpecPhaseSchema = z.enum([
+export const SPEC_PHASES = [
   "research",
   "requirements",
   "design",
   "tasks",
   "implementation",
   "validation",
-]);
+] as const;
+
+export const SpecPhaseSchema = z.enum(SPEC_PHASES);
 
 /**
  * Type for spec mode phases.
  */
-export type SpecPhase = z.infer<typeof SpecPhaseSchema>;
-
-/**
- * All available spec phases as a readonly array.
- */
-export const SPEC_PHASES = SpecPhaseSchema.options;
+export type SpecPhase = (typeof SPEC_PHASES)[number];
 
 /**
  * Tool access level for spec phases.

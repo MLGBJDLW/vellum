@@ -947,7 +947,7 @@ describe("Validation errors", () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ZodError);
         const zodError = error as ZodError;
-        expect(zodError.errors[0]?.path).toContain("createdAt");
+        expect(zodError.issues[0]?.path).toContain("createdAt");
       }
     });
 
@@ -958,7 +958,8 @@ describe("Validation errors", () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ZodError);
         const zodError = error as ZodError;
-        expect(zodError.errors[0]?.code).toBe("invalid_type");
+        // Zod v4 uses 'invalid_value' for enum/literal type mismatches
+        expect(["invalid_type", "invalid_value"]).toContain(zodError.issues[0]?.code);
       }
     });
   });

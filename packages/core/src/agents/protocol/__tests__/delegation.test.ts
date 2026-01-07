@@ -417,8 +417,9 @@ describe("Delegation Protocol", () => {
       expect(result.success).toBe(false);
       if (!result.success) {
         // Discriminated union should provide clear error about invalid discriminator
+        // Zod v4 uses "Invalid input" instead of "Invalid discriminator value"
         const errorMessage = result.error.issues[0]?.message;
-        expect(errorMessage).toContain("Invalid discriminator value");
+        expect(["Invalid discriminator value", "Invalid input"]).toContain(errorMessage);
       }
     });
 

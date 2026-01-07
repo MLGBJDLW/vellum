@@ -36,8 +36,8 @@
     "nanoid": "^5.1.6",
     "picomatch": "^4.0.3",
     "simple-git": "^3.22.0",
-    "zod": "^3.24.1",
-    "zod-to-json-schema": "^3.25.0"
+    "zod": "^4.3.5",
+    "zod-to-json-schema": "^3.25.1"
   },
   "optionalDependencies": {
     "libsecret": "^0.1.0"

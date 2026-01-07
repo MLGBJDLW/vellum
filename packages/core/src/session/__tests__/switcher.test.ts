@@ -567,7 +567,9 @@ describe("SessionSwitcher", () => {
       const forked = await switcher.forkSession();
 
       // Modify forked message
-      forked.messages[0]?.parts[0] = { type: "text" as const, text: "Modified" };
+      if (forked.messages[0]?.parts[0]) {
+        forked.messages[0].parts[0] = { type: "text" as const, text: "Modified" };
+      }
 
       // Original should be unchanged
       expect(originalSession.messages[0]?.parts[0]).toEqual({

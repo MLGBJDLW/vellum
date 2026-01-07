@@ -384,10 +384,10 @@ describe("ConfigSchema", () => {
       expect(result.llm.provider).toBe("openai");
       expect(result.llm.model).toBe("gpt-4");
       expect(result.llm.maxTokens).toBe(8192);
-      expect(result.agent.name).toBe("test-agent");
-      expect(result.agent.enableReasoning).toBe(true);
-      expect(result.permissions.fileRead).toBe("allow");
-      expect(result.permissions.shellExecute).toBe("deny");
+      expect(result.agent?.name).toBe("test-agent");
+      expect(result.agent?.enableReasoning).toBe(true);
+      expect(result.permissions?.fileRead).toBe("allow");
+      expect(result.permissions?.shellExecute).toBe("deny");
       expect(result.workingDir).toBe("/home/user/project");
       expect(result.debug).toBe(true);
       expect(result.logLevel).toBe("debug");
@@ -406,8 +406,8 @@ describe("ConfigSchema", () => {
         ...minimalValidConfig,
         agent: { name: "partial-agent" },
       });
-      expect(result.agent.name).toBe("partial-agent");
-      expect(result.agent.maxToolCalls).toBe(50);
+      expect(result.agent?.name).toBe("partial-agent");
+      expect(result.agent?.maxToolCalls).toBe(50);
     });
 
     it("parses with llm and partial permissions", () => {
@@ -415,29 +415,35 @@ describe("ConfigSchema", () => {
         ...minimalValidConfig,
         permissions: { fileRead: "allow" },
       });
-      expect(result.permissions.fileRead).toBe("allow");
-      expect(result.permissions.fileWrite).toBe("ask");
+      expect(result.permissions?.fileRead).toBe("allow");
+      expect(result.permissions?.fileWrite).toBe("ask");
     });
   });
 
   describe("defaults applied", () => {
     it("applies default agent config", () => {
-      const result = ConfigSchema.parse(minimalValidConfig);
+      const result = ConfigSchema.parse({
+        ...minimalValidConfig,
+        agent: {},
+      });
       expect(result.agent).toBeDefined();
-      expect(result.agent.maxToolCalls).toBe(50);
-      expect(result.agent.maxTurns).toBe(100);
-      expect(result.agent.maxRetries).toBe(3);
-      expect(result.agent.enableReasoning).toBe(false);
+      expect(result.agent?.maxToolCalls).toBe(50);
+      expect(result.agent?.maxTurns).toBe(100);
+      expect(result.agent?.maxRetries).toBe(3);
+      expect(result.agent?.enableReasoning).toBe(false);
     });
 
     it("applies default permissions config", () => {
-      const result = ConfigSchema.parse(minimalValidConfig);
+      const result = ConfigSchema.parse({
+        ...minimalValidConfig,
+        permissions: {},
+      });
       expect(result.permissions).toBeDefined();
-      expect(result.permissions.fileRead).toBe("ask");
-      expect(result.permissions.fileWrite).toBe("ask");
-      expect(result.permissions.shellExecute).toBe("ask");
-      expect(result.permissions.networkAccess).toBe("ask");
-      expect(result.permissions.mcpConnect).toBe("ask");
+      expect(result.permissions?.fileRead).toBe("ask");
+      expect(result.permissions?.fileWrite).toBe("ask");
+      expect(result.permissions?.shellExecute).toBe("ask");
+      expect(result.permissions?.networkAccess).toBe("ask");
+      expect(result.permissions?.mcpConnect).toBe("ask");
     });
 
     it("applies default debug of false", () => {
@@ -510,8 +516,8 @@ describe("ConfigSchema", () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ZodError);
         const zodError = error as ZodError;
-        expect(zodError.errors.length).toBeGreaterThan(0);
-        expect(zodError.errors[0]?.path).toContain("provider");
+        expect(zodError.issues.length).toBeGreaterThan(0);
+        expect(zodError.issues[0]?.path).toContain("provider");
       }
     });
   });

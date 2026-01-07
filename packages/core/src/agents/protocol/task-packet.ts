@@ -37,7 +37,7 @@ export const TaskContextSchema = z.object({
   chainId: z.string().uuid().optional(),
   sessionId: z.string().optional(),
   files: z.array(z.string()).optional(),
-  memory: z.record(z.unknown()).optional(),
+  memory: z.record(z.string(), z.unknown()).optional(),
 });
 
 // ============================================

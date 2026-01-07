@@ -48,7 +48,7 @@ export const AuditLogEntrySchema = z.object({
   /** Duration of the operation in milliseconds */
   durationMs: z.number(),
   /** Optional additional metadata (NEVER contains credential values) */
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type AuditLogEntry = z.infer<typeof AuditLogEntrySchema>;

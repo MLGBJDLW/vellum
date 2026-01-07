@@ -536,7 +536,7 @@ maxTurns = 50
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.llm.provider).toBe("anthropic");
-        expect(result.value.agent.maxTurns).toBe(50);
+        expect(result.value.agent?.maxTurns).toBe(50);
         expect(result.value.debug).toBe(true);
       }
     });
@@ -561,10 +561,10 @@ model = "claude-3"
         expect(result.value.llm.maxTokens).toBe(4096);
         expect(result.value.llm.temperature).toBe(0.7);
         expect(result.value.llm.timeout).toBe(60000);
-        expect(result.value.agent.maxToolCalls).toBe(50);
-        expect(result.value.agent.maxTurns).toBe(100);
-        expect(result.value.agent.maxRetries).toBe(3);
-        expect(result.value.permissions.fileRead).toBe("ask");
+        expect(result.value.agent?.maxToolCalls).toBe(50);
+        expect(result.value.agent?.maxTurns).toBe(100);
+        expect(result.value.agent?.maxRetries).toBe(3);
+        expect(result.value.permissions?.fileRead).toBe("ask");
       }
     });
 

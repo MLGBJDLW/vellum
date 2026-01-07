@@ -170,7 +170,7 @@ describe("E2E: Full Workflow", () => {
       // 4. ROUTE: Test routing by context
       const registry = new CustomAgentRegistry();
       expect(agent).toBeDefined();
-      registry.register(agent?.definition, agent?.source);
+      registry.register(agent!.definition, agent!.source);
 
       const router = new AgentRouter(registry);
 

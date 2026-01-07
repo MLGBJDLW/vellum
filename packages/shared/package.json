@@ -23,6 +23,6 @@
   "dependencies": {
     "gray-matter": "^4.0.3",
     "yaml": "^2.8.2",
-    "zod": "^3.25"
+    "zod": "^4.3.5"
   }
 }

@@ -8,7 +8,7 @@
  * @see REQ-003
  */
 
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { z } from "zod";
 import { CustomAgentDefinitionSchema } from "./schema.js";
 
 // =============================================================================
@@ -86,18 +86,11 @@ export function generateJsonSchema(options: GenerateSchemaOptions = {}): JsonSch
     includeSchemaRef = true,
   } = options;
 
-  // Convert Zod schema to JSON Schema
-  const result = zodToJsonSchema(CustomAgentDefinitionSchema, {
-    name: "CustomAgentDefinition",
-    $refStrategy: "none", // Inline all definitions
+  // Convert Zod schema to JSON Schema using native Zod v4 function
+  const result = z.toJSONSchema(CustomAgentDefinitionSchema, {
+    target: "draft-2020-12",
+    unrepresentable: "any",
   });
-
-  // zodToJsonSchema may nest the schema under definitions or return it directly
-  // Handle both cases
-  const jsonSchema = (result.definitions?.CustomAgentDefinition ?? result) as {
-    type?: string;
-    properties?: Record<string, unknown>;
-  };
 
   // Build the final schema
   const schema: JsonSchema = {
@@ -105,9 +98,14 @@ export function generateJsonSchema(options: GenerateSchemaOptions = {}): JsonSch
     $id: id,
     title,
     description,
-    type: jsonSchema.type ?? "object",
-    properties: (jsonSchema.properties ?? {}) as Record<string, unknown>,
+    type: (result.type as string) ?? "object",
+    properties: (result.properties ?? {}) as Record<string, unknown>,
   };
+
+  // Copy over required if present
+  if (result.required) {
+    schema.required = result.required as string[];
+  }
 
   // Add helpful metadata
   if (schema.properties && Object.keys(schema.properties).length > 0) {

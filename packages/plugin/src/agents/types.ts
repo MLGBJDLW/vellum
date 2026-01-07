@@ -295,9 +295,7 @@ export type PluginAgentDefinitionInput = z.input<typeof PluginAgentDefinitionSch
  * }
  * ```
  */
-export function validatePluginAgentDefinition(
-  definition: unknown
-): z.SafeParseReturnType<unknown, PluginAgentDefinition> {
+export function validatePluginAgentDefinition(definition: unknown) {
   return PluginAgentDefinitionSchema.safeParse(definition);
 }
 

@@ -265,7 +265,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should parse valid recovery log correctly", async () => {
-      const sessionId = "11111111-1111-1111-1111-111111111111";
+      const sessionId = "11111111-1111-4111-8111-111111111111";
       const timestamp = new Date();
       const validLog: RecoveryLog = {
         sessionId,
@@ -305,9 +305,9 @@ describe("RecoveryManager", () => {
     });
 
     it("should return all valid recovery logs", async () => {
-      const session1 = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
-      const session2 = createTestSession({ id: "22222222-2222-2222-2222-222222222222" });
-      const session3 = createTestSession({ id: "33333333-3333-3333-3333-333333333333" });
+      const session1 = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
+      const session2 = createTestSession({ id: "22222222-2222-4222-8222-222222222222" });
+      const session3 = createTestSession({ id: "33333333-3333-4333-8333-333333333333" });
 
       await recovery.writeRecoveryLog(session1);
       await recovery.writeRecoveryLog(session2);
@@ -323,7 +323,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should skip corrupted log files", async () => {
-      const validSession = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
+      const validSession = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
       await recovery.writeRecoveryLog(validSession);
 
       // Write corrupted file
@@ -377,7 +377,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should identify crashed sessions with active status", async () => {
-      const session = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
+      const session = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
       await recovery.writeRecoveryLog(session);
 
       const storage = createMockStorageManager([session.metadata.id]);
@@ -390,7 +390,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should not include sessions that no longer exist in storage", async () => {
-      const session = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
+      const session = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
       await recovery.writeRecoveryLog(session);
 
       const storage = createMockStorageManager([]); // Session doesn't exist in storage
@@ -401,7 +401,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should update recovery log status to crashed", async () => {
-      const session = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
+      const session = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
       await recovery.writeRecoveryLog(session);
 
       const storage = createMockStorageManager([session.metadata.id]);
@@ -413,8 +413,8 @@ describe("RecoveryManager", () => {
     });
 
     it("should sort crashed sessions by timestamp (most recent first)", async () => {
-      const session1 = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
-      const session2 = createTestSession({ id: "22222222-2222-2222-2222-222222222222" });
+      const session1 = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
+      const session2 = createTestSession({ id: "22222222-2222-4222-8222-222222222222" });
 
       await recovery.writeRecoveryLog(session1);
       // Small delay to ensure different timestamps
@@ -430,7 +430,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should ignore non-active recovery logs", async () => {
-      const sessionId = "11111111-1111-1111-1111-111111111111";
+      const sessionId = "11111111-1111-4111-8111-111111111111";
       const recoveryPath = path.join(tempDir, ".recovery");
       await fs.mkdir(recoveryPath, { recursive: true });
 
@@ -461,8 +461,8 @@ describe("RecoveryManager", () => {
 
   describe("startupCheck", () => {
     it("should return most recent crashed session", async () => {
-      const session1 = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
-      const session2 = createTestSession({ id: "22222222-2222-2222-2222-222222222222" });
+      const session1 = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
+      const session2 = createTestSession({ id: "22222222-2222-4222-8222-222222222222" });
 
       await recovery.writeRecoveryLog(session1);
       await new Promise((r) => setTimeout(r, 10));
@@ -527,7 +527,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should clean up orphaned recovery logs for non-existent sessions", async () => {
-      const sessionId = "11111111-1111-1111-1111-111111111111";
+      const sessionId = "11111111-1111-4111-8111-111111111111";
       const recoveryPath = path.join(tempDir, ".recovery");
       await fs.mkdir(recoveryPath, { recursive: true });
 
@@ -554,7 +554,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should not clean up active logs even if session doesn't exist", async () => {
-      const session = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
+      const session = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
       await recovery.writeRecoveryLog(session);
 
       const storage = createMockStorageManager([]); // Session doesn't exist
@@ -574,7 +574,7 @@ describe("RecoveryManager", () => {
 
   describe("markSessionActive", () => {
     it("should create recovery log with active status", async () => {
-      const sessionId = "11111111-1111-1111-1111-111111111111";
+      const sessionId = "11111111-1111-4111-8111-111111111111";
 
       await recovery.markSessionActive(sessionId);
 
@@ -584,7 +584,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should include message count and last message ID", async () => {
-      const sessionId = "11111111-1111-1111-1111-111111111111";
+      const sessionId = "11111111-1111-4111-8111-111111111111";
 
       await recovery.markSessionActive(sessionId, 10, "msg-10");
 
@@ -628,7 +628,7 @@ describe("RecoveryManager", () => {
 
   describe("markSessionClosed", () => {
     it("should delete recovery log", async () => {
-      const sessionId = "11111111-1111-1111-1111-111111111111";
+      const sessionId = "11111111-1111-4111-8111-111111111111";
       await recovery.markSessionActive(sessionId);
 
       await recovery.markSessionClosed(sessionId);
@@ -648,7 +648,7 @@ describe("RecoveryManager", () => {
 
   describe("updateRecoveryLogStatus", () => {
     it("should update status to recovered", async () => {
-      const session = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
+      const session = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
       await recovery.writeRecoveryLog(session);
 
       await recovery.updateRecoveryLogStatus(session.metadata.id, "recovered");
@@ -658,7 +658,7 @@ describe("RecoveryManager", () => {
     });
 
     it("should update timestamp when changing status", async () => {
-      const session = createTestSession({ id: "11111111-1111-1111-1111-111111111111" });
+      const session = createTestSession({ id: "11111111-1111-4111-8111-111111111111" });
       await recovery.writeRecoveryLog(session);
 
       const originalLog = await recovery.getRecoveryLog(session.metadata.id);
@@ -668,7 +668,7 @@ describe("RecoveryManager", () => {
       await recovery.updateRecoveryLogStatus(session.metadata.id, "crashed");
 
       const updatedLog = await recovery.getRecoveryLog(session.metadata.id);
-      expect(updatedLog?.timestamp.getTime()).toBeGreaterThan(originalTimestamp?.getTime());
+      expect(updatedLog?.timestamp.getTime()).toBeGreaterThan(originalTimestamp!.getTime());
     });
 
     it("should throw RecoveryError.notFound for missing log", async () => {
@@ -744,7 +744,7 @@ describe("RecoveryError", () => {
 describe("RecoveryLogSchema", () => {
   it("should validate valid recovery log", () => {
     const log = {
-      sessionId: "11111111-1111-1111-1111-111111111111",
+      sessionId: "11111111-1111-4111-8111-111111111111",
       timestamp: new Date().toISOString(),
       messageCount: 5,
       lastMessageId: "msg-5",
@@ -771,7 +771,7 @@ describe("RecoveryLogSchema", () => {
 
   it("should reject negative messageCount", () => {
     const log = {
-      sessionId: "11111111-1111-1111-1111-111111111111",
+      sessionId: "11111111-1111-4111-8111-111111111111",
       timestamp: new Date().toISOString(),
       messageCount: -1,
       status: "active",
@@ -784,7 +784,7 @@ describe("RecoveryLogSchema", () => {
 
   it("should reject invalid status", () => {
     const log = {
-      sessionId: "11111111-1111-1111-1111-111111111111",
+      sessionId: "11111111-1111-4111-8111-111111111111",
       timestamp: new Date().toISOString(),
       messageCount: 0,
       status: "invalid",
@@ -797,7 +797,7 @@ describe("RecoveryLogSchema", () => {
 
   it("should allow optional lastMessageId", () => {
     const log = {
-      sessionId: "11111111-1111-1111-1111-111111111111",
+      sessionId: "11111111-1111-4111-8111-111111111111",
       timestamp: new Date().toISOString(),
       messageCount: 0,
       status: "active",
@@ -814,7 +814,7 @@ describe("RecoveryLogSchema", () => {
   it("should coerce date strings to Date objects", () => {
     const timestamp = "2025-12-30T12:00:00.000Z";
     const log = {
-      sessionId: "11111111-1111-1111-1111-111111111111",
+      sessionId: "11111111-1111-4111-8111-111111111111",
       timestamp,
       messageCount: 0,
       status: "active",

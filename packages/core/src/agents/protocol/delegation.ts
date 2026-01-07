@@ -184,7 +184,7 @@ export const McpTargetSchema = z.object({
   kind: z.literal("mcp"),
   serverId: z.string().min(1, "Server ID cannot be empty"),
   toolName: z.string().min(1, "Tool name cannot be empty"),
-  params: z.record(z.unknown()).optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**

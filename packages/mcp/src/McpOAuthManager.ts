@@ -177,7 +177,8 @@ export interface OAuthRefreshTimer {
  * Manages OAuth state and token storage for a single MCP server.
  */
 export class VellumOAuthClientProvider implements OAuthClientProvider {
-  private readonly serverName: string;
+  readonly serverName: string;
+  readonly serverUrl: string;
   private readonly serverId: string;
   private readonly config: McpOAuthManagerConfig;
   private readonly credentialManager?: OAuthCredentialManager;

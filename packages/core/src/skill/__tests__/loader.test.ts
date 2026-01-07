@@ -434,7 +434,7 @@ describe("SkillLoader", () => {
 
       expect(secondAccess).toBeDefined();
       expect(firstAccess).toBeDefined();
-      expect(secondAccess?.getTime()).toBeGreaterThanOrEqual(firstAccess?.getTime());
+      expect(secondAccess!.getTime()).toBeGreaterThanOrEqual(firstAccess!.getTime());
     });
   });
 

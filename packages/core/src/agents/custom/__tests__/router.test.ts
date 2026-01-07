@@ -360,12 +360,12 @@ describe("AgentRouter", () => {
       expect(candidate).toBeDefined();
 
       // Verify weights are applied correctly
-      const breakdown = candidate?.scoreBreakdown;
+      const breakdown = candidate!.scoreBreakdown;
       const expectedScore =
-        breakdown.filePatterns * ROUTING_WEIGHTS.FILE_PATTERNS +
-        breakdown.keywords * ROUTING_WEIGHTS.KEYWORDS +
-        breakdown.directories * ROUTING_WEIGHTS.DIRECTORIES +
-        breakdown.priorityBonus;
+        breakdown!.filePatterns * ROUTING_WEIGHTS.FILE_PATTERNS +
+        breakdown!.keywords * ROUTING_WEIGHTS.KEYWORDS +
+        breakdown!.directories * ROUTING_WEIGHTS.DIRECTORIES +
+        breakdown!.priorityBonus;
 
       expect(candidate?.score).toBeCloseTo(expectedScore, 5);
     });
@@ -580,7 +580,7 @@ describe("AgentRouter", () => {
 
       // Verify ordering
       for (let i = 1; i < result.candidates.length; i++) {
-        expect(result.candidates[i - 1]?.score).toBeGreaterThanOrEqual(result.candidates[i]?.score);
+        expect(result.candidates[i - 1]!.score).toBeGreaterThanOrEqual(result.candidates[i]!.score);
       }
     });
 
