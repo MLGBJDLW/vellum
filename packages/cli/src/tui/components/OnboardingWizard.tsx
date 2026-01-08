@@ -551,15 +551,9 @@ export function OnboardingWizard({
   return (
     <Box flexDirection="column" padding={1}>
       {/* Header */}
-      <Box
-        borderStyle="round"
-        borderColor={theme.colors.primary}
-        paddingX={2}
-        paddingY={1}
-        marginBottom={1}
-      >
-        <Text bold color={theme.colors.primary}>
-          * Vellum Setup Wizard
+      <Box borderStyle="round" borderColor="#DAA520" paddingX={2} paddingY={1} marginBottom={1}>
+        <Text bold color="#DAA520">
+          ✦ Vellum Setup Wizard
         </Text>
       </Box>
 

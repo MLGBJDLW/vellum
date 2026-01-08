@@ -131,6 +131,32 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
     invalidHint: "Available: {{codes}}",
     saved: "Language preference saved",
   },
+  onboarding: {
+    selectProvider: "Select your AI Provider:",
+    providerNav: "Use ↑/↓ to navigate, Enter to select",
+    apiKeyRequired: "(requires API key)",
+    noApiKeyNeeded: "(local, no key needed)",
+  },
+  providers: {
+    anthropic: {
+      name: "Anthropic",
+      shortcut: "[A]",
+      description: "Claude 4.5 Opus - Best for coding tasks",
+    },
+    openai: { name: "OpenAI", shortcut: "[O]", description: "GPT 5.2 - Versatile and powerful" },
+    google: {
+      name: "Google AI",
+      shortcut: "[G]",
+      description: "Gemini 3 Pro - Latest Google model",
+    },
+    mistral: { name: "Mistral AI", shortcut: "[M]", description: "Open weight models" },
+    groq: { name: "Groq", shortcut: "[R]", description: "Ultra-fast inference" },
+    openrouter: { name: "OpenRouter", shortcut: "[X]", description: "Multi-provider gateway" },
+    deepseek: { name: "DeepSeek", shortcut: "[D]", description: "DeepSeek-V3 - Chinese AI model" },
+    qwen: { name: "Qwen", shortcut: "[Q]", description: "Alibaba Qwen-72B" },
+    moonshot: { name: "Moonshot", shortcut: "[S]", description: "Moonshot-v1" },
+    ollama: { name: "Ollama", shortcut: "[L]", description: "Local models" },
+  },
 };
 
 /**
@@ -253,6 +279,28 @@ const ZH_TRANSLATIONS: Record<string, unknown> = {
     invalid: "无效的语言代码: {{code}}",
     invalidHint: "可用: {{codes}}",
     saved: "语言偏好已保存",
+  },
+  onboarding: {
+    selectProvider: "选择您的 AI 提供商：",
+    providerNav: "使用 ↑/↓ 导航，Enter 选择",
+    apiKeyRequired: "(需要 API 密钥)",
+    noApiKeyNeeded: "(本地运行，无需密钥)",
+  },
+  providers: {
+    anthropic: {
+      name: "Anthropic",
+      shortcut: "[A]",
+      description: "Claude 4.5 Opus - 最适合编程任务",
+    },
+    openai: { name: "OpenAI", shortcut: "[O]", description: "GPT 5.2 - 多功能且强大" },
+    google: { name: "Google AI", shortcut: "[G]", description: "Gemini 3 Pro - 最新谷歌模型" },
+    mistral: { name: "Mistral AI", shortcut: "[M]", description: "开源权重模型" },
+    groq: { name: "Groq", shortcut: "[R]", description: "超快推理" },
+    openrouter: { name: "OpenRouter", shortcut: "[X]", description: "多提供商网关" },
+    deepseek: { name: "DeepSeek", shortcut: "[D]", description: "DeepSeek-V3 - 中国 AI 模型" },
+    qwen: { name: "Qwen", shortcut: "[Q]", description: "阿里巴巴 Qwen-72B" },
+    moonshot: { name: "Moonshot", shortcut: "[S]", description: "Moonshot-v1" },
+    ollama: { name: "Ollama", shortcut: "[L]", description: "本地模型" },
   },
 };
 
