@@ -22,12 +22,14 @@
  * @module @vellum/tool
  */
 
-// Emit deprecation warning on import
-console.warn(
-  "[@vellum/tool] DEPRECATION WARNING: This package is deprecated. " +
-    "Please import from '@vellum/core' instead. " +
-    "See the migration guide at packages/core/MIGRATION.md"
-);
+// Emit deprecation warning on import (only once)
+const WARNED_KEY = "__vellum_tool_deprecated_warned__";
+if (!(globalThis as Record<string, unknown>)[WARNED_KEY]) {
+  (globalThis as Record<string, unknown>)[WARNED_KEY] = true;
+  console.warn(
+    "[@vellum/tool] This package is deprecated. Please import from @vellum/core instead."
+  );
+}
 
 // Agent tools (multi-agent orchestration)
 export * from "./agent/index.js";

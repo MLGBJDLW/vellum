@@ -420,3 +420,20 @@ export {
   memorySubcommands,
   withMemoryService,
 } from "./memory/index.js";
+
+// =============================================================================
+// User Commands (Phase 16)
+// =============================================================================
+
+export {
+  ensureCommandsDirectory,
+  getCommandTemplate,
+  registerUserCommands,
+  type UserCommandArgs,
+  type UserCommandContext,
+  type UserCommandDefinition,
+  UserCommandLoader,
+  type UserCommandLoadResult,
+  type UserCommandResult,
+  type UserCommandValidationError,
+} from "./user-commands.js";

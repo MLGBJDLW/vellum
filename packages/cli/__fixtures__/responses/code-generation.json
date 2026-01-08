@@ -1,0 +1,42 @@
+{
+  "id": "code-generation",
+  "promptPattern": "write.*function|create.*code|generate.*typescript",
+  "isRegex": true,
+  "description": "Code generation response with tool calls",
+  "streamDelay": 20,
+  "events": [
+    {
+      "type": "text",
+      "content": "I'll create a TypeScript function for you.\n\n"
+    },
+    {
+      "type": "tool_call_start",
+      "toolCallId": "toolu_01ABC123",
+      "toolName": "write_file"
+    },
+    {
+      "type": "tool_call_delta",
+      "toolCallId": "toolu_01ABC123",
+      "arguments": "{\"path\": \"src/utils/helper.ts\", \"content\": \"export function greet(name: string): string {\\n  return `Hello, ${name}!`;\\n}\"}"
+    },
+    {
+      "type": "tool_call_end",
+      "toolCallId": "toolu_01ABC123"
+    },
+    {
+      "type": "text",
+      "content": "\n\nI've created a simple greeting function in `src/utils/helper.ts`."
+    },
+    {
+      "type": "usage",
+      "usage": {
+        "inputTokens": 25,
+        "outputTokens": 120
+      }
+    },
+    {
+      "type": "end",
+      "stopReason": "end_turn"
+    }
+  ]
+}

@@ -9,6 +9,7 @@
  */
 
 import { EventEmitter } from "node:events";
+import type { Logger } from "../logger/logger.js";
 import { calculateCostBreakdown, sumCostBreakdowns } from "./calculator.js";
 import type {
   CostBreakdown,
@@ -54,7 +55,7 @@ import type {
  */
 export class CostService extends EventEmitter {
   private readonly sessionId: string;
-  private readonly debug: boolean;
+  private readonly logger?: Logger;
   private readonly records: CostRecord[] = [];
   private sessionCost: CostBreakdown = createEmptyBreakdown();
   private totalCost: CostBreakdown = createEmptyBreakdown();
@@ -67,7 +68,7 @@ export class CostService extends EventEmitter {
   constructor(options: CostServiceOptions) {
     super();
     this.sessionId = options.sessionId;
-    this.debug = options.debug ?? false;
+    this.logger = options.logger;
   }
 
   // ===========================================================================
@@ -106,9 +107,7 @@ export class CostService extends EventEmitter {
     this.records.push(record);
     this.updateCosts(breakdown);
 
-    if (this.debug) {
-      console.log(`[CostService] Tracked: ${model} - $${breakdown.total.toFixed(6)}`);
-    }
+    this.logger?.debug(`[CostService] Tracked: ${model} - $${breakdown.total.toFixed(6)}`);
 
     const event: CostUpdateEvent = {
       sessionId: this.sessionId,
@@ -188,9 +187,7 @@ export class CostService extends EventEmitter {
     this.records.length = 0;
     this.sessionCost = createEmptyBreakdown();
 
-    if (this.debug) {
-      console.log("[CostService] Session reset");
-    }
+    this.logger?.debug("[CostService] Session reset");
 
     this.emit("reset", { sessionId: this.sessionId });
   }

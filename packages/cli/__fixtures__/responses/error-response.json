@@ -1,0 +1,20 @@
+{
+  "id": "error-response",
+  "promptPattern": "trigger-error|cause-failure",
+  "isRegex": true,
+  "description": "Error response for testing error handling",
+  "streamDelay": 0,
+  "events": [
+    {
+      "type": "text",
+      "content": "Processing your request..."
+    },
+    {
+      "type": "error",
+      "error": {
+        "code": "RATE_LIMIT_EXCEEDED",
+        "message": "You have exceeded the rate limit. Please wait before making another request."
+      }
+    }
+  ]
+}

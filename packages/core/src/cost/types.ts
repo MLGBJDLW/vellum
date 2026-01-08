@@ -303,8 +303,8 @@ export interface CostServiceOptions {
   /** Session identifier for grouping costs */
   sessionId: string;
 
-  /** Enable logging */
-  debug?: boolean;
+  /** Optional logger for debug output */
+  logger?: import("../logger/logger.js").Logger;
 }
 
 /**

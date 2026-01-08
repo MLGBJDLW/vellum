@@ -1,6 +1,8 @@
 {
   "name": "@vellum/tool",
   "version": "0.1.0",
+  "description": "[DEPRECATED] This package is deprecated. Please use @vellum/core instead.",
+  "deprecated": "This package is deprecated. Please import from @vellum/core instead.",
   "private": true,
   "type": "module",
   "exports": {

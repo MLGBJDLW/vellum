@@ -1,0 +1,32 @@
+{
+  "id": "hello-world",
+  "promptPattern": "hello",
+  "isRegex": false,
+  "description": "Simple greeting response for basic connectivity tests",
+  "streamDelay": 10,
+  "events": [
+    {
+      "type": "text",
+      "content": "Hello! "
+    },
+    {
+      "type": "text",
+      "content": "I'm Vellum, your AI assistant. "
+    },
+    {
+      "type": "text",
+      "content": "How can I help you today?"
+    },
+    {
+      "type": "usage",
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 15
+      }
+    },
+    {
+      "type": "end",
+      "stopReason": "end_turn"
+    }
+  ]
+}

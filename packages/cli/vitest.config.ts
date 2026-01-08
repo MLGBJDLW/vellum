@@ -14,10 +14,15 @@ export default defineConfig({
       // Explicitly include command tests
       "src/commands/**/*.test.{ts,tsx}",
       "src/commands/__tests__/**/*.test.{ts,tsx}",
+      // Include fixture tests
+      "src/test/fixtures/__tests__/**/*.test.{ts,tsx}",
     ],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
+    },
+    env: {
+      VELLUM_FAKE_RESPONSES: "true",
     },
   },
 });
