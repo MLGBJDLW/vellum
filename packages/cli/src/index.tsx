@@ -20,6 +20,7 @@ import {
   renderCredentialsRemove,
 } from "./commands/credentials.js";
 import { executeInit } from "./commands/init.js";
+import { createLspCommand } from "./commands/lsp.js";
 import {
   handleSkillCreate,
   handleSkillList,
@@ -390,5 +391,11 @@ skillCmd
 // =============================================================================
 
 registerDelegateCommand(program);
+
+// =============================================================================
+// LSP Command (Phase 30)
+// =============================================================================
+
+program.addCommand(createLspCommand());
 
 program.parse();

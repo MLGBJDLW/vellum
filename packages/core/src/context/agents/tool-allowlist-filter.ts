@@ -57,6 +57,16 @@ export const TOOL_GROUPS: Readonly<Record<string, readonly string[]>> = {
     "Stat",
     "stat",
     "Tree",
+    "lsp",
+    "lsp_diagnostics",
+    "lsp_hover",
+    "lsp_definition",
+    "lsp_references",
+    "lsp_symbols",
+    "lsp_workspace_symbol",
+    "lsp_incoming_calls",
+    "lsp_outgoing_calls",
+    "lsp_code_actions",
   ],
 
   // File modification operations
@@ -90,6 +100,7 @@ export const TOOL_GROUPS: Readonly<Record<string, readonly string[]>> = {
     "Mkdir",
     "mkdir",
     "create_directory",
+    "lsp_format",
   ],
 
   // Command execution tools

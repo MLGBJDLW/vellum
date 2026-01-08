@@ -203,6 +203,17 @@ export {
 export { EXIT_CODES, type ExitCode, ExitCodeMapper } from "./exit-codes.js";
 
 // =============================================================================
+// Onboarding (Phase 38)
+// =============================================================================
+
+export {
+  type OnboardOptions,
+  type OnboardResult,
+  onboardCommand,
+  runOnboardCommand,
+} from "./onboard.js";
+
+// =============================================================================
 // Shell Completion (T047)
 // =============================================================================
 
@@ -362,6 +373,17 @@ export {
 } from "./mode.js";
 
 // =============================================================================
+// Cost Commands (Phase 35)
+// =============================================================================
+
+export {
+  costCommand,
+  costResetCommand,
+  getCostCommandsService,
+  setCostCommandsService,
+} from "./cost.js";
+
+// =============================================================================
 // Spec Workflow Commands (T034)
 // =============================================================================
 
@@ -371,3 +393,30 @@ export {
   type SpecResult,
   specSlashCommand,
 } from "./spec.js";
+
+// =============================================================================
+// LSP Commands (Phase 30)
+// =============================================================================
+
+export { createLspCommand } from "./lsp.js";
+
+// =============================================================================
+// Memory Commands (Phase 31)
+// =============================================================================
+
+export {
+  executeMemoryExport,
+  executeMemoryList,
+  executeMemorySearch,
+  type MemoryExportFormat,
+  type MemoryExportOptions,
+  type MemoryListOptions,
+  type MemorySearchOptions,
+  memoryCommand,
+  memoryCommands,
+  memoryExportCommand,
+  memoryListCommand,
+  memorySearchCommand,
+  memorySubcommands,
+  withMemoryService,
+} from "./memory/index.js";

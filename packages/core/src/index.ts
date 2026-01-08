@@ -578,6 +578,40 @@ export {
 export * from "./context/index.js";
 export { ContextManager } from "./context.js";
 // ============================================
+// Cost Tracking (Phase 35)
+// ============================================
+export {
+  type CostBreakdown,
+  type CostCalculationParams,
+  type CostRecord,
+  // Service
+  CostService,
+  type CostServiceOptions,
+  type CostSummary,
+  type CostUpdateEvent,
+  // Calculator
+  calculateCost,
+  calculateCostBreakdown,
+  calculateCostWithUsage,
+  createCostService,
+  type FormatCostOptions,
+  formatCost,
+  formatCostBreakdown,
+  formatTokenCount,
+  getPricing,
+  getSupportedModels,
+  getTieredPricing,
+  hasPricing,
+  MODEL_PRICING,
+  type ModelPricing,
+  type ModelUsage,
+  type PricingTier,
+  type ProviderPricing,
+  type ProviderUsage,
+  sumCostBreakdowns,
+  type TokenUsage as CostTokenUsage,
+} from "./cost/index.js";
+// ============================================
 // Credentials (T001-T003)
 // ============================================
 export * from "./credentials/index.js";
@@ -682,6 +716,10 @@ export * from "./metrics/index.js";
 // ============================================
 export * from "./migration/index.js";
 // ============================================
+// Onboarding (Phase 38)
+// ============================================
+export * from "./onboarding/index.js";
+// ============================================
 // Permission System (T004-T007)
 // ============================================
 export * from "./permission/index.js";
@@ -693,6 +731,10 @@ export * from "./privacy/index.js";
 // Session (LLM, Messages, Thinking)
 // ============================================
 export * from "./session/index.js";
+// ============================================
+// Shell Integration (Phase 37)
+// ============================================
+export * from "./shell/index.js";
 // ============================================
 // Skill System
 // ============================================
@@ -759,3 +801,15 @@ export type {
   ToolCallEvent,
   ToolResultEvent,
 } from "./types.js";
+// ============================================
+// Auto Update (Phase 39)
+// ============================================
+export * from "./update/index.js";
+// ============================================
+// Vision (Phase 32)
+// ============================================
+export * from "./vision/index.js";
+// ============================================
+// Watch (Phase 36)
+// ============================================
+export * from "./watch/index.js";

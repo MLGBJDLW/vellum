@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 import { defineTool, fail, ok } from "../types/index.js";
-import { executeShell } from "./utils/index.js";
+import { executeShell, getSandboxOptions } from "./utils/index.js";
 
 /**
  * Schema for attempt_completion tool parameters
@@ -90,10 +90,12 @@ export const attemptCompletionTool = defineTool({
 
     // Run verification command
     try {
+      const sandboxOptions = getSandboxOptions(ctx);
       const shellResult = await executeShell(input.command, {
         cwd: ctx.workingDir,
         timeout: 60000, // 1 minute timeout for verification
         abortSignal: ctx.abortSignal,
+        sandbox: sandboxOptions,
       });
 
       const output = shellResult.stdout + shellResult.stderr;

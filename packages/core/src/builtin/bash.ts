@@ -11,7 +11,7 @@ import { platform } from "node:os";
 import { z } from "zod";
 
 import { defineTool, fail, ok } from "../types/index.js";
-import { executeShell, type ShellResult } from "./utils/index.js";
+import { executeShell, getSandboxOptions, type ShellResult } from "./utils/index.js";
 
 /** Default timeout for bash commands (2 minutes) */
 const DEFAULT_TIMEOUT = 120000;
@@ -99,11 +99,13 @@ export const bashTool = defineTool({
     }
 
     try {
+      const sandboxOptions = getSandboxOptions(ctx);
       const result: ShellResult = await executeShell(input.command, {
         cwd: ctx.workingDir,
         timeout: input.timeout,
         abortSignal: ctx.abortSignal,
         shell: "/bin/bash",
+        sandbox: sandboxOptions,
       });
 
       return ok({

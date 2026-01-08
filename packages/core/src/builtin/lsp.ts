@@ -8,7 +8,10 @@
  * @module builtin/lsp
  */
 
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { LspHub } from "@vellum/lsp";
 import { z } from "zod";
 
 import { defineTool, fail, ok } from "../types/index.js";
@@ -130,14 +133,209 @@ let lspConnection: LspConnection | null = null;
  * 2. Connect via stdio, socket, or other transport
  * 3. Handle the LSP protocol handshake
  */
-async function getLspConnection(): Promise<LspConnection | null> {
+let lspHub: LspHub | null = null;
+
+async function getLspHub(ctx: { workingDir: string }): Promise<LspHub> {
+  if (!lspHub) {
+    lspHub = LspHub.getInstance({
+      getGlobalConfigPath: async () => join(homedir(), ".vellum", "lsp.json"),
+      getProjectConfigPath: async () => join(ctx.workingDir, ".vellum", "lsp.json"),
+    });
+  }
+
+  await lspHub.initialize();
+  return lspHub;
+}
+
+async function getLspConnection(ctx: { workingDir: string }): Promise<LspConnection | null> {
   if (lspConnection) {
     return lspConnection;
   }
 
-  // TODO: Implement actual LSP server discovery and connection
-  // For now, return null to indicate LSP is not available
-  return null;
+  try {
+    const hub = await getLspHub(ctx);
+    return {
+      isConnected: () => true,
+      definition: async (file, line, column) =>
+        normalizeLocations(await hub.definition(file, line - 1, column - 1)),
+      references: async (file, line, column) =>
+        normalizeLocations(await hub.references(file, line - 1, column - 1)),
+      diagnostics: async (file) => normalizeDiagnostics(await hub.diagnostics(file), file),
+      hover: async (file, line, column) =>
+        normalizeHover(await hub.hover(file, line - 1, column - 1)),
+      completion: async (file, line, column) =>
+        normalizeCompletions(await hub.completion(file, line - 1, column - 1)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLocations(raw: unknown): LspLocation[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const loc = entry as {
+        uri?: string;
+        range?: {
+          start: { line: number; character: number };
+          end: { line: number; character: number };
+        };
+      };
+      if (!loc.uri || !loc.range) return null;
+      const filePath = loc.uri.startsWith("file://") ? fileURLToPath(loc.uri) : loc.uri;
+      return {
+        file: filePath,
+        line: loc.range.start.line + 1,
+        column: loc.range.start.character + 1,
+        endLine: loc.range.end.line + 1,
+        endColumn: loc.range.end.character + 1,
+      } satisfies LspLocation;
+    })
+    .filter(Boolean) as LspLocation[];
+}
+
+function normalizeDiagnostics(raw: unknown, fallbackFile: string): LspDiagnostic[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const diag = entry as {
+        message?: string;
+        severity?: number;
+        range?: {
+          start: { line: number; character: number };
+          end: { line: number; character: number };
+        };
+        source?: string;
+        code?: string | number;
+      };
+      if (!diag.message || !diag.range) return null;
+      return {
+        message: diag.message,
+        severity: mapDiagnosticSeverity(diag.severity),
+        location: {
+          file: fallbackFile,
+          line: diag.range.start.line + 1,
+          column: diag.range.start.character + 1,
+          endLine: diag.range.end.line + 1,
+          endColumn: diag.range.end.character + 1,
+        },
+        source: diag.source,
+        code: diag.code,
+      } satisfies LspDiagnostic;
+    })
+    .filter(Boolean) as LspDiagnostic[];
+}
+
+function normalizeHover(raw: unknown): LspHoverInfo | null {
+  if (!raw || typeof raw !== "object") return null;
+  const hover = raw as {
+    contents?: unknown;
+    range?: {
+      start: { line: number; character: number };
+      end: { line: number; character: number };
+    };
+  };
+  const content = renderHoverContents(hover.contents);
+  if (!content) return null;
+  return {
+    content,
+    contentType: "markdown",
+    range: hover.range
+      ? {
+          start: { line: hover.range.start.line + 1, column: hover.range.start.character + 1 },
+          end: { line: hover.range.end.line + 1, column: hover.range.end.character + 1 },
+        }
+      : undefined,
+  };
+}
+
+function renderHoverContents(contents: unknown): string {
+  if (!contents) return "";
+  if (typeof contents === "string") return contents;
+  if (Array.isArray(contents)) {
+    return contents.map((item) => renderHoverContents(item)).join("\n");
+  }
+  if (typeof contents === "object" && "value" in contents) {
+    return String((contents as { value?: unknown }).value ?? "");
+  }
+  return "";
+}
+
+function normalizeCompletions(raw: unknown): LspCompletionItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const completion = item as {
+        label?: string;
+        kind?: number | string;
+        detail?: string;
+        documentation?: string | { value?: string };
+        insertText?: string;
+      };
+      if (!completion.label) return null;
+      return {
+        label: completion.label,
+        kind: mapCompletionKind(completion.kind),
+        detail: completion.detail,
+        documentation:
+          typeof completion.documentation === "string"
+            ? completion.documentation
+            : completion.documentation?.value,
+        insertText: completion.insertText,
+      } satisfies LspCompletionItem;
+    })
+    .filter(Boolean) as LspCompletionItem[];
+}
+
+function mapDiagnosticSeverity(severity?: number): DiagnosticSeverity {
+  switch (severity) {
+    case 1:
+      return "error";
+    case 2:
+      return "warning";
+    case 3:
+      return "info";
+    case 4:
+      return "hint";
+    default:
+      return "info";
+  }
+}
+
+function mapCompletionKind(kind?: number | string): string {
+  if (typeof kind === "string") return kind;
+  const map = new Map<number, string>([
+    [1, "text"],
+    [2, "method"],
+    [3, "function"],
+    [4, "constructor"],
+    [5, "field"],
+    [6, "variable"],
+    [7, "class"],
+    [8, "interface"],
+    [9, "module"],
+    [10, "property"],
+    [11, "unit"],
+    [12, "value"],
+    [13, "enum"],
+    [14, "keyword"],
+    [15, "snippet"],
+    [16, "color"],
+    [17, "file"],
+    [18, "reference"],
+    [19, "folder"],
+    [20, "enumMember"],
+    [21, "constant"],
+    [22, "struct"],
+    [23, "event"],
+    [24, "operator"],
+    [25, "typeParameter"],
+  ]);
+  return kind ? (map.get(kind) ?? "unknown") : "unknown";
 }
 
 /**
@@ -179,7 +377,7 @@ export const lspTool = defineTool<typeof lspParamsSchema, LspOutput>({
   description:
     "Query Language Server Protocol for code intelligence. Supports definition lookup, references, diagnostics, hover info, and completions. Requires a running LSP server.",
   parameters: lspParamsSchema,
-  kind: "read",
+  kind: "lsp",
   category: "code",
 
   async execute(input, ctx) {
@@ -207,7 +405,7 @@ export const lspTool = defineTool<typeof lspParamsSchema, LspOutput>({
     }
 
     // Try to get LSP connection
-    const connection = await getLspConnection();
+    const connection = await getLspConnection(ctx);
     if (!connection || !connection.isConnected()) {
       return fail(
         "LSP server is not available. No language server is currently running for this workspace. " +

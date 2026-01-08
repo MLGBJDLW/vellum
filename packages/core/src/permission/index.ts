@@ -67,6 +67,10 @@ export {
   type OperationType,
 } from "./danger-detector.js";
 // ============================================
+// Tool Permission Defaults
+// ============================================
+export { LSP_TOOL_PERMISSIONS } from "./defaults.js";
+// ============================================
 // Permission Event Bus (REQ-013)
 // ============================================
 export {

@@ -5,10 +5,12 @@
  * execution context, and factory functions for creating typed tools.
  */
 
+import type { SandboxConfig } from "@vellum/sandbox";
 import { z } from "zod";
 
 import type { AgentLevel } from "../agent/level.js";
 import type { OrchestratorCore } from "../agents/orchestrator/core.js";
+import type { TrustPreset } from "../permission/types.js";
 import type { Result } from "./result.js";
 
 // =============================================================================
@@ -25,8 +27,18 @@ import type { Result } from "./result.js";
  * - browser: Web browsing tools
  * - agent: Sub-agent invocation tools
  * - task: Task/todo management tools
+ * - lsp: Language Server Protocol tools
  */
-export const ToolKindSchema = z.enum(["read", "write", "shell", "mcp", "browser", "agent", "task"]);
+export const ToolKindSchema = z.enum([
+  "read",
+  "write",
+  "shell",
+  "mcp",
+  "browser",
+  "agent",
+  "task",
+  "lsp",
+]);
 
 /** Inferred type for tool kinds */
 export type ToolKind = z.infer<typeof ToolKindSchema>;
@@ -95,6 +107,13 @@ export interface ToolContext {
   // Session-scoped data storage (REQ-005)
   /** Session-scoped data storage for tools to persist state across calls */
   sessionData?: Record<string, unknown>;
+
+  /** Trust preset for sandbox and permission alignment */
+  trustPreset?: TrustPreset;
+  /** Optional sandbox configuration overrides */
+  sandboxConfig?: Partial<SandboxConfig>;
+  /** Skip sandbox execution (typically only for yolo mode) */
+  bypassSandbox?: boolean;
 }
 
 // =============================================================================

@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ToolContext } from "../../types/tool.js";
 import { recallMemoryTool } from "../recall-memory.js";
-import type { MemoryEntry } from "../save-memory.js";
+import type { SavedMemoryEntry } from "../save-memory.js";
 
 describe("recallMemoryTool", () => {
   let ctx: ToolContext;
@@ -54,7 +54,7 @@ describe("recallMemoryTool", () => {
   describe("execute", () => {
     it("should recall existing memory from default namespace", async () => {
       // Create a memory file
-      const memoryEntry: MemoryEntry = {
+      const memoryEntry: SavedMemoryEntry = {
         value: "stored-value",
         storedAt: "2025-01-01T00:00:00Z",
         updatedAt: "2025-01-01T00:00:00Z",
@@ -77,7 +77,7 @@ describe("recallMemoryTool", () => {
     });
 
     it("should recall memory from custom namespace", async () => {
-      const memoryEntry: MemoryEntry = {
+      const memoryEntry: SavedMemoryEntry = {
         value: "custom-value",
         storedAt: "2025-01-01T00:00:00Z",
         updatedAt: "2025-01-01T00:00:00Z",
@@ -125,7 +125,7 @@ describe("recallMemoryTool", () => {
     });
 
     it("should include updatedAt in output", async () => {
-      const memoryEntry: MemoryEntry = {
+      const memoryEntry: SavedMemoryEntry = {
         value: "value",
         storedAt: "2025-01-01T00:00:00Z",
         updatedAt: "2025-01-02T00:00:00Z",

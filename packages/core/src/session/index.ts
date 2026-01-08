@@ -13,6 +13,9 @@
  * where session creation occurs.
  */
 
+// Project Memory (Phase 31)
+export { DEFAULT_MEMORY_CONFIG, ProjectMemoryService } from "../memory/service.js";
+export * from "../memory/types.js";
 // Checkpoint-Snapshot Integration (T026)
 export {
   type CheckpointWithSnapshot,
@@ -89,6 +92,7 @@ export {
   StreamConfigSchema,
   type ToolCallRepairResult,
 } from "./llm.js";
+export { mergeSessions } from "./merge.js";
 // Session Message Types and Converters
 export {
   createAssistantMessage,
@@ -146,6 +150,13 @@ export {
   RecoveryManager,
   type StartupCheckResult,
 } from "./recovery.js";
+export {
+  type ISessionResumeService,
+  type ResumeServiceConfig,
+  SessionResumeService,
+} from "./resume-service.js";
+// Session Resume (Phase 31)
+export * from "./resume-types.js";
 // Session Retry (T022)
 export {
   abortableSleep,

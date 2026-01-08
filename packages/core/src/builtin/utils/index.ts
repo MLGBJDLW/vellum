@@ -15,6 +15,7 @@ export {
 export {
   detectShell,
   executeShell,
+  getSandboxOptions,
   isShellSuccess,
   type ShellOptions,
   type ShellResult,

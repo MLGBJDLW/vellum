@@ -23,6 +23,7 @@
     "@inquirer/prompts": "^7.2.1",
     "@vellum/core": "workspace:*",
     "gray-matter": "^4.0.3",
+    "@vellum/lsp": "workspace:*",
     "@vellum/mcp": "workspace:*",
     "@vellum/plugin": "workspace:*",
     "@vellum/provider": "workspace:*",
@@ -33,7 +34,8 @@
     "ink": "^6.6.0",
     "ink-text-input": "^6.0.0",
     "ora": "^8.1.1",
-    "react": "^19.2.3"
+    "react": "^19.2.3",
+    "table": "^6.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

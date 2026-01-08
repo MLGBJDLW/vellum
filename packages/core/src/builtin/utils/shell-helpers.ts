@@ -9,6 +9,15 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { platform } from "node:os";
+import {
+  configFromTrustPreset,
+  detectSandboxBackend,
+  mergeSandboxConfig,
+  type SandboxBackend,
+  type SandboxConfig,
+  SandboxExecutor,
+} from "@vellum/sandbox";
+import type { ToolContext } from "../../types/tool.js";
 
 /**
  * Options for shell command execution.
@@ -31,6 +40,13 @@ export interface ShellOptions {
 
   /** Shell to use (auto-detected if not specified) */
   shell?: string;
+
+  /** Optional sandbox execution options */
+  sandbox?: {
+    enabled?: boolean;
+    config?: SandboxConfig;
+    backend?: SandboxBackend;
+  };
 }
 
 /**
@@ -129,12 +145,63 @@ export async function executeShell(
     env,
     maxBuffer = DEFAULT_MAX_BUFFER,
     shell: customShell,
+    sandbox,
   } = options;
 
   const startTime = Date.now();
   const { shell, shellArgs } = customShell
     ? { shell: customShell, shellArgs: ["-c"] }
     : detectShell();
+
+  if (sandbox?.enabled && sandbox.config) {
+    const executor = new SandboxExecutor(
+      {
+        ...sandbox.config,
+        workingDir: cwd,
+        resources: {
+          ...sandbox.config.resources,
+          maxOutputBytes: maxBuffer,
+        },
+        environment: {
+          ...sandbox.config.environment,
+          ...(env ?? {}),
+        },
+      },
+      sandbox.backend ?? detectSandboxBackend()
+    );
+
+    try {
+      const result = await executor.execute(shell, [...shellArgs, command], {
+        timeoutMs: timeout,
+        abortSignal,
+        maxOutputBytes: maxBuffer,
+        cwd,
+        env: env ?? {},
+      });
+
+      await executor.cleanup();
+
+      return {
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+        killed: result.terminated,
+        signal: result.signal as NodeJS.Signals | null,
+        duration: result.durationMs,
+      };
+    } catch (error) {
+      await executor.cleanup();
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        stdout: "",
+        stderr: message,
+        exitCode: null,
+        killed: false,
+        signal: null,
+        duration: Date.now() - startTime,
+      };
+    }
+  }
 
   return new Promise((resolve) => {
     let stdout = "";
@@ -250,6 +317,24 @@ export async function executeShell(
       });
     });
   });
+}
+
+/**
+ * Build sandbox options from a ToolContext.
+ */
+export function getSandboxOptions(ctx: ToolContext): ShellOptions["sandbox"] | undefined {
+  if (ctx.bypassSandbox || ctx.trustPreset === "yolo") {
+    return undefined;
+  }
+
+  const preset = ctx.trustPreset ?? "default";
+  const baseConfig = configFromTrustPreset(preset, ctx.workingDir);
+  const mergedConfig = mergeSandboxConfig(baseConfig, ctx.sandboxConfig);
+
+  return {
+    enabled: true,
+    config: mergedConfig,
+  };
 }
 
 /**

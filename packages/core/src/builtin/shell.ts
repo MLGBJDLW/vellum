@@ -10,7 +10,7 @@
 import { z } from "zod";
 
 import { defineTool, fail, ok } from "../types/index.js";
-import { detectShell, executeShell, type ShellResult } from "./utils/index.js";
+import { detectShell, executeShell, getSandboxOptions, type ShellResult } from "./utils/index.js";
 
 /** Default timeout for shell commands (2 minutes) */
 const DEFAULT_TIMEOUT = 120000;
@@ -108,10 +108,12 @@ export const shellTool = defineTool({
     const workingDir = input.cwd ?? ctx.workingDir;
 
     try {
+      const sandboxOptions = getSandboxOptions(ctx);
       const result: ShellResult = await executeShell(input.command, {
         cwd: workingDir,
         timeout: input.timeout,
         abortSignal: ctx.abortSignal,
+        sandbox: sandboxOptions,
       });
 
       return ok({

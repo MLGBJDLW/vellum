@@ -130,7 +130,7 @@ export {
 } from "./recall-memory.js";
 // Memory tools
 export {
-  type MemoryEntry,
+  type SavedMemoryEntry,
   type SaveMemoryOutput,
   type SaveMemoryParams,
   saveMemoryParamsSchema,

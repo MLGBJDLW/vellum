@@ -39,7 +39,7 @@ describe("lspTool", () => {
     });
 
     it("should have correct kind", () => {
-      expect(lspTool.definition.kind).toBe("read");
+      expect(lspTool.definition.kind).toBe("lsp");
     });
 
     it("should have description", () => {
@@ -60,11 +60,12 @@ describe("lspTool", () => {
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error).toContain("LSP server is not available");
+        // When LSP hub fails to find project root, returns descriptive error
+        expect(result.error).toContain("LSP query failed");
       }
     });
 
-    it("should suggest starting language server", async () => {
+    it("should return error with context about failure", async () => {
       const result = await lspTool.execute(
         { action: "diagnostics", file: "src/index.ts" },
         mockContext
@@ -72,7 +73,8 @@ describe("lspTool", () => {
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error).toContain("language server");
+        // Error includes context about what went wrong
+        expect(result.error).toContain("LSP query failed");
       }
     });
   });

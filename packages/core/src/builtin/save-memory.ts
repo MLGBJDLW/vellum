@@ -55,7 +55,7 @@ export const saveMemoryParamsSchema = z.object({
 export type SaveMemoryParams = z.infer<typeof saveMemoryParamsSchema>;
 
 /** Memory entry structure stored in JSON */
-export interface MemoryEntry {
+export interface SavedMemoryEntry {
   /** The stored value */
   value: string;
   /** ISO timestamp when memory was stored */
@@ -85,11 +85,11 @@ export interface SaveMemoryOutput {
 /**
  * Load existing memory entry if it exists
  */
-async function loadExistingMemory(filePath: string): Promise<MemoryEntry | null> {
+async function loadExistingMemory(filePath: string): Promise<SavedMemoryEntry | null> {
   try {
     const { readFile } = await import("node:fs/promises");
     const content = await readFile(filePath, { encoding: "utf-8" });
-    return JSON.parse(content) as MemoryEntry;
+    return JSON.parse(content) as SavedMemoryEntry;
   } catch {
     return null;
   }
@@ -152,7 +152,7 @@ export const saveMemoryTool = defineTool({
       const existing = await loadExistingMemory(memoryFilePath);
       const now = new Date().toISOString();
 
-      const memoryEntry: MemoryEntry = {
+      const memoryEntry: SavedMemoryEntry = {
         value,
         storedAt: existing?.storedAt || now,
         updatedAt: now,

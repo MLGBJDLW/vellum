@@ -6,7 +6,7 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ToolContext } from "../../types/tool.js";
-import { type MemoryEntry, saveMemoryTool } from "../save-memory.js";
+import { type SavedMemoryEntry, saveMemoryTool } from "../save-memory.js";
 
 describe("saveMemoryTool", () => {
   let ctx: ToolContext;
@@ -67,7 +67,7 @@ describe("saveMemoryTool", () => {
       // Verify file was created
       const filePath = join(testDir, ".vellum", "memory", "default", "test-key.json");
       const content = await readFile(filePath, "utf-8");
-      const entry = JSON.parse(content) as MemoryEntry;
+      const entry = JSON.parse(content) as SavedMemoryEntry;
       expect(entry.value).toBe("test-value");
       expect(entry.key).toBe("test-key");
       expect(entry.namespace).toBe("default");
@@ -87,7 +87,7 @@ describe("saveMemoryTool", () => {
       // Verify file location
       const filePath = join(testDir, ".vellum", "memory", "settings", "config-key.json");
       const content = await readFile(filePath, "utf-8");
-      const entry = JSON.parse(content) as MemoryEntry;
+      const entry = JSON.parse(content) as SavedMemoryEntry;
       expect(entry.namespace).toBe("settings");
     });
 
@@ -113,7 +113,7 @@ describe("saveMemoryTool", () => {
       // Verify updated value
       const filePath = join(testDir, ".vellum", "memory", "default", "update-key.json");
       const content = await readFile(filePath, "utf-8");
-      const entry = JSON.parse(content) as MemoryEntry;
+      const entry = JSON.parse(content) as SavedMemoryEntry;
       expect(entry.value).toBe("updated");
     });
 
@@ -133,7 +133,7 @@ describe("saveMemoryTool", () => {
 
       const filePath = join(testDir, ".vellum", "memory", "default", "timestamp-key.json");
       const content = await readFile(filePath, "utf-8");
-      const entry = JSON.parse(content) as MemoryEntry;
+      const entry = JSON.parse(content) as SavedMemoryEntry;
 
       expect(entry.storedAt).not.toBe(entry.updatedAt);
     });

@@ -9,6 +9,8 @@ import type { SubsessionManager } from "../agents/session/subsession-manager.js"
 import { SessionAgentsIntegration } from "../context/agents/session-integration.js";
 import type { LLMLogger } from "../logger/llm-logger.js";
 import type { Logger } from "../logger/logger.js";
+import { DefaultPermissionChecker } from "../permission/checker.js";
+import type { TrustPreset } from "../permission/types.js";
 import type { PromptBuilder } from "../prompts/prompt-builder.js";
 import { classifyError, type ErrorInfo, isFatal, isRetryable } from "../session/errors.js";
 import {
@@ -1041,6 +1043,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @returns ToolContext instance
    */
   private createToolContext(callId: string): ToolContext {
+    const trustPreset = this.getTrustPreset();
     const checkPermission = async (action: string, resource?: string): Promise<boolean> => {
       if (!this.config.permissionChecker) {
         return true;
@@ -1094,7 +1097,29 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       agentLevel: this.config.agentLevel,
       parentAgentId: this.config.parentSessionId,
       orchestrator: this.config.orchestrator,
+      trustPreset,
     };
+  }
+
+  /**
+   * Resolve trust preset for sandbox-aware tool execution.
+   */
+  private getTrustPreset(): TrustPreset | undefined {
+    const checker = this.config.permissionChecker;
+    if (!checker) {
+      return undefined;
+    }
+
+    if (checker instanceof DefaultPermissionChecker) {
+      return checker.trustManager.getEffectivePreset().preset;
+    }
+
+    if ("trustManager" in checker) {
+      const trustManager = (checker as DefaultPermissionChecker).trustManager;
+      return trustManager.getEffectivePreset().preset;
+    }
+
+    return undefined;
   }
 
   /**

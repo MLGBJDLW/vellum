@@ -11,7 +11,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { defineTool, fail, ok } from "../types/index.js";
-import type { MemoryEntry } from "./save-memory.js";
+import type { SavedMemoryEntry } from "./save-memory.js";
 
 /** Base path for memory storage relative to working directory */
 const MEMORY_BASE_PATH = ".vellum/memory";
@@ -116,7 +116,7 @@ export const recallMemoryTool = defineTool<typeof recallMemoryParamsSchema, Reca
     try {
       // Try to read the memory file
       const content = await readFile(memoryFilePath, { encoding: "utf-8" });
-      const memoryEntry = JSON.parse(content) as MemoryEntry;
+      const memoryEntry = JSON.parse(content) as SavedMemoryEntry;
 
       return ok({
         found: true,
