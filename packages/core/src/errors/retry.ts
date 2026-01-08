@@ -2,6 +2,7 @@
 // Vellum Retry and Timeout Utilities
 // ============================================
 
+import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { ErrorCode, isRetryableError, VellumError } from "./types.js";
 
 // ============================================
@@ -49,7 +50,7 @@ export interface RetryOptions {
 }
 
 const DEFAULT_RETRY_OPTIONS: Required<Omit<RetryOptions, "shouldRetry" | "onRetry" | "signal">> = {
-  maxRetries: 3,
+  maxRetries: CONFIG_DEFAULTS.limits.maxRetries,
   baseDelay: 1000,
   maxDelay: 30000,
   backoffMultiplier: 2,

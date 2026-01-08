@@ -7,6 +7,7 @@
  * @module @vellum/core/permission
  */
 
+import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import type { PermissionInfo, PermissionResponse } from "./types.js";
 
 // ============================================
@@ -17,7 +18,7 @@ import type { PermissionInfo, PermissionResponse } from "./types.js";
  * Default timeout for permission prompts in milliseconds (30 seconds).
  * EC-006: Timeout defaults to deny.
  */
-export const DEFAULT_ASK_TIMEOUT_MS = 30_000;
+export const DEFAULT_ASK_TIMEOUT_MS = CONFIG_DEFAULTS.timeouts.permissionAsk;
 
 // ============================================
 // Types

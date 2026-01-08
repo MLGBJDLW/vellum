@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 
+import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { ErrorCode, VellumError } from "../errors/index.js";
 import {
   defineTool,
@@ -465,7 +466,7 @@ export interface MCPProxyConfig {
 }
 
 /** Default timeout for MCP operations */
-const DEFAULT_MCP_TIMEOUT_MS = 30000;
+const DEFAULT_MCP_TIMEOUT_MS = CONFIG_DEFAULTS.timeouts.mcpDefault;
 
 /** Default prefix for MCP tool names */
 const DEFAULT_TOOL_PREFIX = "mcp_";

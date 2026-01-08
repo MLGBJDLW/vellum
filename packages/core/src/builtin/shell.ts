@@ -9,11 +9,12 @@
 
 import { z } from "zod";
 
+import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { defineTool, fail, ok } from "../types/index.js";
 import { detectShell, executeShell, getSandboxOptions, type ShellResult } from "./utils/index.js";
 
 /** Default timeout for shell commands (2 minutes) */
-const DEFAULT_TIMEOUT = 120000;
+const DEFAULT_TIMEOUT = CONFIG_DEFAULTS.timeouts.shell;
 
 /**
  * Schema for shell tool parameters

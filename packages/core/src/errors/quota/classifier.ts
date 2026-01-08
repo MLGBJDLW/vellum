@@ -2,6 +2,8 @@
 // Quota Error Classifier
 // ============================================
 
+import { CONFIG_DEFAULTS } from "../../config/defaults.js";
+
 /**
  * Result of classifying a quota-related error.
  */
@@ -18,7 +20,7 @@ export interface QuotaClassificationResult {
 const TERMINAL_THRESHOLD_MS = 120000;
 
 /** Default retry delay when uncertain (60 seconds) */
-const DEFAULT_RETRY_DELAY_MS = 60000;
+const DEFAULT_RETRY_DELAY_MS = CONFIG_DEFAULTS.timeouts.quotaRetryDelay;
 
 /** Patterns indicating terminal quota errors (case-insensitive) */
 const TERMINAL_PATTERNS = ["billing", "payment", "exceeded", "limit exceeded", "quota exceeded"];

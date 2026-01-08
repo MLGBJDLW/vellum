@@ -25,6 +25,7 @@ import type {
 } from "@vellum/provider";
 import { ErrorCode } from "@vellum/shared";
 import { z } from "zod";
+import { CONFIG_DEFAULTS } from "../config/defaults.js";
 
 // =============================================================================
 // Constants
@@ -39,7 +40,7 @@ export const MAX_OUTPUT_TOKENS = 32768;
 /**
  * Default timeout for stream inactivity (30 seconds)
  */
-export const DEFAULT_STREAM_TIMEOUT_MS = 30000;
+export const DEFAULT_STREAM_TIMEOUT_MS = CONFIG_DEFAULTS.timeouts.llmStream;
 
 // =============================================================================
 // Types

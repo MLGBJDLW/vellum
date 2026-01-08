@@ -10,11 +10,12 @@
 import { platform } from "node:os";
 import { z } from "zod";
 
+import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { defineTool, fail, ok } from "../types/index.js";
 import { executeShell, getSandboxOptions, type ShellResult } from "./utils/index.js";
 
 /** Default timeout for bash commands (2 minutes) */
-const DEFAULT_TIMEOUT = 120000;
+const DEFAULT_TIMEOUT = CONFIG_DEFAULTS.timeouts.bashExecution;
 
 /**
  * Schema for bash tool parameters

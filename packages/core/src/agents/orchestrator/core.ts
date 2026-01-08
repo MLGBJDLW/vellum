@@ -8,6 +8,7 @@
 import type { AgentLevel } from "../../agent/level.js";
 import { canSpawn } from "../../agent/level.js";
 import type { ModeRegistry } from "../../agent/mode-registry.js";
+import { CONFIG_DEFAULTS } from "../../config/defaults.js";
 import type { ImplementationResult, SpecHandoffPacket } from "../../spec/index.js";
 import { createTaskPacket } from "../protocol/task-packet.js";
 import type { SubsessionManager } from "../session/subsession-manager.js";
@@ -291,8 +292,8 @@ export type OrchestratorEventHandler = (event: OrchestratorEvent) => void;
 // Default Values
 // ============================================
 
-const DEFAULT_MAX_CONCURRENT_SUBAGENTS = 3;
-const DEFAULT_TASK_TIMEOUT = 300000; // 5 minutes
+const DEFAULT_MAX_CONCURRENT_SUBAGENTS = CONFIG_DEFAULTS.limits.maxConcurrentAgents;
+const DEFAULT_TASK_TIMEOUT = CONFIG_DEFAULTS.limits.orchestratorTaskTimeout;
 
 // ============================================
 // Implementation

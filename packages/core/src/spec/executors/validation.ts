@@ -16,6 +16,7 @@ import { exec } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { CONFIG_DEFAULTS } from "../../config/defaults.js";
 import type { PhaseResult } from "../types.js";
 import type { PhaseContext, PhaseExecutor } from "./base.js";
 import type { AgentSpawner } from "./research.js";
@@ -61,7 +62,7 @@ export type CommandExecutor = (command: string, options?: CommandOptions) => Pro
 
 const OUTPUT_FILE = "validation-report.md";
 const AGENT_NAME = "spec-validator";
-const DEFAULT_TIMEOUT = 60000; // 60 seconds
+const DEFAULT_TIMEOUT = CONFIG_DEFAULTS.timeouts.specValidation;
 
 // =============================================================================
 // Validation Executor Class

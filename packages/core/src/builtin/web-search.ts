@@ -8,6 +8,7 @@
  */
 
 import { z } from "zod";
+import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { defineTool, fail, ok } from "../types/index.js";
 import type { ToolResult } from "../types/tool.js";
 
@@ -15,13 +16,13 @@ import type { ToolResult } from "../types/tool.js";
 const DEFAULT_MAX_RESULTS = 10;
 
 /** Default timeout for search requests (15 seconds) */
-const DEFAULT_TIMEOUT = 15000;
+const DEFAULT_TIMEOUT = CONFIG_DEFAULTS.timeouts.webSearch;
 
 /** DuckDuckGo HTML search base URL */
-const DUCKDUCKGO_HTML_URL = "https://html.duckduckgo.com/html/";
+const DUCKDUCKGO_HTML_URL = CONFIG_DEFAULTS.externalApis.duckduckgoHtml;
 
 /** SerpAPI base URL */
-const SERPAPI_BASE_URL = "https://serpapi.com/search";
+const SERPAPI_BASE_URL = CONFIG_DEFAULTS.externalApis.serpapi;
 
 /**
  * Schema for web_search tool parameters

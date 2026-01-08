@@ -4,6 +4,7 @@
 // ============================================
 
 import { z } from "zod";
+import { CONFIG_DEFAULTS } from "../../config/defaults.js";
 import { defineEvent, type EventBus } from "../../events/bus.js";
 import { CircuitOpenError } from "./CircuitOpenError.js";
 
@@ -78,9 +79,9 @@ export const circuitHalfOpen = defineEvent(
 // Default Configuration
 // ============================================
 
-const DEFAULT_FAILURE_THRESHOLD = 5;
-const DEFAULT_RESET_TIMEOUT_MS = 30000; // 30 seconds
-const DEFAULT_WINDOW_MS = 60000; // 1 minute
+const DEFAULT_FAILURE_THRESHOLD = CONFIG_DEFAULTS.circuitBreaker.failureThreshold;
+const DEFAULT_RESET_TIMEOUT_MS = CONFIG_DEFAULTS.circuitBreaker.resetTimeout;
+const DEFAULT_WINDOW_MS = CONFIG_DEFAULTS.circuitBreaker.windowSize;
 const DEFAULT_HALF_OPEN_MAX_ATTEMPTS = 1;
 
 // ============================================

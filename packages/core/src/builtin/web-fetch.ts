@@ -8,6 +8,7 @@
  */
 
 import { z } from "zod";
+import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { CloudMetadataError, PrivateIPError, UnsafeRedirectError } from "../errors/web.js";
 import { defineTool, fail, ok } from "../types/index.js";
 import type { ToolResult } from "../types/tool.js";
@@ -15,7 +16,7 @@ import { createCacheKey, ResponseCache } from "./cache/response-cache.js";
 import { isCloudMetadata, validateUrlWithDNS } from "./security/url-validator.js";
 
 /** Default timeout for HTTP requests (30 seconds) */
-const DEFAULT_TIMEOUT = 30000;
+const DEFAULT_TIMEOUT = CONFIG_DEFAULTS.timeouts.webFetch;
 
 /** Maximum response body size to capture (5MB) */
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024;

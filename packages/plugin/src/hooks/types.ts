@@ -7,6 +7,7 @@
  * @module plugin/hooks/types
  */
 
+import { CONFIG_DEFAULTS } from "@vellum/core";
 import { z } from "zod";
 
 // =============================================================================
@@ -16,17 +17,17 @@ import { z } from "zod";
 /**
  * Default timeout for hook execution in milliseconds.
  */
-export const DEFAULT_HOOK_TIMEOUT = 30000;
+export const DEFAULT_HOOK_TIMEOUT = CONFIG_DEFAULTS.timeouts.hookDefault;
 
 /**
  * Maximum timeout value allowed (5 minutes).
  */
-export const MAX_HOOK_TIMEOUT = 300000;
+export const MAX_HOOK_TIMEOUT = CONFIG_DEFAULTS.timeouts.hookMax;
 
 /**
  * Minimum timeout value allowed (100ms).
  */
-export const MIN_HOOK_TIMEOUT = 100;
+export const MIN_HOOK_TIMEOUT = CONFIG_DEFAULTS.timeouts.hookMin;
 
 // =============================================================================
 // HookEvent - Lifecycle event types
