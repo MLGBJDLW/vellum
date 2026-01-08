@@ -74,7 +74,8 @@ function filterEntries(entries: MemoryEntry[], options: MemoryListOptions): Memo
 
   // Filter by date
   if (options.since) {
-    filtered = filtered.filter((e) => e.updatedAt >= options.since!);
+    const sinceDate = options.since;
+    filtered = filtered.filter((e) => e.updatedAt >= sinceDate);
   }
 
   // Apply limit
@@ -200,6 +201,7 @@ export async function executeMemoryList(
 /**
  * Parse list command arguments.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Argument parsing requires handling many flag combinations
 function parseListArgs(args: string[]): MemoryListOptions {
   const options: MemoryListOptions = {};
 

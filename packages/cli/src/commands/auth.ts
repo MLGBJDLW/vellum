@@ -14,6 +14,7 @@
 
 import {
   CredentialManager,
+  type CredentialRef,
   EncryptedFileStore,
   EnvCredentialStore,
   KeychainStore,
@@ -316,7 +317,7 @@ async function handleCredentials(
       message: lines.join("\n"),
       data: {
         availability,
-        credentials: credentials.map((c) => ({
+        credentials: credentials.map((c: CredentialRef) => ({
           provider: c.provider,
           source: c.source,
           type: c.type,
@@ -658,7 +659,7 @@ export const credentialsCommand: EnhancedSlashCommand = {
 
       return success(lines.join("\n"), {
         availability,
-        credentials: credentials.map((c) => ({
+        credentials: credentials.map((c: CredentialRef) => ({
           provider: c.provider,
           source: c.source,
           type: c.type,

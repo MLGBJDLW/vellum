@@ -6,6 +6,8 @@
 
 // AgentProgress (T046)
 export { AgentProgress, type AgentProgressProps } from "./AgentProgress.js";
+// Banner (ASCII Art with shimmer animation)
+export * from "./Banner/index.js";
 // Backtrack controls
 export * from "./backtrack/index.js";
 // Cost Display (Phase 35)
@@ -26,6 +28,8 @@ export { MemoryPanel, type MemoryPanelProps } from "./MemoryPanel.js";
 export * from "./Messages/index.js";
 // Mode components (T043-T047)
 export { ModeIndicator, type ModeIndicatorProps } from "./ModeIndicator.js";
+// Model selector (Chain 22)
+export { ModelSelector, type ModelSelectorProps } from "./ModelSelector.js";
 export { ModeSelector, type ModeSelectorProps } from "./ModeSelector.js";
 // Onboarding Wizard (Phase 38)
 export { OnboardingWizard, type OnboardingWizardProps } from "./OnboardingWizard.js";

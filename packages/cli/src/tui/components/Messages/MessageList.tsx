@@ -8,6 +8,7 @@
  * @module tui/components/Messages/MessageList
  */
 
+import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Message } from "../../context/MessagesContext.js";
@@ -49,17 +50,18 @@ function formatTimestamp(date: Date): string {
  * Get the display icon for a message role.
  */
 function getRoleIcon(role: Message["role"]): string {
+  const icons = getIcons();
   switch (role) {
     case "user":
-      return "👤";
+      return icons.user;
     case "assistant":
-      return "🤖";
+      return icons.assistant;
     case "system":
-      return "⚙️";
+      return icons.system;
     case "tool":
-      return "🔧";
+      return icons.tool;
     default:
-      return "💬";
+      return icons.info;
   }
 }
 
@@ -135,7 +137,7 @@ function MessageItem({ message, roleColor, textColor, mutedColor }: MessageItemP
           {message.toolCalls.map((toolCall) => (
             <Box key={toolCall.id}>
               <Text color={mutedColor}>
-                🔧 {toolCall.name}
+                {getIcons().tool} {toolCall.name}
                 <Text dimColor> [{toolCall.status}]</Text>
               </Text>
             </Box>

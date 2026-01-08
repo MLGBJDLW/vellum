@@ -115,5 +115,63 @@
     "invalid": "无效的语言代码: {{code}}",
     "invalidHint": "可用: {{codes}}",
     "saved": "语言偏好已保存"
+  },
+  "onboarding": {
+    "selectProvider": "选择您的 AI 提供商：",
+    "providerNav": "使用 ↑/↓ 导航，Enter 确认选择",
+    "apiKeyRequired": "(需要 API Key)",
+    "noApiKeyNeeded": "(本地运行，无需 API Key)"
+  },
+  "providers": {
+    "anthropic": {
+      "name": "Anthropic Claude",
+      "description": "Claude 4.5 Opus - 最适合编程任务",
+      "shortcut": "[A]"
+    },
+    "openai": {
+      "name": "OpenAI",
+      "description": "GPT 5.2 - 功能全面强大",
+      "shortcut": "[O]"
+    },
+    "google": {
+      "name": "Google AI",
+      "description": "Gemini 3 Pro - 最新 Google 模型",
+      "shortcut": "[G]"
+    },
+    "mistral": {
+      "name": "Mistral AI",
+      "description": "Mistral Large - 欧洲替代方案",
+      "shortcut": "[M]"
+    },
+    "groq": {
+      "name": "Groq",
+      "description": "超快速推理",
+      "shortcut": "[*]"
+    },
+    "openrouter": {
+      "name": "OpenRouter",
+      "description": "一个 API Key 访问多个模型",
+      "shortcut": "[R]"
+    },
+    "deepseek": {
+      "name": "DeepSeek",
+      "description": "DeepSeek V3 - 高性能模型",
+      "shortcut": "[D]"
+    },
+    "qwen": {
+      "name": "通义千问",
+      "description": "阿里巴巴旗舰模型",
+      "shortcut": "[Q]"
+    },
+    "moonshot": {
+      "name": "Moonshot",
+      "description": "Kimi - 对话式 AI",
+      "shortcut": "[K]"
+    },
+    "ollama": {
+      "name": "Ollama (本地)",
+      "description": "本地运行模型 - 无需 API Key",
+      "shortcut": "[L]"
+    }
   }
 }

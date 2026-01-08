@@ -10,6 +10,9 @@
 import type { CommandExecutor } from "../executor.js";
 import type { CommandResult } from "../types.js";
 
+// Re-export command
+export { batchCommand, createBatchCommand } from "./command.js";
+
 // =============================================================================
 // Interfaces
 // =============================================================================

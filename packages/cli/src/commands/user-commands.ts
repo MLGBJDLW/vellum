@@ -190,7 +190,7 @@ export class UserCommandLoader {
         } else {
           result.errors.push({
             file,
-            error: validation.error!,
+            error: validation.error ?? "Unknown validation error",
           });
         }
       } catch (err) {

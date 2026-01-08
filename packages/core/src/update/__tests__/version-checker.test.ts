@@ -86,42 +86,60 @@ describe("parseSemVer", () => {
 
 describe("compareSemVer", () => {
   it("should return 0 for equal versions", () => {
-    const a = parseSemVer("1.2.3")!;
-    const b = parseSemVer("1.2.3")!;
+    const a = parseSemVer("1.2.3");
+    const b = parseSemVer("1.2.3");
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    if (!a || !b) return;
     expect(compareSemVer(a, b)).toBe(0);
   });
 
   it("should compare major versions", () => {
-    const a = parseSemVer("1.0.0")!;
-    const b = parseSemVer("2.0.0")!;
+    const a = parseSemVer("1.0.0");
+    const b = parseSemVer("2.0.0");
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    if (!a || !b) return;
     expect(compareSemVer(a, b)).toBeLessThan(0);
     expect(compareSemVer(b, a)).toBeGreaterThan(0);
   });
 
   it("should compare minor versions", () => {
-    const a = parseSemVer("1.1.0")!;
-    const b = parseSemVer("1.2.0")!;
+    const a = parseSemVer("1.1.0");
+    const b = parseSemVer("1.2.0");
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    if (!a || !b) return;
     expect(compareSemVer(a, b)).toBeLessThan(0);
     expect(compareSemVer(b, a)).toBeGreaterThan(0);
   });
 
   it("should compare patch versions", () => {
-    const a = parseSemVer("1.1.1")!;
-    const b = parseSemVer("1.1.2")!;
+    const a = parseSemVer("1.1.1");
+    const b = parseSemVer("1.1.2");
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    if (!a || !b) return;
     expect(compareSemVer(a, b)).toBeLessThan(0);
     expect(compareSemVer(b, a)).toBeGreaterThan(0);
   });
 
   it("should rank stable higher than prerelease", () => {
-    const stable = parseSemVer("1.0.0")!;
-    const prerelease = parseSemVer("1.0.0-beta")!;
+    const stable = parseSemVer("1.0.0");
+    const prerelease = parseSemVer("1.0.0-beta");
+    expect(stable).toBeDefined();
+    expect(prerelease).toBeDefined();
+    if (!stable || !prerelease) return;
     expect(compareSemVer(stable, prerelease)).toBeGreaterThan(0);
     expect(compareSemVer(prerelease, stable)).toBeLessThan(0);
   });
 
   it("should compare prereleases alphabetically", () => {
-    const alpha = parseSemVer("1.0.0-alpha")!;
-    const beta = parseSemVer("1.0.0-beta")!;
+    const alpha = parseSemVer("1.0.0-alpha");
+    const beta = parseSemVer("1.0.0-beta");
+    expect(alpha).toBeDefined();
+    expect(beta).toBeDefined();
+    if (!alpha || !beta) return;
     expect(compareSemVer(alpha, beta)).toBeLessThan(0);
     expect(compareSemVer(beta, alpha)).toBeGreaterThan(0);
   });

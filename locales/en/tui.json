@@ -115,5 +115,63 @@
     "invalid": "Invalid language code: {{code}}",
     "invalidHint": "Available: {{codes}}",
     "saved": "Language preference saved"
+  },
+  "onboarding": {
+    "selectProvider": "Select your AI Provider:",
+    "providerNav": "Use ↑/↓ to navigate, Enter to select",
+    "apiKeyRequired": "(requires API key)",
+    "noApiKeyNeeded": "(local, no key needed)"
+  },
+  "providers": {
+    "anthropic": {
+      "name": "Anthropic Claude",
+      "description": "Claude 4.5 Opus - Best for coding tasks",
+      "shortcut": "[A]"
+    },
+    "openai": {
+      "name": "OpenAI",
+      "description": "GPT 5.2 - Versatile and powerful",
+      "shortcut": "[O]"
+    },
+    "google": {
+      "name": "Google AI",
+      "description": "Gemini 3 Pro - Latest Google model",
+      "shortcut": "[G]"
+    },
+    "mistral": {
+      "name": "Mistral AI",
+      "description": "Mistral Large - European alternative",
+      "shortcut": "[M]"
+    },
+    "groq": {
+      "name": "Groq",
+      "description": "Ultra-fast inference",
+      "shortcut": "[*]"
+    },
+    "openrouter": {
+      "name": "OpenRouter",
+      "description": "Access multiple models with one API key",
+      "shortcut": "[R]"
+    },
+    "deepseek": {
+      "name": "DeepSeek",
+      "description": "DeepSeek V3 - High performance",
+      "shortcut": "[D]"
+    },
+    "qwen": {
+      "name": "Qwen",
+      "description": "Alibaba's flagship model",
+      "shortcut": "[Q]"
+    },
+    "moonshot": {
+      "name": "Moonshot",
+      "description": "Kimi - Conversational AI",
+      "shortcut": "[K]"
+    },
+    "ollama": {
+      "name": "Ollama (Local)",
+      "description": "Run models locally - No API key needed",
+      "shortcut": "[L]"
+    }
   }
 }

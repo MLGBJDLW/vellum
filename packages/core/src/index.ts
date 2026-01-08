@@ -343,6 +343,8 @@ export {
   type CustomModeTarget,
   type CustomModeTargetInferred,
   CustomModeTargetSchema,
+  // Delegation exports (migrated from @vellum/tool)
+  canDelegate,
   coderWorker,
   createApprovalForwarder,
   // Session factories (T034)
@@ -365,18 +367,30 @@ export {
   // Router exports
   createTaskRouter,
   createWorkerFactory,
+  DEFAULT_DELEGATION_TIMEOUT,
   type DecompositionResult,
   DecompositionResultSchema,
+  type DelegateTaskContext,
+  type DelegateTaskParams,
+  type DelegateTaskParamsInferred,
+  DelegateTaskParamsSchema,
+  type DelegateTaskResult,
+  type DelegateTaskResultInferred,
+  DelegateTaskResultSchema,
+  type DelegationHandler,
   type DelegationTarget,
   type DelegationTargetInferred,
   DelegationTargetSchema,
   DuplicateWorkerError,
+  delegateTaskTool,
   devopsWorker,
   type EstimatedEffort,
   EstimatedEffortSchema,
+  executeDelegateTask,
   // Session: Filtered tool registry (T034)
   type FilteredToolRegistry,
   getBuiltinWorkerCapabilities,
+  getDelegationHandler,
   getSpecAgentSlugs,
   // Handoff exports (T019)
   type HandoffRequest,
@@ -437,6 +451,7 @@ export {
   type SubtaskDependency,
   SubtaskDependencySchema,
   securityWorker,
+  setDelegationHandler,
   // Spec agents (T032)
   specArchitectAgent,
   specRequirementsAgent,
@@ -471,6 +486,7 @@ export {
   WORKER_BLOCKED_TOOLS,
   type WorkerCapabilities,
   type WorkerContext,
+  WorkerDelegationError,
   type WorkerFactory,
   type WorkerMetadata,
   type WorkerResult,
@@ -727,6 +743,10 @@ export * from "./permission/index.js";
 // Privacy
 // ============================================
 export * from "./privacy/index.js";
+// ============================================
+// Rate Limiting (Phase 34)
+// ============================================
+export * from "./rate-limit/index.js";
 // ============================================
 // Session (LLM, Messages, Thinking)
 // ============================================

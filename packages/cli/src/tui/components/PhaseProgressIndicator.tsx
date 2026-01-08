@@ -9,6 +9,7 @@
 
 import type { SpecPhase } from "@vellum/core";
 import { SPEC_PHASE_CONFIG, SPEC_PHASES } from "@vellum/core";
+import { getIcons } from "@vellum/shared";
 import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
@@ -55,12 +56,17 @@ const PROGRESS_CHARS = {
   separatorEmpty: "┊",
 } as const;
 
-/** Phase status icons */
-const PHASE_STATUS_ICONS = {
-  completed: "✓",
-  current: "●",
-  pending: "○",
-} as const;
+/**
+ * Get phase status icons using the icon system for proper Unicode/ASCII support.
+ */
+function getPhaseStatusIcons() {
+  const icons = getIcons();
+  return {
+    completed: icons.check,
+    current: icons.bullet,
+    pending: icons.pending,
+  } as const;
+}
 
 // =============================================================================
 // Helper Functions
@@ -205,7 +211,7 @@ export function PhaseProgressIndicator({
         {showLabels && (
           <Box marginTop={1}>
             <Text color={theme.colors.primary} bold>
-              {PHASE_STATUS_ICONS.current} {getPhaseName(validPhase)}
+              {getPhaseStatusIcons().current} {getPhaseName(validPhase)}
             </Text>
             <Text color={theme.semantic.text.muted}>
               {" "}
@@ -217,15 +223,18 @@ export function PhaseProgressIndicator({
     );
   }
 
+  // Get icons for vertical list
+  const phaseIcons = getPhaseStatusIcons();
+
   // Render vertical progress list
   return (
     <Box flexDirection="column">
       {segments.map((segment) => {
         const icon = segment.isCompleted
-          ? PHASE_STATUS_ICONS.completed
+          ? phaseIcons.completed
           : segment.isCurrent
-            ? PHASE_STATUS_ICONS.current
-            : PHASE_STATUS_ICONS.pending;
+            ? phaseIcons.current
+            : phaseIcons.pending;
 
         const color = segment.isCompleted
           ? theme.colors.success

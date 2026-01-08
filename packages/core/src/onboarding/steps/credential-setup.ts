@@ -81,10 +81,12 @@ const API_KEY_PATTERNS: Record<OnboardingProvider, RegExp | null> = {
   anthropic: /^sk-ant-[a-zA-Z0-9-_]{90,}$/,
   openai: /^sk-[a-zA-Z0-9-_]{40,}$/,
   google: /^[a-zA-Z0-9-_]{39}$/,
-  gemini: /^[a-zA-Z0-9-_]{39}$/,
   mistral: /^[a-zA-Z0-9]{32}$/,
   groq: /^gsk_[a-zA-Z0-9]{50,}$/,
   openrouter: /^sk-or-[a-zA-Z0-9-_]{40,}$/,
+  deepseek: /^sk-[a-zA-Z0-9]{32,}$/,
+  qwen: /^sk-[a-zA-Z0-9]{32,}$/,
+  moonshot: /^sk-[a-zA-Z0-9]{32,}$/,
   ollama: null, // No API key required
 };
 
@@ -95,10 +97,12 @@ const API_KEY_FORMAT_HINTS: Record<OnboardingProvider, string> = {
   anthropic: "Should start with 'sk-ant-' followed by ~90+ characters",
   openai: "Should start with 'sk-' followed by ~40+ characters",
   google: "Should be 39 alphanumeric characters",
-  gemini: "Should be 39 alphanumeric characters",
   mistral: "Should be 32 alphanumeric characters",
   groq: "Should start with 'gsk_' followed by ~50+ characters",
   openrouter: "Should start with 'sk-or-' followed by ~40+ characters",
+  deepseek: "Should start with 'sk-' followed by ~32+ characters",
+  qwen: "Should start with 'sk-' followed by ~32+ characters",
+  moonshot: "Should start with 'sk-' followed by ~32+ characters",
   ollama: "No API key required for local Ollama",
 };
 
@@ -304,10 +308,12 @@ export function getApiKeyUrl(provider: OnboardingProvider): string {
     anthropic: "https://console.anthropic.com/settings/keys",
     openai: "https://platform.openai.com/api-keys",
     google: "https://makersuite.google.com/app/apikey",
-    gemini: "https://aistudio.google.com/apikey",
     mistral: "https://console.mistral.ai/api-keys/",
     groq: "https://console.groq.com/keys",
     openrouter: "https://openrouter.ai/keys",
+    deepseek: "https://platform.deepseek.com/api_keys",
+    qwen: "https://dashscope.console.aliyun.com/apiKey",
+    moonshot: "https://platform.moonshot.cn/console/api-keys",
     ollama: "https://ollama.ai (no key needed)",
   };
 

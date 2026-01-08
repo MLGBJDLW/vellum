@@ -23,6 +23,7 @@ export default defineConfig({
     },
     env: {
       VELLUM_FAKE_RESPONSES: "true",
+      VELLUM_ICONS: "unicode", // Force Unicode icons in tests for consistent assertions
     },
   },
 });

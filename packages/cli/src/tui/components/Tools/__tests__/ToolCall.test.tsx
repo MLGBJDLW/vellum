@@ -7,12 +7,25 @@
  * @module tui/components/Tools/__tests__/ToolCall.test
  */
 
+import { getIcons, type IconSet } from "@vellum/shared";
 import { render } from "ink-testing-library";
 import type React from "react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ToolExecution } from "../../../context/ToolsContext.js";
 import { ThemeProvider } from "../../../theme/index.js";
 import { ToolCall } from "../ToolCall.js";
+
+// =============================================================================
+// Test Setup
+// =============================================================================
+
+// Icons are fetched in beforeEach to ensure setup has run first
+let icons: IconSet;
+
+beforeEach(() => {
+  // Get icons after setup has configured Unicode mode
+  icons = getIcons();
+});
 
 // =============================================================================
 // Test Helpers
@@ -44,21 +57,21 @@ function createTestExecution(overrides: Partial<ToolExecution> = {}): ToolExecut
 
 describe("ToolCall", () => {
   describe("status icons", () => {
-    it("renders pending status with hourglass icon", () => {
+    it("renders pending status with tilde icon", () => {
       const execution = createTestExecution({ status: "pending" });
 
       const { lastFrame } = renderWithTheme(<ToolCall execution={execution} />);
 
-      expect(lastFrame()).toContain("⏳");
+      expect(lastFrame()).toContain("~");
       expect(lastFrame()).toContain("test_tool");
     });
 
-    it("renders approved status with checkmark icon", () => {
+    it("renders approved status with check icon", () => {
       const execution = createTestExecution({ status: "approved" });
 
       const { lastFrame } = renderWithTheme(<ToolCall execution={execution} />);
 
-      expect(lastFrame()).toContain("✓");
+      expect(lastFrame()).toContain(icons.check);
       expect(lastFrame()).toContain("test_tool");
     });
 
@@ -67,7 +80,7 @@ describe("ToolCall", () => {
 
       const { lastFrame } = renderWithTheme(<ToolCall execution={execution} />);
 
-      expect(lastFrame()).toContain("✗");
+      expect(lastFrame()).toContain(icons.cross);
       expect(lastFrame()).toContain("test_tool");
     });
 
@@ -84,12 +97,12 @@ describe("ToolCall", () => {
       expect(frame).toContain("test_tool");
     });
 
-    it("renders complete status with checkmark icon", () => {
+    it("renders complete status with check icon", () => {
       const execution = createTestExecution({ status: "complete" });
 
       const { lastFrame } = renderWithTheme(<ToolCall execution={execution} />);
 
-      expect(lastFrame()).toContain("✓");
+      expect(lastFrame()).toContain(icons.check);
       expect(lastFrame()).toContain("test_tool");
     });
 
@@ -101,7 +114,7 @@ describe("ToolCall", () => {
 
       const { lastFrame } = renderWithTheme(<ToolCall execution={execution} />);
 
-      expect(lastFrame()).toContain("✗");
+      expect(lastFrame()).toContain(icons.cross);
       expect(lastFrame()).toContain("test_tool");
     });
   });
@@ -215,7 +228,7 @@ describe("ToolCall", () => {
         <ToolCall execution={execution} compact showDuration />
       );
 
-      expect(lastFrame()).toContain("✓");
+      expect(lastFrame()).toContain(icons.check);
       expect(lastFrame()).toContain("test_tool");
       // Duration should not be shown in compact mode
       expect(lastFrame()).not.toContain("5s");
@@ -229,7 +242,7 @@ describe("ToolCall", () => {
 
       const { lastFrame } = renderWithTheme(<ToolCall execution={execution} compact />);
 
-      expect(lastFrame()).toContain("⏳");
+      expect(lastFrame()).toContain("~");
       expect(lastFrame()).toContain("my_custom_tool");
     });
   });

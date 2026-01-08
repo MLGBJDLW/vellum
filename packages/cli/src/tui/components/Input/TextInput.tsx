@@ -433,10 +433,13 @@ export function TextInput({
     );
   };
 
+  // Border color based on focus state
+  const borderColor = focused ? theme.semantic.border.focus : theme.semantic.border.default;
+
   // Render placeholder
   if (showPlaceholder) {
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" borderStyle="round" borderColor={borderColor} paddingX={1}>
         <Text color={theme.semantic.text.muted}>
           {focused ? (
             <>
@@ -453,12 +456,16 @@ export function TextInput({
 
   // Render single-line
   if (!multiline) {
-    return <Box>{renderLineWithCursor(value, 0)}</Box>;
+    return (
+      <Box borderStyle="round" borderColor={borderColor} paddingX={1}>
+        {renderLineWithCursor(value, 0)}
+      </Box>
+    );
   }
 
   // Render multiline with stable keys based on line position
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" borderStyle="round" borderColor={borderColor} paddingX={1}>
       {lineData.map(({ line, startPos, key }) => (
         <Box key={key}>{renderLineWithCursor(line, startPos)}</Box>
       ))}

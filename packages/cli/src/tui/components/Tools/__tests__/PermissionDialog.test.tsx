@@ -161,7 +161,7 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(lastFrame()).toContain("🔐 Tool Permission Request");
+      expect(lastFrame()).toContain("# Tool Permission Request");
     });
 
     it("displays tool name", () => {

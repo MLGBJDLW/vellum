@@ -8,6 +8,7 @@
  */
 
 import type { MemoryEntry, MemoryEntryType } from "@vellum/core";
+import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
@@ -45,21 +46,34 @@ const DEFAULT_MAX_HEIGHT = 12;
 /** Number of items per page */
 const PAGE_SIZE = 5;
 
-/** Type badge colors */
-const TYPE_COLORS: Record<MemoryEntryType, string> = {
-  context: "cyan",
-  preference: "magenta",
-  decision: "yellow",
-  summary: "green",
-};
+/**
+ * Get type badge colors from theme.
+ * Uses semantic theme colors for each memory entry type.
+ */
+function getTypeColors(
+  theme: ReturnType<typeof useTheme>["theme"]
+): Record<MemoryEntryType, string> {
+  return {
+    context: theme.colors.info,
+    preference: theme.colors.primary,
+    decision: theme.colors.warning,
+    summary: theme.colors.success,
+  };
+}
 
-/** Type icons */
-const TYPE_ICONS: Record<MemoryEntryType, string> = {
-  context: "📋",
-  preference: "⚙️",
-  decision: "🎯",
-  summary: "📝",
-};
+/**
+ * Get type icons for memory entry types.
+ * Uses centralized icon system with auto-detection.
+ */
+function getTypeIcons(): Record<MemoryEntryType, string> {
+  const icons = getIcons();
+  return {
+    context: icons.context,
+    preference: icons.preference,
+    decision: icons.decision,
+    summary: icons.summary,
+  };
+}
 
 // =============================================================================
 // Helper Functions
@@ -110,8 +124,10 @@ interface MemoryItemProps {
 
 function MemoryItem({ entry, isSelected, width }: MemoryItemProps): React.JSX.Element {
   const { theme } = useTheme();
-  const icon = TYPE_ICONS[entry.type];
-  const color = TYPE_COLORS[entry.type];
+  const typeIcons = getTypeIcons();
+  const typeColors = getTypeColors(theme);
+  const icon = typeIcons[entry.type];
+  const color = typeColors[entry.type];
   const date = formatDate(entry.updatedAt);
 
   // Calculate available width for content preview
@@ -152,8 +168,10 @@ interface MemoryDetailsProps {
 
 function MemoryDetails({ entry, width }: MemoryDetailsProps): React.JSX.Element {
   const { theme } = useTheme();
-  const icon = TYPE_ICONS[entry.type];
-  const color = TYPE_COLORS[entry.type];
+  const typeIcons = getTypeIcons();
+  const typeColors = getTypeColors(theme);
+  const icon = typeIcons[entry.type];
+  const color = typeColors[entry.type];
 
   // Wrap content to width
   const contentLines = entry.content.split("\n").slice(0, 5);
@@ -288,6 +306,7 @@ export function MemoryPanel({
 
   // Handle keyboard input
   useInput(
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Input handler must process multiple key bindings for navigation and actions
     (input, key) => {
       if (!isFocused || entries.length === 0) return;
 

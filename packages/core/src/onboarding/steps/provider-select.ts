@@ -130,10 +130,12 @@ export function toProviderName(provider: OnboardingProvider): ProviderName {
     anthropic: "anthropic",
     openai: "openai",
     google: "google",
-    gemini: "gemini",
     mistral: "mistral",
     groq: "groq",
     openrouter: "openrouter",
+    deepseek: "deepseek",
+    qwen: "qwen",
+    moonshot: "moonshot",
     ollama: "ollama",
   };
 
@@ -165,12 +167,14 @@ export function formatProviderList(providers: ProviderInfo[]): string {
 export function getDefaultModelForProvider(provider: OnboardingProvider): string {
   const models: Record<OnboardingProvider, string> = {
     anthropic: "claude-sonnet-4-20250514",
-    openai: "gpt-4o",
-    google: "gemini-pro",
-    gemini: "gemini-2.0-flash",
+    openai: "gpt-5.2-turbo",
+    google: "gemini-3-pro",
     mistral: "mistral-large-latest",
     groq: "llama-3.3-70b-versatile",
     openrouter: "anthropic/claude-3.5-sonnet",
+    deepseek: "deepseek-chat",
+    qwen: "qwen-plus",
+    moonshot: "moonshot-v1-8k",
     ollama: "llama3.2",
   };
 

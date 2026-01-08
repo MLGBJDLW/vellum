@@ -242,7 +242,7 @@ export function PermissionDialog({
       {/* Header */}
       <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
         <Text color={textColor} bold>
-          🔐 Tool Permission Request
+          # Tool Permission Request
         </Text>
         <RiskBadge level={riskLevel} />
       </Box>

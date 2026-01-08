@@ -12,11 +12,21 @@
  * @module __tests__/tui-integration.test
  */
 
+import { getIcons, type IconSet } from "@vellum/shared";
 import { Box, Text } from "ink";
 import { render } from "ink-testing-library";
 import type React from "react";
 import { act, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Icons are fetched in beforeEach to ensure setup has run first
+let icons: IconSet;
+
+beforeEach(() => {
+  // Get icons after setup has configured Unicode mode
+  icons = getIcons();
+});
+
 import {
   type Message,
   MessageList,
@@ -93,7 +103,7 @@ describe("Integration: Send Message → MessageList", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Hello, AI assistant!");
     expect(frame).toContain("You"); // User role label
-    expect(frame).toContain("👤"); // User role icon
+    expect(frame).toContain(icons.user); // User role icon
   });
 
   it("adds multiple messages in sequence and displays them all", async () => {
@@ -152,10 +162,10 @@ describe("Integration: Send Message → MessageList", () => {
     });
 
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("👤"); // user
-    expect(frame).toContain("🤖"); // assistant
-    expect(frame).toContain("⚙️"); // system
-    expect(frame).toContain("🔧"); // tool
+    expect(frame).toContain(icons.user); // user
+    expect(frame).toContain(icons.assistant); // assistant
+    expect(frame).toContain(icons.system); // system
+    expect(frame).toContain(icons.tool); // tool
   });
 
   it("handles initial messages in provider", () => {
@@ -589,7 +599,7 @@ describe("Integration: Tool Result → Status Update", () => {
     });
 
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("✓"); // Complete icon
+    expect(frame).toContain(icons.check); // Complete icon
     expect(frame).toContain("read_file");
   });
 
@@ -627,7 +637,7 @@ describe("Integration: Tool Result → Status Update", () => {
     });
 
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("✗"); // Error icon
+    expect(frame).toContain(icons.cross); // Error icon
     expect(frame).toContain("execute_command");
   });
 
@@ -659,7 +669,7 @@ describe("Integration: Tool Result → Status Update", () => {
     });
 
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("✗"); // Rejected icon
+    expect(frame).toContain(icons.cross); // Rejected icon
     expect(frame).toContain("dangerous_tool");
   });
 

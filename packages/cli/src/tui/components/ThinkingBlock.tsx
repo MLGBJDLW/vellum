@@ -187,14 +187,14 @@ export function ThinkingBlock({
   const metricsDisplay = buildMetricsDisplay(duration, tokenCount);
 
   // Determine arrow indicator
-  const arrow = isCollapsed ? "▶" : "▼";
+  const arrow = isCollapsed ? ">" : "v";
 
   if (isCollapsed) {
     // Collapsed view
     return (
       <Box>
         <Text dimColor>
-          {arrow} 💭 [Thinking...{isStreaming ? " " : ""}
+          {arrow} [*] [Thinking...{isStreaming ? " " : ""}
           {isStreaming && <Spinner />}
           {metricsDisplay}] <Text italic>(press Enter to expand)</Text>
         </Text>
@@ -207,7 +207,7 @@ export function ThinkingBlock({
     <Box flexDirection="column">
       <Box>
         <Text dimColor>
-          {arrow} 💭 Thinking{isStreaming ? " " : ""}
+          {arrow} [*] Thinking{isStreaming ? " " : ""}
           {isStreaming && <Spinner />}
           {metricsDisplay} <Text italic>(press Enter to collapse)</Text>
         </Text>

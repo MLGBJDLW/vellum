@@ -137,6 +137,10 @@ export const ProviderNameSchema = z.enum([
   "bedrock",
   "ollama",
   "openrouter",
+  // Chinese providers
+  "deepseek",
+  "qwen",
+  "moonshot",
 ]);
 
 export type ProviderName = z.infer<typeof ProviderNameSchema>;

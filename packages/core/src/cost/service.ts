@@ -279,7 +279,8 @@ export class CostService extends EventEmitter {
       };
     }
 
-    const stats = byProvider[record.provider]!;
+    // stats is guaranteed to exist because we just created it above
+    const stats = byProvider[record.provider] as ProviderUsage;
     stats.requests++;
     stats.inputTokens += record.inputTokens;
     stats.outputTokens += record.outputTokens;
@@ -306,7 +307,8 @@ export class CostService extends EventEmitter {
       };
     }
 
-    const stats = byModel[record.model]!;
+    // stats is guaranteed to exist because we just created it above
+    const stats = byModel[record.model] as ModelUsage;
     const prevTotal = stats.avgLatencyMs * stats.requests;
     stats.requests++;
     stats.inputTokens += record.inputTokens;

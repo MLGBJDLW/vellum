@@ -8,9 +8,10 @@
  * @module tui/components/Input/CommandInput
  */
 
-import { useInput } from "ink";
-import { useCallback, useRef, useState } from "react";
+import { Box, useInput } from "ink";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useInputHistory } from "../../hooks/useInputHistory.js";
+import { Autocomplete } from "./Autocomplete.js";
 import { TextInput } from "./TextInput.js";
 
 // =============================================================================
@@ -204,6 +205,15 @@ export function CommandInput({
 }: CommandInputProps): React.ReactElement {
   const [value, setValue] = useState("");
 
+  // Ref for TextInput to manage focus
+  const inputRef = useRef<{ focus: () => void } | null>(null);
+
+  // Show autocomplete when typing slash commands
+  const showAutocomplete = useMemo(
+    () => value.startsWith("/") && value.length > 1 && !value.includes(" "),
+    [value]
+  );
+
   // Track if we're navigating history (to restore original input)
   const originalInputRef = useRef<string | null>(null);
 
@@ -303,15 +313,38 @@ export function CommandInput({
     { isActive: focused && !disabled && !multiline }
   );
 
+  // Handle autocomplete selection
+  const handleAutocompleteSelect = useCallback((cmd: string) => {
+    setValue(`/${cmd} `);
+    inputRef.current?.focus();
+  }, []);
+
+  // Handle autocomplete cancel
+  const handleAutocompleteCancel = useCallback(() => {
+    inputRef.current?.focus();
+  }, []);
+
   return (
-    <TextInput
-      value={value}
-      onChange={handleChange}
-      onSubmit={handleSubmit}
-      placeholder={placeholder}
-      disabled={disabled}
-      focused={focused}
-      multiline={multiline}
-    />
+    <Box flexDirection="column">
+      {/* Autocomplete dropdown - render above input */}
+      {showAutocomplete && commands && commands.length > 0 && (
+        <Autocomplete
+          input={value.slice(1)}
+          options={commands}
+          onSelect={handleAutocompleteSelect}
+          onCancel={handleAutocompleteCancel}
+          visible={showAutocomplete}
+        />
+      )}
+      <TextInput
+        value={value}
+        onChange={handleChange}
+        onSubmit={handleSubmit}
+        placeholder={placeholder}
+        disabled={disabled}
+        focused={focused && !showAutocomplete}
+        multiline={multiline}
+      />
+    </Box>
   );
 }

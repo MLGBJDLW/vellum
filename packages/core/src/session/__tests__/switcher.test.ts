@@ -554,7 +554,9 @@ describe("SessionSwitcher", () => {
       await switcher.createNewSession({ title: "Original" });
 
       // Access the internal session to add a message
-      const originalSession = persistence.currentSession!;
+      const originalSession = persistence.currentSession;
+      expect(originalSession).toBeDefined();
+      if (!originalSession) return;
       originalSession.messages = [
         {
           id: "msg-1",

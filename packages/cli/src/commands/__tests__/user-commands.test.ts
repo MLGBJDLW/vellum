@@ -290,11 +290,12 @@ describe("UserCommandLoader", () => {
       expect(result.errors).toHaveLength(0);
       expect(result.scanned).toBe(1);
 
-      const cmd = result.commands[0]!;
-      expect(cmd.name).toBe("test-cmd");
-      expect(cmd.description).toBe("A test command");
-      expect(cmd.kind).toBe("user");
-      expect(cmd.category).toBe("tools");
+      const cmd = result.commands[0];
+      expect(cmd).toBeDefined();
+      expect(cmd?.name).toBe("test-cmd");
+      expect(cmd?.description).toBe("A test command");
+      expect(cmd?.kind).toBe("user");
+      expect(cmd?.category).toBe("tools");
     });
 
     it("should load valid .mjs command file", async () => {
@@ -314,10 +315,11 @@ describe("UserCommandLoader", () => {
       const result = await loader.load();
 
       expect(result.commands).toHaveLength(1);
-      const cmd = result.commands[0]!;
-      expect(cmd.name).toBe("greet");
-      expect(cmd.aliases).toEqual(["g", "hello"]);
-      expect(cmd.category).toBe("tools");
+      const cmd = result.commands[0];
+      expect(cmd).toBeDefined();
+      expect(cmd?.name).toBe("greet");
+      expect(cmd?.aliases).toEqual(["g", "hello"]);
+      expect(cmd?.category).toBe("tools");
     });
 
     it("should ignore non-command files", async () => {
@@ -433,11 +435,13 @@ describe("UserCommandLoader", () => {
 
       expect(result.commands).toHaveLength(1);
 
-      const cmd = result.commands[0]!;
+      const cmd = result.commands[0];
+      expect(cmd).toBeDefined();
+      if (!cmd) return;
       const ctx = createMockContext();
       ctx.parsedArgs.raw = "/test-cmd hello world";
 
-      const execResult = await cmd.execute(ctx as any);
+      const execResult = await cmd.execute(ctx as unknown as Parameters<typeof cmd.execute>[0]);
       assertSuccess(execResult);
       expect(execResult.message).toContain("Test executed");
       expect(execResult.message).toContain("hello world");
@@ -449,13 +453,15 @@ describe("UserCommandLoader", () => {
       const loader = new UserCommandLoader(TEST_DIR);
       const result = await loader.load();
 
-      const cmd = result.commands[0]!;
+      const cmd = result.commands[0];
+      expect(cmd).toBeDefined();
+      if (!cmd) return;
       const ctx = createMockContext();
       ctx.session.cwd = "/my/cwd";
       ctx.session.id = "my-session";
       ctx.session.provider = "openai";
 
-      const execResult = await cmd.execute(ctx as any);
+      const execResult = await cmd.execute(ctx as unknown as Parameters<typeof cmd.execute>[0]);
       assertSuccess(execResult);
 
       const data = execResult.data as {
@@ -472,10 +478,12 @@ describe("UserCommandLoader", () => {
       const loader = new UserCommandLoader(TEST_DIR);
       const result = await loader.load();
 
-      const cmd = result.commands[0]!;
+      const cmd = result.commands[0];
+      expect(cmd).toBeDefined();
+      if (!cmd) return;
       const ctx = createMockContext();
 
-      const execResult = await cmd.execute(ctx as any);
+      const execResult = await cmd.execute(ctx as unknown as Parameters<typeof cmd.execute>[0]);
       assertError(execResult);
       expect(execResult.message).toBe("Intentional failure");
     });
@@ -486,10 +494,12 @@ describe("UserCommandLoader", () => {
       const loader = new UserCommandLoader(TEST_DIR);
       const result = await loader.load();
 
-      const cmd = result.commands[0]!;
+      const cmd = result.commands[0];
+      expect(cmd).toBeDefined();
+      if (!cmd) return;
       const ctx = createMockContext();
 
-      const execResult = await cmd.execute(ctx as any);
+      const execResult = await cmd.execute(ctx as unknown as Parameters<typeof cmd.execute>[0]);
       assertError(execResult);
       expect(execResult.message).toBe("Unexpected error");
     });

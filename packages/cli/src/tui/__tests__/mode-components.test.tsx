@@ -10,13 +10,22 @@
  */
 
 import type { CodingMode } from "@vellum/core";
+import { getIcons, type IconSet } from "@vellum/shared";
 import { render } from "ink-testing-library";
 import type React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModeIndicator } from "../components/ModeIndicator.js";
 import { ModeSelector } from "../components/ModeSelector.js";
 import { PhaseProgressIndicator } from "../components/PhaseProgressIndicator.js";
 import { ThemeProvider } from "../theme/index.js";
+
+// Icons are fetched in beforeEach to ensure setup has run first
+let icons: IconSet;
+
+beforeEach(() => {
+  // Get icons after setup has configured Unicode mode
+  icons = getIcons();
+});
 
 // =============================================================================
 // Test Helpers
@@ -35,24 +44,24 @@ function renderWithTheme(element: React.ReactElement) {
 
 describe("ModeIndicator", () => {
   describe("Mode Icons", () => {
-    it("should render vibe mode with lightning icon", () => {
+    it("should render vibe mode with icon", () => {
       const { lastFrame } = renderWithTheme(<ModeIndicator mode="vibe" />);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("⚡");
+      expect(frame).toContain(icons.vibe);
       expect(frame).toContain("vibe");
     });
 
-    it("should render plan mode with clipboard icon", () => {
+    it("should render plan mode with icon", () => {
       const { lastFrame } = renderWithTheme(<ModeIndicator mode="plan" />);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("📋");
+      expect(frame).toContain(icons.plan);
       expect(frame).toContain("plan");
     });
 
-    it("should render spec mode with wrench icon", () => {
+    it("should render spec mode with icon", () => {
       const { lastFrame } = renderWithTheme(<ModeIndicator mode="spec" />);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("🔧");
+      expect(frame).toContain(icons.spec);
       expect(frame).toContain("spec");
     });
   });
@@ -61,7 +70,7 @@ describe("ModeIndicator", () => {
     it("should show phase progress when in spec mode", () => {
       const { lastFrame } = renderWithTheme(<ModeIndicator mode="spec" specPhase={3} />);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("🔧");
+      expect(frame).toContain(icons.spec);
       expect(frame).toContain("spec");
       expect(frame).toContain("(3/6");
       expect(frame).toContain("Design");
@@ -98,14 +107,14 @@ describe("ModeIndicator", () => {
     it("should show only icon in compact mode", () => {
       const { lastFrame } = renderWithTheme(<ModeIndicator mode="vibe" compact />);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("⚡");
+      expect(frame).toContain(icons.vibe);
       expect(frame).not.toContain("vibe ");
     });
 
     it("should show phase numbers in compact spec mode", () => {
       const { lastFrame } = renderWithTheme(<ModeIndicator mode="spec" specPhase={4} compact />);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("🔧");
+      expect(frame).toContain(icons.spec);
       expect(frame).toContain("(4/6)");
       // Should NOT show the phase name in compact mode
       expect(frame).not.toContain("Tasks");
@@ -126,11 +135,11 @@ describe("ModeSelector", () => {
       );
       const frame = lastFrame() ?? "";
 
-      expect(frame).toContain("⚡");
+      expect(frame).toContain(icons.vibe);
       expect(frame).toContain("vibe");
-      expect(frame).toContain("📋");
+      expect(frame).toContain(icons.plan);
       expect(frame).toContain("plan");
-      expect(frame).toContain("🔧");
+      expect(frame).toContain(icons.spec);
       expect(frame).toContain("spec");
     });
 
@@ -305,7 +314,7 @@ describe("PhaseProgressIndicator", () => {
       const frame = lastFrame() ?? "";
 
       // Phases 1 and 2 should be completed
-      expect(frame).toContain("✓");
+      expect(frame).toContain(icons.check);
     });
 
     it("should show current phase with bullet", () => {
@@ -314,7 +323,7 @@ describe("PhaseProgressIndicator", () => {
       );
       const frame = lastFrame() ?? "";
 
-      expect(frame).toContain("●");
+      expect(frame).toContain(icons.bullet);
     });
 
     it("should show pending phases with circle", () => {
@@ -323,7 +332,7 @@ describe("PhaseProgressIndicator", () => {
       );
       const frame = lastFrame() ?? "";
 
-      expect(frame).toContain("○");
+      expect(frame).toContain(icons.pending);
     });
 
     it("should show progress summary with percentage", () => {

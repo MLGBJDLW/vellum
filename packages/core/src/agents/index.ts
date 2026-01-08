@@ -5,6 +5,25 @@
 // Re-export all custom agent components (T027)
 export * from "./custom/index.js";
 
+// Re-export delegation types (migrated from @vellum/tool)
+export {
+  canDelegate,
+  DEFAULT_DELEGATION_TIMEOUT,
+  type DelegateTaskContext,
+  type DelegateTaskParams,
+  type DelegateTaskParamsInferred,
+  DelegateTaskParamsSchema,
+  type DelegateTaskResult,
+  type DelegateTaskResultInferred,
+  DelegateTaskResultSchema,
+  type DelegationHandler,
+  delegateTaskTool,
+  executeDelegateTask,
+  getDelegationHandler,
+  setDelegationHandler,
+  WorkerDelegationError,
+} from "./delegation/index.js";
+
 // Re-export all orchestrator components
 export {
   // Aggregator exports

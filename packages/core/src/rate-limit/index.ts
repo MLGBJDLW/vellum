@@ -4,18 +4,16 @@
 
 // =============================================================================
 // Type Exports
+// Note: BackpressureConfig, BackpressureState, BackpressureStrategy, and RetryOptions
+// are NOT exported here to avoid conflicts with streaming/index.js and errors/index.js
 // =============================================================================
 
 export type {
-  BackpressureConfig,
   BackpressureLevel,
-  BackpressureState,
-  BackpressureStrategy,
   RateLimiterConfig,
   RateLimiterKeyState,
   RateLimiterStats,
   RequestPriority,
-  RetryOptions,
   TokenBucketConfig,
   TokenBucketState,
 } from "./types.js";

@@ -247,7 +247,8 @@ export class TipEngine {
 
     // Sort by priority (descending) and return highest
     matchingTips.sort((a, b) => b.priority - a.priority);
-    const tip = matchingTips[0]!;
+    // Array is guaranteed non-empty due to check above
+    const tip = matchingTips[0] as Tip;
 
     // Update state
     this.recordTipShown(tip.id);
@@ -359,6 +360,7 @@ export class TipEngine {
   /**
    * Check if a tip is eligible to be shown
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Tip eligibility check requires evaluating multiple trigger conditions
   private isTipEligible(tip: Tip, context: TipContext): boolean {
     // Check if dismissed
     if (this.dismissedTips.has(tip.id)) {

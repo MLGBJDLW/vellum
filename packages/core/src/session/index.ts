@@ -224,6 +224,16 @@ export {
   ThinkingHandler,
   type ThinkingState,
 } from "./thinking.js";
+// Session-based Todo Types (migrated from @vellum/tool)
+export {
+  type SessionTodoData,
+  type SessionTodoItem,
+  SessionTodoItemSchema,
+  type SessionTodoOperation,
+  SessionTodoOperationSchema,
+  type SessionTodoStatus,
+  SessionTodoStatusSchema,
+} from "./todo-types.js";
 // Session Types (T005)
 export {
   addCheckpoint,

@@ -432,8 +432,10 @@ export class TutorialSystem {
     // Get updated progress
     const lessonProgress = await this.progressTracker.getLessonProgress(lesson.id);
 
-    // Fire events
-    this.events.onLessonComplete?.(lesson, lessonProgress!);
+    // Fire events - lessonProgress will be defined since we just completed the lesson
+    if (lessonProgress) {
+      this.events.onLessonComplete?.(lesson, lessonProgress);
+    }
 
     // Check if all tutorials complete
     if (await this.isComplete()) {

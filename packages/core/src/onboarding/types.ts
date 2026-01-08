@@ -64,35 +64,35 @@ export const ONBOARDING_STEP_CONFIG: Record<OnboardingStep, OnboardingStepConfig
     id: "welcome",
     title: "Welcome to Vellum",
     description: "Introduction to Vellum AI coding assistant",
-    icon: "👋",
+    icon: "*",
     skippable: false,
   },
   "provider-select": {
     id: "provider-select",
     title: "Select Provider",
     description: "Choose your default AI provider",
-    icon: "🤖",
+    icon: ">",
     skippable: false,
   },
   "credential-setup": {
     id: "credential-setup",
     title: "Configure Credentials",
     description: "Enter your API key",
-    icon: "🔐",
+    icon: "#",
     skippable: false,
   },
   "mode-select": {
     id: "mode-select",
     title: "Choose Mode",
     description: "Select your preferred coding mode",
-    icon: "⚡",
+    icon: "*",
     skippable: true,
   },
   complete: {
     id: "complete",
     title: "Setup Complete",
     description: "You're ready to start coding!",
-    icon: "🎉",
+    icon: "+",
     skippable: false,
   },
 };
@@ -185,15 +185,18 @@ export interface OnboardingResult {
 
 /**
  * Supported providers for onboarding
+ * Order: International first, then Chinese, then Local
  */
 export const ONBOARDING_PROVIDERS = [
   "anthropic",
   "openai",
   "google",
-  "gemini",
   "mistral",
   "groq",
   "openrouter",
+  "deepseek",
+  "qwen",
+  "moonshot",
   "ollama",
 ] as const;
 
@@ -219,71 +222,88 @@ export interface ProviderInfo {
 
 /**
  * Provider information for onboarding UI
+ * Note: name, description, and icon are i18n keys - TUI will translate them
  */
 export const PROVIDER_INFO: Record<OnboardingProvider, ProviderInfo> = {
   anthropic: {
     id: "anthropic",
-    name: "Anthropic Claude",
-    description: "Claude 3.5 Sonnet - Best for coding tasks",
+    name: "anthropic",
+    description: "anthropic",
     envVar: "ANTHROPIC_API_KEY",
     requiresApiKey: true,
-    icon: "🟣",
+    icon: "A",
   },
   openai: {
     id: "openai",
-    name: "OpenAI",
-    description: "GPT-4o - Versatile and powerful",
+    name: "openai",
+    description: "openai",
     envVar: "OPENAI_API_KEY",
     requiresApiKey: true,
-    icon: "🟢",
+    icon: "O",
   },
   google: {
     id: "google",
-    name: "Google AI",
-    description: "Gemini Pro - Fast and capable",
+    name: "google",
+    description: "google",
     envVar: "GOOGLE_API_KEY",
     requiresApiKey: true,
-    icon: "🔵",
-  },
-  gemini: {
-    id: "gemini",
-    name: "Google Gemini",
-    description: "Gemini 2.0 Flash - Latest Google model",
-    envVar: "GEMINI_API_KEY",
-    requiresApiKey: true,
-    icon: "💎",
+    icon: "G",
   },
   mistral: {
     id: "mistral",
-    name: "Mistral AI",
-    description: "Mistral Large - European alternative",
+    name: "mistral",
+    description: "mistral",
     envVar: "MISTRAL_API_KEY",
     requiresApiKey: true,
-    icon: "🌊",
+    icon: "M",
   },
   groq: {
     id: "groq",
-    name: "Groq",
-    description: "Ultra-fast inference",
+    name: "groq",
+    description: "groq",
     envVar: "GROQ_API_KEY",
     requiresApiKey: true,
-    icon: "⚡",
+    icon: "*",
   },
   openrouter: {
     id: "openrouter",
-    name: "OpenRouter",
-    description: "Access multiple models with one API key",
+    name: "openrouter",
+    description: "openrouter",
     envVar: "OPENROUTER_API_KEY",
     requiresApiKey: true,
-    icon: "🔀",
+    icon: "R",
+  },
+  deepseek: {
+    id: "deepseek",
+    name: "deepseek",
+    description: "deepseek",
+    envVar: "DEEPSEEK_API_KEY",
+    requiresApiKey: true,
+    icon: "D",
+  },
+  qwen: {
+    id: "qwen",
+    name: "qwen",
+    description: "qwen",
+    envVar: "QWEN_API_KEY",
+    requiresApiKey: true,
+    icon: "Q",
+  },
+  moonshot: {
+    id: "moonshot",
+    name: "moonshot",
+    description: "moonshot",
+    envVar: "MOONSHOT_API_KEY",
+    requiresApiKey: true,
+    icon: "K",
   },
   ollama: {
     id: "ollama",
-    name: "Ollama (Local)",
-    description: "Run models locally - No API key needed",
+    name: "ollama",
+    description: "ollama",
     envVar: "OLLAMA_HOST",
     requiresApiKey: false,
-    icon: "🏠",
+    icon: "L",
   },
 };
 
@@ -316,21 +336,21 @@ export const MODE_INFO: Record<string, ModeInfo> = {
     name: "Vibe Mode",
     description: "Fast, autonomous coding with minimal interruption",
     useCase: "Quick fixes, simple tasks, exploration",
-    icon: "⚡",
+    icon: "*",
   },
   plan: {
     id: "plan" as CodingMode,
     name: "Plan Mode",
     description: "Structured approach with planning phase",
     useCase: "Medium complexity, new features",
-    icon: "📋",
+    icon: "-",
   },
   spec: {
     id: "spec" as CodingMode,
     name: "Spec Mode",
     description: "Full specification-driven development",
     useCase: "Complex features, architecture changes",
-    icon: "🔧",
+    icon: "=",
   },
 };
 

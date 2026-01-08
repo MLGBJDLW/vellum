@@ -7,6 +7,14 @@
  */
 
 export {
+  calculateCost,
+  getContextWindow,
+  getModelInfo,
+  getProviderModels,
+  getSupportedProviders,
+  type ModelMetadata,
+} from "./model-info.js";
+export {
   formatResumeHint,
   getShortId,
   SHORT_ID_LENGTH,

@@ -4,12 +4,16 @@
  * Tests for the MessageList component with auto-scroll functionality.
  */
 
+import { getIcons } from "@vellum/shared";
 import { render } from "ink-testing-library";
 import type React from "react";
 import { describe, expect, it } from "vitest";
 import type { Message } from "../../../context/MessagesContext.js";
 import { ThemeProvider } from "../../../theme/index.js";
 import { MessageList } from "../MessageList.js";
+
+// Get icons for test assertions
+const icons = getIcons();
 
 /**
  * Wrapper to provide theme context for tests
@@ -48,7 +52,7 @@ describe("MessageList", () => {
       const frame = lastFrame() ?? "";
       expect(frame).toContain("Hello, world!");
       expect(frame).toContain("You"); // User role label
-      expect(frame).toContain("👤"); // User role icon
+      expect(frame).toContain(icons.user); // User role icon
     });
 
     it("should render multiple messages in order", () => {
@@ -77,10 +81,10 @@ describe("MessageList", () => {
       const { lastFrame } = renderWithTheme(<MessageList messages={messages} />);
 
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("👤"); // user
-      expect(frame).toContain("🤖"); // assistant
-      expect(frame).toContain("⚙️"); // system
-      expect(frame).toContain("🔧"); // tool
+      expect(frame).toContain(icons.user); // user
+      expect(frame).toContain(icons.assistant); // assistant
+      expect(frame).toContain(icons.system); // system
+      expect(frame).toContain(icons.tool); // tool
     });
 
     it("should render role labels correctly", () => {

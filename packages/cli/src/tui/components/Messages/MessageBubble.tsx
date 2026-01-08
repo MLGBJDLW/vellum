@@ -8,6 +8,7 @@
  * @module tui/components/Messages/MessageBubble
  */
 
+import { getIcons, getRoleBorderColor, getRoleTextColor, type VellumTheme } from "@vellum/shared";
 import { Box, Text } from "ink";
 import type { Message } from "../../context/MessagesContext.js";
 import { useTheme } from "../../theme/index.js";
@@ -48,17 +49,18 @@ function formatTimestamp(date: Date): string {
  * Get the display icon for a message role.
  */
 function getRoleIcon(role: Message["role"]): string {
+  const icons = getIcons();
   switch (role) {
     case "user":
-      return "👤";
+      return icons.user;
     case "assistant":
-      return "🤖";
+      return icons.assistant;
     case "system":
-      return "⚙️";
+      return icons.system;
     case "tool":
-      return "🔧";
+      return icons.tool;
     default:
-      return "💬";
+      return icons.info;
   }
 }
 
@@ -141,8 +143,9 @@ export function MessageBubble({
 }: MessageBubbleProps): React.JSX.Element {
   const { theme } = useTheme();
 
-  // Get role-specific styling
+  // Get role-specific styling using semantic tokens
   const roleColor = getRoleColor(message.role, theme);
+  const borderColor = getMessageBorderColor(message.role, theme);
   const textColor = theme.semantic.text.primary;
   const mutedColor = theme.semantic.text.muted;
   const alignment = getAlignment(message.role);
@@ -163,61 +166,70 @@ export function MessageBubble({
       paddingLeft={paddingLeft}
       paddingRight={paddingRight}
     >
-      {/* Message header: avatar/icon, label, and timestamp */}
-      <Box>
-        <Text>
-          {showAvatar && <>{icon} </>}
-          <Text color={roleColor} bold>
-            {label}
-          </Text>
-          {showTimestamp && <Text color={mutedColor}> • {timestamp}</Text>}
-          {message.isStreaming && (
-            <Text color={mutedColor} italic>
-              {" "}
-              (streaming...)
+      {/* Message bubble with border and background */}
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={borderColor}
+        paddingX={1}
+        paddingY={compact ? 0 : 0}
+      >
+        {/* Message header: avatar/icon, label, and timestamp */}
+        <Box>
+          <Text>
+            {showAvatar && <>{icon} </>}
+            <Text color={roleColor} bold>
+              {label}
             </Text>
-          )}
-        </Text>
-      </Box>
-
-      {/* Message content */}
-      <Box marginLeft={showAvatar ? 2 : 0} marginTop={compact ? 0 : 0}>
-        <Text color={textColor} wrap="wrap">
-          {message.content || (message.isStreaming ? "..." : "(empty)")}
-        </Text>
-      </Box>
-
-      {/* Tool calls, if any */}
-      {message.toolCalls && message.toolCalls.length > 0 && !compact && (
-        <Box flexDirection="column" marginLeft={showAvatar ? 2 : 0} marginTop={1}>
-          {message.toolCalls.map((toolCall) => (
-            <Box key={toolCall.id}>
-              <Text color={mutedColor}>
-                🔧 {toolCall.name}
-                <Text dimColor> [{toolCall.status}]</Text>
+            {showTimestamp && <Text color={mutedColor}> • {timestamp}</Text>}
+            {message.isStreaming && (
+              <Text color={mutedColor} italic>
+                {" "}
+                (streaming...)
               </Text>
-            </Box>
-          ))}
+            )}
+          </Text>
         </Box>
-      )}
+
+        {/* Message content */}
+        <Box marginLeft={showAvatar ? 2 : 0} marginTop={compact ? 0 : 0}>
+          <Text color={textColor} wrap="wrap">
+            {message.content || (message.isStreaming ? "..." : "(empty)")}
+          </Text>
+        </Box>
+
+        {/* Tool calls, if any */}
+        {message.toolCalls && message.toolCalls.length > 0 && !compact && (
+          <Box flexDirection="column" marginLeft={showAvatar ? 2 : 0} marginTop={1}>
+            {message.toolCalls.map((toolCall) => (
+              <Box key={toolCall.id}>
+                <Text color={mutedColor}>
+                  {getIcons().tool} {toolCall.name}
+                  <Text dimColor> [{toolCall.status}]</Text>
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 }
 
 /**
  * Get the color for a message role from the theme.
+ * Uses semantic role colors for consistent theming.
  */
-function getRoleColor(role: Message["role"], theme: ReturnType<typeof useTheme>["theme"]): string {
-  switch (role) {
-    case "user":
-      return theme.semantic.text.role.user;
-    case "assistant":
-      return theme.semantic.text.role.assistant;
-    case "system":
-      return theme.semantic.text.role.system;
-    case "tool":
-      return theme.semantic.text.role.tool;
-    default:
-      return theme.semantic.text.muted;
-  }
+function getRoleColor(role: Message["role"], theme: VellumTheme): string {
+  const validRole = role as "user" | "assistant" | "system" | "tool";
+  return getRoleTextColor(validRole, theme);
+}
+
+/**
+ * Get the border color for a message role from the theme.
+ * Uses semantic border colors for consistent theming.
+ */
+function getMessageBorderColor(role: Message["role"], theme: VellumTheme): string {
+  const validRole = role as "user" | "assistant" | "system" | "tool";
+  return getRoleBorderColor(validRole, theme);
 }

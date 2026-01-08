@@ -9,6 +9,7 @@
 
 import type { CostBreakdown } from "@vellum/core";
 import { formatCost, formatTokenCount } from "@vellum/core";
+import { getIcons } from "@vellum/shared";
 import { Box, Text } from "ink";
 import { useTheme } from "../theme/index.js";
 
@@ -64,6 +65,7 @@ export function CostDisplay({
   showBreakdown = false,
 }: CostDisplayProps): React.JSX.Element {
   const { theme } = useTheme();
+  const icons = getIcons();
 
   // Determine cost color based on magnitude
   const costColor = getCostColor(totalCost, theme);
@@ -74,7 +76,7 @@ export function CostDisplay({
   if (compact) {
     return (
       <Box>
-        <Text dimColor>💰 </Text>
+        <Text dimColor>{icons.cost} </Text>
         <Text color={theme.colors.muted}>{formatTokenCount(totalTokens)} tokens</Text>
         <Text dimColor> • </Text>
         <Text color={costColor} bold>
@@ -88,7 +90,7 @@ export function CostDisplay({
     <Box flexDirection="column" paddingX={1}>
       <Box marginBottom={1}>
         <Text color={theme.colors.primary} bold>
-          💰 Session Cost
+          {icons.cost} Session Cost
         </Text>
       </Box>
 

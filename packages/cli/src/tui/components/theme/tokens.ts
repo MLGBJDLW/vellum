@@ -395,19 +395,19 @@ export const icons = {
   expanded: "▾",
 
   /** User icon */
-  user: "👤",
+  user: "@",
 
   /** Assistant/AI icon */
-  assistant: "🤖",
+  assistant: "*",
 
   /** Tool icon */
-  tool: "🔧",
+  tool: ">",
 
   /** Edit/pencil icon */
-  edit: "✎",
+  edit: "~",
 
   /** Copy icon */
-  copy: "📋",
+  copy: "#",
 
   /** Loading/spinner placeholder */
   loading: "◌",

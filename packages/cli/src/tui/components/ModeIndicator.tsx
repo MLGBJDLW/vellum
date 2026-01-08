@@ -9,6 +9,7 @@
 
 import type { CodingMode, SpecPhase } from "@vellum/core";
 import { SPEC_PHASE_CONFIG, SPEC_PHASES } from "@vellum/core";
+import { getIcons } from "@vellum/shared";
 import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
@@ -35,14 +36,17 @@ export interface ModeIndicatorProps {
 // =============================================================================
 
 /**
- * Mode icons for each coding mode.
- * Using Unicode symbols for consistent terminal display.
+ * Get mode icons for each coding mode.
+ * Uses centralized icon system with auto-detection.
  */
-const MODE_ICONS: Record<CodingMode, string> = {
-  vibe: "⚡",
-  plan: "📋",
-  spec: "🔧",
-} as const;
+function getModeIcons(): Record<CodingMode, string> {
+  const icons = getIcons();
+  return {
+    vibe: icons.vibe,
+    plan: icons.plan,
+    spec: icons.spec,
+  };
+}
 
 /**
  * Mode display names.
@@ -96,7 +100,7 @@ function getPhaseName(phaseNumber: number): string {
  * ModeIndicator - Displays the current coding mode with visual styling.
  *
  * Features:
- * - Mode icon (⚡ vibe, 📋 plan, 🔧 spec)
+ * - Mode icon (using centralized icon system)
  * - Color-coded mode name (green, blue, purple)
  * - Spec phase progress indicator when in spec mode
  * - Compact mode for space-constrained layouts
@@ -121,7 +125,8 @@ export function ModeIndicator({
   const { theme } = useTheme();
 
   // Get mode display properties
-  const icon = MODE_ICONS[mode];
+  const modeIcons = getModeIcons();
+  const icon = modeIcons[mode];
   const name = MODE_NAMES[mode];
   const color = getModeColor(mode, theme);
 

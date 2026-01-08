@@ -7,12 +7,16 @@
  * @module tui/components/Messages/__tests__/MessageBubble.test
  */
 
+import { getIcons } from "@vellum/shared";
 import { render } from "ink-testing-library";
 import type React from "react";
 import { describe, expect, it } from "vitest";
 import type { Message } from "../../../context/MessagesContext.js";
 import { ThemeProvider } from "../../../theme/index.js";
 import { MessageBubble } from "../MessageBubble.js";
+
+// Get icons for test assertions
+const icons = getIcons();
 
 // =============================================================================
 // Test Helpers
@@ -143,7 +147,7 @@ describe("MessageBubble", () => {
       const { lastFrame } = renderWithTheme(<MessageBubble message={message} />);
 
       // User icon should not appear
-      expect(lastFrame()).not.toContain("👤");
+      expect(lastFrame()).not.toContain(icons.user);
     });
 
     it("shows user avatar when showAvatar is true", () => {
@@ -151,7 +155,7 @@ describe("MessageBubble", () => {
 
       const { lastFrame } = renderWithTheme(<MessageBubble message={message} showAvatar />);
 
-      expect(lastFrame()).toContain("👤");
+      expect(lastFrame()).toContain(icons.user);
     });
 
     it("shows assistant avatar when showAvatar is true", () => {
@@ -159,7 +163,7 @@ describe("MessageBubble", () => {
 
       const { lastFrame } = renderWithTheme(<MessageBubble message={message} showAvatar />);
 
-      expect(lastFrame()).toContain("🤖");
+      expect(lastFrame()).toContain(icons.assistant);
     });
 
     it("shows system avatar when showAvatar is true", () => {
@@ -167,7 +171,7 @@ describe("MessageBubble", () => {
 
       const { lastFrame } = renderWithTheme(<MessageBubble message={message} showAvatar />);
 
-      expect(lastFrame()).toContain("⚙️");
+      expect(lastFrame()).toContain(icons.system);
     });
 
     it("shows tool avatar when showAvatar is true", () => {
@@ -175,7 +179,7 @@ describe("MessageBubble", () => {
 
       const { lastFrame } = renderWithTheme(<MessageBubble message={message} showAvatar />);
 
-      expect(lastFrame()).toContain("🔧");
+      expect(lastFrame()).toContain(icons.tool);
     });
   });
 
@@ -251,7 +255,7 @@ describe("MessageBubble", () => {
 
       expect(lastFrame()).toContain("No tools");
       // Should only have the main content, no extra tool icons
-      expect(lastFrame()?.split("🔧").length).toBeLessThanOrEqual(1);
+      expect(lastFrame()?.split(icons.tool).length).toBeLessThanOrEqual(1);
     });
   });
 
@@ -275,7 +279,7 @@ describe("MessageBubble", () => {
       );
 
       expect(lastFrame()).toContain("Full featured message");
-      expect(lastFrame()).toContain("🤖"); // Avatar
+      expect(lastFrame()).toContain(icons.assistant); // Avatar
       expect(lastFrame()).toContain("Assistant");
       expect(lastFrame()).toContain("•"); // Timestamp separator
       expect(lastFrame()).toContain("test_tool");

@@ -7,6 +7,7 @@
  * @module tui/components/session/SessionPicker
  */
 
+import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -316,7 +317,7 @@ export function SessionPicker({
         paddingY={1}
       >
         <Text color={textColor} bold>
-          📋 Select Session
+          {getIcons().plan} Select Session
         </Text>
         <Box marginY={1}>
           <Text color={mutedColor} italic>
@@ -343,7 +344,7 @@ export function SessionPicker({
         {/* Header */}
         <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
           <Text color={textColor} bold>
-            📋 Select Session ({sessions.length})
+            {getIcons().plan} Select Session ({sessions.length})
           </Text>
           <Box flexDirection="row" gap={1}>
             {canScrollUp && <Text color={mutedColor}>↑</Text>}

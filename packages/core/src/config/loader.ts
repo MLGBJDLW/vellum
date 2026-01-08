@@ -414,6 +414,10 @@ const PROVIDER_DISPLAY_NAMES: Record<ProviderName, string> = {
   bedrock: "AWS Bedrock",
   ollama: "Ollama (Local)",
   openrouter: "OpenRouter",
+  // Chinese providers
+  deepseek: "DeepSeek",
+  qwen: "Qwen (通义千问)",
+  moonshot: "Moonshot (Kimi)",
 };
 
 /**

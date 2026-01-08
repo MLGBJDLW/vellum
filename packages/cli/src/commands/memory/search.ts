@@ -288,6 +288,7 @@ export async function executeMemorySearch(
 /**
  * Parse search command arguments.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Argument parsing requires handling many flag combinations
 function parseSearchArgs(args: string[]): MemorySearchOptions {
   const options: MemorySearchOptions = { query: "" };
   const queryParts: string[] = [];

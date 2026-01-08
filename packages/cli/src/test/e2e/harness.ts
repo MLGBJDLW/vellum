@@ -29,6 +29,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 /**
  * Assert CLI output against expected matchers (inline to avoid circular import)
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Assertion function needs to check multiple output conditions
 function assertOutput(result: CLIResult, expected: OutputMatcher): AssertionFailure[] {
   const failures: AssertionFailure[] = [];
 
@@ -302,6 +303,7 @@ export class CLITestHarness {
       let inputIndex = 0;
 
       // Process input steps
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Input processing requires handling multiple step types and timing conditions
       const processNextInput = async (): Promise<void> => {
         if (inputIndex >= inputs.length) return;
 

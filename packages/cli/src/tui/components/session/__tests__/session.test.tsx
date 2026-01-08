@@ -7,6 +7,7 @@
  * @module tui/components/session/__tests__/session.test
  */
 
+import { getIcons } from "@vellum/shared";
 import { render } from "ink-testing-library";
 import type React from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -16,6 +17,9 @@ import { SessionListPanel } from "../SessionListPanel.js";
 import { SessionPicker } from "../SessionPicker.js";
 import { SessionPreview } from "../SessionPreview.js";
 import type { SessionMetadata, SessionPreviewMessage } from "../types.js";
+
+// Get icons for test assertions
+const icons = getIcons();
 
 // =============================================================================
 // Test Helpers
@@ -228,8 +232,8 @@ describe("SessionPreview", () => {
 
     const { lastFrame } = renderWithTheme(<SessionPreview messages={messages} />);
 
-    expect(lastFrame()).toContain("👤"); // User icon
-    expect(lastFrame()).toContain("🤖"); // Assistant icon
+    expect(lastFrame()).toContain(icons.user); // User icon
+    expect(lastFrame()).toContain(icons.assistant); // Assistant icon
   });
 });
 

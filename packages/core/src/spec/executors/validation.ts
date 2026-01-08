@@ -354,9 +354,9 @@ export class ValidationExecutor implements PhaseExecutor {
       `Write the validation report to: ${OUTPUT_FILE}`,
       "",
       "Use clear status indicators:",
-      "- ✅ PASS - Requirement met",
-      "- ⚠️ WARN - Minor issues",
-      "- ❌ FAIL - Critical issues",
+      "- [+] PASS - Requirement met",
+      "- [!] WARN - Minor issues",
+      "- [x] FAIL - Critical issues",
       "",
       "The report should be actionable - if issues are found, explain how to fix them."
     );

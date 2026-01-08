@@ -948,10 +948,11 @@ describe("StorageManager", () => {
       expect(index.size).toBe(2);
 
       // Verify oldest were archived (sessions 0 and 1)
-      expect(index.has(sessions[0]?.metadata.id)).toBe(false);
-      expect(index.has(sessions[1]?.metadata.id)).toBe(false);
-      expect(index.has(sessions[2]?.metadata.id)).toBe(true);
-      expect(index.has(sessions[3]?.metadata.id)).toBe(true);
+      // Sessions array is guaranteed to have 4 elements from the loop above
+      expect(index.has(sessions[0]?.metadata.id ?? "")).toBe(false);
+      expect(index.has(sessions[1]?.metadata.id ?? "")).toBe(false);
+      expect(index.has(sessions[2]?.metadata.id ?? "")).toBe(true);
+      expect(index.has(sessions[3]?.metadata.id ?? "")).toBe(true);
     });
 
     it("should move archived files to archived directory", async () => {

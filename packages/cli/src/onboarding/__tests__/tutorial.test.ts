@@ -245,7 +245,9 @@ describe("TutorialSystem", () => {
       const firstStep = system.currentStep();
       expect(firstStep?.id).toBe("basics-welcome");
 
-      await system.completeStep(firstStep?.id);
+      if (firstStep) {
+        await system.completeStep(firstStep.id);
+      }
       const secondStep = system.currentStep();
       expect(secondStep?.id).toBe("basics-chat");
     });

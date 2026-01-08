@@ -747,6 +747,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
    * @param packet - The spec handoff packet containing implementation tasks
    * @param onComplete - Callback to invoke when implementation completes
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Handoff handling requires coordinating multiple async operations and error conditions
   async handleSpecHandoff(
     packet: SpecHandoffPacket,
     onComplete: (result: ImplementationResult) => void

@@ -147,10 +147,10 @@ function StatusIndicator({
   return (
     <Box gap={1}>
       <Text color={canUndo ? theme.colors.success : theme.colors.muted}>
-        ⟲ Undo {canUndo ? "✓" : "✗"}
+        {"[<]"} Undo {canUndo ? "+" : "x"}
       </Text>
       <Text color={canRedo ? theme.colors.success : theme.colors.muted}>
-        ⟳ Redo {canRedo ? "✓" : "✗"}
+        {"[>]"} Redo {canRedo ? "+" : "x"}
       </Text>
     </Box>
   );

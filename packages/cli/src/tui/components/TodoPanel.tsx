@@ -241,6 +241,7 @@ export function TodoPanel({
 
   // Handle keyboard input
   useInput(
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Input handler must process multiple key bindings for navigation and actions
     (input, key) => {
       if (!isFocused) return;
 
@@ -322,7 +323,7 @@ export function TodoPanel({
       <Box flexDirection="column" paddingX={1}>
         <Box marginBottom={1}>
           <Text color={theme.colors.primary} bold>
-            📋 Todo List
+            Todo List
           </Text>
         </Box>
         <Text dimColor>No todos yet.</Text>
@@ -338,7 +339,7 @@ export function TodoPanel({
         {/* Header */}
         <Box marginBottom={1}>
           <Text color={theme.colors.primary} bold>
-            📋 Todo List
+            Todo List
           </Text>
           <Text dimColor> ({items.length} total)</Text>
         </Box>
@@ -363,7 +364,7 @@ export function TodoPanel({
       <Box marginBottom={1} paddingX={1} flexDirection="column">
         <Box>
           <Text color={theme.colors.primary} bold>
-            📋 Todo List
+            Todo List
           </Text>
           <Text dimColor>
             {" "}

@@ -7,6 +7,7 @@
  * @module tui/components/Tools/ToolCall
  */
 
+import { getIcons } from "@vellum/shared";
 import { Box, Text } from "ink";
 import type React from "react";
 import { useEffect, useState } from "react";
@@ -39,15 +40,20 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 /** Spinner animation interval in milliseconds */
 const SPINNER_INTERVAL_MS = 80;
 
-/** Status icons for each execution status */
-const STATUS_ICONS: Record<ToolExecutionStatus, string> = {
-  pending: "⏳",
-  approved: "✓",
-  rejected: "✗",
-  running: "", // Will use spinner
-  complete: "✓",
-  error: "✗",
-};
+/**
+ * Get status icons using the icon system for proper Unicode/ASCII support.
+ */
+function getStatusIcons(): Record<ToolExecutionStatus, string> {
+  const icons = getIcons();
+  return {
+    pending: "~",
+    approved: icons.check,
+    rejected: icons.cross,
+    running: "", // Will use spinner
+    complete: icons.check,
+    error: icons.cross,
+  };
+}
 
 // =============================================================================
 // Helper Functions
@@ -147,7 +153,8 @@ function StatusIcon({ status }: { readonly status: ToolExecutionStatus }): React
     return <Spinner />;
   }
 
-  return <Text color={color}>{STATUS_ICONS[status]}</Text>;
+  const statusIcons = getStatusIcons();
+  return <Text color={color}>{statusIcons[status]}</Text>;
 }
 
 // =============================================================================
@@ -159,12 +166,12 @@ function StatusIcon({ status }: { readonly status: ToolExecutionStatus }): React
  *
  * Features:
  * - Status icon with color coding:
- *   - pending: ⏳ (yellow)
- *   - approved: ✓ (green)
- *   - rejected: ✗ (red)
+ *   - pending: [...] (yellow)
+ *   - approved: + (green)
+ *   - rejected: x (red)
  *   - running: animated spinner (cyan)
- *   - complete: ✓ (green)
- *   - error: ✗ (red)
+ *   - complete: + (green)
+ *   - error: x (red)
  * - Tool name display
  * - Optional duration for completed executions
  * - Compact mode for inline display

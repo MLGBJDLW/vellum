@@ -6,6 +6,7 @@
  * @module tui/components/session/SessionPreview
  */
 
+import { getIcons } from "@vellum/shared";
 import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
@@ -40,17 +41,18 @@ function formatTimestamp(date: Date): string {
  * Get the display icon for a message role.
  */
 function getRoleIcon(role: SessionPreviewMessage["role"]): string {
+  const icons = getIcons();
   switch (role) {
     case "user":
-      return "👤";
+      return icons.user;
     case "assistant":
-      return "🤖";
+      return icons.assistant;
     case "system":
-      return "⚙️";
+      return icons.system;
     case "tool":
-      return "🔧";
+      return icons.tool;
     default:
-      return "💬";
+      return icons.info;
   }
 }
 
@@ -181,7 +183,7 @@ export function SessionPreview({
         height={maxHeight}
       >
         <Text color={textColor} bold>
-          📝 {title || "Session Preview"}
+          {getIcons().note} {title || "Session Preview"}
         </Text>
         <Box flexGrow={1} justifyContent="center" alignItems="center">
           <Text color={mutedColor} italic>
@@ -203,7 +205,7 @@ export function SessionPreview({
       {/* Header */}
       <Box flexDirection="row" justifyContent="space-between">
         <Text color={textColor} bold>
-          📝 {title || "Session Preview"}
+          {getIcons().note} {title || "Session Preview"}
         </Text>
         <Text color={mutedColor}>
           {messages.length} message{messages.length !== 1 ? "s" : ""}

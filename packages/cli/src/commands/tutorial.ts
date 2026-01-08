@@ -278,7 +278,10 @@ async function handleContinue(): Promise<CommandResult> {
     }
 
     // Show next step
-    const lesson = system.getCurrentLesson()!;
+    const lesson = system.getCurrentLesson();
+    if (!lesson) {
+      return error("INTERNAL_ERROR", "No active lesson found");
+    }
     const stepIndex = (await system.getCurrentLessonProgress())?.currentStepIndex ?? 0;
 
     return success(formatStep(nextStep, stepIndex, lesson.steps.length));
@@ -315,7 +318,10 @@ async function handleSkip(): Promise<CommandResult> {
     );
   }
 
-  const lesson = system.getCurrentLesson()!;
+  const lesson = system.getCurrentLesson();
+  if (!lesson) {
+    return error("INTERNAL_ERROR", "No active lesson found");
+  }
   const stepIndex = (await system.getCurrentLessonProgress())?.currentStepIndex ?? 0;
 
   return success(formatStep(nextStep, stepIndex, lesson.steps.length));

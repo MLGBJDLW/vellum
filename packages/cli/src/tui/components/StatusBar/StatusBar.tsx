@@ -30,7 +30,7 @@ export interface StatusBarProps {
   readonly trustMode?: TrustModeIndicatorProps["mode"];
   /** Thinking mode status */
   readonly thinking?: ThinkingModeIndicatorProps;
-  /** Whether to show a border */
+  /** Whether to show a border (default: true) */
   readonly showBorder?: boolean;
 }
 
@@ -77,9 +77,12 @@ export function StatusBar({
   tokens,
   trustMode,
   thinking,
-  showBorder = false,
+  showBorder = true,
 }: StatusBarProps): React.JSX.Element {
   const { theme } = useTheme();
+
+  // Use primary/accent color for status bar border
+  const borderColor = theme.colors.primary;
 
   // Collect active indicators
   const indicators: React.ReactNode[] = [];
@@ -134,7 +137,7 @@ export function StatusBar({
       flexDirection="row"
       paddingX={showBorder ? 1 : 0}
       borderStyle={showBorder ? "round" : undefined}
-      borderColor={showBorder ? theme.semantic.border.default : undefined}
+      borderColor={showBorder ? borderColor : undefined}
     >
       {renderedItems}
     </Box>

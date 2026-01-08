@@ -92,7 +92,9 @@ const sharedAnimation = {
 } as const;
 
 /**
- * Common icons shared across all themes
+ * Common icons shared across all themes.
+ * Note: For TUI components, use getIcons() from ./icons.js instead
+ * for proper terminal capability detection.
  */
 const sharedIcons = {
   success: "✓",
@@ -104,11 +106,11 @@ const sharedIcons = {
   unchecked: "☐",
   collapsed: "▸",
   expanded: "▾",
-  user: "👤",
-  assistant: "🤖",
-  tool: "🔧",
+  user: "◉",
+  assistant: "◈",
+  tool: "◆",
   edit: "✎",
-  copy: "📋",
+  copy: "▤",
 } as const;
 
 // =============================================================================
@@ -536,6 +538,329 @@ export const ansiTheme: VellumTheme = {
 } as const;
 
 // =============================================================================
+// Parchment Theme
+// =============================================================================
+
+/**
+ * Parchment theme - Warm sepia/parchment tones
+ *
+ * A warm, eye-friendly theme inspired by aged parchment paper.
+ * Features earthy browns, creams, and muted natural colors
+ * for a comfortable reading experience.
+ */
+export const parchmentTheme: VellumTheme = {
+  name: "parchment",
+  mode: "light",
+  colors: {
+    primary: "#8B7355", // Warm brown
+    secondary: "#A69076", // Lighter brown
+    success: "#6B8E23", // Olive green
+    error: "#CD5C5C", // Indian red
+    warning: "#DAA520", // Goldenrod
+    info: "#5F9EA0", // Cadet blue
+    muted: "#9E9689", // Muted taupe
+    accent: "#C4956A", // Golden accent
+  },
+  semantic: {
+    text: {
+      primary: "#4A3F2F", // Dark brown
+      secondary: "#5D4E3C", // Medium brown
+      muted: "#9E9689", // Muted taupe
+      inverted: "#F5F0E6", // Warm cream
+      role: {
+        user: "#5F9EA0", // Cadet blue
+        assistant: "#8B7355", // Warm brown
+        system: "#9E9689", // Muted taupe
+        tool: "#6B8E23", // Olive green
+      },
+    },
+    background: {
+      primary: "#F5F0E6", // Warm cream
+      secondary: "#EDE4D4", // Slightly darker cream
+      elevated: "#E5D9C3", // Light tan
+      code: "#FDF8EF", // Very light cream
+    },
+    border: {
+      default: "#D4C4A8", // Light tan border
+      focus: "#8B7355", // Warm brown
+      muted: "#E5D9C3", // Light tan
+    },
+    status: {
+      pending: "#9E9689", // Muted taupe
+      running: "#5F9EA0", // Cadet blue
+      complete: "#6B8E23", // Olive green
+      error: "#CD5C5C", // Indian red
+      approved: "#6B8E23", // Olive green
+      rejected: "#CD5C5C", // Indian red
+    },
+    syntax: {
+      keyword: "#8B4513", // Saddle brown
+      string: "#6B8E23", // Olive green
+      number: "#B8860B", // Dark goldenrod
+      comment: "#9E9689", // Muted taupe
+      function: "#5F9EA0", // Cadet blue
+      variable: "#4A3F2F", // Dark brown
+      type: "#708090", // Slate gray
+      operator: "#CD5C5C", // Indian red
+      punctuation: "#9E9689", // Muted taupe
+    },
+    diff: {
+      added: "#D4EDDA", // Light green
+      removed: "#F8D7DA", // Light red
+      changed: "#FFF3CD", // Light yellow
+      context: "#F5F0E6", // Warm cream
+    },
+  },
+  borders: sharedBorders,
+  spacing: sharedSpacing,
+  animation: sharedAnimation,
+  icons: sharedIcons,
+} as const;
+
+// =============================================================================
+// Tokyo Night Theme
+// =============================================================================
+
+/**
+ * Tokyo Night theme - Popular VS Code dark theme
+ *
+ * Based on the Tokyo Night color palette, featuring
+ * soft, muted colors inspired by Tokyo's night skyline.
+ *
+ * @see https://github.com/enkia/tokyo-night-vscode-theme
+ */
+export const tokyoNightTheme: VellumTheme = {
+  name: "tokyo-night",
+  mode: "dark",
+  colors: {
+    primary: "#7aa2f7", // Blue
+    secondary: "#bb9af7", // Purple
+    success: "#9ece6a", // Green
+    error: "#f7768e", // Red
+    warning: "#e0af68", // Orange
+    info: "#7dcfff", // Cyan
+    muted: "#565f89", // Gray
+    accent: "#bb9af7", // Purple
+  },
+  semantic: {
+    text: {
+      primary: "#c0caf5", // Foreground
+      secondary: "#a9b1d6", // Subtle
+      muted: "#565f89", // Muted
+      inverted: "#1a1b26", // Background
+      role: {
+        user: "#7dcfff", // Cyan
+        assistant: "#bb9af7", // Purple
+        system: "#565f89", // Muted
+        tool: "#9ece6a", // Green
+      },
+    },
+    background: {
+      primary: "#1a1b26", // Background
+      secondary: "#24283b", // Surface
+      elevated: "#414868", // Elevated
+      code: "#16161e", // Code background
+    },
+    border: {
+      default: "#3b4261", // Border
+      focus: "#7aa2f7", // Primary
+      muted: "#24283b", // Surface
+    },
+    status: {
+      pending: "#565f89", // Muted
+      running: "#7aa2f7", // Blue
+      complete: "#9ece6a", // Green
+      error: "#f7768e", // Red
+      approved: "#9ece6a", // Green
+      rejected: "#f7768e", // Red
+    },
+    syntax: {
+      keyword: "#bb9af7", // Purple
+      string: "#9ece6a", // Green
+      number: "#ff9e64", // Orange
+      comment: "#565f89", // Gray
+      function: "#7aa2f7", // Blue
+      variable: "#c0caf5", // Foreground
+      type: "#7dcfff", // Cyan
+      operator: "#89ddff", // Light cyan
+      punctuation: "#c0caf5", // Foreground
+    },
+    diff: {
+      added: "#1a2f1f", // Dark green
+      removed: "#3f1d22", // Dark red
+      changed: "#3d3419", // Dark yellow
+      context: "#1a1b26", // Background
+    },
+  },
+  borders: sharedBorders,
+  spacing: sharedSpacing,
+  animation: sharedAnimation,
+  icons: sharedIcons,
+} as const;
+
+// =============================================================================
+// Nord Theme
+// =============================================================================
+
+/**
+ * Nord theme - Arctic, north-bluish color palette
+ *
+ * Based on the Nord color scheme with its distinctive
+ * blue-gray tones inspired by the arctic north.
+ *
+ * @see https://www.nordtheme.com
+ */
+export const nordTheme: VellumTheme = {
+  name: "nord",
+  mode: "dark",
+  colors: {
+    primary: "#88c0d0", // Frost
+    secondary: "#81a1c1", // Frost 2
+    success: "#a3be8c", // Aurora green
+    error: "#bf616a", // Aurora red
+    warning: "#ebcb8b", // Aurora yellow
+    info: "#5e81ac", // Frost dark
+    muted: "#4c566a", // Polar night 4
+    accent: "#b48ead", // Aurora purple
+  },
+  semantic: {
+    text: {
+      primary: "#eceff4", // Snow storm 3
+      secondary: "#e5e9f0", // Snow storm 2
+      muted: "#4c566a", // Polar night 4
+      inverted: "#2e3440", // Polar night 1
+      role: {
+        user: "#88c0d0", // Frost
+        assistant: "#b48ead", // Aurora purple
+        system: "#4c566a", // Polar night 4
+        tool: "#a3be8c", // Aurora green
+      },
+    },
+    background: {
+      primary: "#2e3440", // Polar night 1
+      secondary: "#3b4252", // Polar night 2
+      elevated: "#434c5e", // Polar night 3
+      code: "#242933", // Darker polar night
+    },
+    border: {
+      default: "#4c566a", // Polar night 4
+      focus: "#88c0d0", // Frost
+      muted: "#3b4252", // Polar night 2
+    },
+    status: {
+      pending: "#4c566a", // Polar night 4
+      running: "#81a1c1", // Frost 2
+      complete: "#a3be8c", // Aurora green
+      error: "#bf616a", // Aurora red
+      approved: "#a3be8c", // Aurora green
+      rejected: "#bf616a", // Aurora red
+    },
+    syntax: {
+      keyword: "#81a1c1", // Frost 2
+      string: "#a3be8c", // Aurora green
+      number: "#b48ead", // Aurora purple
+      comment: "#616e88", // Dimmed
+      function: "#88c0d0", // Frost
+      variable: "#eceff4", // Snow storm 3
+      type: "#8fbcbb", // Frost light
+      operator: "#81a1c1", // Frost 2
+      punctuation: "#d8dee9", // Snow storm 1
+    },
+    diff: {
+      added: "#2e3f38", // Dark green tint
+      removed: "#3d2f33", // Dark red tint
+      changed: "#3d3c2e", // Dark yellow tint
+      context: "#2e3440", // Background
+    },
+  },
+  borders: sharedBorders,
+  spacing: sharedSpacing,
+  animation: sharedAnimation,
+  icons: sharedIcons,
+} as const;
+
+// =============================================================================
+// Catppuccin Mocha Theme
+// =============================================================================
+
+/**
+ * Catppuccin Mocha theme - Soothing pastel theme
+ *
+ * Based on the Catppuccin color palette (Mocha flavor),
+ * featuring warm, soothing colors with excellent contrast.
+ *
+ * @see https://github.com/catppuccin/catppuccin
+ */
+export const catppuccinMochaTheme: VellumTheme = {
+  name: "catppuccin-mocha",
+  mode: "dark",
+  colors: {
+    primary: "#cba6f7", // Mauve
+    secondary: "#f5c2e7", // Pink
+    success: "#a6e3a1", // Green
+    error: "#f38ba8", // Red
+    warning: "#f9e2af", // Yellow
+    info: "#89dceb", // Sky
+    muted: "#6c7086", // Overlay0
+    accent: "#f5c2e7", // Pink
+  },
+  semantic: {
+    text: {
+      primary: "#cdd6f4", // Text
+      secondary: "#bac2de", // Subtext1
+      muted: "#6c7086", // Overlay0
+      inverted: "#1e1e2e", // Base
+      role: {
+        user: "#89dceb", // Sky
+        assistant: "#cba6f7", // Mauve
+        system: "#6c7086", // Overlay0
+        tool: "#a6e3a1", // Green
+      },
+    },
+    background: {
+      primary: "#1e1e2e", // Base
+      secondary: "#313244", // Surface0
+      elevated: "#45475a", // Surface1
+      code: "#181825", // Mantle
+    },
+    border: {
+      default: "#45475a", // Surface1
+      focus: "#cba6f7", // Mauve
+      muted: "#313244", // Surface0
+    },
+    status: {
+      pending: "#6c7086", // Overlay0
+      running: "#89b4fa", // Blue
+      complete: "#a6e3a1", // Green
+      error: "#f38ba8", // Red
+      approved: "#a6e3a1", // Green
+      rejected: "#f38ba8", // Red
+    },
+    syntax: {
+      keyword: "#cba6f7", // Mauve
+      string: "#a6e3a1", // Green
+      number: "#fab387", // Peach
+      comment: "#6c7086", // Overlay0
+      function: "#89b4fa", // Blue
+      variable: "#cdd6f4", // Text
+      type: "#89dceb", // Sky
+      operator: "#94e2d5", // Teal
+      punctuation: "#bac2de", // Subtext1
+    },
+    diff: {
+      added: "#1e3a2f", // Dark green
+      removed: "#3d1f2e", // Dark red
+      changed: "#3d3419", // Dark yellow
+      context: "#1e1e2e", // Base
+    },
+  },
+  borders: sharedBorders,
+  spacing: sharedSpacing,
+  animation: sharedAnimation,
+  icons: sharedIcons,
+} as const;
+
+// =============================================================================
 // Theme Registry
 // =============================================================================
 
@@ -551,6 +876,10 @@ export const themes = {
   dracula: draculaTheme,
   "github-dark": githubTheme,
   ansi: ansiTheme,
+  parchment: parchmentTheme,
+  "tokyo-night": tokyoNightTheme,
+  nord: nordTheme,
+  "catppuccin-mocha": catppuccinMochaTheme,
 } as const;
 
 /**

@@ -159,7 +159,7 @@ function ListCredentials({ onComplete }: ListCredentialsProps) {
   if (isLoading) {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="cyan">⏳ Loading credentials...</Text>
+        <Text color="cyan">... Loading credentials...</Text>
       </Box>
     );
   }
@@ -167,7 +167,7 @@ function ListCredentials({ onComplete }: ListCredentialsProps) {
   if (!result) {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="red">❌ Failed to load credentials</Text>
+        <Text color="red">[x] Failed to load credentials</Text>
       </Box>
     );
   }
@@ -176,7 +176,7 @@ function ListCredentials({ onComplete }: ListCredentialsProps) {
     <Box flexDirection="column" padding={1}>
       <Box borderStyle="round" paddingX={1} marginBottom={1}>
         <Text bold color="cyan">
-          🔐 Vellum Credentials
+          # Vellum Credentials
         </Text>
       </Box>
 
@@ -187,7 +187,7 @@ function ListCredentials({ onComplete }: ListCredentialsProps) {
         </Text>
         {Object.entries(result.storeAvailability).map(([store, available]) => (
           <Box key={store}>
-            <Text color={available ? "green" : "red"}>{available ? "✓" : "✗"} </Text>
+            <Text color={available ? "green" : "red"}>{available ? "+" : "x"} </Text>
             <Text>{store}</Text>
           </Box>
         ))}
@@ -316,14 +316,14 @@ function AddCredential({ provider, onComplete }: AddCredentialProps) {
     <Box flexDirection="column" padding={1}>
       <Box borderStyle="round" paddingX={1} marginBottom={1}>
         <Text bold color="cyan">
-          🔐 Add Credential: {normalizedProvider}
+          # Add Credential: {normalizedProvider}
         </Text>
       </Box>
 
       {!isSupported && (
         <Box marginBottom={1}>
           <Text color="yellow">
-            ⚠️ Provider &apos;{normalizedProvider}&apos; is not in the standard list. Proceeding
+            ! Provider &apos;{normalizedProvider}&apos; is not in the standard list. Proceeding
             anyway.
           </Text>
         </Box>
@@ -365,13 +365,13 @@ function AddCredential({ provider, onComplete }: AddCredentialProps) {
 
       {step === "saving" && (
         <Box>
-          <Text color="cyan">⏳ Saving credential...</Text>
+          <Text color="cyan">... Saving credential...</Text>
         </Box>
       )}
 
       {step === "done" && (
         <Box flexDirection="column">
-          <Text color="green">✅ Credential saved to {savedStore ?? "store"}</Text>
+          <Text color="green">[+] Credential saved to {savedStore ?? "store"}</Text>
           <Box marginTop={1}>
             <Text dimColor>Press Enter to exit</Text>
           </Box>
@@ -380,7 +380,7 @@ function AddCredential({ provider, onComplete }: AddCredentialProps) {
 
       {step === "error" && (
         <Box flexDirection="column">
-          <Text color="red">❌ Error: {error}</Text>
+          <Text color="red">[x] Error: {error}</Text>
           <Box marginTop={1}>
             <Text dimColor>Press Enter to exit</Text>
           </Box>
@@ -491,13 +491,13 @@ function RemoveCredential({ provider, onComplete }: RemoveCredentialProps) {
 
       {step === "removing" && (
         <Box>
-          <Text color="cyan">⏳ Removing credential...</Text>
+          <Text color="cyan">... Removing credential...</Text>
         </Box>
       )}
 
       {step === "done" && (
         <Box flexDirection="column">
-          <Text color="green">✅ Credential removed from {deletedCount} store(s)</Text>
+          <Text color="green">[+] Credential removed from {deletedCount} store(s)</Text>
           <Box marginTop={1}>
             <Text dimColor>Press Enter to exit</Text>
           </Box>
@@ -506,7 +506,7 @@ function RemoveCredential({ provider, onComplete }: RemoveCredentialProps) {
 
       {step === "not_found" && (
         <Box flexDirection="column">
-          <Text color="yellow">⚠️ No credential found for {normalizedProvider}</Text>
+          <Text color="yellow">! No credential found for {normalizedProvider}</Text>
           <Box marginTop={1}>
             <Text dimColor>Press Enter to exit</Text>
           </Box>
@@ -515,7 +515,7 @@ function RemoveCredential({ provider, onComplete }: RemoveCredentialProps) {
 
       {step === "error" && (
         <Box flexDirection="column">
-          <Text color="red">❌ Error: {error}</Text>
+          <Text color="red">[x] Error: {error}</Text>
           <Box marginTop={1}>
             <Text dimColor>Press Enter to exit</Text>
           </Box>
@@ -545,7 +545,7 @@ function CredentialsApp({ action, provider }: CredentialsAppProps) {
       if (!provider) {
         return (
           <Box padding={1}>
-            <Text color="red">❌ Error: Provider name required for &apos;add&apos; command</Text>
+            <Text color="red">[x] Error: Provider name required for &apos;add&apos; command</Text>
           </Box>
         );
       }
@@ -554,7 +554,9 @@ function CredentialsApp({ action, provider }: CredentialsAppProps) {
       if (!provider) {
         return (
           <Box padding={1}>
-            <Text color="red">❌ Error: Provider name required for &apos;remove&apos; command</Text>
+            <Text color="red">
+              [x] Error: Provider name required for &apos;remove&apos; command
+            </Text>
           </Box>
         );
       }
@@ -562,7 +564,7 @@ function CredentialsApp({ action, provider }: CredentialsAppProps) {
     default:
       return (
         <Box padding={1}>
-          <Text color="red">❌ Unknown action: {action}</Text>
+          <Text color="red">[x] Unknown action: {action}</Text>
         </Box>
       );
   }

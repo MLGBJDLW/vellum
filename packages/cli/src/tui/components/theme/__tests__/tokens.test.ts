@@ -325,14 +325,14 @@ describe("Icon Tokens", () => {
     });
 
     it("should have all entity icons", () => {
-      expect(icons.user).toBe("👤");
-      expect(icons.assistant).toBe("🤖");
-      expect(icons.tool).toBe("🔧");
+      expect(icons.user).toBe("@");
+      expect(icons.assistant).toBe("*");
+      expect(icons.tool).toBe(">");
     });
 
     it("should have action icons", () => {
-      expect(icons.edit).toBe("✎");
-      expect(icons.copy).toBe("📋");
+      expect(icons.edit).toBe("~");
+      expect(icons.copy).toBe("#");
       expect(icons.loading).toBe("◌");
     });
   });

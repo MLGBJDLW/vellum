@@ -281,7 +281,7 @@ export function getTieredPricing(
   }
 
   // If beyond all tiers, use the last tier (guaranteed to exist since we checked length > 0)
-  const lastTier = pricing.tiers[pricing.tiers.length - 1]!;
+  const lastTier = pricing.tiers[pricing.tiers.length - 1] as (typeof pricing.tiers)[number];
   return {
     inputPrice: lastTier.inputPricePerMillion,
     outputPrice: lastTier.outputPricePerMillion,

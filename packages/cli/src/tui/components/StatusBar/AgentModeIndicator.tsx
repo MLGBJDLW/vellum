@@ -7,6 +7,7 @@
  * @module tui/components/StatusBar/AgentModeIndicator
  */
 
+import { getIcons } from "@vellum/shared";
 import { Box, Text } from "ink";
 import { useMemo } from "react";
 import { useTheme } from "../../theme/index.js";
@@ -61,28 +62,31 @@ export interface AgentModeIndicatorProps {
 // =============================================================================
 
 /**
- * Agent icons mapping.
- * Uses emoji for visual identification of agent types.
+ * Get agent icons mapping.
+ * Uses centralized icon system for consistent terminal display.
  */
-const AGENT_ICONS: Record<string, string> = {
-  orchestrator: "🎭",
-  coder: "⌨️",
-  qa: "🧪",
-  writer: "✍️",
-  analyst: "🔍",
-  devops: "🔧",
-  security: "🔒",
-  architect: "📐",
-  researcher: "📚",
-  requirements: "📋",
-  tasks: "📝",
-  validator: "✅",
-  init: "🚀",
-  spec: "📖",
-  implement: "⚙️",
-  archive: "📦",
-  default: "🤖",
-};
+function getAgentIcons(): Record<string, string> {
+  const icons = getIcons();
+  return {
+    orchestrator: icons.assistant, // Robot/AI icon
+    coder: "⌨", // Keyboard (Unicode)
+    qa: "⚗", // Test tube (Unicode)
+    writer: "✎", // Pencil (Unicode)
+    analyst: "⊙", // Search/target (Unicode)
+    devops: icons.tool, // Tool icon
+    security: "⊗", // Lock-like (Unicode)
+    architect: "⦿", // Diagram-like (Unicode)
+    researcher: "⊞", // Book-like (Unicode)
+    requirements: icons.plan, // Plan icon
+    tasks: icons.note, // Note icon
+    validator: icons.check, // Check icon
+    init: "▶", // Play (Unicode)
+    spec: icons.spec, // Spec icon
+    implement: icons.gear, // Gear icon
+    archive: "⊟", // Box-like (Unicode)
+    default: icons.assistant, // Default robot
+  };
+}
 
 /**
  * Agent display names mapping.
@@ -124,8 +128,9 @@ const LEVEL_LABELS: Record<AgentLevel, string> = {
  * Falls back to default robot icon for unknown agents.
  */
 function getAgentIcon(agentName: string): string {
+  const agentIcons = getAgentIcons();
   const normalizedName = agentName.toLowerCase();
-  return AGENT_ICONS[normalizedName] ?? AGENT_ICONS.default ?? "🤖";
+  return agentIcons[normalizedName] ?? agentIcons.default ?? getIcons().assistant;
 }
 
 /**

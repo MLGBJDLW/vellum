@@ -107,7 +107,7 @@ function QueueHeader({
     <Box flexDirection="column" marginBottom={1}>
       <Box>
         <Text color={theme.colors.warning} bold>
-          ⏳ Pending Approvals: {count}
+          Pending Approvals: {count}
         </Text>
       </Box>
       <Box gap={2}>

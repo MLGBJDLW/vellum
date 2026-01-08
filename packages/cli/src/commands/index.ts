@@ -243,6 +243,8 @@ export {
   type BatchResult,
   BatchScriptParser,
   type BatchValidationResult,
+  batchCommand,
+  createBatchCommand,
   createBatchScript,
 } from "./batch/index.js";
 
@@ -373,6 +375,27 @@ export {
 } from "./mode.js";
 
 // =============================================================================
+// Model Commands (Chain 22)
+// =============================================================================
+
+export {
+  getModelCommandConfig,
+  modelCommand,
+  setModelCommandConfig,
+} from "./model.js";
+
+// =============================================================================
+// Theme Commands (T042)
+// =============================================================================
+
+export {
+  getThemeContext,
+  setThemeContext,
+  themeCommand,
+  themeSlashCommands,
+} from "./theme.js";
+
+// =============================================================================
 // Cost Commands (Phase 35)
 // =============================================================================
 
@@ -437,3 +460,13 @@ export {
   type UserCommandResult,
   type UserCommandValidationError,
 } from "./user-commands.js";
+
+// =============================================================================
+// Metrics Commands (T067)
+// =============================================================================
+
+export {
+  metricsCommand,
+  metricsCommands,
+  metricsResetCommand,
+} from "./metrics.js";

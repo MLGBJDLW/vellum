@@ -456,11 +456,12 @@ describe("StatusBar", () => {
   describe("Partial Indicators", () => {
     it("should render with only model indicator", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar model={{ provider: "anthropic", model: "claude-3" }} />
+        <StatusBar model={{ provider: "anthropic", model: "claude-3" }} showBorder={false} />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("◈");
       expect(frame).toContain("Anthropic");
+      // With only one indicator and no border, there should be no separator
       expect(frame).not.toContain("│");
     });
 

@@ -128,6 +128,19 @@ export interface TUITranslations {
     invalidHint: string;
     saved: string;
   };
+  onboarding: {
+    selectProvider: string;
+    providerNav: string;
+    apiKeyRequired: string;
+    noApiKeyNeeded: string;
+  };
+  providers: {
+    [key: string]: {
+      name: string;
+      description: string;
+      shortcut: string;
+    };
+  };
 }
 
 /**

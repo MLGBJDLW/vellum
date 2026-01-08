@@ -15,7 +15,6 @@ import {
   formatCompletionMessage,
   formatCredentialPrompt,
   formatModeList,
-  formatProviderList,
   formatQuickStart,
   formatWelcomeContent,
   getRecommendedSource,
@@ -29,6 +28,7 @@ import { Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 
 // =============================================================================
@@ -101,6 +101,7 @@ function ProgressBar({ currentStep }: { currentStep: OnboardingStep }): React.Re
  * Welcome step content
  */
 function WelcomeContent(): React.ReactElement {
+  const { theme } = useTheme();
   const welcomeStep = createWelcomeStep();
   const content = welcomeStep.getContent();
 
@@ -108,39 +109,95 @@ function WelcomeContent(): React.ReactElement {
     <Box flexDirection="column">
       <Text>{formatWelcomeContent(content)}</Text>
       <Box marginTop={1}>
-        <Text color="gray">Press Enter to continue, Esc to skip setup</Text>
+        <Text color={theme.colors.muted}>Press Enter to continue, Esc to skip setup</Text>
       </Box>
     </Box>
   );
 }
 
 /**
- * Provider selection content
+ * Provider selection content with arrow-key navigation
  */
 function ProviderSelectContent({
-  onInputChange,
-  inputValue,
+  onSelect,
   error,
 }: {
-  onInputChange: (value: string) => void;
-  inputValue: string;
+  onSelect: (provider: OnboardingProvider) => void;
   error: string | null;
 }): React.ReactElement {
+  const { theme } = useTheme();
+  const { t } = useTUITranslation();
   const providerStep = createProviderSelectStep();
   const providers = providerStep.getProviders();
 
+  // Track focused index for keyboard navigation
+  const [focusedIndex, setFocusedIndex] = useState(0);
+
+  // Handle keyboard input
+  useInput(
+    useCallback(
+      (input: string, key) => {
+        // Arrow navigation
+        if (key.upArrow || input === "k") {
+          setFocusedIndex((prev) => (prev > 0 ? prev - 1 : providers.length - 1));
+          return;
+        }
+
+        if (key.downArrow || input === "j") {
+          setFocusedIndex((prev) => (prev < providers.length - 1 ? prev + 1 : 0));
+          return;
+        }
+
+        // Confirm selection with Enter
+        if (key.return) {
+          const selected = providers[focusedIndex];
+          if (selected) {
+            onSelect(selected.id);
+          }
+        }
+      },
+      [focusedIndex, providers, onSelect]
+    )
+  );
+
   return (
     <Box flexDirection="column">
-      <Text>{formatProviderList(providers)}</Text>
-      <Box marginTop={1}>
-        <Text color="cyan">› </Text>
-        <TextInput value={inputValue} onChange={onInputChange} />
+      <Text bold>{t("onboarding.selectProvider")}</Text>
+      <Box flexDirection="column" marginTop={1}>
+        {providers.map((provider, index) => {
+          const isFocused = index === focusedIndex;
+          const indicator = isFocused ? ">" : " ";
+          const providerName = t(`providers.${provider.id}.name`);
+          const providerDescription = t(`providers.${provider.id}.description`);
+          const providerShortcut = t(`providers.${provider.id}.shortcut`);
+          const apiNote = provider.requiresApiKey
+            ? t("onboarding.apiKeyRequired")
+            : t("onboarding.noApiKeyNeeded");
+
+          return (
+            <Box key={provider.id} flexDirection="column">
+              <Text color={isFocused ? theme.colors.primary : undefined} bold={isFocused}>
+                {indicator} {providerShortcut} {providerName}
+              </Text>
+              <Text
+                color={isFocused ? theme.colors.primary : theme.colors.muted}
+                dimColor={!isFocused}
+              >
+                {"   "}
+                {providerDescription} {apiNote}
+              </Text>
+            </Box>
+          );
+        })}
       </Box>
       {error && (
         <Box marginTop={1}>
-          <Text color="red">⚠️ {error}</Text>
+          <Text color={theme.colors.error}>! {error}</Text>
         </Box>
       )}
+      <Box marginTop={1}>
+        <Text color={theme.colors.muted}>{t("onboarding.providerNav")}</Text>
+      </Box>
     </Box>
   );
 }
@@ -159,20 +216,23 @@ function CredentialSetupContent({
   inputValue: string;
   error: string | null;
 }): React.ReactElement {
+  const { theme } = useTheme();
   return (
     <Box flexDirection="column">
       <Text>{formatCredentialPrompt(provider)}</Text>
       <Box marginTop={1}>
-        <Text color="cyan">API Key: </Text>
+        <Text color={theme.colors.info}>API Key: </Text>
         <TextInput value={inputValue} onChange={onInputChange} mask="*" />
       </Box>
       {error && (
         <Box marginTop={1}>
-          <Text color="red">⚠️ {error}</Text>
+          <Text color={theme.colors.error}>! {error}</Text>
         </Box>
       )}
       <Box marginTop={1}>
-        <Text color="gray">Press Backspace to go back, 'skip' to configure later</Text>
+        <Text color={theme.colors.muted}>
+          Press Backspace to go back, 'skip' to configure later
+        </Text>
       </Box>
     </Box>
   );
@@ -190,6 +250,7 @@ function ModeSelectContent({
   inputValue: string;
   error: string | null;
 }): React.ReactElement {
+  const { theme } = useTheme();
   const modeStep = createModeSelectStep();
   const modes = modeStep.getModes();
 
@@ -197,12 +258,12 @@ function ModeSelectContent({
     <Box flexDirection="column">
       <Text>{formatModeList(modes)}</Text>
       <Box marginTop={1}>
-        <Text color="cyan">› </Text>
+        <Text color={theme.colors.info}>{">"} </Text>
         <TextInput value={inputValue} onChange={onInputChange} />
       </Box>
       {error && (
         <Box marginTop={1}>
-          <Text color="red">⚠️ {error}</Text>
+          <Text color={theme.colors.error}>! {error}</Text>
         </Box>
       )}
     </Box>
@@ -221,6 +282,7 @@ function CompleteContent({
   mode: string;
   credentialsConfigured: boolean;
 }): React.ReactElement {
+  const { theme } = useTheme();
   const completeStep = createCompleteStep();
   const summary = {
     provider,
@@ -236,7 +298,7 @@ function CompleteContent({
         {formatQuickStart(completeStep.getQuickStartTips(), completeStep.getNextSteps(summary))}
       </Text>
       <Box marginTop={1}>
-        <Text color="green">Press Enter to start using Vellum!</Text>
+        <Text color={theme.colors.success}>Press Enter to start using Vellum!</Text>
       </Box>
     </Box>
   );
@@ -290,7 +352,37 @@ export function OnboardingWizard({
     setState((s) => ({ ...s, input: value, error: null }));
   }, []);
 
+  // Handle provider selection (from arrow-key selector)
+  const handleProviderSelect = useCallback(
+    async (provider: OnboardingProvider) => {
+      setState((s) => ({ ...s, isLoading: true, error: null }));
+
+      try {
+        const result = await wizard.executeProviderSelect(provider);
+        if (result.success && result.next) {
+          setState((s) => ({
+            ...s,
+            step: "credential-setup",
+            input: "",
+            isLoading: false,
+            selectedProvider: (result.data?.provider as OnboardingProvider) || provider,
+          }));
+        } else if (result.error) {
+          setState((s) => ({ ...s, error: result.error || null, isLoading: false }));
+        }
+      } catch (err) {
+        setState((s) => ({
+          ...s,
+          error: err instanceof Error ? err.message : "An error occurred",
+          isLoading: false,
+        }));
+      }
+    },
+    [wizard]
+  );
+
   // Handle step submission
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Wizard step handling requires processing multiple step types with different logic
   const handleSubmit = useCallback(async () => {
     setState((s) => ({ ...s, isLoading: true, error: null }));
 
@@ -305,23 +397,9 @@ export function OnboardingWizard({
         }
 
         case "provider-select": {
-          // Normalize number input
-          let selection = state.input.trim();
-          if (["1", "2", "3", "4", "5", "6", "7", "8"].includes(selection)) {
-            const providers = [
-              "anthropic",
-              "openai",
-              "google",
-              "gemini",
-              "mistral",
-              "groq",
-              "openrouter",
-              "ollama",
-            ];
-            selection = providers[parseInt(selection, 10) - 1] || selection;
-          }
-
-          const result = await wizard.executeProviderSelect(selection || "anthropic");
+          // Provider selection is now handled by handleProviderSelect
+          // This case handles Enter when no selection made (use default)
+          const result = await wizard.executeProviderSelect("anthropic");
           if (result.success && result.next) {
             setState((s) => ({
               ...s,
@@ -438,13 +516,7 @@ export function OnboardingWizard({
         return <WelcomeContent />;
 
       case "provider-select":
-        return (
-          <ProviderSelectContent
-            onInputChange={handleInputChange}
-            inputValue={state.input}
-            error={state.error}
-          />
-        );
+        return <ProviderSelectContent onSelect={handleProviderSelect} error={state.error} />;
 
       case "credential-setup":
         return (
@@ -487,7 +559,7 @@ export function OnboardingWizard({
         marginBottom={1}
       >
         <Text bold color={theme.colors.primary}>
-          🚀 Vellum Setup Wizard
+          * Vellum Setup Wizard
         </Text>
       </Box>
 
@@ -497,15 +569,15 @@ export function OnboardingWizard({
       {/* Content */}
       <Box flexDirection="column" marginY={1}>
         {state.isLoading ? (
-          <Text color={theme.colors.info}>⏳ Processing...</Text>
+          <Text color={theme.colors.info}>Processing...</Text>
         ) : (
           renderStepContent()
         )}
       </Box>
 
       {/* Footer */}
-      <Box marginTop={1} borderStyle="single" borderColor="gray" paddingX={1}>
-        <Text color="gray">Esc: Cancel | Enter: Continue | ←/Backspace: Back</Text>
+      <Box marginTop={1} borderStyle="single" borderColor={theme.colors.muted} paddingX={1}>
+        <Text color={theme.colors.muted}>Esc: Cancel | Enter: Continue | Backspace: Back</Text>
       </Box>
     </Box>
   );

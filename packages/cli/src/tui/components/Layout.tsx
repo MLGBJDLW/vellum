@@ -273,19 +273,21 @@ export function Layout({
     return Math.min(Math.max(calculatedWidth, SIDEBAR_MIN_WIDTH), SIDEBAR_MAX_WIDTH);
   }, [sidebarVisible, columns]);
 
-  // Get border color from theme
-  const borderColor = theme.semantic.border.default;
+  // Get border colors from theme - use focus color for header/footer, default for sidebar
+  const headerBorderColor = theme.colors.primary;
+  const footerBorderColor = theme.semantic.border.focus;
+  const sidebarBorderColor = theme.semantic.border.default;
 
   return (
     <Box flexDirection="column" width="100%">
       {/* Header Region */}
-      {header && <HeaderRegion borderColor={borderColor}>{header}</HeaderRegion>}
+      {header && <HeaderRegion borderColor={headerBorderColor}>{header}</HeaderRegion>}
 
       {/* Middle Section: Sidebar + Content */}
       <Box flexDirection="row" flexGrow={1}>
         {/* Sidebar Region (optional) */}
         {sidebarVisible && sidebar && (
-          <SidebarRegion width={sidebarWidth} borderColor={borderColor}>
+          <SidebarRegion width={sidebarWidth} borderColor={sidebarBorderColor}>
             {sidebar}
           </SidebarRegion>
         )}
@@ -295,7 +297,7 @@ export function Layout({
       </Box>
 
       {/* Footer Region */}
-      {footer && <FooterRegion borderColor={borderColor}>{footer}</FooterRegion>}
+      {footer && <FooterRegion borderColor={footerBorderColor}>{footer}</FooterRegion>}
     </Box>
   );
 }

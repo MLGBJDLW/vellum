@@ -9,6 +9,7 @@
 
 import type { CodingMode } from "@vellum/core";
 import { BUILTIN_CODING_MODES, CODING_MODES } from "@vellum/core";
+import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useState } from "react";
@@ -37,13 +38,17 @@ export interface ModeSelectorProps {
 // =============================================================================
 
 /**
- * Mode icons for visual identification.
+ * Get mode icons for visual identification.
+ * Uses centralized icon system with auto-detection.
  */
-const MODE_ICONS: Record<CodingMode, string> = {
-  vibe: "⚡",
-  plan: "📋",
-  spec: "🔧",
-} as const;
+function getModeIcons(): Record<CodingMode, string> {
+  const icons = getIcons();
+  return {
+    vibe: icons.vibe,
+    plan: icons.plan,
+    spec: icons.spec,
+  };
+}
 
 /**
  * Keyboard shortcuts for quick mode selection.
@@ -154,7 +159,8 @@ export function ModeSelector({
       {modes.map((mode, index) => {
         const isFocused = index === focusedIndex && isActive;
         const isCurrent = mode === currentMode;
-        const icon = MODE_ICONS[mode];
+        const modeIcons = getModeIcons();
+        const icon = modeIcons[mode];
         const shortcut = MODE_SHORTCUTS[mode];
         const colorKey = MODE_COLOR_KEYS[mode];
         const color = theme.colors[colorKey];

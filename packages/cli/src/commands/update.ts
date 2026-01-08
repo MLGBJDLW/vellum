@@ -70,11 +70,11 @@ export interface UpdateCommandResult {
  * Format version check result for display
  */
 function formatCheckResult(result: VersionCheckResult): string {
-  if (!result.success) {
-    return chalk.red(`✗ Failed to check for updates: ${result.error}`);
+  if (!result.success || !result.updateInfo) {
+    return chalk.red(`✗ Failed to check for updates: ${result.error ?? "Unknown error"}`);
   }
 
-  const info = result.updateInfo!;
+  const info = result.updateInfo;
 
   if (!info.hasUpdate) {
     return chalk.green(`✓ You're up to date! (v${info.currentVersion})`);
@@ -138,7 +138,16 @@ export async function executeUpdateCommand(
     };
   }
 
-  const info = checkResult.updateInfo!;
+  // updateInfo is guaranteed to exist because we checked success above
+  const info = checkResult.updateInfo;
+  if (!info) {
+    return {
+      success: false,
+      exitCode: EXIT_CODES.ERROR,
+      message: "Failed to get update info",
+      updateAvailable: false,
+    };
+  }
 
   // If no update available, we're done
   if (!info.hasUpdate) {

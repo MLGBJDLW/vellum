@@ -680,7 +680,7 @@ ${body}
             ? `${resultContent.slice(0, 1000)}...[truncated]`
             : resultContent;
         const errorClass = part.isError ? " error" : "";
-        const icon = part.isError ? "❌" : "✅";
+        const icon = part.isError ? "[x]" : "[+]";
         return `
           <div class="tool-result">
             <div class="collapsible-header${errorClass}">
@@ -695,13 +695,13 @@ ${body}
       case "reasoning":
         return `
           <div class="thinking">
-            💭 <em>${this.escapeHtml(part.text)}</em>
+            [*] <em>${this.escapeHtml(part.text)}</em>
           </div>`;
 
       case "file":
         return `
           <div class="file-attachment">
-            📎 <a href="${this.escapeHtml(part.url)}">${this.escapeHtml(part.filename ?? part.url)}</a>
+            [+] <a href="${this.escapeHtml(part.url)}">${this.escapeHtml(part.filename ?? part.url)}</a>
           </div>`;
 
       case "image":

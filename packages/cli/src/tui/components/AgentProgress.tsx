@@ -37,13 +37,13 @@ export interface AgentProgressProps {
 
 /**
  * Status icons for task states.
- * Using Unicode symbols for terminal display.
+ * Using ASCII symbols for terminal display.
  */
 const STATUS_ICONS: Record<TaskChainNode["status"], string> = {
-  pending: "○",
-  running: "◐",
-  completed: "●",
-  failed: "✗",
+  pending: "o",
+  running: "~",
+  completed: "+",
+  failed: "x",
 } as const;
 
 /**

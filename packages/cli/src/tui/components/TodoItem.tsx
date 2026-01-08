@@ -58,9 +58,9 @@ export interface TodoItemProps {
 
 /** Status icons */
 const STATUS_ICONS: Record<TodoStatus, string> = {
-  pending: "◯",
-  "in-progress": "⟳",
-  completed: "✓",
+  pending: "o",
+  "in-progress": "~",
+  completed: "+",
 };
 
 /** Status colors */

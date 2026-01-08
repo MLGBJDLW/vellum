@@ -7,14 +7,15 @@
  * @module cli/agents/commands/delegate
  */
 
-import { AgentLevel, type DelegationTarget } from "@vellum/core";
 import {
+  AgentLevel,
   DEFAULT_DELEGATION_TIMEOUT,
   type DelegateTaskContext,
   type DelegateTaskParams,
   type DelegateTaskResult,
+  type DelegationTarget,
   executeDelegateTask,
-} from "@vellum/tool";
+} from "@vellum/core";
 import type { Command } from "commander";
 
 // =============================================================================

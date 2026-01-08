@@ -193,7 +193,7 @@ export function SessionListPanel({
         height={maxHeight}
       >
         <Text color={textColor} bold>
-          📋 Sessions
+          Sessions
         </Text>
         <Box flexGrow={1} justifyContent="center" alignItems="center">
           <Text color={mutedColor} italic>
@@ -215,7 +215,7 @@ export function SessionListPanel({
       {/* Header with scroll indicators */}
       <Box flexDirection="row" justifyContent="space-between">
         <Text color={textColor} bold>
-          📋 Sessions ({sessions.length})
+          Sessions ({sessions.length})
         </Text>
         <Box flexDirection="row" gap={1}>
           {canScrollUp && <Text color={mutedColor}>↑</Text>}
