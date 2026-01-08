@@ -2,6 +2,10 @@
 // T002: MCP Constants
 // ============================================
 
+// Note: These values match CONFIG_DEFAULTS in @vellum/core
+// They are duplicated here to avoid import complexity and ensure
+// the MCP package can be used standalone if needed.
+
 /** Default timeout for MCP operations in seconds */
 export const DEFAULT_MCP_TIMEOUT_SECONDS = 60;
 
@@ -24,7 +28,7 @@ export const MAX_CONNECTION_RETRIES = 3;
 export const RETRY_BASE_DELAY_MS = 1000;
 
 /** OAuth flow timeout in milliseconds (5 minutes) */
-export const OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
+export const OAUTH_TIMEOUT_MS = 300000;
 
 /** Client name for MCP protocol handshake */
 export const MCP_CLIENT_NAME = "Vellum";

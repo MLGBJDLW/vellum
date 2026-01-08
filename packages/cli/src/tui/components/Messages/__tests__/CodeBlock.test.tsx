@@ -211,13 +211,15 @@ line 4`;
     it("shows copy button when enabled", () => {
       const { lastFrame } = renderWithTheme(<CodeBlock code="test" showCopyButton />);
 
-      expect(lastFrame()).toContain("[Copy]");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("code.copy");
     });
 
     it("hides copy button when disabled", () => {
       const { lastFrame } = renderWithTheme(<CodeBlock code="test" showCopyButton={false} />);
 
-      expect(lastFrame()).not.toContain("[Copy]");
+      // Translation key should not be present
+      expect(lastFrame()).not.toContain("code.copy");
     });
   });
 
@@ -284,7 +286,8 @@ line 3`;
       );
 
       expect(lastFrame()).toContain("typescript");
-      expect(lastFrame()).toContain("[Copy]");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("code.copy");
       expect(lastFrame()).toContain("▶");
       expect(lastFrame()).toContain("1");
       expect(lastFrame()).toContain("function");

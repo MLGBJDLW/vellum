@@ -220,6 +220,103 @@ export const LogLevelSchema = z.enum(["debug", "info", "warn", "error"]);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 // ============================================
+// Timeout Configuration Schema
+// ============================================
+
+/**
+ * Timeout configuration schema for various operations.
+ * All values are in milliseconds.
+ */
+export const TimeoutsConfigSchema = z.object({
+  /** Default timeout for most tools */
+  toolDefault: z.number().optional(),
+  /** Shell/bash command execution */
+  shell: z.number().optional(),
+  /** Bash tool execution */
+  bashExecution: z.number().optional(),
+  /** Web fetch operations */
+  webFetch: z.number().optional(),
+  /** Web search operations */
+  webSearch: z.number().optional(),
+  /** MCP server operations */
+  mcpDefault: z.number().optional(),
+  /** MCP server shutdown */
+  mcpShutdown: z.number().optional(),
+  /** Agent delegation */
+  delegation: z.number().optional(),
+  /** LLM stream timeout */
+  llmStream: z.number().optional(),
+  /** Git local operations */
+  gitLocal: z.number().optional(),
+  /** Git network operations */
+  gitNetwork: z.number().optional(),
+  /** Permission ask dialog */
+  permissionAsk: z.number().optional(),
+  /** Spec validation */
+  specValidation: z.number().optional(),
+  /** OAuth flow */
+  oauth: z.number().optional(),
+  /** Hook execution */
+  hookDefault: z.number().optional(),
+  /** Hook maximum */
+  hookMax: z.number().optional(),
+  /** Hook minimum */
+  hookMin: z.number().optional(),
+  /** MCP retry base delay */
+  mcpRetryBaseDelay: z.number().optional(),
+  /** Quota retry delay */
+  quotaRetryDelay: z.number().optional(),
+});
+
+export type TimeoutsConfig = z.infer<typeof TimeoutsConfigSchema>;
+
+// ============================================
+// Limits Configuration Schema
+// ============================================
+
+/**
+ * Numeric limits and thresholds configuration schema.
+ */
+export const LimitsConfigSchema = z.object({
+  /** Maximum retry attempts */
+  maxRetries: z.number().optional(),
+  /** Maximum concurrent agents */
+  maxConcurrentAgents: z.number().optional(),
+  /** Maximum agent iteration steps */
+  agentMaxSteps: z.number().optional(),
+  /** Maximum tokens per agent session */
+  agentMaxTokens: z.number().optional(),
+  /** Maximum agent execution time (ms) */
+  agentMaxTimeMs: z.number().optional(),
+  /** Session token quota */
+  sessionMaxTokens: z.number().optional(),
+  /** Session duration quota (ms) */
+  sessionMaxDurationMs: z.number().optional(),
+  /** Orchestrator task timeout (ms) */
+  orchestratorTaskTimeout: z.number().optional(),
+});
+
+export type LimitsConfig = z.infer<typeof LimitsConfigSchema>;
+
+// ============================================
+// Circuit Breaker Configuration Schema
+// ============================================
+
+/**
+ * Circuit breaker configuration schema.
+ */
+export const CircuitBreakerConfigSchema = z.object({
+  /** Failures before opening circuit */
+  failureThreshold: z.number().optional(),
+  /** Time before attempting reset (ms) */
+  resetTimeout: z.number().optional(),
+  /** Window for counting failures (ms) */
+  windowSize: z.number().optional(),
+});
+
+export type CircuitBreakerConfig = z.infer<typeof CircuitBreakerConfigSchema>;
+
+// ============================================
 // Complete Configuration Schema
 // ============================================
 
@@ -235,6 +332,9 @@ export const ConfigSchema = z
     llm: LLMProviderSchema,
     agent: AgentConfigSchema.optional(),
     permissions: PermissionSchema.optional(),
+    timeouts: TimeoutsConfigSchema.optional(),
+    limits: LimitsConfigSchema.optional(),
+    circuitBreaker: CircuitBreakerConfigSchema.optional(),
     workingDir: z.string().optional(),
     debug: z.boolean().optional().default(false),
     logLevel: LogLevelSchema.optional().default("info"),
@@ -244,6 +344,9 @@ export const ConfigSchema = z
     // Apply inner schema defaults when agent/permissions are omitted
     agent: data.agent ?? AgentConfigSchema.parse({}),
     permissions: data.permissions ?? PermissionSchema.parse({}),
+    timeouts: data.timeouts ?? {},
+    limits: data.limits ?? {},
+    circuitBreaker: data.circuitBreaker ?? {},
   }));
 
 export type Config = z.infer<typeof ConfigSchema>;

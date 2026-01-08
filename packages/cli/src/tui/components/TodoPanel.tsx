@@ -10,6 +10,7 @@
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
+import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { TodoItem, type TodoItemData } from "./TodoItem.js";
 
@@ -172,6 +173,7 @@ export function TodoPanel({
   onRefresh,
 }: TodoPanelProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
 
   // Track selection, scroll, filter, and expansion
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -323,11 +325,11 @@ export function TodoPanel({
       <Box flexDirection="column" paddingX={1}>
         <Box marginBottom={1}>
           <Text color={theme.colors.primary} bold>
-            Todo List
+            {t("todo.title")}
           </Text>
         </Box>
-        <Text dimColor>No todos yet.</Text>
-        <Text dimColor>Use the todo_manage tool to add tasks.</Text>
+        <Text dimColor>{t("todo.empty")}</Text>
+        <Text dimColor>{t("todo.emptyHint")}</Text>
       </Box>
     );
   }
@@ -339,21 +341,21 @@ export function TodoPanel({
         {/* Header */}
         <Box marginBottom={1}>
           <Text color={theme.colors.primary} bold>
-            Todo List
+            {t("todo.title")}
           </Text>
           <Text dimColor> ({items.length} total)</Text>
         </Box>
 
         {/* Filter indicator */}
         <Box marginBottom={1}>
-          <Text dimColor>Filter: </Text>
+          <Text dimColor>{t("todo.filter")}</Text>
           <Text color={theme.colors.accent} bold>
             {FILTER_LABELS[filter]}
           </Text>
         </Box>
 
-        <Text dimColor>No {filter} todos found.</Text>
-        <Text dimColor>Press Tab to change filter.</Text>
+        <Text dimColor>{t("todo.noMatch", { filter })}</Text>
+        <Text dimColor>{t("todo.changeFilter")}</Text>
       </Box>
     );
   }
@@ -364,7 +366,7 @@ export function TodoPanel({
       <Box marginBottom={1} paddingX={1} flexDirection="column">
         <Box>
           <Text color={theme.colors.primary} bold>
-            Todo List
+            {t("todo.title")}
           </Text>
           <Text dimColor>
             {" "}
@@ -428,7 +430,7 @@ export function TodoPanel({
       {/* Help hint */}
       {isFocused && (
         <Box marginTop={1} paddingX={1}>
-          <Text dimColor>j/k: navigate • Tab: filter • Enter: expand • r: refresh</Text>
+          <Text dimColor>{t("todo.keybindings")}</Text>
         </Box>
       )}
     </Box>

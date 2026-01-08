@@ -506,7 +506,8 @@ describe("StatusBar", () => {
   describe("Empty State", () => {
     it("should render empty state when no indicators", () => {
       const { lastFrame } = renderWithTheme(<StatusBar />);
-      expect(lastFrame()).toContain("No status information");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("status.noInfo");
     });
   });
 

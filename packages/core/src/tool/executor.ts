@@ -4,6 +4,7 @@
 
 import type { z } from "zod";
 
+import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { ErrorCode, VellumError } from "../errors/index.js";
 import type { IGitSnapshotService } from "../git/types.js";
 import { createDefaultPermissionChecker } from "../permission/checker.js";
@@ -310,10 +311,10 @@ export interface ExecuteOptions {
 // =============================================================================
 
 /** Default timeout for most tools (30 seconds) */
-export const DEFAULT_TIMEOUT_MS = 30_000;
+export const DEFAULT_TIMEOUT_MS = CONFIG_DEFAULTS.timeouts.toolDefault;
 
 /** Extended timeout for shell tools (120 seconds) */
-export const SHELL_TIMEOUT_MS = 120_000;
+export const SHELL_TIMEOUT_MS = CONFIG_DEFAULTS.timeouts.shell;
 
 // =============================================================================
 // T012, T013, T035: ToolExecutor Class

@@ -12,6 +12,7 @@ import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
+import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 
 // =============================================================================
@@ -168,6 +169,7 @@ interface MemoryDetailsProps {
 
 function MemoryDetails({ entry, width }: MemoryDetailsProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
   const typeIcons = getTypeIcons();
   const typeColors = getTypeColors(theme);
   const icon = typeIcons[entry.type];
@@ -204,21 +206,21 @@ function MemoryDetails({ entry, width }: MemoryDetailsProps): React.JSX.Element 
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>─────────────────</Text>
         <Box>
-          <Text color={theme.colors.muted}>Created: </Text>
+          <Text color={theme.colors.muted}>{t("memory.created")}</Text>
           <Text>{formatDate(entry.createdAt)}</Text>
         </Box>
         <Box>
-          <Text color={theme.colors.muted}>Updated: </Text>
+          <Text color={theme.colors.muted}>{t("memory.updated")}</Text>
           <Text>{formatDate(entry.updatedAt)}</Text>
         </Box>
         {entry.metadata.tags.length > 0 && (
           <Box>
-            <Text color={theme.colors.muted}>Tags: </Text>
+            <Text color={theme.colors.muted}>{t("memory.tags")}</Text>
             <Text color="cyan">{entry.metadata.tags.map((t) => `#${t}`).join(" ")}</Text>
           </Box>
         )}
         <Box>
-          <Text color={theme.colors.muted}>Importance: </Text>
+          <Text color={theme.colors.muted}>{t("memory.importance")}</Text>
           <Text>{(entry.metadata.importance * 100).toFixed(0)}%</Text>
         </Box>
       </Box>
@@ -260,6 +262,7 @@ export function MemoryPanel({
   showDetails = false,
 }: MemoryPanelProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
 
   // Track selection and scroll
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -360,11 +363,11 @@ export function MemoryPanel({
       <Box flexDirection="column" paddingX={1}>
         <Box marginBottom={1}>
           <Text color={theme.colors.primary} bold>
-            📚 Project Memory
+            📚 {t("memory.title")}
           </Text>
         </Box>
-        <Text dimColor>No memories saved yet.</Text>
-        <Text dimColor>Use /save to remember important context.</Text>
+        <Text dimColor>{t("memory.empty")}</Text>
+        <Text dimColor>{t("memory.emptyHint")}</Text>
       </Box>
     );
   }
@@ -377,11 +380,11 @@ export function MemoryPanel({
       {/* Header */}
       <Box marginBottom={1} paddingX={1}>
         <Text color={theme.colors.primary} bold>
-          📚 Project Memory
+          📚 {t("memory.title")}
         </Text>
         <Text dimColor>
           {" "}
-          ({entries.length} {entries.length === 1 ? "entry" : "entries"})
+          ({entries.length} {entries.length === 1 ? t("memory.entry") : t("memory.entries")})
         </Text>
       </Box>
 
@@ -421,7 +424,7 @@ export function MemoryPanel({
       {/* Help hint */}
       {isFocused && (
         <Box marginTop={1} paddingX={1}>
-          <Text dimColor>j/k: navigate • Enter: view • g/G: first/last</Text>
+          <Text dimColor>{t("memory.keybindings")}</Text>
         </Box>
       )}
     </Box>

@@ -8,6 +8,7 @@ import type { ToolDefinition } from "@vellum/provider";
 import { AgentLevel } from "../../agent/level.js";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
 import { MODE_CONFIGS } from "../../agent/modes.js";
+import { CONFIG_DEFAULTS } from "../../config/defaults.js";
 import { createUserMessage, SessionParts } from "../../session/message.js";
 import type { WorkerContext, WorkerResult } from "./base.js";
 
@@ -173,7 +174,7 @@ export interface WorkerExecutionConfig {
  */
 const DEFAULT_CONFIG: Required<WorkerExecutionConfig> = {
   maxIterations: 15,
-  timeout: 120000, // 2 minutes
+  timeout: CONFIG_DEFAULTS.timeouts.shell, // 2 minutes
   providerType: "anthropic",
   model: "claude-sonnet-4-20250514",
 };

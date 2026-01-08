@@ -8,6 +8,7 @@
  */
 
 import { Box, Text } from "ink";
+import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { ModelIndicator, type ModelIndicatorProps } from "./ModelIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
@@ -80,6 +81,7 @@ export function StatusBar({
   showBorder = true,
 }: StatusBarProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
 
   // Use primary/accent color for status bar border
   const borderColor = theme.colors.primary;
@@ -127,7 +129,7 @@ export function StatusBar({
   if (indicators.length === 0) {
     return (
       <Box>
-        <Text color={theme.semantic.text.muted}>No status information</Text>
+        <Text color={theme.semantic.text.muted}>{t("status.noInfo")}</Text>
       </Box>
     );
   }

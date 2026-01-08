@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { AgentLevel } from "../../agent/level.js";
+import { CONFIG_DEFAULTS } from "../../config/defaults.js";
 import { type DelegationTarget, DelegationTargetSchema } from "../protocol/delegation.js";
 import { createTaskPacket, type TaskPacket } from "../protocol/task-packet.js";
 
@@ -86,7 +87,7 @@ export const DelegateTaskParamsSchema = z.object({
   target: DelegationTargetSchema,
   task: z.string().min(1, "Task description cannot be empty"),
   context: DelegateTaskContextSchema.optional(),
-  timeout: z.number().int().positive().optional().default(300000),
+  timeout: z.number().int().positive().optional().default(CONFIG_DEFAULTS.timeouts.delegation),
 });
 
 /**
@@ -112,7 +113,7 @@ export type DelegateTaskResultInferred = z.infer<typeof DelegateTaskResultSchema
 // ============================================
 
 /** Default timeout for delegated tasks (5 minutes) */
-export const DEFAULT_DELEGATION_TIMEOUT = 300000;
+export const DEFAULT_DELEGATION_TIMEOUT = CONFIG_DEFAULTS.timeouts.delegation;
 
 // ============================================
 // Extended Tool Context

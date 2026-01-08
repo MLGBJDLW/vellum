@@ -13,7 +13,8 @@
     "connected": "已连接",
     "disconnected": "已断开",
     "session": "会话",
-    "elapsed": "已用时间"
+    "elapsed": "已用时间",
+    "noInfo": "暂无状态信息"
   },
   "input": {
     "placeholder": "输入消息...",
@@ -50,7 +51,13 @@
     "mcp": {
       "connect": "连接 MCP 服务器",
       "call": "调用 MCP 工具"
-    }
+    },
+    "approve": "批准",
+    "reject": "拒绝",
+    "alwaysAllow": "始终允许",
+    "tool": "工具：",
+    "parameters": "参数：",
+    "requestTitle": "工具权限请求"
   },
   "vim": {
     "normal": "普通",
@@ -95,7 +102,9 @@
     "connectionFailed": "连接失败",
     "timeout": "请求超时",
     "invalidInput": "无效输入",
-    "unknown": "发生未知错误"
+    "unknown": "发生未知错误",
+    "somethingWrong": "出错了",
+    "retryHint": "按 Enter 重试或按 Esc 关闭"
   },
   "common": {
     "yes": "是",
@@ -173,5 +182,103 @@
       "description": "本地运行模型 - 无需 API Key",
       "shortcut": "[L]"
     }
+  },
+  "update": {
+    "available": "有可用更新",
+    "current": "当前版本：",
+    "latest": "最新版本：",
+    "upgradeHint": "运行 vellum update 升级",
+    "dismissHint": "(按 d 关闭)",
+    "dismissInstructions": "按 d 或 Esc 关闭"
+  },
+  "todo": {
+    "title": "任务列表",
+    "empty": "暂无任务。",
+    "emptyHint": "使用 todo_manage 工具添加任务。",
+    "filter": "筛选：",
+    "filterHint": "Tab 切换筛选",
+    "keybindings": "j/k：导航 • Tab：筛选 • Enter：展开 • r：刷新",
+    "created": "创建时间：",
+    "completed": "完成时间：",
+    "noMatch": "没有 {{filter}} 任务。",
+    "changeFilter": "按 Tab 切换筛选。"
+  },
+  "memory": {
+    "title": "项目记忆",
+    "empty": "暂无保存的记忆。",
+    "emptyHint": "使用 memory 工具保存重要上下文。",
+    "created": "创建时间：",
+    "updated": "更新时间：",
+    "tags": "标签：",
+    "importance": "重要性：",
+    "keybindings": "j/k：导航 • Enter：查看 • g/G：首/尾",
+    "entry": "条",
+    "entries": "条"
+  },
+  "modelSelector": {
+    "title": "选择模型：",
+    "current": "当前：",
+    "keybindings": "↑↓ 导航 • Enter 选择"
+  },
+  "modeSelector": {
+    "title": "选择模式：",
+    "current": "(当前)",
+    "keybindings": "↑↓ 导航 • Enter 选择 • 1-3 快捷选择"
+  },
+  "session": {
+    "closeHint": "按 Esc 或 q 关闭",
+    "selectHint": "Enter 选择",
+    "closeKey": "Esc/q 关闭"
+  },
+  "thinking": {
+    "expandHint": "(按 Enter 展开)",
+    "collapseHint": "(按 Enter 收起)",
+    "label": "思考中..."
+  },
+  "splash": {
+    "initializing": "初始化中...",
+    "banner": "AI 驱动的编程助手"
+  },
+  "help": {
+    "closeHint": "按 Esc、? 或 q 关闭"
+  },
+  "approval": {
+    "empty": "无待处理的审批",
+    "pending": "待处理审批：",
+    "approveAll": "全部允许",
+    "rejectAll": "全部拒绝",
+    "navigate": "导航",
+    "approve": "允许",
+    "reject": "拒绝"
+  },
+  "cost": {
+    "input": "输入：",
+    "output": "输出：",
+    "total": "总计：",
+    "tokens": "tokens",
+    "cacheRead": "缓存(读)：",
+    "cacheWrite": "缓存(写)：",
+    "reasoning": "推理：",
+    "cost": "费用：",
+    "sessionCost": "会话费用"
+  },
+  "agent": {
+    "progress": "进度：",
+    "noTasks": "无任务",
+    "taskChain": "任务链："
+  },
+  "backtrack": {
+    "keybindings": "↑↓ 导航 • Enter 选择 • Esc 关闭",
+    "selectBranch": "选择分支",
+    "current": "(当前)",
+    "undo": "撤销",
+    "redo": "重做",
+    "fork": "分支",
+    "forks": "分支",
+    "switchBranch": "切换分支",
+    "newBranch": "新建分支"
+  },
+  "code": {
+    "copy": "[复制]"
   }
 }

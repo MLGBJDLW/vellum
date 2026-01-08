@@ -510,10 +510,16 @@ export {
   BearerTokenCredentialSchema,
   type CertificateCredential,
   CertificateCredentialSchema,
+  // Circuit breaker config
+  type CircuitBreakerConfig,
+  CircuitBreakerConfigSchema,
+  // Config defaults
+  CONFIG_DEFAULTS,
   type Config,
   type ConfigCredential,
   // T014 - Credential discriminated union schema
   ConfigCredentialSchema,
+  type ConfigDefaults,
   // Config loader utilities
   type ConfigError,
   type ConfigErrorCode,
@@ -536,10 +542,18 @@ export {
   clearDeprecationWarningsCache,
   deepMerge,
   findProjectConfig,
+  // Config value resolution
+  getCircuitBreaker,
+  getLimit,
+  getProviderDefault,
   // T023 - Credential wizard helpers
   getProviderDisplayName,
+  getTimeout,
   // T025 - Credential resolution
   hasProviderCredentials,
+  // Limits config
+  type LimitsConfig,
+  LimitsConfigSchema,
   type LLMProvider,
   LLMProviderSchema,
   type LoadConfigOptions,
@@ -565,6 +579,9 @@ export {
   type ServiceAccountCredential,
   ServiceAccountCredentialSchema,
   storeCredential,
+  // Timeouts config
+  type TimeoutsConfig,
+  TimeoutsConfigSchema,
 } from "./config/index.js";
 // ============================================
 // Logging Config

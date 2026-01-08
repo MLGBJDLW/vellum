@@ -10,6 +10,7 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
+import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -333,6 +334,7 @@ interface CodeHeaderProps {
 
 function CodeHeader({ language, showCopyButton }: CodeHeaderProps): React.ReactElement | null {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
 
   if (!language && !showCopyButton) {
     return null;
@@ -353,7 +355,7 @@ function CodeHeader({ language, showCopyButton }: CodeHeaderProps): React.ReactE
       ) : (
         <Text> </Text>
       )}
-      {showCopyButton && <Text color={theme.semantic.text.muted}>[Copy]</Text>}
+      {showCopyButton && <Text color={theme.semantic.text.muted}>{t("code.copy")}</Text>}
     </Box>
   );
 }

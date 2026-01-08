@@ -13,6 +13,7 @@ import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useState } from "react";
 import type { ToolExecution } from "../../context/ToolsContext.js";
+import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -99,32 +100,34 @@ function getParamSummary(params: Record<string, unknown>): string {
 function QueueHeader({
   count,
   theme,
+  t,
 }: {
   readonly count: number;
   readonly theme: VellumTheme;
+  readonly t: (key: string) => string;
 }): React.JSX.Element {
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Box>
         <Text color={theme.colors.warning} bold>
-          Pending Approvals: {count}
+          {t("approval.pending")} {count}
         </Text>
       </Box>
       <Box gap={2}>
         <Text dimColor>
-          <Text color={theme.colors.success}>[a]</Text> approve all
+          <Text color={theme.colors.success}>[a]</Text> {t("approval.approveAll")}
         </Text>
         <Text dimColor>
-          <Text color={theme.colors.error}>[r]</Text> reject all
+          <Text color={theme.colors.error}>[r]</Text> {t("approval.rejectAll")}
         </Text>
         <Text dimColor>
-          <Text color={theme.colors.info}>[↑↓]</Text> navigate
+          <Text color={theme.colors.info}>[↑↓]</Text> {t("approval.navigate")}
         </Text>
         <Text dimColor>
-          <Text color={theme.colors.success}>[y]</Text> approve
+          <Text color={theme.colors.success}>[y]</Text> {t("approval.approve")}
         </Text>
         <Text dimColor>
-          <Text color={theme.colors.error}>[n]</Text> reject
+          <Text color={theme.colors.error}>[n]</Text> {t("approval.reject")}
         </Text>
       </Box>
     </Box>
@@ -166,10 +169,16 @@ function QueueItem({
 /**
  * Empty state when no approvals pending.
  */
-function EmptyState({ theme }: { readonly theme: VellumTheme }): React.JSX.Element {
+function EmptyState({
+  theme,
+  t,
+}: {
+  readonly theme: VellumTheme;
+  readonly t: (key: string) => string;
+}): React.JSX.Element {
   return (
     <Box paddingY={1}>
-      <Text color={theme.colors.muted}>No pending approvals</Text>
+      <Text color={theme.colors.muted}>{t("approval.empty")}</Text>
     </Box>
   );
 }
@@ -245,6 +254,7 @@ export function ApprovalQueue({
   isFocused = true,
 }: ApprovalQueueProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Calculate visible window for scrolling
@@ -360,7 +370,7 @@ export function ApprovalQueue({
 
   // Empty state
   if (executions.length === 0) {
-    return <EmptyState theme={theme} />;
+    return <EmptyState theme={theme} t={t} />;
   }
 
   return (
@@ -370,7 +380,7 @@ export function ApprovalQueue({
       borderColor={theme.semantic.border.default}
       padding={1}
     >
-      <QueueHeader count={executions.length} theme={theme} />
+      <QueueHeader count={executions.length} theme={theme} t={t} />
 
       <Box flexDirection="column">
         {visibleExecutions.map((execution, visibleIdx) => {

@@ -12,6 +12,7 @@ import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useRef } from "react";
 import type { ToolExecution } from "../../context/ToolsContext.js";
+import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { ToolParams } from "./ToolParams.js";
 
@@ -106,8 +107,10 @@ function RiskBadge({ level }: { readonly level: RiskLevel }): React.JSX.Element 
  */
 function KeybindingHints({
   showAlwaysAllow,
+  t,
 }: {
   readonly showAlwaysAllow: boolean;
+  readonly t: (key: string) => string;
 }): React.JSX.Element {
   return (
     <Box flexDirection="row" gap={2}>
@@ -115,20 +118,20 @@ function KeybindingHints({
         <Text color="green" bold>
           [y/Enter]
         </Text>{" "}
-        <Text dimColor>Approve</Text>
+        <Text dimColor>{t("permission.approve")}</Text>
       </Text>
       <Text>
         <Text color="red" bold>
           [n/Esc]
         </Text>{" "}
-        <Text dimColor>Reject</Text>
+        <Text dimColor>{t("permission.reject")}</Text>
       </Text>
       {showAlwaysAllow && (
         <Text>
           <Text color="cyan" bold>
             [a]
           </Text>{" "}
-          <Text dimColor>Always Allow</Text>
+          <Text dimColor>{t("permission.alwaysAllow")}</Text>
         </Text>
       )}
     </Box>
@@ -182,6 +185,7 @@ export function PermissionDialog({
   isFocused = true,
 }: PermissionDialogProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
 
   // Track the current execution ID to detect changes and reset handled state
   const currentExecutionId = useRef(execution.id);
@@ -242,7 +246,7 @@ export function PermissionDialog({
       {/* Header */}
       <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
         <Text color={textColor} bold>
-          # Tool Permission Request
+          # {t("permission.requestTitle")}
         </Text>
         <RiskBadge level={riskLevel} />
       </Box>
@@ -252,7 +256,7 @@ export function PermissionDialog({
       {/* Tool Info */}
       <Box flexDirection="column" marginY={1}>
         <Box flexDirection="row" gap={1}>
-          <Text dimColor>Tool:</Text>
+          <Text dimColor>{t("permission.tool")}</Text>
           <Text color={textColor} bold>
             {execution.toolName}
           </Text>
@@ -261,7 +265,7 @@ export function PermissionDialog({
         {/* Parameters */}
         {hasParams && (
           <Box flexDirection="column" marginTop={1}>
-            <Text dimColor>Parameters:</Text>
+            <Text dimColor>{t("permission.parameters")}</Text>
             <Box marginLeft={2}>
               <ToolParams params={execution.params} highlightPaths highlightCommands />
             </Box>
@@ -273,7 +277,7 @@ export function PermissionDialog({
 
       {/* Keybindings */}
       <Box marginTop={1}>
-        <KeybindingHints showAlwaysAllow={onApproveAlways !== undefined} />
+        <KeybindingHints showAlwaysAllow={onApproveAlways !== undefined} t={t} />
       </Box>
     </Box>
   );

@@ -161,7 +161,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(lastFrame()).toContain("# Tool Permission Request");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.requestTitle");
     });
 
     it("displays tool name", () => {
@@ -177,7 +178,8 @@ describe("PermissionDialog", () => {
       );
 
       expect(lastFrame()).toContain("read_file");
-      expect(lastFrame()).toContain("Tool:");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.tool");
     });
 
     it("displays tool parameters when present", () => {
@@ -195,7 +197,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(lastFrame()).toContain("Parameters:");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.parameters");
       expect(lastFrame()).toContain("path");
       expect(lastFrame()).toContain("/test/file.txt");
     });
@@ -212,7 +215,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(lastFrame()).not.toContain("Parameters:");
+      // Translation key should not be present
+      expect(lastFrame()).not.toContain("permission.parameters");
     });
   });
 
@@ -230,7 +234,8 @@ describe("PermissionDialog", () => {
       );
 
       expect(lastFrame()).toContain("[y/Enter]");
-      expect(lastFrame()).toContain("Approve");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.approve");
     });
 
     it("displays reject keybinding hint", () => {
@@ -246,7 +251,8 @@ describe("PermissionDialog", () => {
       );
 
       expect(lastFrame()).toContain("[n/Esc]");
-      expect(lastFrame()).toContain("Reject");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.reject");
     });
 
     it("displays always allow hint when onApproveAlways is provided", () => {
@@ -263,7 +269,8 @@ describe("PermissionDialog", () => {
       );
 
       expect(lastFrame()).toContain("[a]");
-      expect(lastFrame()).toContain("Always Allow");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.alwaysAllow");
     });
 
     it("does not display always allow hint when onApproveAlways is not provided", () => {
@@ -278,7 +285,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(lastFrame()).not.toContain("Always Allow");
+      // Translation key should not be present
+      expect(lastFrame()).not.toContain("permission.alwaysAllow");
     });
   });
 
@@ -305,7 +313,8 @@ describe("PermissionDialog", () => {
       );
 
       expect(lastFrame()).toContain("[y/Enter]");
-      expect(lastFrame()).toContain("Approve");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.approve");
     });
 
     it("renders always allow option when onApproveAlways callback is provided", () => {
@@ -322,7 +331,8 @@ describe("PermissionDialog", () => {
       );
 
       expect(lastFrame()).toContain("[a]");
-      expect(lastFrame()).toContain("Always Allow");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.alwaysAllow");
     });
 
     it("does not render always allow option when callback is not provided", () => {
@@ -337,7 +347,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(lastFrame()).not.toContain("Always Allow");
+      // Translation key should not be present
+      expect(lastFrame()).not.toContain("permission.alwaysAllow");
     });
   });
 
@@ -363,7 +374,8 @@ describe("PermissionDialog", () => {
       );
 
       expect(lastFrame()).toContain("[n/Esc]");
-      expect(lastFrame()).toContain("Reject");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.reject");
     });
   });
 
@@ -390,7 +402,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(frame1()).toContain("Tool Permission Request");
+      // Translation key is used in tests
+      expect(frame1()).toContain("permission.requestTitle");
 
       // Should render without errors when isFocused is explicitly true
       const { lastFrame: frame2 } = renderWithTheme(
@@ -403,7 +416,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(frame2()).toContain("Tool Permission Request");
+      // Translation key is used in tests
+      expect(frame2()).toContain("permission.requestTitle");
     });
 
     it("uses isFocused=true by default", () => {
@@ -419,7 +433,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(lastFrame()).toContain("Tool Permission Request");
+      // Translation key is used in tests
+      expect(lastFrame()).toContain("permission.requestTitle");
     });
   });
 
@@ -446,7 +461,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(frame1()).toContain("Tool Permission Request");
+      // Translation key is used in tests
+      expect(frame1()).toContain("permission.requestTitle");
 
       const { lastFrame: frame2 } = renderWithTheme(
         <PermissionDialog
@@ -457,7 +473,8 @@ describe("PermissionDialog", () => {
         />
       );
 
-      expect(frame2()).toContain("Tool Permission Request");
+      // Translation key is used in tests
+      expect(frame2()).toContain("permission.requestTitle");
     });
   });
 

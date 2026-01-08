@@ -11,6 +11,7 @@ import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useState } from "react";
 import type { BacktrackState, Branch } from "../../hooks/useBacktrack.js";
+import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -67,6 +68,7 @@ function BranchSelector({
   isFocused,
 }: BranchSelectorProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
   const [selectedIndex, setSelectedIndex] = useState(() => {
     const index = branches.findIndex((b) => b.name === currentBranch);
     return index >= 0 ? index : 0;
@@ -96,7 +98,7 @@ function BranchSelector({
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={theme.colors.muted} paddingX={1}>
       <Text bold color={theme.colors.primary}>
-        Select Branch
+        {t("backtrack.selectBranch")}
       </Text>
       <Box marginTop={1} flexDirection="column">
         {branches.map((branch, index) => {
@@ -108,14 +110,14 @@ function BranchSelector({
               <Text color={isSelected ? theme.colors.primary : undefined} inverse={isSelected}>
                 {isSelected ? "▸ " : "  "}
                 {branch.name}
-                {isCurrent ? " (current)" : ""}
+                {isCurrent ? ` ${t("backtrack.current")}` : ""}
               </Text>
             </Box>
           );
         })}
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>↑↓ navigate • Enter select • Esc close</Text>
+        <Text dimColor>{t("backtrack.keybindings")}</Text>
       </Box>
     </Box>
   );
@@ -128,10 +130,12 @@ function StatusIndicator({
   canUndo,
   canRedo,
   compact,
+  t,
 }: {
   canUndo: boolean;
   canRedo: boolean;
   compact: boolean;
+  t: (key: string) => string;
 }): React.JSX.Element {
   const { theme } = useTheme();
 
@@ -147,10 +151,10 @@ function StatusIndicator({
   return (
     <Box gap={1}>
       <Text color={canUndo ? theme.colors.success : theme.colors.muted}>
-        {"[<]"} Undo {canUndo ? "+" : "x"}
+        {"[<]"} {t("backtrack.undo")} {canUndo ? "+" : "x"}
       </Text>
       <Text color={canRedo ? theme.colors.success : theme.colors.muted}>
-        {"[>]"} Redo {canRedo ? "+" : "x"}
+        {"[>]"} {t("backtrack.redo")} {canRedo ? "+" : "x"}
       </Text>
     </Box>
   );
@@ -163,11 +167,13 @@ function BranchIndicator({
   currentBranch,
   forkCount,
   compact,
+  t,
 }: {
   currentBranch: string;
   forkCount: number;
   compact: boolean;
   onClick?: () => void;
+  t: (key: string) => string;
 }): React.JSX.Element {
   const { theme } = useTheme();
 
@@ -184,7 +190,7 @@ function BranchIndicator({
       <Text color={theme.colors.info}>⎇ {currentBranch}</Text>
       {forkCount > 0 && (
         <Text dimColor>
-          ({forkCount} fork{forkCount !== 1 ? "s" : ""})
+          ({forkCount} {forkCount !== 1 ? t("backtrack.forks") : t("backtrack.fork")})
         </Text>
       )}
     </Box>
@@ -258,6 +264,7 @@ export function BacktrackControls({
   compact = false,
   showHints = true,
 }: BacktrackControlsProps): React.JSX.Element {
+  const { t } = useTUITranslation();
   const [showBranchSelector, setShowBranchSelector] = useState(false);
 
   const { canUndo, canRedo, forkCount, currentBranch, currentIndex, historyLength } =
@@ -328,12 +335,13 @@ export function BacktrackControls({
   if (compact) {
     return (
       <Box gap={1}>
-        <StatusIndicator canUndo={canUndo} canRedo={canRedo} compact={true} />
+        <StatusIndicator canUndo={canUndo} canRedo={canRedo} compact={true} t={t} />
         <BranchIndicator
           currentBranch={currentBranch}
           forkCount={forkCount}
           compact={true}
           onClick={() => setShowBranchSelector(true)}
+          t={t}
         />
         <HistoryIndicator currentIndex={currentIndex} historyLength={historyLength} />
       </Box>
@@ -344,13 +352,14 @@ export function BacktrackControls({
   return (
     <Box flexDirection="column">
       <Box gap={2}>
-        <StatusIndicator canUndo={canUndo} canRedo={canRedo} compact={false} />
+        <StatusIndicator canUndo={canUndo} canRedo={canRedo} compact={false} t={t} />
         <Text dimColor>│</Text>
         <BranchIndicator
           currentBranch={currentBranch}
           forkCount={forkCount}
           compact={false}
           onClick={() => setShowBranchSelector(true)}
+          t={t}
         />
         <Text dimColor>│</Text>
         <HistoryIndicator currentIndex={currentIndex} historyLength={historyLength} />
@@ -359,7 +368,8 @@ export function BacktrackControls({
       {showHints && (
         <Box marginTop={1}>
           <Text dimColor>
-            ^Z undo • ^Y redo • ^B {branches.length > 1 ? "switch branch" : "new branch"}
+            ^Z {t("backtrack.undo").toLowerCase()} • ^Y {t("backtrack.redo").toLowerCase()} • ^B{" "}
+            {branches.length > 1 ? t("backtrack.switchBranch") : t("backtrack.newBranch")}
           </Text>
         </Box>
       )}

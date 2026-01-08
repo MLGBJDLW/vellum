@@ -26,6 +26,7 @@ export interface TUITranslations {
     disconnected: string;
     session: string;
     elapsed: string;
+    noInfo: string;
   };
   input: {
     placeholder: string;
@@ -63,6 +64,13 @@ export interface TUITranslations {
       connect: string;
       call: string;
     };
+    // New permission dialog keys
+    approve: string;
+    reject: string;
+    alwaysAllow: string;
+    tool: string;
+    parameters: string;
+    requestTitle: string;
   };
   vim: {
     normal: string;
@@ -108,6 +116,9 @@ export interface TUITranslations {
     timeout: string;
     invalidInput: string;
     unknown: string;
+    // New error keys
+    somethingWrong: string;
+    retryHint: string;
   };
   common: {
     yes: string;
@@ -140,6 +151,104 @@ export interface TUITranslations {
       description: string;
       shortcut: string;
     };
+  };
+  update: {
+    available: string;
+    current: string;
+    latest: string;
+    upgradeHint: string;
+    dismissHint: string;
+    dismissInstructions: string;
+  };
+  todo: {
+    title: string;
+    empty: string;
+    emptyHint: string;
+    filter: string;
+    filterHint: string;
+    keybindings: string;
+    created: string;
+    completed: string;
+    noMatch: string;
+    changeFilter: string;
+  };
+  memory: {
+    title: string;
+    empty: string;
+    emptyHint: string;
+    created: string;
+    updated: string;
+    tags: string;
+    importance: string;
+    keybindings: string;
+    entry: string;
+    entries: string;
+  };
+  modelSelector: {
+    title: string;
+    current: string;
+    keybindings: string;
+  };
+  modeSelector: {
+    title: string;
+    current: string;
+    keybindings: string;
+  };
+  session: {
+    closeHint: string;
+    selectHint: string;
+    closeKey: string;
+  };
+  thinking: {
+    expandHint: string;
+    collapseHint: string;
+    label: string;
+  };
+  splash: {
+    initializing: string;
+    banner: string;
+  };
+  help: {
+    closeHint: string;
+  };
+  approval: {
+    empty: string;
+    pending: string;
+    approveAll: string;
+    rejectAll: string;
+    navigate: string;
+    approve: string;
+    reject: string;
+  };
+  cost: {
+    input: string;
+    output: string;
+    total: string;
+    tokens: string;
+    cacheRead: string;
+    cacheWrite: string;
+    reasoning: string;
+    cost: string;
+    sessionCost: string;
+  };
+  agent: {
+    progress: string;
+    noTasks: string;
+    taskChain: string;
+  };
+  backtrack: {
+    keybindings: string;
+    selectBranch: string;
+    current: string;
+    undo: string;
+    redo: string;
+    fork: string;
+    forks: string;
+    switchBranch: string;
+    newBranch: string;
+  };
+  code: {
+    copy: string;
   };
 }
 

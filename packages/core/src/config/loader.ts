@@ -5,6 +5,7 @@ import * as TOML from "@iarna/toml";
 import type { CredentialManager } from "../credentials/manager.js";
 import type { Credential, CredentialInput, CredentialSource } from "../credentials/types.js";
 import { Err, Ok, type Result } from "../types/result.js";
+import { CONFIG_DEFAULTS } from "./defaults.js";
 import { type Config, ConfigSchema, type PartialConfig, type ProviderName } from "./schema.js";
 
 // ============================================
@@ -139,6 +140,32 @@ const ENV_MAPPINGS: Record<string, string[]> = {
   VELLUM_LLM_API_KEY: ["llm", "apiKey"],
   VELLUM_DEBUG: ["debug"],
   VELLUM_LOG_LEVEL: ["logLevel"],
+  // Timeout mappings
+  VELLUM_TIMEOUT_TOOL_DEFAULT: ["timeouts", "toolDefault"],
+  VELLUM_TIMEOUT_SHELL: ["timeouts", "shell"],
+  VELLUM_TIMEOUT_BASH: ["timeouts", "bashExecution"],
+  VELLUM_TIMEOUT_WEB_FETCH: ["timeouts", "webFetch"],
+  VELLUM_TIMEOUT_WEB_SEARCH: ["timeouts", "webSearch"],
+  VELLUM_TIMEOUT_MCP_DEFAULT: ["timeouts", "mcpDefault"],
+  VELLUM_TIMEOUT_MCP_SHUTDOWN: ["timeouts", "mcpShutdown"],
+  VELLUM_TIMEOUT_DELEGATION: ["timeouts", "delegation"],
+  VELLUM_TIMEOUT_LLM_STREAM: ["timeouts", "llmStream"],
+  VELLUM_TIMEOUT_GIT_LOCAL: ["timeouts", "gitLocal"],
+  VELLUM_TIMEOUT_GIT_NETWORK: ["timeouts", "gitNetwork"],
+  VELLUM_TIMEOUT_PERMISSION_ASK: ["timeouts", "permissionAsk"],
+  VELLUM_TIMEOUT_OAUTH: ["timeouts", "oauth"],
+  // Limit mappings
+  VELLUM_LIMIT_MAX_RETRIES: ["limits", "maxRetries"],
+  VELLUM_LIMIT_MAX_CONCURRENT_AGENTS: ["limits", "maxConcurrentAgents"],
+  VELLUM_LIMIT_AGENT_MAX_STEPS: ["limits", "agentMaxSteps"],
+  VELLUM_LIMIT_AGENT_MAX_TOKENS: ["limits", "agentMaxTokens"],
+  VELLUM_LIMIT_AGENT_MAX_TIME_MS: ["limits", "agentMaxTimeMs"],
+  VELLUM_LIMIT_SESSION_MAX_TOKENS: ["limits", "sessionMaxTokens"],
+  VELLUM_LIMIT_SESSION_MAX_DURATION_MS: ["limits", "sessionMaxDurationMs"],
+  // Circuit breaker mappings
+  VELLUM_CB_FAILURE_THRESHOLD: ["circuitBreaker", "failureThreshold"],
+  VELLUM_CB_RESET_TIMEOUT: ["circuitBreaker", "resetTimeout"],
+  VELLUM_CB_WINDOW_SIZE: ["circuitBreaker", "windowSize"],
 };
 
 /**
@@ -148,6 +175,11 @@ function coerceValue(value: string, path: string[]): unknown {
   // Boolean coercion for debug flag
   if (path[0] === "debug") {
     return value === "true" || value === "1";
+  }
+  // Number coercion for timeouts, limits, and circuit breaker values
+  if (path[0] === "timeouts" || path[0] === "limits" || path[0] === "circuitBreaker") {
+    const num = Number.parseInt(value, 10);
+    return Number.isNaN(num) ? undefined : num;
   }
   return value;
 }
@@ -655,6 +687,76 @@ export function loadConfig(options: LoadConfigOptions = {}): Result<Config, Conf
   }
 
   return Ok(parseResult.data);
+}
+
+// ============================================
+// Config Value Resolution with Defaults
+// ============================================
+
+/**
+ * Get a timeout value from config, falling back to defaults.
+ *
+ * @param config - The loaded configuration
+ * @param key - The timeout key to retrieve
+ * @returns The timeout value in milliseconds
+ *
+ * @example
+ * ```typescript
+ * const timeout = getTimeout(config, 'shell'); // Returns config.timeouts.shell or default
+ * ```
+ */
+export function getTimeout(
+  config: Config | undefined,
+  key: keyof typeof CONFIG_DEFAULTS.timeouts
+): number {
+  return config?.timeouts?.[key] ?? CONFIG_DEFAULTS.timeouts[key];
+}
+
+/**
+ * Get a limit value from config, falling back to defaults.
+ *
+ * @param config - The loaded configuration
+ * @param key - The limit key to retrieve
+ * @returns The limit value
+ *
+ * @example
+ * ```typescript
+ * const maxRetries = getLimit(config, 'maxRetries'); // Returns config.limits.maxRetries or default
+ * ```
+ */
+export function getLimit(
+  config: Config | undefined,
+  key: keyof typeof CONFIG_DEFAULTS.limits
+): number {
+  return config?.limits?.[key] ?? CONFIG_DEFAULTS.limits[key];
+}
+
+/**
+ * Get a circuit breaker value from config, falling back to defaults.
+ *
+ * @param config - The loaded configuration
+ * @param key - The circuit breaker key to retrieve
+ * @returns The circuit breaker value
+ */
+export function getCircuitBreaker(
+  config: Config | undefined,
+  key: keyof typeof CONFIG_DEFAULTS.circuitBreaker
+): number {
+  return config?.circuitBreaker?.[key] ?? CONFIG_DEFAULTS.circuitBreaker[key];
+}
+
+/**
+ * Get a provider default value, falling back to defaults.
+ *
+ * @param provider - The provider name
+ * @param key - The provider config key
+ * @returns The provider config value
+ */
+export function getProviderDefault(
+  provider: keyof typeof CONFIG_DEFAULTS.providers,
+  key: "defaultMaxTokens"
+): number {
+  return CONFIG_DEFAULTS.providers[provider]?.[key] ?? CONFIG_DEFAULTS.providers.openai[key];
 }
 
 // ============================================

@@ -162,7 +162,8 @@ describe("ModeSelector", () => {
       );
       const frame = lastFrame() ?? "";
 
-      expect(frame).toContain("(current)");
+      // Translation key is used in tests - checks correct key is applied
+      expect(frame).toContain("modeSelector.current");
     });
 
     it("should show mode descriptions by default", () => {
@@ -199,8 +200,8 @@ describe("ModeSelector", () => {
       );
       const frame = lastFrame() ?? "";
 
-      expect(frame).toContain("↑↓");
-      expect(frame).toContain("Enter");
+      // Translation key is used in tests - checks correct key is applied
+      expect(frame).toContain("modeSelector.keybindings");
     });
 
     // Note: Testing stdin/keyboard input with ink-testing-library is complex

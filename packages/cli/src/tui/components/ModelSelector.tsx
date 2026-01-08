@@ -16,6 +16,7 @@ import {
   getSupportedProviders,
   type ModelMetadata,
 } from "../../utils/model-info.js";
+import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 
 // =============================================================================
@@ -150,6 +151,7 @@ export function ModelSelector({
   providers,
 }: ModelSelectorProps): React.ReactElement {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
   const icons = getIcons();
 
   // Build flattened list of model options
@@ -231,7 +233,7 @@ export function ModelSelector({
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box marginBottom={1}>
-        <Text bold>Select Model:</Text>
+        <Text bold>{t("modelSelector.title")}</Text>
       </Box>
 
       {Array.from(groupedByProvider.entries()).map(([provider, { options, startIndex }]) => {
@@ -266,7 +268,9 @@ export function ModelSelector({
                     </Text>
 
                     {/* Current indicator */}
-                    {isCurrent && <Text color={theme.semantic.text.muted}> (current)</Text>}
+                    {isCurrent && (
+                      <Text color={theme.semantic.text.muted}> {t("modeSelector.current")}</Text>
+                    )}
                   </Box>
 
                   {/* Details (when enabled and focused) */}
@@ -288,7 +292,7 @@ export function ModelSelector({
 
       {/* Help text */}
       <Box marginTop={1}>
-        <Text dimColor>↑↓ navigate • Enter select</Text>
+        <Text dimColor>{t("modelSelector.keybindings")}</Text>
       </Box>
     </Box>
   );

@@ -11,6 +11,7 @@ import type { CostBreakdown } from "@vellum/core";
 import { formatCost, formatTokenCount } from "@vellum/core";
 import { getIcons } from "@vellum/shared";
 import { Box, Text } from "ink";
+import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 
 // =============================================================================
@@ -65,6 +66,7 @@ export function CostDisplay({
   showBreakdown = false,
 }: CostDisplayProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
   const icons = getIcons();
 
   // Determine cost color based on magnitude
@@ -77,7 +79,9 @@ export function CostDisplay({
     return (
       <Box>
         <Text dimColor>{icons.cost} </Text>
-        <Text color={theme.colors.muted}>{formatTokenCount(totalTokens)} tokens</Text>
+        <Text color={theme.colors.muted}>
+          {formatTokenCount(totalTokens)} {t("cost.tokens")}
+        </Text>
         <Text dimColor> • </Text>
         <Text color={costColor} bold>
           {formatCost(totalCost)}
@@ -90,26 +94,26 @@ export function CostDisplay({
     <Box flexDirection="column" paddingX={1}>
       <Box marginBottom={1}>
         <Text color={theme.colors.primary} bold>
-          {icons.cost} Session Cost
+          {icons.cost} {t("cost.sessionCost")}
         </Text>
       </Box>
 
       {/* Token Summary */}
       <Box flexDirection="column" marginLeft={2}>
         <Box>
-          <Text color={theme.colors.muted}>Input: </Text>
+          <Text color={theme.colors.muted}>{t("cost.input")}</Text>
           <Text>{formatTokenCount(inputTokens)}</Text>
-          <Text color={theme.colors.muted}> tokens</Text>
+          <Text color={theme.colors.muted}> {t("cost.tokens")}</Text>
         </Box>
         <Box>
-          <Text color={theme.colors.muted}>Output: </Text>
+          <Text color={theme.colors.muted}>{t("cost.output")}</Text>
           <Text>{formatTokenCount(outputTokens)}</Text>
-          <Text color={theme.colors.muted}> tokens</Text>
+          <Text color={theme.colors.muted}> {t("cost.tokens")}</Text>
         </Box>
         <Box marginTop={1}>
-          <Text color={theme.colors.muted}>Total: </Text>
+          <Text color={theme.colors.muted}>{t("cost.total")}</Text>
           <Text bold>{formatTokenCount(totalTokens)}</Text>
-          <Text color={theme.colors.muted}> tokens</Text>
+          <Text color={theme.colors.muted}> {t("cost.tokens")}</Text>
         </Box>
       </Box>
 
@@ -121,31 +125,31 @@ export function CostDisplay({
           </Text>
           {breakdown.input > 0 && (
             <Box>
-              <Text color={theme.colors.muted}>Input: </Text>
+              <Text color={theme.colors.muted}>{t("cost.input")}</Text>
               <Text>{formatCost(breakdown.input)}</Text>
             </Box>
           )}
           {breakdown.output > 0 && (
             <Box>
-              <Text color={theme.colors.muted}>Output: </Text>
+              <Text color={theme.colors.muted}>{t("cost.output")}</Text>
               <Text>{formatCost(breakdown.output)}</Text>
             </Box>
           )}
           {breakdown.cacheRead > 0 && (
             <Box>
-              <Text color={theme.colors.muted}>Cache (R): </Text>
+              <Text color={theme.colors.muted}>{t("cost.cacheRead")}</Text>
               <Text>{formatCost(breakdown.cacheRead)}</Text>
             </Box>
           )}
           {breakdown.cacheWrite > 0 && (
             <Box>
-              <Text color={theme.colors.muted}>Cache (W): </Text>
+              <Text color={theme.colors.muted}>{t("cost.cacheWrite")}</Text>
               <Text>{formatCost(breakdown.cacheWrite)}</Text>
             </Box>
           )}
           {breakdown.reasoning > 0 && (
             <Box>
-              <Text color={theme.colors.muted}>Reasoning: </Text>
+              <Text color={theme.colors.muted}>{t("cost.reasoning")}</Text>
               <Text>{formatCost(breakdown.reasoning)}</Text>
             </Box>
           )}
@@ -159,7 +163,7 @@ export function CostDisplay({
         </Text>
       </Box>
       <Box marginLeft={2}>
-        <Text color={theme.colors.muted}>Cost: </Text>
+        <Text color={theme.colors.muted}>{t("cost.cost")}</Text>
         <Text color={costColor} bold>
           {formatCost(totalCost)}
         </Text>

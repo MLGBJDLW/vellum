@@ -10,6 +10,7 @@
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useState } from "react";
+import { useTUITranslation } from "../i18n/index.js";
 
 // =============================================================================
 // Types
@@ -58,6 +59,7 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
   onDismiss,
   compact = false,
 }) => {
+  const { t } = useTUITranslation();
   const [dismissed, setDismissed] = useState(false);
 
   // Handle dismiss key press
@@ -82,7 +84,7 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
       <Box>
         <Text color="yellow">
           ⬆ v{latestVersion} available
-          {dismissible && <Text color="gray"> (d to dismiss)</Text>}
+          {dismissible && <Text color="gray"> {t("update.dismissHint")}</Text>}
         </Text>
       </Box>
     );
@@ -93,13 +95,13 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
     <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1} marginY={1}>
       <Box>
         <Text color="yellow" bold>
-          ⬆ Update Available
+          ⬆ {t("update.available")}
         </Text>
       </Box>
 
       <Box marginTop={1}>
         <Text>
-          <Text color="gray">Current: </Text>
+          <Text color="gray">{t("update.current")}</Text>
           <Text>v{currentVersion}</Text>
           <Text color="gray"> → </Text>
           <Text color="green" bold>
@@ -109,9 +111,7 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
       </Box>
 
       <Box marginTop={1}>
-        <Text color="cyan">
-          Run <Text bold>vellum update</Text> to upgrade
-        </Text>
+        <Text color="cyan">{t("update.upgradeHint")}</Text>
       </Box>
 
       {releaseNotesUrl && (
@@ -125,7 +125,7 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
       {dismissible && (
         <Box marginTop={1}>
           <Text color="gray" dimColor>
-            Press <Text bold>d</Text> or <Text bold>Esc</Text> to dismiss
+            {t("update.dismissInstructions")}
           </Text>
         </Box>
       )}

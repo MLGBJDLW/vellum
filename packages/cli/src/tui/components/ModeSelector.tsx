@@ -13,6 +13,7 @@ import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useState } from "react";
+import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 
 // =============================================================================
@@ -104,6 +105,7 @@ export function ModeSelector({
   showDescriptions = true,
 }: ModeSelectorProps): React.ReactElement {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
   const modes = CODING_MODES;
 
   // Track focused index for keyboard navigation
@@ -153,7 +155,7 @@ export function ModeSelector({
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box marginBottom={1}>
-        <Text bold>Select Mode:</Text>
+        <Text bold>{t("modeSelector.title")}</Text>
       </Box>
 
       {modes.map((mode, index) => {
@@ -182,7 +184,9 @@ export function ModeSelector({
               </Text>
 
               {/* Current indicator */}
-              {isCurrent && <Text color={theme.semantic.text.muted}> (current)</Text>}
+              {isCurrent && (
+                <Text color={theme.semantic.text.muted}> {t("modeSelector.current")}</Text>
+              )}
             </Box>
 
             {/* Description (when enabled) */}
@@ -199,7 +203,7 @@ export function ModeSelector({
 
       {/* Help text */}
       <Box marginTop={1}>
-        <Text dimColor>↑↓ navigate • Enter select • 1-3 quick select</Text>
+        <Text dimColor>{t("modeSelector.keybindings")}</Text>
       </Box>
     </Box>
   );

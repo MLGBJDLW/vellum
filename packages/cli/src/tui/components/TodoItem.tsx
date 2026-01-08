@@ -9,6 +9,7 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
+import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 
 // =============================================================================
@@ -127,6 +128,7 @@ export function TodoItem({
   isExpanded = false,
 }: TodoItemProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
   const icon = STATUS_ICONS[item.status];
   const statusColor = STATUS_COLORS[item.status];
 
@@ -167,11 +169,11 @@ export function TodoItem({
             </Box>
           )}
           <Box>
-            <Text dimColor> Created: </Text>
+            <Text dimColor> {t("todo.created")}</Text>
             <Text>{formatDate(item.createdAt)}</Text>
             {item.completedAt && (
               <>
-                <Text dimColor> • Completed: </Text>
+                <Text dimColor> • {t("todo.completed")}</Text>
                 <Text color={theme.colors.success}>{formatDate(item.completedAt)}</Text>
               </>
             )}

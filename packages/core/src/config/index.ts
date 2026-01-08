@@ -2,6 +2,8 @@
 // T027, T043 - Config Module Barrel Export
 // ============================================
 
+// Config defaults
+export { CONFIG_DEFAULTS, type ConfigDefaults } from "./defaults.js";
 // T034-T038 - Config loader utilities
 // T023-T025 - Credential integration
 export {
@@ -15,8 +17,13 @@ export {
   clearDeprecationWarningsCache,
   deepMerge,
   findProjectConfig,
+  // Config value resolution
+  getCircuitBreaker,
+  getLimit,
   // T023 - Credential wizard helpers
+  getProviderDefault,
   getProviderDisplayName,
+  getTimeout,
   // T025 - Credential resolution
   hasProviderCredentials,
   type LoadConfigOptions,
@@ -55,6 +62,9 @@ export {
   BearerTokenCredentialSchema,
   type CertificateCredential,
   CertificateCredentialSchema,
+  // Circuit breaker config
+  type CircuitBreakerConfig,
+  CircuitBreakerConfigSchema,
   type Config,
   type ConfigCredential,
   ConfigCredentialSchema,
@@ -65,6 +75,9 @@ export {
   CredentialSourceSchema,
   type CredentialType,
   CredentialTypeSchema,
+  // Limits config
+  type LimitsConfig,
+  LimitsConfigSchema,
   type LLMProvider,
   // T029 - LLM provider schema
   LLMProviderSchema,
@@ -84,4 +97,7 @@ export {
   ProviderNameSchema,
   type ServiceAccountCredential,
   ServiceAccountCredentialSchema,
+  // Timeouts config
+  type TimeoutsConfig,
+  TimeoutsConfigSchema,
 } from "./schema.js";

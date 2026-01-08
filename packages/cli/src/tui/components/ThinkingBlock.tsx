@@ -8,6 +8,7 @@
 
 import { Box, Text, useInput } from "ink";
 import { useCallback, useEffect, useState } from "react";
+import { useTUITranslation } from "../i18n/index.js";
 import { StreamingText } from "./Messages/StreamingText.js";
 
 // =============================================================================
@@ -155,6 +156,7 @@ export function ThinkingBlock({
   thinking,
   isExpanded,
 }: ThinkingBlockProps): React.JSX.Element {
+  const { t } = useTUITranslation();
   // Internal state for uncontrolled mode (default collapsed)
   const [internalCollapsed, setInternalCollapsed] = useState(true);
 
@@ -194,9 +196,10 @@ export function ThinkingBlock({
     return (
       <Box>
         <Text dimColor>
-          {arrow} [*] [Thinking...{isStreaming ? " " : ""}
+          {arrow} [*] [{t("thinking.label")}
+          {isStreaming ? " " : ""}
           {isStreaming && <Spinner />}
-          {metricsDisplay}] <Text italic>(press Enter to expand)</Text>
+          {metricsDisplay}] <Text italic>{t("thinking.expandHint")}</Text>
         </Text>
       </Box>
     );
@@ -207,9 +210,10 @@ export function ThinkingBlock({
     <Box flexDirection="column">
       <Box>
         <Text dimColor>
-          {arrow} [*] Thinking{isStreaming ? " " : ""}
+          {arrow} [*] {t("thinking.label").replace("...", "")}
+          {isStreaming ? " " : ""}
           {isStreaming && <Spinner />}
-          {metricsDisplay} <Text italic>(press Enter to collapse)</Text>
+          {metricsDisplay} <Text italic>{t("thinking.collapseHint")}</Text>
         </Text>
       </Box>
       <Box marginLeft={2} marginTop={1}>
