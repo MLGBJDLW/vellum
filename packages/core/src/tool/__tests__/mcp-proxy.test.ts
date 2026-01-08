@@ -896,7 +896,7 @@ describe("MCPProxy Error Handling", () => {
   describe("MCPConnectionError", () => {
     it("should have correct error code", () => {
       const error = new MCPConnectionError("Connection failed");
-      expect(error.code).toBe(3008); // ErrorCode.MCP_CONNECTION
+      expect(error.code).toBe(6010); // ErrorCode.MCP_CONNECTION
     });
 
     it("should be retryable", () => {
@@ -914,7 +914,7 @@ describe("MCPProxy Error Handling", () => {
   describe("MCPProtocolError", () => {
     it("should have correct error code", () => {
       const error = new MCPProtocolError("Protocol violation");
-      expect(error.code).toBe(3009); // ErrorCode.MCP_PROTOCOL
+      expect(error.code).toBe(6011); // ErrorCode.MCP_PROTOCOL
     });
 
     it("should not be retryable", () => {
@@ -926,7 +926,7 @@ describe("MCPProxy Error Handling", () => {
   describe("MCPTimeoutError", () => {
     it("should have correct error code", () => {
       const error = new MCPTimeoutError("Request timed out", 5000);
-      expect(error.code).toBe(3010); // ErrorCode.MCP_TIMEOUT
+      expect(error.code).toBe(6012); // ErrorCode.MCP_TIMEOUT
     });
 
     it("should be retryable", () => {

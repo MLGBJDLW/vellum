@@ -9,7 +9,7 @@ import { ErrorCode, VellumError } from "../errors/index.js";
  */
 export class CancelledError extends VellumError {
   constructor(message = "Operation was cancelled", context?: Record<string, unknown>) {
-    super(message, ErrorCode.SYSTEM_UNKNOWN, {
+    super(message, ErrorCode.UNKNOWN, {
       context: { ...context, cancelled: true },
       isRetryable: false,
     });

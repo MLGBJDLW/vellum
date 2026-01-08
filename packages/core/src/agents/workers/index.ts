@@ -33,6 +33,20 @@ export {
 } from "./factory.js";
 
 // ============================================
+// Worker Executor
+// ============================================
+
+export type { WorkerExecutionConfig } from "./worker-executor.js";
+
+export {
+  executeWorkerTask,
+  getWorkerPrompt,
+  getWorkerToolSet,
+  WORKER_PROMPTS,
+  WORKER_TOOL_SETS,
+} from "./worker-executor.js";
+
+// ============================================
 // Builtin Workers Registry
 // ============================================
 

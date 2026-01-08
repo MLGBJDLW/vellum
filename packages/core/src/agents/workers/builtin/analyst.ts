@@ -4,6 +4,7 @@
 // REQ-029: Builtin worker for code analysis tasks (READ-ONLY)
 
 import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js";
+import { executeWorkerTask } from "../worker-executor.js";
 
 /**
  * AnalystWorker - Level 2 worker specialized in code analysis (READ-ONLY).
@@ -15,6 +16,13 @@ import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js
  * - Architecture review and documentation
  *
  * **IMPORTANT**: This worker is READ-ONLY and cannot modify files.
+ *
+ * Uses AgentLoop for actual LLM-powered analysis with tools:
+ * - read_file: Read source files
+ * - search_files: Search for patterns
+ * - codebase_search: Semantic code search
+ * - list_dir: Explore directory structure
+ * - lsp: Language server features (go-to-definition, etc.)
  *
  * @example
  * ```typescript
@@ -40,54 +48,15 @@ export const analystWorker: BaseWorker = createBaseWorker({
     specializations: ["analysis", "review", "dependency-mapping", "impact-assessment"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    const { taskPacket, signal } = context;
+    // Execute using the worker executor with analyst-specific configuration
+    const result = await executeWorkerTask("analyst", context, {
+      maxIterations: 20, // Analysis may need more iterations for thorough review
+    });
 
-    // Check for cancellation
-    if (signal?.aborted) {
-      return {
-        success: false,
-        error: new Error("Task cancelled"),
-      };
-    }
-
-    try {
-      // Parse task from packet
-      const task = taskPacket.task;
-
-      // Determine the type of analysis task
-      const lowerTask = task.toLowerCase();
-      let action = "analysis";
-
-      if (lowerTask.includes("review")) {
-        action = "code_review";
-      } else if (lowerTask.includes("dependency") || lowerTask.includes("dependencies")) {
-        action = "dependency_mapping";
-      } else if (lowerTask.includes("impact")) {
-        action = "impact_assessment";
-      } else if (lowerTask.includes("architecture") || lowerTask.includes("structure")) {
-        action = "architecture_analysis";
-      }
-
-      // TODO: Integrate with actual code analysis logic
-      // For now, return a placeholder result indicating the task was received
-      // The actual implementation will be connected to code analysis tools
-
-      // NOTE: Analyst is READ-ONLY, so filesModified should always be empty
-      return {
-        success: true,
-        data: {
-          task,
-          action,
-          readOnly: true,
-          message: `Analyst worker processed task: ${task.substring(0, 100)}${task.length > 100 ? "..." : ""}`,
-        },
-        filesModified: [], // Always empty for read-only worker
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
+    // Ensure filesModified is always empty for read-only worker
+    return {
+      ...result,
+      filesModified: [], // Always empty for read-only worker
+    };
   },
 });

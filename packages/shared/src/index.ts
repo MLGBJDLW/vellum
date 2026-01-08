@@ -5,7 +5,7 @@
 // Config Parser Module (AGENTS.md Protocol)
 export * from "./config-parser/index.js";
 // Error codes
-export { ErrorCode } from "./errors/index.js";
+export { ErrorCode, ErrorSeverity, inferSeverity } from "./errors/index.js";
 // Theme types (Phase 33 - Visual Theme System)
 // Theme utilities (Phase 33 - Visual Theme System)
 export type {

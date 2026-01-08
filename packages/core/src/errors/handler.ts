@@ -62,7 +62,7 @@ export class GlobalErrorHandler {
    *
    * Normalization rules:
    * - VellumError: returned as-is
-   * - Error: wrapped with SYSTEM_UNKNOWN code
+   * - Error: wrapped with UNKNOWN code
    * - string: creates VellumError with message
    * - other: creates VellumError with generic message
    *
@@ -110,9 +110,9 @@ export class GlobalErrorHandler {
       return error;
     }
 
-    // Standard Error - wrap with SYSTEM_UNKNOWN code
+    // Standard Error - wrap with UNKNOWN code
     if (error instanceof Error) {
-      return new VellumError(error.message, ErrorCode.SYSTEM_UNKNOWN, {
+      return new VellumError(error.message, ErrorCode.UNKNOWN, {
         cause: error,
         context: {
           originalName: error.name,
@@ -123,11 +123,11 @@ export class GlobalErrorHandler {
 
     // String - create VellumError with the string as message
     if (typeof error === "string") {
-      return new VellumError(error, ErrorCode.SYSTEM_UNKNOWN);
+      return new VellumError(error, ErrorCode.UNKNOWN);
     }
 
     // Other types - generic message
-    return new VellumError("An unknown error occurred", ErrorCode.SYSTEM_UNKNOWN, {
+    return new VellumError("An unknown error occurred", ErrorCode.UNKNOWN, {
       context: {
         originalValue: String(error),
         originalType: typeof error,

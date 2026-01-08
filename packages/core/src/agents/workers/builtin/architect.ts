@@ -4,6 +4,7 @@
 // REQ-029: Builtin worker for system design and architecture tasks
 
 import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js";
+import { executeWorkerTask } from "../worker-executor.js";
 
 /**
  * ArchitectWorker - Level 2 worker specialized in system design.
@@ -15,6 +16,14 @@ import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js
  * - Technical specifications
  *
  * **CAN EDIT**: Limited to ADR and design documentation files.
+ *
+ * Uses AgentLoop for actual LLM-powered design with tools:
+ * - read_file: Read existing code and docs
+ * - write_file: Create ADRs and design docs
+ * - search_files: Find relevant patterns
+ * - codebase_search: Understand system structure
+ * - list_dir: Explore project layout
+ * - smart_edit: Edit existing documentation
  *
  * @example
  * ```typescript
@@ -41,53 +50,9 @@ export const architectWorker: BaseWorker = createBaseWorker({
     specializations: ["design", "adr", "system-design", "patterns"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    const { taskPacket, signal } = context;
-
-    // Check for cancellation
-    if (signal?.aborted) {
-      return {
-        success: false,
-        error: new Error("Task cancelled"),
-      };
-    }
-
-    try {
-      // Parse task from packet
-      const task = taskPacket.task;
-      const filesModified: string[] = [];
-
-      // Determine the type of architecture task
-      const lowerTask = task.toLowerCase();
-      let action = "design";
-
-      if (lowerTask.includes("adr")) {
-        action = "adr_creation";
-      } else if (lowerTask.includes("pattern")) {
-        action = "pattern_recommendation";
-      } else if (lowerTask.includes("system") || lowerTask.includes("architecture")) {
-        action = "system_design";
-      } else if (lowerTask.includes("specification") || lowerTask.includes("spec")) {
-        action = "technical_specification";
-      }
-
-      // TODO: Integrate with actual architecture design logic
-      // For now, return a placeholder result indicating the task was received
-      // The actual implementation will be connected to design tools and templates
-
-      return {
-        success: true,
-        data: {
-          task,
-          action,
-          message: `Architect worker processed task: ${task.substring(0, 100)}${task.length > 100 ? "..." : ""}`,
-        },
-        filesModified,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
+    // Execute using the worker executor with architect-specific configuration
+    return executeWorkerTask("architect", context, {
+      maxIterations: 15, // Design tasks are typically well-scoped
+    });
   },
 });

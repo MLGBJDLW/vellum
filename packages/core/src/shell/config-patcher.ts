@@ -286,7 +286,7 @@ if (Get-Command vellum -ErrorAction SilentlyContinue) {
     // Generate and append config block
     const configBlock = this.generateConfigBlock(shell);
     const separator = content && !content.endsWith("\n") ? "\n\n" : content ? "\n" : "";
-    const newContent = content + separator + configBlock + "\n";
+    const newContent = `${content + separator + configBlock}\n`;
 
     // Write updated content
     writeFileSync(filePath, newContent, "utf-8");
@@ -392,7 +392,7 @@ if (Get-Command vellum -ErrorAction SilentlyContinue) {
     const configBlock = this.generateConfigBlock(shell);
     const separator =
       withoutBlock && !withoutBlock.endsWith("\n") ? "\n\n" : withoutBlock ? "\n" : "";
-    const newContent = withoutBlock + separator + configBlock + "\n";
+    const newContent = `${withoutBlock + separator + configBlock}\n`;
 
     writeFileSync(filePath, newContent, "utf-8");
 

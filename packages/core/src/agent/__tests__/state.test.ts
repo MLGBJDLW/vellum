@@ -198,7 +198,7 @@ describe("AgentState", () => {
       if (!isValidTransition(from, to)) {
         throw new VellumError(
           `Invalid state transition from '${from}' to '${to}'`,
-          ErrorCode.SYSTEM_UNKNOWN,
+          ErrorCode.UNKNOWN,
           {
             context: { from, to },
           }

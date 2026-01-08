@@ -86,8 +86,6 @@ function buildUpdateCommand(
         command: "pnpm",
         args: [options.global ? "add" : "install", ...(options.global ? ["-g"] : []), packageSpec],
       };
-
-    case "npm":
     default:
       return {
         command: "npm",

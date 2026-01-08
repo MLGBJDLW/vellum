@@ -183,8 +183,8 @@ describe("CompactionService", () => {
       const toolResult = pruned.messages[1]?.parts[0] as { content: string } | undefined;
 
       expect(toolResult?.content).toContain("STARTSTART"); // Beginning preserved
-      expect(toolResult!.content).toContain("ENDEND"); // End preserved
-      expect(toolResult!.content).toContain(DEFAULT_COMPACTION_CONFIG.prunedMarker);
+      expect(toolResult?.content).toContain("ENDEND"); // End preserved
+      expect(toolResult?.content).toContain(DEFAULT_COMPACTION_CONFIG.prunedMarker);
     });
 
     it("should be immutable - not modify original session", () => {

@@ -375,9 +375,6 @@ async function executeCommandAction(
     throw new HookExecutionError("Command execution aborted", HookErrorCode.HOOK_ABORTED);
   }
 
-  // For now, return a stub implementation
-  // Real implementation would use child_process.spawn with signal
-  // TODO: Implement actual command execution with spawn
   const { spawn } = await import("node:child_process");
 
   return new Promise((resolve, reject) => {

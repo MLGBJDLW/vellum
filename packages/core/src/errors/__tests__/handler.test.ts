@@ -41,14 +41,14 @@ describe("GlobalErrorHandler", () => {
         expect(result.code).toBe(ErrorCode.TOOL_NOT_FOUND);
       });
 
-      it("should wrap standard Error with SYSTEM_UNKNOWN code", () => {
+      it("should wrap standard Error with UNKNOWN code", () => {
         const handler = new GlobalErrorHandler({ logger });
         const original = new Error("Something went wrong");
 
         const result = handler.handle(original);
 
         expect(result).toBeInstanceOf(VellumError);
-        expect(result.code).toBe(ErrorCode.SYSTEM_UNKNOWN);
+        expect(result.code).toBe(ErrorCode.UNKNOWN);
         expect(result.message).toBe("Something went wrong");
         expect(result.cause).toBe(original);
         expect(result.context).toMatchObject({
@@ -56,14 +56,14 @@ describe("GlobalErrorHandler", () => {
         });
       });
 
-      it("should wrap TypeError with SYSTEM_UNKNOWN code and preserve name", () => {
+      it("should wrap TypeError with UNKNOWN code and preserve name", () => {
         const handler = new GlobalErrorHandler({ logger });
         const original = new TypeError("Cannot read property 'x' of undefined");
 
         const result = handler.handle(original);
 
         expect(result).toBeInstanceOf(VellumError);
-        expect(result.code).toBe(ErrorCode.SYSTEM_UNKNOWN);
+        expect(result.code).toBe(ErrorCode.UNKNOWN);
         expect(result.context?.originalName).toBe("TypeError");
       });
 
@@ -73,7 +73,7 @@ describe("GlobalErrorHandler", () => {
         const result = handler.handle("A string error message");
 
         expect(result).toBeInstanceOf(VellumError);
-        expect(result.code).toBe(ErrorCode.SYSTEM_UNKNOWN);
+        expect(result.code).toBe(ErrorCode.UNKNOWN);
         expect(result.message).toBe("A string error message");
       });
 
@@ -83,7 +83,7 @@ describe("GlobalErrorHandler", () => {
         const result = handler.handle(undefined);
 
         expect(result).toBeInstanceOf(VellumError);
-        expect(result.code).toBe(ErrorCode.SYSTEM_UNKNOWN);
+        expect(result.code).toBe(ErrorCode.UNKNOWN);
         expect(result.message).toBe("An unknown error occurred");
         expect(result.context?.originalType).toBe("undefined");
       });
@@ -94,7 +94,7 @@ describe("GlobalErrorHandler", () => {
         const result = handler.handle(null);
 
         expect(result).toBeInstanceOf(VellumError);
-        expect(result.code).toBe(ErrorCode.SYSTEM_UNKNOWN);
+        expect(result.code).toBe(ErrorCode.UNKNOWN);
         expect(result.message).toBe("An unknown error occurred");
         expect(result.context?.originalValue).toBe("null");
       });
@@ -105,7 +105,7 @@ describe("GlobalErrorHandler", () => {
         const result = handler.handle(42);
 
         expect(result).toBeInstanceOf(VellumError);
-        expect(result.code).toBe(ErrorCode.SYSTEM_UNKNOWN);
+        expect(result.code).toBe(ErrorCode.UNKNOWN);
         expect(result.message).toBe("An unknown error occurred");
         expect(result.context?.originalValue).toBe("42");
         expect(result.context?.originalType).toBe("number");
@@ -117,7 +117,7 @@ describe("GlobalErrorHandler", () => {
         const result = handler.handle({ custom: "error" });
 
         expect(result).toBeInstanceOf(VellumError);
-        expect(result.code).toBe(ErrorCode.SYSTEM_UNKNOWN);
+        expect(result.code).toBe(ErrorCode.UNKNOWN);
         expect(result.message).toBe("An unknown error occurred");
         expect(result.context?.originalType).toBe("object");
       });
@@ -126,7 +126,7 @@ describe("GlobalErrorHandler", () => {
     describe("logging", () => {
       it("should log FATAL errors at error level", () => {
         const handler = new GlobalErrorHandler({ logger });
-        const fatalError = new VellumError("Fatal!", ErrorCode.SYSTEM_UNKNOWN);
+        const fatalError = new VellumError("Fatal!", ErrorCode.UNKNOWN);
 
         handler.handle(fatalError);
 
@@ -241,7 +241,7 @@ describe("GlobalErrorHandler", () => {
   describe("isRecoverable()", () => {
     it("should return false for FATAL VellumError", () => {
       const handler = new GlobalErrorHandler({ logger });
-      const fatalError = new VellumError("Fatal!", ErrorCode.SYSTEM_UNKNOWN);
+      const fatalError = new VellumError("Fatal!", ErrorCode.UNKNOWN);
 
       expect(fatalError.severity).toBe(ErrorSeverity.FATAL);
       expect(handler.isRecoverable(fatalError)).toBe(false);

@@ -75,7 +75,6 @@ export class ServerInstaller extends EventEmitter {
           command: "cargo",
           args: ["install", pkg, ...extraArgs],
         };
-      case "system":
       default:
         return {
           command: pkg,

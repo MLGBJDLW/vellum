@@ -51,7 +51,117 @@ export interface ErrorInfo {
  * Mapping of error codes to classification properties.
  */
 const ERROR_CLASSIFICATIONS: Record<ErrorCode, Omit<ErrorInfo, "error" | "code">> = {
-  // Configuration errors - user needs to fix
+  // ═══════════════════════════════════════════
+  // 1xxx - General/System Errors
+  // ═══════════════════════════════════════════
+  [ErrorCode.UNKNOWN]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "An unexpected error occurred.",
+  },
+  [ErrorCode.INTERNAL_ERROR]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "An internal error occurred.",
+  },
+  [ErrorCode.INVALID_ARGUMENT]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Invalid argument provided.",
+  },
+  [ErrorCode.NOT_IMPLEMENTED]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "This feature is not yet implemented.",
+  },
+  [ErrorCode.TIMEOUT]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 2000,
+    maxRetries: 3,
+    userMessage: "Operation timed out. Retrying...",
+  },
+  [ErrorCode.SYSTEM_IO_ERROR]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 1000,
+    maxRetries: 3,
+    userMessage: "I/O error occurred.",
+  },
+  [ErrorCode.SYSTEM_OUT_OF_MEMORY]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Out of memory. Please restart the application.",
+  },
+
+  // ═══════════════════════════════════════════
+  // 2xxx - Network/API Errors
+  // ═══════════════════════════════════════════
+  [ErrorCode.NETWORK_ERROR]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 5000,
+    maxRetries: 3,
+    userMessage: "Network error. Retrying...",
+  },
+  [ErrorCode.API_ERROR]: {
+    severity: "recoverable",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 2000,
+    maxRetries: 2,
+    userMessage: "API error occurred. Retrying...",
+  },
+  [ErrorCode.RATE_LIMITED]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 60000,
+    maxRetries: 5,
+    userMessage: "Rate limit reached. Waiting before retry.",
+  },
+  [ErrorCode.SERVICE_UNAVAILABLE]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 10000,
+    maxRetries: 3,
+    userMessage: "Service temporarily unavailable. Retrying...",
+  },
+  [ErrorCode.QUOTA_TERMINAL]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Quota permanently exceeded. Please check your billing or usage limits.",
+  },
+  [ErrorCode.QUOTA_RETRYABLE]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 60000,
+    maxRetries: 3,
+    userMessage: "Rate limit reached. Waiting before retry.",
+  },
+  [ErrorCode.CIRCUIT_OPEN]: {
+    severity: "transient",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 30000,
+    maxRetries: 3,
+    userMessage: "Service temporarily unavailable. Circuit breaker is open.",
+  },
+
+  // ═══════════════════════════════════════════
+  // 3xxx - Configuration Errors
+  // ═══════════════════════════════════════════
   [ErrorCode.CONFIG_INVALID]: {
     severity: "fatal",
     retryable: false,
@@ -71,7 +181,87 @@ const ERROR_CLASSIFICATIONS: Record<ErrorCode, Omit<ErrorInfo, "error" | "code">
     userMessage: "Failed to parse configuration file.",
   },
 
-  // LLM errors - mixed retryability
+  // ═══════════════════════════════════════════
+  // 4xxx - Credential/Auth Errors
+  // ═══════════════════════════════════════════
+  [ErrorCode.CREDENTIAL_NOT_FOUND]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Credentials not found. Please configure your API keys.",
+  },
+  [ErrorCode.CREDENTIAL_EXPIRED]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Credentials have expired. Please refresh your API keys.",
+  },
+  [ErrorCode.CREDENTIAL_INVALID_FORMAT]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Invalid credential format.",
+  },
+  [ErrorCode.CREDENTIAL_VALIDATION_FAILED]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Credential validation failed. Please check your API keys.",
+  },
+  [ErrorCode.KEYCHAIN_NOT_AVAILABLE]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "System keychain not available. Using fallback storage.",
+  },
+  [ErrorCode.ENCRYPTION_FAILED]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Failed to encrypt credentials.",
+  },
+  [ErrorCode.DECRYPTION_FAILED]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Failed to decrypt credentials.",
+  },
+  [ErrorCode.REFRESH_TOKEN_EXPIRED]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Refresh token has expired. Please re-authenticate.",
+  },
+  [ErrorCode.CREDENTIAL_STORE_UNAVAILABLE]: {
+    severity: "recoverable",
+    retryable: true,
+    suggestedAction: "retry",
+    retryDelay: 1000,
+    maxRetries: 2,
+    userMessage: "Credential store temporarily unavailable.",
+  },
+
+  // ═══════════════════════════════════════════
+  // 5xxx - Provider/LLM Errors
+  // ═══════════════════════════════════════════
+  [ErrorCode.PROVIDER_NOT_FOUND]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Provider not found. Please check your configuration.",
+  },
+  [ErrorCode.PROVIDER_INITIALIZATION_FAILED]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Failed to initialize provider.",
+  },
+  [ErrorCode.PROVIDER_AUTH_FAILED]: {
+    severity: "fatal",
+    retryable: false,
+    suggestedAction: "abort",
+    userMessage: "Provider authentication failed. Please check your API key.",
+  },
   [ErrorCode.LLM_RATE_LIMIT]: {
     severity: "transient",
     retryable: true,
@@ -116,38 +306,10 @@ const ERROR_CLASSIFICATIONS: Record<ErrorCode, Omit<ErrorInfo, "error" | "code">
     maxRetries: 2,
     userMessage: "Received invalid response. Retrying...",
   },
-  [ErrorCode.QUOTA_TERMINAL]: {
-    severity: "fatal",
-    retryable: false,
-    suggestedAction: "abort",
-    userMessage: "Quota permanently exceeded. Please check your billing or usage limits.",
-  },
-  [ErrorCode.QUOTA_RETRYABLE]: {
-    severity: "transient",
-    retryable: true,
-    suggestedAction: "retry",
-    retryDelay: 60000,
-    maxRetries: 3,
-    userMessage: "Rate limit reached. Waiting before retry.",
-  },
-  [ErrorCode.CIRCUIT_OPEN]: {
-    severity: "transient",
-    retryable: true,
-    suggestedAction: "retry",
-    retryDelay: 30000,
-    maxRetries: 3,
-    userMessage: "Service temporarily unavailable. Circuit breaker is open.",
-  },
-  [ErrorCode.NETWORK_ERROR]: {
-    severity: "transient",
-    retryable: true,
-    suggestedAction: "retry",
-    retryDelay: 5000,
-    maxRetries: 3,
-    userMessage: "Network error. Retrying...",
-  },
 
-  // Tool errors - mixed handling
+  // ═══════════════════════════════════════════
+  // 6xxx - Tool/MCP Errors
+  // ═══════════════════════════════════════════
   [ErrorCode.TOOL_NOT_FOUND]: {
     severity: "recoverable",
     retryable: false,
@@ -227,7 +389,9 @@ const ERROR_CLASSIFICATIONS: Record<ErrorCode, Omit<ErrorInfo, "error" | "code">
     userMessage: "Smart edit operation failed.",
   },
 
-  // Session errors - mostly fatal
+  // ═══════════════════════════════════════════
+  // 7xxx - Session Errors
+  // ═══════════════════════════════════════════
   [ErrorCode.SESSION_NOT_FOUND]: {
     severity: "fatal",
     retryable: false,
@@ -249,29 +413,31 @@ const ERROR_CLASSIFICATIONS: Record<ErrorCode, Omit<ErrorInfo, "error" | "code">
     userMessage: "Session conflict detected.",
   },
 
-  // System errors - mixed
-  [ErrorCode.SYSTEM_IO_ERROR]: {
-    severity: "transient",
-    retryable: true,
-    suggestedAction: "retry",
-    retryDelay: 1000,
-    maxRetries: 3,
-    userMessage: "I/O error occurred.",
-  },
-  [ErrorCode.SYSTEM_OUT_OF_MEMORY]: {
+  // ═══════════════════════════════════════════
+  // 8xxx - Agent Errors
+  // ═══════════════════════════════════════════
+  [ErrorCode.AGENT_NOT_FOUND]: {
     severity: "fatal",
     retryable: false,
     suggestedAction: "abort",
-    userMessage: "Out of memory. Please restart the application.",
+    userMessage: "Agent not found.",
   },
-  [ErrorCode.SYSTEM_UNKNOWN]: {
+  [ErrorCode.AGENT_LOOP_ERROR]: {
     severity: "fatal",
     retryable: false,
     suggestedAction: "abort",
-    userMessage: "An unexpected error occurred.",
+    userMessage: "Agent loop error detected.",
+  },
+  [ErrorCode.CONTEXT_OVERFLOW]: {
+    severity: "recoverable",
+    retryable: false,
+    suggestedAction: "escalate",
+    userMessage: "Context window overflow. Consider summarizing the conversation.",
   },
 
-  // Git/Snapshot errors
+  // ═══════════════════════════════════════════
+  // 9xxx - Git/Snapshot Errors
+  // ═══════════════════════════════════════════
   [ErrorCode.GIT_NOT_INITIALIZED]: {
     severity: "recoverable",
     retryable: false,

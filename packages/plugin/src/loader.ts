@@ -7,6 +7,7 @@
  * @module plugin/loader
  */
 
+import { createHash } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -124,6 +125,12 @@ export interface LoadOptions {
    * @default false
    */
   validateHash?: boolean;
+
+  /**
+   * Expected SHA-256 hash of the plugin manifest file.
+   * Required when validateHash is true.
+   */
+  expectedHash?: string;
 }
 
 /**
@@ -312,14 +319,22 @@ export async function loadPlugin(
   discovered: DiscoveredPlugin,
   options: LoadOptions = {}
 ): Promise<LoadedPlugin | PartiallyLoadedPlugin> {
-  const { fullLoad = false, validateHash = false } = options;
+  const { fullLoad = false, validateHash = false, expectedHash } = options;
 
   // Always perform L1 loading first
   const partial = await loadManifestOnly(discovered);
 
-  // TODO: Implement hash validation if validateHash is true
+  // Validate plugin hash if requested
   if (validateHash) {
-    // Reserved for future integrity validation
+    const manifestContent = await fs.readFile(discovered.manifestPath);
+    const actualHash = createHash("sha256").update(manifestContent).digest("hex");
+
+    if (expectedHash && actualHash !== expectedHash) {
+      throw new PluginLoadError("Hash validation failed", discovered.name, discovered.root, {
+        expected: expectedHash,
+        actual: actualHash,
+      });
+    }
   }
 
   // Return early if full loading not requested

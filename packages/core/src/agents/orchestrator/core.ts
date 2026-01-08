@@ -9,7 +9,9 @@ import type { AgentLevel } from "../../agent/level.js";
 import { canSpawn } from "../../agent/level.js";
 import type { ModeRegistry } from "../../agent/mode-registry.js";
 import type { ImplementationResult, SpecHandoffPacket } from "../../spec/index.js";
+import { createTaskPacket } from "../protocol/task-packet.js";
 import type { SubsessionManager } from "../session/subsession-manager.js";
+import { executeWorkerTask, type WorkerExecutionConfig } from "../workers/worker-executor.js";
 import type { AggregatedResult, ResultAggregator, TaskResult } from "./aggregator.js";
 import { createResultAggregator } from "./aggregator.js";
 import type { ApprovalForwarder, ApprovalRequest } from "./approval-forwarder.js";
@@ -763,14 +765,60 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
     try {
       // Route to coder agent for implementation
-      // In a real implementation, this would parse the tasks file and execute each task
-      const handle = await this.spawnSubagent("coder", `Implement tasks from ${tasksFile}`, {
+      const taskDescription = `Implement tasks from ${tasksFile}`;
+      const handle = await this.spawnSubagent("coder", taskDescription, {
         taskId: `spec-impl-${workflowId}`,
       });
 
-      // For now, simulate successful completion
-      // TODO: Integrate with actual task execution when coder agent is fully wired
-      handle.status = "completed";
+      // Execute actual task using worker executor if subsession manager is available
+      if (this.subsessionManager && handle.subsessionId) {
+        const subsession = this.subsessionManager.get(handle.subsessionId);
+        if (subsession) {
+          // Create task packet for the worker
+          const taskPacket = createTaskPacket(
+            taskDescription,
+            { kind: "builtin", slug: "coder" },
+            "orchestrator",
+            {
+              context: {
+                chainId: this.taskToChain.get(handle.taskId),
+                files: tasksFile ? [tasksFile] : undefined,
+              },
+            }
+          );
+
+          // Configure worker execution
+          const execConfig: WorkerExecutionConfig = {
+            maxIterations: 25, // Allow more iterations for implementation tasks
+            timeout: 300000, // 5 minutes for implementation
+          };
+
+          // Execute the worker task
+          const workerResult = await executeWorkerTask(
+            "coder",
+            {
+              subsession,
+              taskPacket,
+            },
+            execConfig
+          );
+
+          // Update handle based on result
+          if (workerResult.success) {
+            handle.status = "completed";
+          } else {
+            handle.status = "failed";
+            throw workerResult.error ?? new Error("Worker execution failed");
+          }
+        } else {
+          // Subsession not found, mark as completed (fallback behavior)
+          handle.status = "completed";
+        }
+      } else {
+        // No subsession manager - use legacy behavior (mark as completed)
+        handle.status = "completed";
+      }
+
       handle.completedAt = new Date();
 
       const chainId = this.taskToChain.get(handle.taskId);

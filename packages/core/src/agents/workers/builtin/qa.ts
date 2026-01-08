@@ -4,6 +4,7 @@
 // REQ-029: Builtin worker for testing and debugging tasks
 
 import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js";
+import { executeWorkerTask } from "../worker-executor.js";
 
 /**
  * QAWorker - Level 2 worker specialized in testing and quality assurance.
@@ -13,6 +14,16 @@ import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js
  * - Debugging issues and fixing bugs
  * - Verification and validation of implementations
  * - Vitest test framework integration
+ *
+ * Uses AgentLoop for actual LLM-powered QA with tools:
+ * - read_file: Read source and test files
+ * - write_file: Create new test files
+ * - search_files: Find test patterns
+ * - codebase_search: Semantic search for code
+ * - list_dir: Explore test structure
+ * - bash/shell: Run test commands
+ * - smart_edit: Edit test files
+ * - lsp: Go-to-definition, find usages
  *
  * @example
  * ```typescript
@@ -38,49 +49,10 @@ export const qaWorker: BaseWorker = createBaseWorker({
     specializations: ["testing", "debugging", "verification", "vitest"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    const { taskPacket, signal } = context;
-
-    // Check for cancellation
-    if (signal?.aborted) {
-      return {
-        success: false,
-        error: new Error("Task cancelled"),
-      };
-    }
-
-    try {
-      // Parse task from packet
-      const task = taskPacket.task;
-      const filesModified: string[] = [];
-
-      // Determine the type of QA task
-      const lowerTask = task.toLowerCase();
-      let action = "verification";
-
-      if (lowerTask.includes("test") || lowerTask.includes("vitest")) {
-        action = "test_writing";
-      } else if (lowerTask.includes("debug") || lowerTask.includes("fix")) {
-        action = "debugging";
-      }
-
-      // TODO: Integrate with actual testing/debugging logic
-      // For now, return a placeholder result indicating the task was received
-      // The actual implementation will be connected to test runners and debugging tools
-
-      return {
-        success: true,
-        data: {
-          task,
-          action,
-          message: `QA worker processed task: ${task.substring(0, 100)}${task.length > 100 ? "..." : ""}`,
-        },
-        filesModified,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
+    // Execute using the worker executor with QA-specific configuration
+    return executeWorkerTask("qa", context, {
+      maxIterations: 20, // Tests may need multiple iterations to get right
+      timeout: 180000, // 3 minutes for test suites
+    });
   },
 });

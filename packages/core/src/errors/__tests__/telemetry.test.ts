@@ -219,7 +219,7 @@ describe("BufferedErrorTelemetry", () => {
 
       const fingerprint = telemetry.generateFingerprint(error);
 
-      expect(fingerprint).toBe("VellumError-2001-Test error message");
+      expect(fingerprint).toBe("VellumError-5010-Test error message");
     });
 
     it("should truncate message to 100 chars", () => {
@@ -229,7 +229,7 @@ describe("BufferedErrorTelemetry", () => {
 
       const fingerprint = telemetry.generateFingerprint(error);
 
-      expect(fingerprint).toBe(`VellumError-2001-${"A".repeat(100)}`);
+      expect(fingerprint).toBe(`VellumError-5010-${"A".repeat(100)}`);
     });
 
     it("should produce same fingerprint for same error type", () => {

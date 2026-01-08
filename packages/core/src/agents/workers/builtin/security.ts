@@ -4,6 +4,7 @@
 // REQ-029: Builtin worker for security analysis and auditing tasks (READ-ONLY)
 
 import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js";
+import { executeWorkerTask } from "../worker-executor.js";
 
 /**
  * SecurityWorker - Level 2 worker specialized in security analysis (READ-ONLY).
@@ -16,6 +17,13 @@ import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js
  *
  * **IMPORTANT**: This worker is READ-ONLY for audit integrity.
  * Security workers should not modify code they are auditing.
+ *
+ * Uses AgentLoop for actual LLM-powered security analysis with tools:
+ * - read_file: Read source files for audit
+ * - search_files: Find security patterns
+ * - codebase_search: Semantic search for vulnerabilities
+ * - list_dir: Explore project structure
+ * - lsp: Language server features
  *
  * @example
  * ```typescript
@@ -42,54 +50,15 @@ export const securityWorker: BaseWorker = createBaseWorker({
     specializations: ["vulnerability", "audit", "security-review", "compliance"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    const { taskPacket, signal } = context;
+    // Execute using the worker executor with security-specific configuration
+    const result = await executeWorkerTask("security", context, {
+      maxIterations: 25, // Security audits may need thorough analysis
+    });
 
-    // Check for cancellation
-    if (signal?.aborted) {
-      return {
-        success: false,
-        error: new Error("Task cancelled"),
-      };
-    }
-
-    try {
-      // Parse task from packet
-      const task = taskPacket.task;
-
-      // Determine the type of security task
-      const lowerTask = task.toLowerCase();
-      let action = "security_review";
-
-      if (lowerTask.includes("vulnerability") || lowerTask.includes("vulnerabilities")) {
-        action = "vulnerability_scan";
-      } else if (lowerTask.includes("audit")) {
-        action = "security_audit";
-      } else if (lowerTask.includes("compliance")) {
-        action = "compliance_check";
-      } else if (lowerTask.includes("review")) {
-        action = "security_review";
-      }
-
-      // TODO: Integrate with actual security scanning tools
-      // For now, return a placeholder result indicating the task was received
-      // The actual implementation will be connected to security analysis tools
-
-      // NOTE: Security worker is READ-ONLY, filesModified should always be empty
-      return {
-        success: true,
-        data: {
-          task,
-          action,
-          readOnly: true,
-          message: `Security worker processed task: ${task.substring(0, 100)}${task.length > 100 ? "..." : ""}`,
-        },
-        filesModified: [], // Always empty for read-only worker
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
+    // Ensure filesModified is always empty for read-only worker
+    return {
+      ...result,
+      filesModified: [], // Always empty for read-only worker
+    };
   },
 });

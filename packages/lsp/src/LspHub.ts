@@ -145,7 +145,7 @@ export class LspHub {
 
     const root = workspaceRoot ?? process.cwd();
     const existing = this.servers.get(serverId);
-    if (existing?.connection && existing.connection.isAlive()) {
+    if (existing?.connection?.isAlive()) {
       return this.getServer(serverId) as LspServer;
     }
 
@@ -267,7 +267,7 @@ export class LspHub {
       : dirname(resolve(filePath));
 
     const existing = this.servers.get(serverId);
-    if (existing?.connection && existing.connection.isAlive()) {
+    if (existing?.connection?.isAlive()) {
       return existing.connection;
     }
 

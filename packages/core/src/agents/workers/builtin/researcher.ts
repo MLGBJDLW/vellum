@@ -4,6 +4,7 @@
 // REQ-029: Builtin worker for research and exploration tasks (READ-ONLY)
 
 import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js";
+import { executeWorkerTask } from "../worker-executor.js";
 
 /**
  * ResearcherWorker - Level 2 worker specialized in research and exploration (READ-ONLY).
@@ -15,6 +16,15 @@ import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js
  * - Feasibility studies
  *
  * **IMPORTANT**: This worker is READ-ONLY but has network access for research.
+ *
+ * Uses AgentLoop for actual LLM-powered research with tools:
+ * - read_file: Read source files and docs
+ * - search_files: Find relevant patterns
+ * - codebase_search: Semantic search
+ * - list_dir: Explore project structure
+ * - web_fetch: Fetch web resources
+ * - web_search: Search the web
+ * - doc_lookup: Query documentation
  *
  * @example
  * ```typescript
@@ -41,54 +51,16 @@ export const researcherWorker: BaseWorker = createBaseWorker({
     specializations: ["research", "exploration", "discovery", "documentation"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    const { taskPacket, signal } = context;
+    // Execute using the worker executor with researcher-specific configuration
+    const result = await executeWorkerTask("researcher", context, {
+      maxIterations: 25, // Research may need many iterations for thorough results
+      timeout: 300000, // 5 minutes for web-based research
+    });
 
-    // Check for cancellation
-    if (signal?.aborted) {
-      return {
-        success: false,
-        error: new Error("Task cancelled"),
-      };
-    }
-
-    try {
-      // Parse task from packet
-      const task = taskPacket.task;
-
-      // Determine the type of research task
-      const lowerTask = task.toLowerCase();
-      let action = "research";
-
-      if (lowerTask.includes("exploration") || lowerTask.includes("explore")) {
-        action = "exploration";
-      } else if (lowerTask.includes("discovery") || lowerTask.includes("discover")) {
-        action = "discovery";
-      } else if (lowerTask.includes("documentation") || lowerTask.includes("docs")) {
-        action = "documentation_gathering";
-      } else if (lowerTask.includes("feasibility") || lowerTask.includes("evaluate")) {
-        action = "feasibility_study";
-      }
-
-      // TODO: Integrate with actual research tools (web search, documentation APIs, etc.)
-      // For now, return a placeholder result indicating the task was received
-      // The actual implementation will be connected to research and discovery tools
-
-      // NOTE: Researcher is READ-ONLY, filesModified should always be empty
-      return {
-        success: true,
-        data: {
-          task,
-          action,
-          readOnly: true,
-          message: `Researcher worker processed task: ${task.substring(0, 100)}${task.length > 100 ? "..." : ""}`,
-        },
-        filesModified: [], // Always empty for read-only worker
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
+    // Ensure filesModified is always empty for read-only worker
+    return {
+      ...result,
+      filesModified: [], // Always empty for read-only worker
+    };
   },
 });

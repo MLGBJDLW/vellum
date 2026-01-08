@@ -2,78 +2,22 @@
 // Vellum Error Types
 // ============================================
 
+import {
+  ErrorCode,
+  type ErrorSeverity as SharedErrorSeverity,
+  inferSeverity as sharedInferSeverity,
+} from "@vellum/shared";
 import { nanoid } from "nanoid";
 
-/**
- * Categorized error codes for the Vellum system.
- *
- * Categories:
- * - 1xxx: Configuration errors
- * - 2xxx: LLM/Provider errors
- * - 3xxx: Tool errors
- * - 4xxx: Session errors
- * - 5xxx: System errors
- * - 7xxx: Git/Snapshot errors
- */
-export enum ErrorCode {
-  // 1xxx - Configuration errors
-  CONFIG_INVALID = 1001,
-  CONFIG_NOT_FOUND = 1002,
-  CONFIG_PARSE_ERROR = 1003,
+// Re-export ErrorCode for backward compatibility
+export { ErrorCode };
 
-  // 2xxx - LLM/Provider errors
-  LLM_RATE_LIMIT = 2001,
-  LLM_CONTEXT_LENGTH = 2002,
-  LLM_AUTH_FAILED = 2003,
-  LLM_NETWORK_ERROR = 2004,
-  LLM_TIMEOUT = 2005,
-  LLM_INVALID_RESPONSE = 2006,
-  QUOTA_TERMINAL = 2010,
-  QUOTA_RETRYABLE = 2011,
-  CIRCUIT_OPEN = 2020,
-  NETWORK_ERROR = 2030,
-
-  // 3xxx - Tool errors
-  TOOL_NOT_FOUND = 3001,
-  TOOL_VALIDATION_FAILED = 3002,
-  TOOL_EXECUTION_FAILED = 3003,
-  TOOL_PERMISSION_DENIED = 3004,
-  TOOL_TIMEOUT = 3005,
-  TOOL_ABORTED = 3006,
-  PATH_SECURITY = 3007,
-  MCP_CONNECTION = 3008,
-  MCP_PROTOCOL = 3009,
-  MCP_TIMEOUT = 3010,
-  SMART_EDIT_FAILED = 3011,
-
-  // 4xxx - Session errors
-  SESSION_NOT_FOUND = 4001,
-  SESSION_EXPIRED = 4002,
-  SESSION_CONFLICT = 4003,
-
-  // 5xxx - System errors
-  SYSTEM_IO_ERROR = 5001,
-  SYSTEM_OUT_OF_MEMORY = 5002,
-  SYSTEM_UNKNOWN = 5999,
-
-  // 7xxx - Git/Snapshot errors
-  GIT_NOT_INITIALIZED = 7000,
-  GIT_SNAPSHOT_DISABLED = 7001,
-  GIT_PROTECTED_PATH = 7002,
-  GIT_OPERATION_FAILED = 7010,
-  GIT_LOCK_TIMEOUT = 7020,
-  GIT_CONFLICT = 7030,
-  GIT_DIRTY_WORKDIR = 7031,
-  GIT_BRANCH_EXISTS = 7032,
-  GIT_BRANCH_NOT_FOUND = 7033,
-  GIT_REMOTE_ERROR = 7034,
-  GIT_TIMEOUT = 7035,
-  GIT_NO_STAGED_CHANGES = 7036,
-  GIT_STASH_EMPTY = 7037,
-}
+// Re-export shared severity type with different name to avoid conflict
+export type { SharedErrorSeverity };
 
 /**
  * Error severity levels that determine handling strategy.
+ * Kept as enum for backward compatibility with existing code.
  */
 export enum ErrorSeverity {
   /** Can retry automatically */
@@ -84,59 +28,56 @@ export enum ErrorSeverity {
   FATAL = "fatal",
 }
 
+// Alias for compatibility
+export const LegacyErrorSeverity = ErrorSeverity;
+
 /**
  * Infers the appropriate severity level from an error code.
+ * Maps from the new string literal type to the legacy enum for backward compatibility.
  *
  * - Rate limit, timeout, network errors → RECOVERABLE
  * - Auth failed, validation, permission errors → USER_ACTION
  * - Out of memory, unknown errors → FATAL
  */
 export function inferSeverity(code: ErrorCode): ErrorSeverity {
-  switch (code) {
-    // Recoverable errors - can retry automatically
-    case ErrorCode.GIT_LOCK_TIMEOUT:
-    case ErrorCode.GIT_TIMEOUT:
-    case ErrorCode.GIT_REMOTE_ERROR:
-    case ErrorCode.LLM_RATE_LIMIT:
-    case ErrorCode.LLM_TIMEOUT:
-    case ErrorCode.LLM_NETWORK_ERROR:
-    case ErrorCode.NETWORK_ERROR:
-    case ErrorCode.TOOL_TIMEOUT:
-    case ErrorCode.SYSTEM_IO_ERROR:
-    case ErrorCode.MCP_TIMEOUT:
-    case ErrorCode.MCP_CONNECTION:
-    case ErrorCode.CIRCUIT_OPEN:
-      return ErrorSeverity.RECOVERABLE;
+  // Map new severity levels to legacy enum
+  const newSeverity = sharedInferSeverity(code);
 
-    // User action required - user needs to fix something
-    case ErrorCode.CONFIG_INVALID:
-    case ErrorCode.CONFIG_NOT_FOUND:
-    case ErrorCode.CONFIG_PARSE_ERROR:
-    case ErrorCode.LLM_AUTH_FAILED:
-    case ErrorCode.LLM_CONTEXT_LENGTH:
-    case ErrorCode.LLM_INVALID_RESPONSE:
-    case ErrorCode.TOOL_NOT_FOUND:
-    case ErrorCode.TOOL_VALIDATION_FAILED:
-    case ErrorCode.TOOL_PERMISSION_DENIED:
-    case ErrorCode.TOOL_EXECUTION_FAILED:
-    case ErrorCode.TOOL_ABORTED:
-    case ErrorCode.PATH_SECURITY:
-    case ErrorCode.MCP_PROTOCOL:
-    case ErrorCode.SMART_EDIT_FAILED:
-    case ErrorCode.SESSION_NOT_FOUND:
-    case ErrorCode.SESSION_EXPIRED:
-    case ErrorCode.GIT_NOT_INITIALIZED:
-    case ErrorCode.GIT_SNAPSHOT_DISABLED:
-    case ErrorCode.GIT_PROTECTED_PATH:
-    case ErrorCode.GIT_OPERATION_FAILED:
-    case ErrorCode.GIT_CONFLICT:
-    case ErrorCode.GIT_DIRTY_WORKDIR:
-    case ErrorCode.GIT_BRANCH_EXISTS:
-    case ErrorCode.GIT_BRANCH_NOT_FOUND:
-    case ErrorCode.GIT_NO_STAGED_CHANGES:
-    case ErrorCode.GIT_STASH_EMPTY:
-    case ErrorCode.SESSION_CONFLICT:
-      return ErrorSeverity.USER_ACTION;
+  switch (newSeverity) {
+    case "low":
+    case "medium":
+      // Recoverable errors - can retry automatically
+      // Check specific codes for more granular mapping
+      switch (code) {
+        case ErrorCode.GIT_LOCK_TIMEOUT:
+        case ErrorCode.GIT_TIMEOUT:
+        case ErrorCode.GIT_REMOTE_ERROR:
+        case ErrorCode.LLM_RATE_LIMIT:
+        case ErrorCode.LLM_TIMEOUT:
+        case ErrorCode.LLM_NETWORK_ERROR:
+        case ErrorCode.NETWORK_ERROR:
+        case ErrorCode.TOOL_TIMEOUT:
+        case ErrorCode.SYSTEM_IO_ERROR:
+        case ErrorCode.MCP_TIMEOUT:
+        case ErrorCode.MCP_CONNECTION:
+        case ErrorCode.CIRCUIT_OPEN:
+        case ErrorCode.RATE_LIMITED:
+        case ErrorCode.SERVICE_UNAVAILABLE:
+        case ErrorCode.QUOTA_RETRYABLE:
+          return ErrorSeverity.RECOVERABLE;
+        default:
+          return ErrorSeverity.USER_ACTION;
+      }
+    case "high":
+    case "critical":
+      // Check for recoverable high severity errors
+      switch (code) {
+        case ErrorCode.TIMEOUT:
+        case ErrorCode.SYSTEM_IO_ERROR:
+          return ErrorSeverity.RECOVERABLE;
+        default:
+          return ErrorSeverity.FATAL;
+      }
     default:
       return ErrorSeverity.FATAL;
   }

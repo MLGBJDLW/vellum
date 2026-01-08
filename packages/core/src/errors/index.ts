@@ -73,6 +73,8 @@ export {
   inferSeverity,
   isFatalError,
   isRetryableError,
+  LegacyErrorSeverity,
+  type SharedErrorSeverity,
   VellumError,
   type VellumErrorOptions,
 } from "./types.js";

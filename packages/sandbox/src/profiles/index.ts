@@ -96,7 +96,6 @@ export function configFromTrustPreset(preset: TrustPreset, workingDir: string): 
         workingDir,
         enableAudit: false,
       };
-    case "default":
     default:
       return {
         id: randomUUID(),

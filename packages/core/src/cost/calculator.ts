@@ -301,9 +301,6 @@ function adjustInputTokensForProvider(
     case "openai":
       // OpenAI includes cached tokens in prompt_tokens, subtract to avoid double-counting
       return Math.max(0, inputTokens - cacheReadTokens);
-    case "anthropic":
-    case "google":
-    case "deepseek":
     default:
       // These providers report cache tokens separately
       return inputTokens;

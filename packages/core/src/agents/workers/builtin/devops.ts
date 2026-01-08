@@ -4,6 +4,7 @@
 // REQ-029: Builtin worker for deployment and infrastructure tasks
 
 import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js";
+import { executeWorkerTask } from "../worker-executor.js";
 
 /**
  * DevOpsWorker - Level 2 worker specialized in DevOps and infrastructure.
@@ -15,6 +16,14 @@ import { type BaseWorker, createBaseWorker, type WorkerResult } from "../base.js
  * - Infrastructure management
  *
  * **FULL ACCESS**: Can edit files, execute commands, and make network requests.
+ *
+ * Uses AgentLoop for actual LLM-powered DevOps with tools:
+ * - read_file: Read config files
+ * - write_file: Create configs and scripts
+ * - search_files: Find relevant files
+ * - list_dir: Explore project structure
+ * - bash/shell: Run deployment commands
+ * - smart_edit: Edit configurations
  *
  * @example
  * ```typescript
@@ -41,57 +50,10 @@ export const devopsWorker: BaseWorker = createBaseWorker({
     specializations: ["deployment", "ci-cd", "docker", "infrastructure"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    const { taskPacket, signal } = context;
-
-    // Check for cancellation
-    if (signal?.aborted) {
-      return {
-        success: false,
-        error: new Error("Task cancelled"),
-      };
-    }
-
-    try {
-      // Parse task from packet
-      const task = taskPacket.task;
-      const filesModified: string[] = [];
-
-      // Determine the type of DevOps task
-      const lowerTask = task.toLowerCase();
-      let action = "devops_operation";
-
-      if (lowerTask.includes("deploy")) {
-        action = "deployment";
-      } else if (
-        lowerTask.includes("ci") ||
-        lowerTask.includes("cd") ||
-        lowerTask.includes("pipeline")
-      ) {
-        action = "ci_cd_setup";
-      } else if (lowerTask.includes("docker") || lowerTask.includes("container")) {
-        action = "containerization";
-      } else if (lowerTask.includes("infrastructure") || lowerTask.includes("infra")) {
-        action = "infrastructure_management";
-      }
-
-      // TODO: Integrate with actual DevOps tooling
-      // For now, return a placeholder result indicating the task was received
-      // The actual implementation will be connected to deployment and infrastructure tools
-
-      return {
-        success: true,
-        data: {
-          task,
-          action,
-          message: `DevOps worker processed task: ${task.substring(0, 100)}${task.length > 100 ? "..." : ""}`,
-        },
-        filesModified,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
+    // Execute using the worker executor with devops-specific configuration
+    return executeWorkerTask("devops", context, {
+      maxIterations: 20, // DevOps tasks may involve multiple steps
+      timeout: 300000, // 5 minutes for deployment tasks
+    });
   },
 });

@@ -9,39 +9,39 @@ import {
 } from "../types.js";
 
 describe("ErrorCode", () => {
-  it("should have configuration error codes in 1xxx range", () => {
-    expect(ErrorCode.CONFIG_INVALID).toBe(1001);
-    expect(ErrorCode.CONFIG_NOT_FOUND).toBe(1002);
-    expect(ErrorCode.CONFIG_PARSE_ERROR).toBe(1003);
+  it("should have configuration error codes in 3xxx range", () => {
+    expect(ErrorCode.CONFIG_INVALID).toBe(3001);
+    expect(ErrorCode.CONFIG_NOT_FOUND).toBe(3002);
+    expect(ErrorCode.CONFIG_PARSE_ERROR).toBe(3003);
   });
 
-  it("should have LLM error codes in 2xxx range", () => {
-    expect(ErrorCode.LLM_RATE_LIMIT).toBe(2001);
-    expect(ErrorCode.LLM_CONTEXT_LENGTH).toBe(2002);
-    expect(ErrorCode.LLM_AUTH_FAILED).toBe(2003);
-    expect(ErrorCode.LLM_NETWORK_ERROR).toBe(2004);
-    expect(ErrorCode.LLM_TIMEOUT).toBe(2005);
-    expect(ErrorCode.LLM_INVALID_RESPONSE).toBe(2006);
+  it("should have LLM error codes in 5xxx range", () => {
+    expect(ErrorCode.LLM_RATE_LIMIT).toBe(5010);
+    expect(ErrorCode.LLM_CONTEXT_LENGTH).toBe(5011);
+    expect(ErrorCode.LLM_AUTH_FAILED).toBe(5012);
+    expect(ErrorCode.LLM_NETWORK_ERROR).toBe(5013);
+    expect(ErrorCode.LLM_TIMEOUT).toBe(5014);
+    expect(ErrorCode.LLM_INVALID_RESPONSE).toBe(5015);
   });
 
-  it("should have tool error codes in 3xxx range", () => {
-    expect(ErrorCode.TOOL_NOT_FOUND).toBe(3001);
-    expect(ErrorCode.TOOL_VALIDATION_FAILED).toBe(3002);
-    expect(ErrorCode.TOOL_EXECUTION_FAILED).toBe(3003);
-    expect(ErrorCode.TOOL_PERMISSION_DENIED).toBe(3004);
-    expect(ErrorCode.TOOL_TIMEOUT).toBe(3005);
+  it("should have tool error codes in 6xxx range", () => {
+    expect(ErrorCode.TOOL_NOT_FOUND).toBe(6001);
+    expect(ErrorCode.TOOL_VALIDATION_FAILED).toBe(6002);
+    expect(ErrorCode.TOOL_EXECUTION_FAILED).toBe(6003);
+    expect(ErrorCode.TOOL_PERMISSION_DENIED).toBe(6004);
+    expect(ErrorCode.TOOL_TIMEOUT).toBe(6005);
   });
 
-  it("should have session error codes in 4xxx range", () => {
-    expect(ErrorCode.SESSION_NOT_FOUND).toBe(4001);
-    expect(ErrorCode.SESSION_EXPIRED).toBe(4002);
-    expect(ErrorCode.SESSION_CONFLICT).toBe(4003);
+  it("should have session error codes in 7xxx range", () => {
+    expect(ErrorCode.SESSION_NOT_FOUND).toBe(7001);
+    expect(ErrorCode.SESSION_EXPIRED).toBe(7002);
+    expect(ErrorCode.SESSION_CONFLICT).toBe(7003);
   });
 
-  it("should have system error codes in 5xxx range", () => {
-    expect(ErrorCode.SYSTEM_IO_ERROR).toBe(5001);
-    expect(ErrorCode.SYSTEM_OUT_OF_MEMORY).toBe(5002);
-    expect(ErrorCode.SYSTEM_UNKNOWN).toBe(5999);
+  it("should have system error codes in 1xxx range", () => {
+    expect(ErrorCode.UNKNOWN).toBe(1000);
+    expect(ErrorCode.SYSTEM_IO_ERROR).toBe(1010);
+    expect(ErrorCode.SYSTEM_OUT_OF_MEMORY).toBe(1011);
   });
 
   it("should have all error codes as numbers", () => {
@@ -127,7 +127,7 @@ describe("inferSeverity", () => {
     });
 
     it("should return FATAL for unknown errors", () => {
-      expect(inferSeverity(ErrorCode.SYSTEM_UNKNOWN)).toBe(ErrorSeverity.FATAL);
+      expect(inferSeverity(ErrorCode.UNKNOWN)).toBe(ErrorSeverity.FATAL);
     });
   });
 });
@@ -202,18 +202,18 @@ describe("VellumError", () => {
   });
 
   it("should generate errorId with nanoid (21 chars) - AC-004-1", () => {
-    const error = new VellumError("Test error", ErrorCode.SYSTEM_UNKNOWN);
+    const error = new VellumError("Test error", ErrorCode.UNKNOWN);
     expect(error.errorId).toBeDefined();
     expect(typeof error.errorId).toBe("string");
     expect(error.errorId.length).toBe(21);
     // Each error should have unique ID
-    const error2 = new VellumError("Another error", ErrorCode.SYSTEM_UNKNOWN);
+    const error2 = new VellumError("Another error", ErrorCode.UNKNOWN);
     expect(error.errorId).not.toBe(error2.errorId);
   });
 
   it("should generate ISO-8601 UTC timestamp - AC-004-2", () => {
     const before = new Date().toISOString();
-    const error = new VellumError("Test error", ErrorCode.SYSTEM_UNKNOWN);
+    const error = new VellumError("Test error", ErrorCode.UNKNOWN);
     const after = new Date().toISOString();
 
     expect(error.timestamp).toBeDefined();
@@ -324,7 +324,7 @@ describe("VellumError", () => {
   });
 
   it("should be instanceof Error", () => {
-    const error = new VellumError("Test", ErrorCode.SYSTEM_UNKNOWN);
+    const error = new VellumError("Test", ErrorCode.UNKNOWN);
     expect(error).toBeInstanceOf(Error);
     expect(error).toBeInstanceOf(VellumError);
   });
@@ -397,7 +397,7 @@ describe("cause chaining", () => {
     const middleError = new VellumError("Provider unavailable", ErrorCode.LLM_NETWORK_ERROR, {
       cause: rootCause,
     });
-    const topError = new VellumError("Agent failed", ErrorCode.SYSTEM_UNKNOWN, {
+    const topError = new VellumError("Agent failed", ErrorCode.UNKNOWN, {
       cause: middleError,
     });
 
@@ -406,7 +406,7 @@ describe("cause chaining", () => {
   });
 
   it("should handle undefined cause", () => {
-    const error = new VellumError("Test error", ErrorCode.SYSTEM_UNKNOWN);
+    const error = new VellumError("Test error", ErrorCode.UNKNOWN);
     expect(error.cause).toBeUndefined();
   });
 });
@@ -484,7 +484,7 @@ describe("getFriendlyMessage", () => {
   describe("message truncation", () => {
     it("should truncate messages longer than 200 characters", () => {
       const longMessage = "A".repeat(250);
-      const error = new VellumError(longMessage, ErrorCode.SYSTEM_UNKNOWN);
+      const error = new VellumError(longMessage, ErrorCode.UNKNOWN);
       const friendly = error.getFriendlyMessage();
       expect(friendly.length).toBe(200);
       expect(friendly.endsWith("...")).toBe(true);
@@ -493,13 +493,13 @@ describe("getFriendlyMessage", () => {
 
     it("should not truncate messages exactly 200 characters", () => {
       const exactMessage = "B".repeat(200);
-      const error = new VellumError(exactMessage, ErrorCode.SYSTEM_UNKNOWN);
+      const error = new VellumError(exactMessage, ErrorCode.UNKNOWN);
       expect(error.getFriendlyMessage()).toBe(exactMessage);
     });
 
     it("should not truncate messages shorter than 200 characters", () => {
       const shortMessage = "Short error message";
-      const error = new VellumError(shortMessage, ErrorCode.SYSTEM_UNKNOWN);
+      const error = new VellumError(shortMessage, ErrorCode.UNKNOWN);
       expect(error.getFriendlyMessage()).toBe(shortMessage);
     });
   });
