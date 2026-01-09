@@ -14,7 +14,6 @@ import {
   createWelcomeStep,
   formatCompletionMessage,
   formatCredentialPrompt,
-  formatModeList,
   formatQuickStart,
   formatWelcomeContent,
   getRecommendedSource,
@@ -239,33 +238,91 @@ function CredentialSetupContent({
 }
 
 /**
- * Mode selection content
+ * Mode selection content with arrow-key navigation
  */
 function ModeSelectContent({
-  onInputChange,
-  inputValue,
+  onSelect,
   error,
 }: {
-  onInputChange: (value: string) => void;
-  inputValue: string;
+  onSelect: (mode: string) => void;
   error: string | null;
 }): React.ReactElement {
   const { theme } = useTheme();
+  const { t } = useTUITranslation();
   const modeStep = createModeSelectStep();
   const modes = modeStep.getModes();
 
+  // Track focused index for keyboard navigation
+  const [focusedIndex, setFocusedIndex] = useState(0);
+
+  // Handle keyboard input
+  useInput(
+    useCallback(
+      (input: string, key) => {
+        // Arrow navigation
+        if (key.upArrow || input === "k") {
+          setFocusedIndex((prev) => (prev > 0 ? prev - 1 : modes.length - 1));
+          return;
+        }
+
+        if (key.downArrow || input === "j") {
+          setFocusedIndex((prev) => (prev < modes.length - 1 ? prev + 1 : 0));
+          return;
+        }
+
+        // Confirm selection with Enter
+        if (key.return) {
+          const selected = modes[focusedIndex];
+          if (selected) {
+            onSelect(selected.id);
+          }
+        }
+      },
+      [focusedIndex, modes, onSelect]
+    )
+  );
+
   return (
     <Box flexDirection="column">
-      <Text>{formatModeList(modes)}</Text>
-      <Box marginTop={1}>
-        <Text color={theme.colors.info}>{">"} </Text>
-        <TextInput value={inputValue} onChange={onInputChange} />
+      <Text bold>{t("onboarding.selectMode")}</Text>
+      <Box flexDirection="column" marginTop={1}>
+        {modes.map((mode, index) => {
+          const isFocused = index === focusedIndex;
+          const indicator = isFocused ? ">" : " ";
+
+          return (
+            <Box key={mode.id} flexDirection="column">
+              <Text color={isFocused ? theme.colors.primary : undefined} bold={isFocused}>
+                {indicator} {mode.icon} {mode.name}
+              </Text>
+              <Text
+                color={isFocused ? theme.colors.primary : theme.colors.muted}
+                dimColor={!isFocused}
+              >
+                {"   "}
+                {mode.description}
+              </Text>
+              <Text
+                color={isFocused ? theme.colors.primary : theme.colors.muted}
+                dimColor={!isFocused}
+              >
+                {"   "}Best for: {mode.useCase}
+              </Text>
+            </Box>
+          );
+        })}
       </Box>
       {error && (
         <Box marginTop={1}>
           <Text color={theme.colors.error}>! {error}</Text>
         </Box>
       )}
+      <Box marginTop={1}>
+        <Text color={theme.colors.muted}>{t("onboarding.modeNav")}</Text>
+      </Box>
+      <Box>
+        <Text color={theme.colors.info}>{t("onboarding.modeSwitchHint")}</Text>
+      </Box>
     </Box>
   );
 }
@@ -381,6 +438,37 @@ export function OnboardingWizard({
     [wizard]
   );
 
+  // Handle mode selection (from arrow-key selector)
+  const handleModeSelect = useCallback(
+    async (mode: string) => {
+      setState((s) => ({ ...s, isLoading: true, error: null }));
+
+      try {
+        const result = await wizard.executeModeSelect(mode);
+        if (result.success && result.next) {
+          setState((s) => ({
+            ...s,
+            step: "complete",
+            input: "",
+            isLoading: false,
+            selectedMode: (result.data?.mode as string) || mode,
+          }));
+        } else if (result.back) {
+          setState((s) => ({ ...s, step: "credential-setup", input: "", isLoading: false }));
+        } else if (result.error) {
+          setState((s) => ({ ...s, error: result.error || null, isLoading: false }));
+        }
+      } catch (err) {
+        setState((s) => ({
+          ...s,
+          error: err instanceof Error ? err.message : "An error occurred",
+          isLoading: false,
+        }));
+      }
+    },
+    [wizard]
+  );
+
   // Handle step submission
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Wizard step handling requires processing multiple step types with different logic
   const handleSubmit = useCallback(async () => {
@@ -455,15 +543,12 @@ export function OnboardingWizard({
           await wizard.executeComplete();
           await wizard.saveConfig();
 
-          // Fire completion callback
+          // Fire completion callback - parent component handles transition
           onComplete?.({
             provider: state.selectedProvider || "anthropic",
             mode: state.selectedMode || "vibe",
             credentialsConfigured: state.credentialsConfigured,
           });
-
-          // Exit the wizard
-          exit();
           break;
         }
       }
@@ -474,7 +559,7 @@ export function OnboardingWizard({
         isLoading: false,
       }));
     }
-  }, [state, wizard, onComplete, exit]);
+  }, [state, wizard, onComplete]);
 
   // Handle keyboard input
   useInput(
@@ -529,13 +614,7 @@ export function OnboardingWizard({
         );
 
       case "mode-select":
-        return (
-          <ModeSelectContent
-            onInputChange={handleInputChange}
-            inputValue={state.input}
-            error={state.error}
-          />
-        );
+        return <ModeSelectContent onSelect={handleModeSelect} error={state.error} />;
 
       case "complete":
         return (
