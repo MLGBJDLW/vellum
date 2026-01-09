@@ -10,7 +10,7 @@
 import { Box, Text, useStdout } from "ink";
 import Gradient from "ink-gradient";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { selectAsciiArt } from "./AsciiArt.js";
 import { useShimmer } from "./useShimmer.js";
 
@@ -146,6 +146,10 @@ export function Banner({
   const [visible, setVisible] = useState(true);
   const [opacity, setOpacity] = useState(1);
 
+  // Refs for nested timer cleanup
+  const step1Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const step2Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Get terminal dimensions for responsive art selection
   const terminalWidth = stdout?.columns ?? 80;
 
@@ -170,23 +174,22 @@ export function Banner({
       // Quick fade: 0.7 -> 0 in 300ms total
       setOpacity(0.7);
 
-      const step1 = setTimeout(() => {
+      step1Ref.current = setTimeout(() => {
         setOpacity(0.3);
       }, 100);
 
-      const step2 = setTimeout(() => {
+      step2Ref.current = setTimeout(() => {
         setOpacity(0);
         setVisible(false);
         onComplete?.();
       }, 200);
-
-      return () => {
-        clearTimeout(step1);
-        clearTimeout(step2);
-      };
     }, displayDuration - 300);
 
-    return () => clearTimeout(hideTimer);
+    return () => {
+      clearTimeout(hideTimer);
+      if (step1Ref.current) clearTimeout(step1Ref.current);
+      if (step2Ref.current) clearTimeout(step2Ref.current);
+    };
   }, [autoHide, displayDuration, onComplete]);
 
   if (!visible) return null;
