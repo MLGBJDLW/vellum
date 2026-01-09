@@ -112,6 +112,8 @@ export interface ChatOptions {
   sandbox?: SandboxPolicy;
   /** Full-auto shortcut flag */
   fullAuto?: boolean;
+  /** UI theme (dark, parchment, dracula, etc.) */
+  theme?: string;
 }
 
 /**
@@ -179,6 +181,8 @@ program
   .option("--sandbox <policy>", `Set sandbox policy (${SANDBOX_POLICIES.join("|")})`, parseSandbox)
   // T040: --full-auto shortcut
   .option("--full-auto", "Shortcut for --mode=vibe --approval=full-auto", false)
+  // Theme selection
+  .option("--theme <theme>", "UI theme (dark|parchment|dracula|etc.)", "parchment")
   .action((options: ChatOptions) => {
     // T040: Apply --full-auto shortcut
     let effectiveMode = options.mode;
@@ -198,6 +202,7 @@ program
         mode={effectiveMode}
         approval={effectiveApproval}
         sandbox={options.sandbox}
+        theme={options.theme as import("./tui/theme/index.js").ThemeName}
       />
     );
   });

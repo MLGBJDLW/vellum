@@ -8,7 +8,7 @@
  */
 
 import type { ToolExecutor, ToolRegistry } from "@vellum/core";
-import type { ThemePreset, VellumTheme } from "@vellum/shared";
+import type { ThemeName, ThemePreset, VellumTheme } from "@vellum/shared";
 import type React from "react";
 import type { ReactNode } from "react";
 
@@ -32,11 +32,11 @@ export interface RootProviderProps {
   readonly children: ReactNode;
 
   /**
-   * Theme configuration - can be a theme preset name or a VellumTheme object
+   * Theme configuration - can be a theme name, preset, or VellumTheme object
    *
    * @default "dark"
    */
-  readonly theme?: ThemePreset | VellumTheme;
+  readonly theme?: ThemeName | ThemePreset | VellumTheme;
 
   /**
    * Initial application state overrides

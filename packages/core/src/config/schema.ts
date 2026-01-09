@@ -338,6 +338,8 @@ export const ConfigSchema = z
     workingDir: z.string().optional(),
     debug: z.boolean().optional().default(false),
     logLevel: LogLevelSchema.optional().default("info"),
+    /** UI theme name (dark, parchment, dracula, etc.) */
+    theme: z.string().optional(),
   })
   .transform((data) => ({
     ...data,

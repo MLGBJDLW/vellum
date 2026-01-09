@@ -110,9 +110,36 @@ import { getMetricsManager, type TuiMetricsManager } from "./tui/metrics-integra
 import { createResilientProvider, type ResilientProvider } from "./tui/resilience.js";
 // Sandbox integration (T063)
 import { cleanupSandbox, initializeSandbox } from "./tui/sandbox-integration.js";
-
+import type { ThemeName } from "./tui/theme/index.js";
 // Tip integration (T069)
 import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
+
+/**
+ * Get default model for a given provider
+ */
+function getDefaultModelForProvider(provider: string): string {
+  const defaults: Record<string, string> = {
+    anthropic: "claude-sonnet-4-20250514",
+    openai: "gpt-4o",
+    google: "gemini-2.0-flash",
+    "azure-openai": "gpt-4o",
+    gemini: "gemini-2.0-flash",
+    "vertex-ai": "gemini-2.0-flash",
+    cohere: "command-r-plus",
+    mistral: "mistral-large-latest",
+    groq: "llama-3.3-70b-versatile",
+    fireworks: "accounts/fireworks/models/llama-v3p1-70b-instruct",
+    together: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+    perplexity: "llama-3.1-sonar-large-128k-online",
+    bedrock: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    ollama: "llama3.2",
+    openrouter: "anthropic/claude-3.5-sonnet",
+    deepseek: "deepseek-chat",
+    qwen: "qwen-max",
+    moonshot: "moonshot-v1-8k",
+  };
+  return defaults[provider] ?? "claude-sonnet-4-20250514";
+}
 
 /**
  * Props for the App component.
@@ -131,6 +158,8 @@ interface AppProps {
   sandbox?: SandboxPolicy;
   /** Optional AgentLoop instance for real agent integration */
   agentLoop?: AgentLoop;
+  /** UI theme (dark, parchment, dracula, etc.) */
+  theme?: ThemeName;
 }
 
 /**
@@ -227,9 +256,10 @@ export function App({
   approval: _approval,
   sandbox: _sandbox,
   agentLoop: agentLoopProp,
+  theme = "parchment",
 }: AppProps) {
   return (
-    <RootProvider theme="dark">
+    <RootProvider theme={theme}>
       <AppContent
         model={model}
         provider={provider}
@@ -1308,7 +1338,14 @@ function AppContent({
       process.env.VELLUM_ONBOARDED = "true";
       setShowOnboarding(false);
       setCurrentProvider(result.provider);
+      // Task 4: Sync model with provider selection
+      const defaultModel = getDefaultModelForProvider(result.provider);
+      setCurrentModel(defaultModel);
       setCurrentMode(result.mode as CodingMode);
+      // Task 5: Persist configuration (environment-based for now, config file in production)
+      process.env.VELLUM_PROVIDER = result.provider;
+      process.env.VELLUM_MODEL = defaultModel;
+      process.env.VELLUM_MODE = result.mode;
       announce("Welcome to Vellum! Onboarding complete.");
     },
     [announce]
