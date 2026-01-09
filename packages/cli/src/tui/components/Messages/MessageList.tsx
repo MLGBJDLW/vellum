@@ -13,6 +13,7 @@ import { Box, Text, useInput } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Message } from "../../context/MessagesContext.js";
 import { useTheme } from "../../theme/index.js";
+import { StreamingText } from "./StreamingText.js";
 
 // =============================================================================
 // Types
@@ -126,9 +127,13 @@ function MessageItem({ message, roleColor, textColor, mutedColor }: MessageItemP
 
       {/* Message content */}
       <Box marginLeft={2} marginTop={0}>
-        <Text color={textColor} wrap="wrap">
-          {message.content || (message.isStreaming ? "..." : "(empty)")}
-        </Text>
+        {message.isStreaming ? (
+          <StreamingText content={message.content || ""} isStreaming={true} />
+        ) : (
+          <Text color={textColor} wrap="wrap">
+            {message.content || "(empty)"}
+          </Text>
+        )}
       </Box>
 
       {/* Tool calls, if any */}

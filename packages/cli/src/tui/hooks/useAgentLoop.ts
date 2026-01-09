@@ -167,6 +167,9 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
   // Track thinking start time for duration calculation
   const thinkingStartRef = useRef<number | null>(null);
 
+  // Track tool clear timeout for cleanup (T038 fix)
+  const toolClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Track current streaming message for accumulation
   const currentMessageRef = useRef<{
     id: string;
@@ -266,9 +269,15 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
         return prev;
       });
 
+      // Clear previous timeout if exists (prevent memory leaks)
+      if (toolClearTimeoutRef.current) {
+        clearTimeout(toolClearTimeoutRef.current);
+      }
+
       // Clear tool after a short delay
-      setTimeout(() => {
+      toolClearTimeoutRef.current = setTimeout(() => {
         setCurrentTool((prev) => (prev?.callId === callId ? null : prev));
+        toolClearTimeoutRef.current = null;
       }, 100);
     };
 
@@ -288,6 +297,55 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       thinkingStartRef.current = null;
     };
 
+    // Message handler - log or store full message content
+    const handleMessage = (_content: string) => {
+      // Message events are handled via text accumulation
+      // This handler can be extended for message-level operations
+    };
+
+    // Tool call handler - track pending tool calls
+    const handleToolCall = (id: string, name: string, input: Record<string, unknown>) => {
+      setCurrentTool({
+        callId: id,
+        name,
+        input,
+        status: "pending",
+      });
+    };
+
+    // Usage handler - track token usage
+    const handleUsage = (_usage: { inputTokens: number; outputTokens: number }) => {
+      // Token usage can be tracked here for display
+      // This data is also available in ContextProgress via context
+    };
+
+    // Terminated handler - handle cancellation/termination
+    const handleTerminated = () => {
+      setCurrentTool(null);
+      setThinking("");
+      thinkingStartRef.current = null;
+    };
+
+    // Loop detected handler - show warning to user
+    const handleLoopDetected = (_result: {
+      detected: boolean;
+      confidence: number;
+      reason?: string;
+    }) => {
+      // Loop detection can trigger UI feedback
+      // Consider emitting a warning message or status
+    };
+
+    // Retry handler - show retry feedback
+    const handleRetry = (_attempt: number, _error: Error, _delay: number) => {
+      // Retry events can be used for UI feedback
+    };
+
+    // Retry exhausted handler - show retry failure
+    const handleRetryExhausted = (err: Error, _attempts: number) => {
+      setError(err);
+    };
+
     // Subscribe to events
     loop.on("stateChange", handleStateChange);
     loop.on("text", handleText);
@@ -296,9 +354,23 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     loop.on("toolEnd", handleToolEnd);
     loop.on("error", handleError);
     loop.on("complete", handleComplete);
+    loop.on("message", handleMessage);
+    loop.on("toolCall", handleToolCall);
+    loop.on("usage", handleUsage);
+    loop.on("terminated", handleTerminated);
+    loop.on("loopDetected", handleLoopDetected);
+    loop.on("retry", handleRetry);
+    loop.on("retryExhausted", handleRetryExhausted);
 
-    // Cleanup subscriptions
+    // Cleanup subscriptions and timers
     return () => {
+      // Clear tool timeout to prevent memory leaks
+      if (toolClearTimeoutRef.current) {
+        clearTimeout(toolClearTimeoutRef.current);
+        toolClearTimeoutRef.current = null;
+      }
+
+      // Unsubscribe from all events
       loop.off("stateChange", handleStateChange);
       loop.off("text", handleText);
       loop.off("thinking", handleThinking);
@@ -306,6 +378,13 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       loop.off("toolEnd", handleToolEnd);
       loop.off("error", handleError);
       loop.off("complete", handleComplete);
+      loop.off("message", handleMessage);
+      loop.off("toolCall", handleToolCall);
+      loop.off("usage", handleUsage);
+      loop.off("terminated", handleTerminated);
+      loop.off("loopDetected", handleLoopDetected);
+      loop.off("retry", handleRetry);
+      loop.off("retryExhausted", handleRetryExhausted);
     };
   }, [loop]);
 

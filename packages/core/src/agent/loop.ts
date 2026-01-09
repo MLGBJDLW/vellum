@@ -51,7 +51,7 @@ import {
   TerminationChecker,
   type TerminationContext,
   type TerminationLimits,
-  type TerminationReason,
+  TerminationReason,
   type TerminationResult,
   type ToolCallInfo,
 } from "./termination.js";
@@ -1033,6 +1033,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // After all tools executed, transition back to streaming or idle
     if (!this.cancellation.isCancelled && this.state === "tool_executing") {
       this.transitionTo("streaming");
+      // Emit complete after all tool calls finish (T038 fix)
+      this.emit("complete");
     }
   }
 
@@ -1533,6 +1535,16 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.cancellation.cancel(reason);
     this.abortController?.abort();
     this.transitionTo("terminated");
+
+    // Emit terminated event with reason (T038 fix)
+    this.emit("terminated", TerminationReason.CANCELLED, {
+      shouldTerminate: true,
+      reason: TerminationReason.CANCELLED,
+      metadata: reason ? { stepsExecuted: this.terminationContext.stepCount } : undefined,
+    });
+
+    // Also emit complete to finalize any pending operations (T038 fix)
+    this.emit("complete");
 
     // Dispose AGENTS.md integration
     if (this.agentsIntegration) {

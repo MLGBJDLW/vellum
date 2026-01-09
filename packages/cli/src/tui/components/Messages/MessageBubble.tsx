@@ -12,6 +12,7 @@ import { getIcons, getRoleBorderColor, getRoleTextColor, type VellumTheme } from
 import { Box, Text } from "ink";
 import type { Message } from "../../context/MessagesContext.js";
 import { useTheme } from "../../theme/index.js";
+import { StreamingText } from "./StreamingText.js";
 
 // =============================================================================
 // Types
@@ -193,9 +194,13 @@ export function MessageBubble({
 
         {/* Message content */}
         <Box marginLeft={showAvatar ? 2 : 0} marginTop={compact ? 0 : 0}>
-          <Text color={textColor} wrap="wrap">
-            {message.content || (message.isStreaming ? "..." : "(empty)")}
-          </Text>
+          {message.isStreaming ? (
+            <StreamingText content={message.content || ""} isStreaming={true} />
+          ) : (
+            <Text color={textColor} wrap="wrap">
+              {message.content || "(empty)"}
+            </Text>
+          )}
         </Box>
 
         {/* Tool calls, if any */}
