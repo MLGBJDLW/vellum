@@ -38,13 +38,8 @@ import { ModelSelector } from "./tui/components/ModelSelector.js";
 import { ModeSelector } from "./tui/components/ModeSelector.js";
 import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
-import { AgentModeIndicator } from "./tui/components/StatusBar/AgentModeIndicator.js";
 import { StatusBar } from "./tui/components/StatusBar/StatusBar.js";
-import { ThinkingModeIndicator } from "./tui/components/StatusBar/ThinkingModeIndicator.js";
-import {
-  type TrustMode,
-  TrustModeIndicator,
-} from "./tui/components/StatusBar/TrustModeIndicator.js";
+import type { TrustMode } from "./tui/components/StatusBar/TrustModeIndicator.js";
 import { SessionPicker } from "./tui/components/session/SessionPicker.js";
 import type { SessionMetadata } from "./tui/components/session/types.js";
 // Message enhancement components
@@ -453,11 +448,28 @@ function AppContent({
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isFirstRun, setIsFirstRun] = useState(false);
 
-  // Check onboarding completion status on mount
+  // Model selection state (moved earlier for onboarding config loading)
+  const [currentModel, setCurrentModel] = useState(model);
+  const [currentProvider, setCurrentProvider] = useState(provider);
+
+  // Check onboarding completion status on mount and load saved config
   useEffect(() => {
     const checkOnboarding = async () => {
       const completed = await CoreOnboardingWizard.isCompleted();
       setIsFirstRun(!completed);
+
+      // Issue 2 Fix: Load saved config if onboarding was completed
+      if (completed) {
+        const wizard = new CoreOnboardingWizard();
+        const loadResult = await wizard.loadState();
+        if (loadResult.ok) {
+          const config = wizard.generateConfig();
+          if (config.provider && config.model) {
+            setCurrentProvider(config.provider);
+            setCurrentModel(config.model);
+          }
+        }
+      }
     };
     void checkOnboarding();
   }, []);
@@ -495,8 +507,8 @@ function AppContent({
     saveSession,
     loadSession,
     clearSession,
-    isSaving,
-    isLoading: isSessionLoading,
+    isSaving: _isSaving,
+    isLoading: _isSessionLoading,
     error: sessionError,
   } = useSessionAdapter({
     sessionId: activeSessionId,
@@ -1322,10 +1334,6 @@ function AppContent({
     [announce]
   );
 
-  // Model selection state
-  const [currentModel, setCurrentModel] = useState(model);
-  const [currentProvider, setCurrentProvider] = useState(provider);
-
   // Handle model selection
   const handleModelSelect = useCallback(
     (selectedProvider: string, selectedModel: string) => {
@@ -1477,33 +1485,14 @@ function AppContent({
   // Enhanced Status Bar with Indicators
   // ==========================================================================
   const renderEnhancedStatusBar = () => (
-    <Box flexDirection="row" gap={1}>
-      <StatusBar
-        mode={currentMode}
-        modelName={currentModel}
-        tokens={{ current: totalTokens, max: contextWindow }}
-        cost={tokenUsage.totalCost}
-      />
-      {/* Fix 2: ModeIndicator and TokenCounter removed - now in StatusBar */}
-      <ThinkingModeIndicator active={isThinking} />
-      <TrustModeIndicator mode={trustMode} />
-      <AgentModeIndicator agentName="orchestrator" level={0} />
-      {isSaving && (
-        <Box>
-          <Text color={themeContext.theme.colors.muted}>[S]</Text>
-        </Box>
-      )}
-      {isSessionLoading && (
-        <Box>
-          <Text color={themeContext.theme.colors.info}>[...]</Text>
-        </Box>
-      )}
-      {agentAdapter.isConnected && (
-        <Box>
-          <Text color={themeContext.theme.colors.success}>[+]</Text>
-        </Box>
-      )}
-    </Box>
+    <StatusBar
+      mode={currentMode}
+      modelName={currentModel}
+      tokens={{ current: totalTokens, max: contextWindow }}
+      cost={tokenUsage.totalCost}
+      trustMode={trustMode}
+      thinking={{ active: isThinking }}
+    />
   );
 
   // ==========================================================================

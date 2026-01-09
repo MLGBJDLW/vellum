@@ -167,8 +167,8 @@ export function formatProviderList(providers: ProviderInfo[]): string {
 export function getDefaultModelForProvider(provider: OnboardingProvider): string {
   const models: Record<OnboardingProvider, string> = {
     anthropic: "claude-sonnet-4-20250514",
-    openai: "gpt-5.2-turbo",
-    google: "gemini-3-pro",
+    openai: "gpt-4o",
+    google: "gemini-2.5-pro",
     mistral: "mistral-large-latest",
     groq: "llama-3.3-70b-versatile",
     openrouter: "anthropic/claude-3.5-sonnet",
