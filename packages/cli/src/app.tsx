@@ -1,4 +1,5 @@
 import type { ApprovalPolicy, CodingMode, ModeManager, SandboxPolicy } from "@vellum/core";
+import { OnboardingWizard as CoreOnboardingWizard } from "@vellum/core";
 import { Box, Text, useApp as useInkApp, useInput } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -452,10 +453,16 @@ function AppContent({
 
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [isFirstRun] = useState(() => {
-    // Check if user has completed onboarding (use env var for terminal)
-    return !process.env.VELLUM_ONBOARDED;
-  });
+  const [isFirstRun, setIsFirstRun] = useState(false);
+
+  // Check onboarding completion status on mount
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      const completed = await CoreOnboardingWizard.isCompleted();
+      setIsFirstRun(!completed);
+    };
+    void checkOnboarding();
+  }, []);
 
   // Spec mode phase tracking
   const [specPhase, _setSpecPhase] = useState(1);
@@ -1335,7 +1342,8 @@ function AppContent({
   // Handle onboarding completion
   const handleOnboardingComplete = useCallback(
     (result: { provider: string; mode: string; credentialsConfigured: boolean }) => {
-      process.env.VELLUM_ONBOARDED = "true";
+      // Note: OnboardingWizard.saveConfig() already persists completed state
+      setIsFirstRun(false);
       setShowOnboarding(false);
       setCurrentProvider(result.provider);
       // Task 4: Sync model with provider selection
@@ -1473,7 +1481,7 @@ function AppContent({
   const renderEnhancedStatusBar = () => (
     <Box flexDirection="row" gap={1}>
       <StatusBar
-        model={{ provider, model }}
+        model={{ provider: currentProvider, model: currentModel }}
         tokens={{ current: totalTokens, max: contextWindow }}
       />
       <ModeIndicator mode={currentMode} />

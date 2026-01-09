@@ -10,6 +10,7 @@ export {
   type AgentModeIndicatorProps,
   type AgentType,
 } from "./AgentModeIndicator.js";
+export { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 export { ModelIndicator, type ModelIndicatorProps } from "./ModelIndicator.js";
 export { StatusBar, type StatusBarProps } from "./StatusBar.js";
 export {

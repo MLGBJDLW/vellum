@@ -17,17 +17,6 @@ export {
   type HotkeyHelpModalProps,
 } from "./HotkeyHelpModal.js";
 
-// ShimmerText
-export {
-  InlineShimmer,
-  ShimmerBlock,
-  type ShimmerBlockProps,
-  ShimmerDots,
-  type ShimmerStyle,
-  ShimmerText,
-  type ShimmerTextProps,
-} from "./ShimmerText.js";
-
 // Spinner (Chain 21)
 export {
   LoadingIndicator,

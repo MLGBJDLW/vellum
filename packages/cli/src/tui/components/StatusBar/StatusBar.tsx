@@ -2,7 +2,7 @@
  * StatusBar Component (T034)
  *
  * Container component that renders all status indicators in a horizontal row.
- * Displays model info, token usage, trust mode, and thinking mode status.
+ * Displays model info, context progress, trust mode, and thinking mode status.
  *
  * @module tui/components/StatusBar/StatusBar
  */
@@ -10,9 +10,9 @@
 import { Box, Text } from "ink";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 import { ModelIndicator, type ModelIndicatorProps } from "./ModelIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
-import { TokenCounter, type TokenCounterProps } from "./TokenCounter.js";
 import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeIndicator.js";
 
 // =============================================================================
@@ -25,8 +25,8 @@ import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeInd
 export interface StatusBarProps {
   /** Model information */
   readonly model?: ModelIndicatorProps;
-  /** Token usage information */
-  readonly tokens?: TokenCounterProps;
+  /** Token usage information (displayed with visual progress bar) */
+  readonly tokens?: ContextProgressProps;
   /** Trust mode setting */
   readonly trustMode?: TrustModeIndicatorProps["mode"];
   /** Thinking mode status */
@@ -94,7 +94,15 @@ export function StatusBar({
   }
 
   if (tokens) {
-    indicators.push(<TokenCounter key="tokens" current={tokens.current} max={tokens.max} />);
+    indicators.push(
+      <ContextProgress
+        key="tokens"
+        current={tokens.current}
+        max={tokens.max}
+        showLabel={tokens.showLabel}
+        barWidth={tokens.barWidth}
+      />
+    );
   }
 
   if (trustMode) {

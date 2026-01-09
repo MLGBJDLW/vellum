@@ -430,9 +430,10 @@ describe("StatusBar", () => {
       expect(frame).toContain("◈");
       expect(frame).toContain("Anthropic");
       expect(frame).toContain("claude-3-opus");
-      // Token counter
-      expect(frame).toContain("◊");
-      expect(frame).toContain("5K");
+      // Context progress (shows progress bar and percentage)
+      expect(frame).toContain("Context:");
+      expect(frame).toContain("5%");
+      expect(frame).toContain("5.0K");
       // Trust mode
       expect(frame).toContain("◉");
       expect(frame).toContain("Auto");
@@ -468,7 +469,7 @@ describe("StatusBar", () => {
     it("should render with only token counter", () => {
       const { lastFrame } = renderWithTheme(<StatusBar tokens={{ current: 5000, max: 10000 }} />);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("◊");
+      expect(frame).toContain("Context:");
       expect(frame).toContain("50%");
     });
 
@@ -498,7 +499,7 @@ describe("StatusBar", () => {
       const frame = lastFrame() ?? "";
       expect(frame).toContain("◎");
       expect(frame).toContain("Google");
-      expect(frame).toContain("◊");
+      expect(frame).toContain("Context:");
       expect(frame).toContain("│");
     });
   });
