@@ -36,6 +36,8 @@ export interface TextInputProps {
   readonly maxLength?: number;
   /** Whether the input is focused (enables keyboard handling) */
   readonly focused?: boolean;
+  /** Minimum height in lines (default: 1 for single-line, 3 for multiline) */
+  readonly minHeight?: number;
 }
 
 // =============================================================================
@@ -108,8 +110,12 @@ export function TextInput({
   disabled = false,
   maxLength,
   focused = true,
+  minHeight,
 }: TextInputProps) {
   const { theme } = useTheme();
+
+  // Calculate effective min height (default 3 for multiline, 1 for single-line)
+  const effectiveMinHeight = minHeight ?? (multiline ? 3 : 1);
 
   // Cursor position within the value
   const [cursorPosition, setCursorPosition] = useState(value.length);
@@ -436,10 +442,22 @@ export function TextInput({
   // Border color based on focus state
   const borderColor = focused ? theme.semantic.border.focus : theme.semantic.border.default;
 
+  // Calculate padding lines needed to meet minHeight
+  const currentLineCount = lineData.length;
+  const paddingLinesNeeded = Math.max(0, effectiveMinHeight - currentLineCount);
+
   // Render placeholder
   if (showPlaceholder) {
+    // Calculate empty lines needed for placeholder (account for the placeholder line itself)
+    const emptyLinesForPlaceholder = Math.max(0, effectiveMinHeight - 1);
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor={borderColor} paddingX={1}>
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={borderColor}
+        paddingX={1}
+        minHeight={effectiveMinHeight + 2} // +2 for top/bottom border
+      >
         <Text color={theme.semantic.text.muted}>
           {focused ? (
             <>
@@ -450,6 +468,11 @@ export function TextInput({
             placeholder
           )}
         </Text>
+        {/* Add empty lines to maintain minHeight - these are static decorative elements */}
+        {Array.from({ length: emptyLinesForPlaceholder }).map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Static placeholder lines don't reorder
+          <Text key={`empty-${i}`}> </Text>
+        ))}
       </Box>
     );
   }
@@ -465,9 +488,20 @@ export function TextInput({
 
   // Render multiline with stable keys based on line position
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={borderColor} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={borderColor}
+      paddingX={1}
+      minHeight={effectiveMinHeight + 2} // +2 for top/bottom border
+    >
       {lineData.map(({ line, startPos, key }) => (
         <Box key={key}>{renderLineWithCursor(line, startPos)}</Box>
+      ))}
+      {/* Add empty lines to maintain minHeight - these are static decorative elements */}
+      {Array.from({ length: paddingLinesNeeded }).map((_, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: Static padding lines don't reorder
+        <Text key={`padding-${i}`}> </Text>
       ))}
     </Box>
   );

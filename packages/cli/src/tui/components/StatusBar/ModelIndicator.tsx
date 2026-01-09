@@ -20,9 +20,11 @@ import { useTheme } from "../../theme/index.js";
  */
 export interface ModelIndicatorProps {
   /** AI provider name (e.g., 'anthropic', 'openai', 'google') */
-  readonly provider: string;
+  readonly provider?: string;
   /** Model name (e.g., 'claude-3-opus', 'gpt-4') */
   readonly model: string;
+  /** Compact mode: show only model name without provider (default: false) */
+  readonly compact?: boolean;
 }
 
 // =============================================================================
@@ -108,26 +110,41 @@ function formatModelName(model: string, maxLength = 25): string {
  *
  * Features:
  * - Provider-specific icon
- * - Provider name
+ * - Provider name (optional)
  * - Model name (truncated if too long)
+ * - Compact mode for unified footer layout
  * - Themed styling
  *
  * @example
  * ```tsx
- * // Anthropic Claude
+ * // Full display with provider
  * <ModelIndicator provider="anthropic" model="claude-3-opus" />
  *
- * // OpenAI GPT-4
- * <ModelIndicator provider="openai" model="gpt-4-turbo" />
+ * // Compact mode (model only)
+ * <ModelIndicator model="claude-sonnet-4" compact />
  * ```
  */
-export function ModelIndicator({ provider, model }: ModelIndicatorProps): React.JSX.Element {
+export function ModelIndicator({
+  provider,
+  model,
+  compact = false,
+}: ModelIndicatorProps): React.JSX.Element {
   const { theme } = useTheme();
 
-  const icon = useMemo(() => getProviderIcon(provider), [provider]);
-  const providerName = useMemo(() => getProviderName(provider), [provider]);
-  const displayModel = useMemo(() => formatModelName(model), [model]);
+  const icon = useMemo(() => (provider ? getProviderIcon(provider) : "●"), [provider]);
+  const providerName = useMemo(() => (provider ? getProviderName(provider) : ""), [provider]);
+  const displayModel = useMemo(() => formatModelName(model, compact ? 20 : 25), [model, compact]);
 
+  // Compact mode: model name only
+  if (compact) {
+    return (
+      <Box>
+        <Text color={theme.semantic.text.primary}>{displayModel}</Text>
+      </Box>
+    );
+  }
+
+  // Full mode: icon + provider + model
   return (
     <Box>
       <Text color={theme.colors.primary}>{icon}</Text>

@@ -26,7 +26,6 @@ import {
   useSessionAdapter,
 } from "./tui/adapters/session-adapter.js";
 // Core components
-import { CostDisplay } from "./tui/components/CostDisplay.js";
 import { Header } from "./tui/components/Header.js";
 // Input components - Replace TextInput with CommandInput
 import { CommandInput, type SlashCommand } from "./tui/components/Input/CommandInput.js";
@@ -34,7 +33,6 @@ import { Layout } from "./tui/components/Layout.js";
 import { MemoryPanel, type MemoryPanelProps } from "./tui/components/MemoryPanel.js";
 import { MessageList } from "./tui/components/Messages/MessageList.js";
 // StatusBar enhancement components
-import { ModeIndicator } from "./tui/components/ModeIndicator.js";
 import { ModelSelector } from "./tui/components/ModelSelector.js";
 // Layout enhancement components
 import { ModeSelector } from "./tui/components/ModeSelector.js";
@@ -1481,11 +1479,12 @@ function AppContent({
   const renderEnhancedStatusBar = () => (
     <Box flexDirection="row" gap={1}>
       <StatusBar
-        model={{ provider: currentProvider, model: currentModel }}
+        mode={currentMode}
+        modelName={currentModel}
         tokens={{ current: totalTokens, max: contextWindow }}
+        cost={tokenUsage.totalCost}
       />
-      <ModeIndicator mode={currentMode} />
-      {/* Fix 2: TokenCounter removed - already in StatusBar */}
+      {/* Fix 2: ModeIndicator and TokenCounter removed - now in StatusBar */}
       <ThinkingModeIndicator active={isThinking} />
       <TrustModeIndicator mode={trustMode} />
       <AgentModeIndicator agentName="orchestrator" level={0} />
@@ -1674,7 +1673,7 @@ function AppContent({
                 </Text>
               </Box>
             )}
-            <Header model={currentModel} provider={currentProvider} mode={currentMode} />
+            <Header mode={currentMode} specPhase={specPhase} />
             {/* Phase Progress Indicator for spec mode */}
             {currentMode === "spec" && (
               <PhaseProgressIndicator currentPhase={specPhase} showLabels showPercentage />
@@ -1693,16 +1692,8 @@ function AppContent({
           </Box>
         }
         footer={
-          // Fix 3: Consolidate footer to single row
-          <Box flexDirection="row" justifyContent="space-between">
-            {renderEnhancedStatusBar()}
-            <CostDisplay
-              inputTokens={tokenUsage.inputTokens}
-              outputTokens={tokenUsage.outputTokens}
-              totalCost={tokenUsage.totalCost}
-              compact
-            />
-          </Box>
+          // Fix 3: Consolidated footer - StatusBar now includes cost display
+          renderEnhancedStatusBar()
         }
         sidebar={renderSidebar()}
         showSidebar={showSidebar}

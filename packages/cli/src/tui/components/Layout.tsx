@@ -12,7 +12,7 @@
  * @module tui/components/Layout
  */
 
-import { Box } from "ink";
+import { Box, Text } from "ink";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "../theme/index.js";
@@ -91,7 +91,28 @@ function useTerminalSize(): { columns: number; rows: number } {
 // =============================================================================
 
 /**
+ * Simple horizontal line separator.
+ */
+interface SeparatorProps {
+  readonly color: string;
+  readonly style?: "single" | "double";
+}
+
+function Separator({ color, style = "single" }: SeparatorProps): React.JSX.Element {
+  // Use box-drawing characters for separators
+  const char = style === "double" ? "═" : "─";
+  // Repeat enough to fill typical terminal widths
+  const line = char.repeat(200);
+  return (
+    <Box width="100%">
+      <Text color={color}>{line}</Text>
+    </Box>
+  );
+}
+
+/**
  * Header region of the layout.
+ * Borderless design with simple line separator below.
  */
 interface HeaderRegionProps {
   readonly children: React.ReactNode;
@@ -100,24 +121,16 @@ interface HeaderRegionProps {
 
 function HeaderRegion({ children, borderColor }: HeaderRegionProps): React.JSX.Element {
   return (
-    <Box
-      flexDirection="column"
-      width="100%"
-      borderStyle="single"
-      borderColor={borderColor}
-      borderBottom={true}
-      borderTop={false}
-      borderLeft={false}
-      borderRight={false}
-      paddingX={1}
-    >
-      {children}
+    <Box flexDirection="column" width="100%">
+      <Box paddingX={1}>{children}</Box>
+      <Separator color={borderColor} />
     </Box>
   );
 }
 
 /**
  * Footer region of the layout.
+ * Uses double-line separator above for visual emphasis.
  */
 interface FooterRegionProps {
   readonly children: React.ReactNode;
@@ -126,18 +139,9 @@ interface FooterRegionProps {
 
 function FooterRegion({ children, borderColor }: FooterRegionProps): React.JSX.Element {
   return (
-    <Box
-      flexDirection="column"
-      width="100%"
-      borderStyle="single"
-      borderColor={borderColor}
-      borderTop={true}
-      borderBottom={false}
-      borderLeft={false}
-      borderRight={false}
-      paddingX={1}
-    >
-      {children}
+    <Box flexDirection="column" width="100%">
+      <Separator color={borderColor} style="double" />
+      <Box paddingX={1}>{children}</Box>
     </Box>
   );
 }

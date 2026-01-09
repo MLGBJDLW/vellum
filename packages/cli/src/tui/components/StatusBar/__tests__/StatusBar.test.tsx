@@ -419,35 +419,37 @@ describe("StatusBar", () => {
     it("should render with all indicators", () => {
       const { lastFrame } = renderWithTheme(
         <StatusBar
-          model={{ provider: "anthropic", model: "claude-3-opus" }}
+          mode="vibe"
+          modelName="claude-3-opus"
           tokens={{ current: 5000, max: 100000 }}
           trustMode="auto"
           thinking={{ active: true, budget: 10000, used: 2500 }}
+          cost={0.02}
         />
       );
       const frame = lastFrame() ?? "";
-      // Model indicator
+      // Mode selector (all modes shown)
+      expect(frame).toContain("◐");
+      expect(frame).toContain("vibe");
+      expect(frame).toContain("◇");
+      expect(frame).toContain("Think");
       expect(frame).toContain("◈");
-      expect(frame).toContain("Anthropic");
+      expect(frame).toContain("Orch");
+      // Model indicator (compact, name only)
       expect(frame).toContain("claude-3-opus");
       // Context progress (shows progress bar and percentage)
-      expect(frame).toContain("Context:");
       expect(frame).toContain("5%");
-      expect(frame).toContain("5.0K");
+      // Cost display
+      expect(frame).toContain("$0.02");
       // Trust mode
-      expect(frame).toContain("◉");
       expect(frame).toContain("Auto");
       // Thinking mode
-      expect(frame).toContain("◆");
       expect(frame).toContain("Think");
     });
 
     it("should render separators between indicators", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar
-          model={{ provider: "openai", model: "gpt-4" }}
-          tokens={{ current: 1000, max: 10000 }}
-        />
+        <StatusBar mode="vibe" modelName="gpt-4" tokens={{ current: 1000, max: 10000 }} />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("│");
@@ -457,56 +459,56 @@ describe("StatusBar", () => {
   describe("Partial Indicators", () => {
     it("should render with only model indicator", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar model={{ provider: "anthropic", model: "claude-3" }} showBorder={false} />
+        <StatusBar mode="vibe" modelName="claude-3" showBorder={false} />
       );
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("◈");
-      expect(frame).toContain("Anthropic");
-      // With only one indicator and no border, there should be no separator
-      expect(frame).not.toContain("│");
+      expect(frame).toContain("claude-3");
+      // Mode selector is always shown
+      expect(frame).toContain("vibe");
     });
 
     it("should render with only token counter", () => {
-      const { lastFrame } = renderWithTheme(<StatusBar tokens={{ current: 5000, max: 10000 }} />);
+      const { lastFrame } = renderWithTheme(
+        <StatusBar mode="vibe" tokens={{ current: 5000, max: 10000 }} />
+      );
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("Context:");
       expect(frame).toContain("50%");
     });
 
-    it("should render with only trust mode", () => {
-      const { lastFrame } = renderWithTheme(<StatusBar trustMode="full" />);
+    it("should render with trust mode when model is present", () => {
+      const { lastFrame } = renderWithTheme(
+        <StatusBar mode="vibe" modelName="claude-3" trustMode="full" />
+      );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("●");
       expect(frame).toContain("Full");
     });
 
-    it("should render with only thinking indicator", () => {
+    it("should render with thinking indicator when model is present", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar thinking={{ active: true, budget: 5000, used: 1000 }} />
+        <StatusBar
+          mode="vibe"
+          modelName="claude-3"
+          thinking={{ active: true, budget: 5000, used: 1000 }}
+        />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("◆");
-      expect(frame).toContain("Think");
     });
 
     it("should render with model and tokens", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar
-          model={{ provider: "google", model: "gemini-pro" }}
-          tokens={{ current: 2000, max: 8000 }}
-        />
+        <StatusBar mode="vibe" modelName="gemini-pro" tokens={{ current: 2000, max: 8000 }} />
       );
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("◎");
-      expect(frame).toContain("Google");
-      expect(frame).toContain("Context:");
+      expect(frame).toContain("gemini-pro");
       expect(frame).toContain("│");
     });
   });
 
   describe("Empty State", () => {
-    it("should render empty state when no indicators", () => {
-      const { lastFrame } = renderWithTheme(<StatusBar />);
+    it("should render empty state when no model or tokens", () => {
+      const { lastFrame } = renderWithTheme(<StatusBar mode="vibe" />);
       // Translation key is used in tests
       expect(lastFrame()).toContain("status.noInfo");
     });
@@ -514,29 +516,24 @@ describe("StatusBar", () => {
 
   describe("Border Option", () => {
     it("should render without border by default", () => {
-      const { lastFrame } = renderWithTheme(
-        <StatusBar model={{ provider: "openai", model: "gpt-4" }} />
-      );
+      const { lastFrame } = renderWithTheme(<StatusBar mode="vibe" modelName="gpt-4" />);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("OpenAI");
+      expect(frame).toContain("gpt-4");
     });
 
     it("should render with border when showBorder is true", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar model={{ provider: "openai", model: "gpt-4" }} showBorder={true} />
+        <StatusBar mode="vibe" modelName="gpt-4" showBorder={true} />
       );
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("OpenAI");
+      expect(frame).toContain("gpt-4");
     });
   });
 
   describe("Combined Token Threshold Display", () => {
     it("should show warning state tokens in status bar", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar
-          model={{ provider: "anthropic", model: "claude-3" }}
-          tokens={{ current: 85000, max: 100000 }}
-        />
+        <StatusBar mode="vibe" modelName="claude-3" tokens={{ current: 85000, max: 100000 }} />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("85%");
@@ -544,10 +541,7 @@ describe("StatusBar", () => {
 
     it("should show error state tokens in status bar", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar
-          model={{ provider: "anthropic", model: "claude-3" }}
-          tokens={{ current: 98000, max: 100000 }}
-        />
+        <StatusBar mode="vibe" modelName="claude-3" tokens={{ current: 98000, max: 100000 }} />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("98%");
@@ -557,7 +551,7 @@ describe("StatusBar", () => {
   describe("Combined Trust Modes in Status Bar", () => {
     it("should show ask mode in full status bar", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar model={{ provider: "anthropic", model: "claude-3" }} trustMode="ask" />
+        <StatusBar mode="vibe" modelName="claude-3" trustMode="ask" />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("◎");
@@ -566,7 +560,7 @@ describe("StatusBar", () => {
 
     it("should show auto mode in full status bar", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar model={{ provider: "anthropic", model: "claude-3" }} trustMode="auto" />
+        <StatusBar mode="vibe" modelName="claude-3" trustMode="auto" />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("◉");
@@ -575,7 +569,7 @@ describe("StatusBar", () => {
 
     it("should show full mode in full status bar", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar model={{ provider: "anthropic", model: "claude-3" }} trustMode="full" />
+        <StatusBar mode="vibe" modelName="claude-3" trustMode="full" />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("●");
@@ -586,20 +580,17 @@ describe("StatusBar", () => {
   describe("Combined Thinking Modes in Status Bar", () => {
     it("should show active thinking without budget", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar
-          model={{ provider: "anthropic", model: "claude-3" }}
-          thinking={{ active: true }}
-        />
+        <StatusBar mode="vibe" modelName="claude-3" thinking={{ active: true }} />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("◆");
-      expect(frame).toContain("Think");
     });
 
     it("should show active thinking with budget", () => {
       const { lastFrame } = renderWithTheme(
         <StatusBar
-          model={{ provider: "anthropic", model: "claude-3" }}
+          mode="vibe"
+          modelName="claude-3"
           thinking={{ active: true, budget: 10000, used: 5000 }}
         />
       );
@@ -611,14 +602,46 @@ describe("StatusBar", () => {
 
     it("should show inactive thinking", () => {
       const { lastFrame } = renderWithTheme(
-        <StatusBar
-          model={{ provider: "anthropic", model: "claude-3" }}
-          thinking={{ active: false }}
-        />
+        <StatusBar mode="vibe" modelName="claude-3" thinking={{ active: false }} />
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("◇");
+    });
+  });
+
+  describe("Mode Selector", () => {
+    it("should highlight active mode", () => {
+      const { lastFrame } = renderWithTheme(<StatusBar mode="plan" modelName="claude-3" />);
+      const frame = lastFrame() ?? "";
+      // All modes should be visible
+      expect(frame).toContain("vibe");
       expect(frame).toContain("Think");
+      expect(frame).toContain("Orch");
+    });
+
+    it("should show spec mode correctly", () => {
+      const { lastFrame } = renderWithTheme(<StatusBar mode="spec" modelName="claude-3" />);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("◈");
+      expect(frame).toContain("Orch");
+    });
+  });
+
+  describe("Cost Display", () => {
+    it("should show cost when provided", () => {
+      const { lastFrame } = renderWithTheme(
+        <StatusBar mode="vibe" modelName="claude-3" cost={1.5} />
+      );
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("$1.50");
+    });
+
+    it("should format small costs correctly", () => {
+      const { lastFrame } = renderWithTheme(
+        <StatusBar mode="vibe" modelName="claude-3" cost={0.001} />
+      );
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("$0.0010");
     });
   });
 });

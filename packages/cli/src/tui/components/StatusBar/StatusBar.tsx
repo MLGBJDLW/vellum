@@ -2,16 +2,17 @@
  * StatusBar Component (T034)
  *
  * Container component that renders all status indicators in a horizontal row.
- * Displays model info, context progress, trust mode, and thinking mode status.
+ * Unified Footer layout: modes | model | context+cost
  *
  * @module tui/components/StatusBar/StatusBar
  */
 
+import type { CodingMode } from "@vellum/core";
 import { Box, Text } from "ink";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
-import { ModelIndicator, type ModelIndicatorProps } from "./ModelIndicator.js";
+import { ModelIndicator } from "./ModelIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
 import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeIndicator.js";
 
@@ -23,15 +24,19 @@ import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeInd
  * Props for the StatusBar component.
  */
 export interface StatusBarProps {
-  /** Model information */
-  readonly model?: ModelIndicatorProps;
+  /** Current coding mode */
+  readonly mode?: CodingMode;
+  /** Model name (e.g., 'claude-sonnet-4') */
+  readonly modelName?: string;
   /** Token usage information (displayed with visual progress bar) */
   readonly tokens?: ContextProgressProps;
   /** Trust mode setting */
   readonly trustMode?: TrustModeIndicatorProps["mode"];
   /** Thinking mode status */
   readonly thinking?: ThinkingModeIndicatorProps;
-  /** Whether to show a border (default: true) */
+  /** Current cost in dollars */
+  readonly cost?: number;
+  /** Whether to show a border (default: false for unified footer) */
   readonly showBorder?: boolean;
 }
 
@@ -42,43 +47,65 @@ export interface StatusBarProps {
 /** Separator between status items */
 const SEPARATOR = " │ ";
 
+/** Goldenrod brand color */
+const BRAND_COLOR = "#DAA520";
+
+/** Mode display configuration */
+const MODES_CONFIG: Array<{ mode: CodingMode; icon: string; label: string }> = [
+  { mode: "vibe", icon: "◐", label: "vibe" },
+  { mode: "plan", icon: "◇", label: "Think" },
+  { mode: "spec", icon: "◈", label: "Orch" },
+];
+
 // =============================================================================
 // Main Component
 // =============================================================================
 
 /**
+ * Format cost as currency string.
+ */
+function formatCost(cost: number): string {
+  if (cost < 0.01) {
+    return `$${cost.toFixed(4)}`;
+  }
+  if (cost < 1) {
+    return `$${cost.toFixed(2)}`;
+  }
+  return `$${cost.toFixed(2)}`;
+}
+
+/**
  * StatusBar displays all status indicators in a horizontal layout.
  *
+ * Unified Footer Layout:
+ * ```
+ * ◐ vibe  ◇ Think  ◈ Orch │ claude-sonnet │ ▓▓▓░░ 45% │ $0.02
+ * ```
+ *
  * Features:
- * - Model and provider information
- * - Token usage with color-coded warnings
- * - Trust mode indicator
- * - Thinking mode status with budget
- * - Optional border styling
- * - Flexible layout with separators
+ * - All modes shown with active one highlighted
+ * - Model name only (no provider prefix)
+ * - Context progress with visual bar
+ * - Cost display
  *
  * @example
  * ```tsx
- * // Full status bar
  * <StatusBar
- *   model={{ provider: "anthropic", model: "claude-3-opus" }}
+ *   mode="vibe"
+ *   modelName="claude-sonnet-4"
  *   tokens={{ current: 5000, max: 100000 }}
- *   trustMode="auto"
- *   thinking={{ active: true, budget: 10000, used: 2500 }}
- * />
- *
- * // Minimal status bar
- * <StatusBar
- *   model={{ provider: "openai", model: "gpt-4" }}
+ *   cost={0.02}
  * />
  * ```
  */
 export function StatusBar({
-  model,
+  mode = "vibe",
+  modelName,
   tokens,
   trustMode,
   thinking,
-  showBorder = true,
+  cost,
+  showBorder = false,
 }: StatusBarProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
@@ -86,31 +113,56 @@ export function StatusBar({
   // Use primary/accent color for status bar border
   const borderColor = theme.colors.primary;
 
-  // Collect active indicators
-  const indicators: React.ReactNode[] = [];
+  // Render mode selector (all modes shown, active highlighted)
+  const modeSection = (
+    <Box key="modes">
+      {MODES_CONFIG.map((modeConfig, index) => {
+        const isActive = modeConfig.mode === mode;
+        return (
+          <Text key={modeConfig.mode}>
+            {index > 0 && "  "}
+            <Text
+              color={isActive ? BRAND_COLOR : theme.semantic.text.muted}
+              bold={isActive}
+              dimColor={!isActive}
+            >
+              {modeConfig.icon} {modeConfig.label}
+            </Text>
+          </Text>
+        );
+      })}
+    </Box>
+  );
 
-  if (model) {
-    indicators.push(<ModelIndicator key="model" provider={model.provider} model={model.model} />);
+  // Collect right-side indicators
+  const rightIndicators: React.ReactNode[] = [];
+
+  // Model indicator (compact, name only)
+  if (modelName) {
+    rightIndicators.push(<ModelIndicator key="model" model={modelName} compact />);
   }
 
+  // Context progress
   if (tokens) {
-    indicators.push(
+    rightIndicators.push(
       <ContextProgress
         key="tokens"
         current={tokens.current}
         max={tokens.max}
-        showLabel={tokens.showLabel}
-        barWidth={tokens.barWidth}
+        showLabel={false}
+        barWidth={tokens.barWidth ?? 5}
       />
     );
   }
 
+  // Trust mode (if provided)
   if (trustMode) {
-    indicators.push(<TrustModeIndicator key="trust" mode={trustMode} />);
+    rightIndicators.push(<TrustModeIndicator key="trust" mode={trustMode} />);
   }
 
+  // Thinking mode (if provided)
   if (thinking) {
-    indicators.push(
+    rightIndicators.push(
       <ThinkingModeIndicator
         key="thinking"
         active={thinking.active}
@@ -120,23 +172,33 @@ export function StatusBar({
     );
   }
 
-  // Render indicators with separators
-  const renderedItems: React.ReactNode[] = [];
-  for (let i = 0; i < indicators.length; i++) {
+  // Cost display
+  if (cost !== undefined && cost > 0) {
+    rightIndicators.push(
+      <Box key="cost">
+        <Text color={theme.colors.success}>{formatCost(cost)}</Text>
+      </Box>
+    );
+  }
+
+  // Render right indicators with separators
+  const renderedRightItems: React.ReactNode[] = [];
+  for (let i = 0; i < rightIndicators.length; i++) {
     if (i > 0) {
-      renderedItems.push(
+      renderedRightItems.push(
         <Text key={`sep-${i}`} color={theme.semantic.border.muted}>
           {SEPARATOR}
         </Text>
       );
     }
-    renderedItems.push(indicators[i]);
+    renderedRightItems.push(rightIndicators[i]);
   }
 
   // Empty state
-  if (indicators.length === 0) {
+  if (!modelName && !tokens && !cost) {
     return (
-      <Box>
+      <Box flexDirection="row" justifyContent="space-between" width="100%">
+        {modeSection}
         <Text color={theme.semantic.text.muted}>{t("status.noInfo")}</Text>
       </Box>
     );
@@ -145,11 +207,17 @@ export function StatusBar({
   return (
     <Box
       flexDirection="row"
+      justifyContent="space-between"
+      width="100%"
       paddingX={showBorder ? 1 : 0}
       borderStyle={showBorder ? "round" : undefined}
       borderColor={showBorder ? borderColor : undefined}
     >
-      {renderedItems}
+      {/* Left: Mode selector */}
+      {modeSection}
+
+      {/* Right: Model, Context, Cost */}
+      <Box flexDirection="row">{renderedRightItems}</Box>
     </Box>
   );
 }
