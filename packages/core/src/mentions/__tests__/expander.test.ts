@@ -376,12 +376,21 @@ describe("expandMention - @git-diff", () => {
 // =============================================================================
 
 describe("expandMention - @problems", () => {
-  it("returns error when getProblems not provided", async () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("uses fallback when getProblems not provided", async () => {
     const mention = createMention("problems", "");
     const result = await expandMention(mention, createContext());
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("not available");
+    // With fallback, it should succeed (either find problems or say none found)
+    expect(result.success).toBe(true);
+    expect(result.content).toContain("@problems");
   });
 
   it("expands problems when getProblems provided", async () => {
@@ -403,6 +412,16 @@ describe("expandMention - @problems", () => {
     expect(result.success).toBe(true);
     expect(result.content).toContain("No problems found");
   });
+
+  it("handles getProblems throwing error", async () => {
+    const getProblems = vi.fn().mockRejectedValue(new Error("LSP connection lost"));
+
+    const mention = createMention("problems", "");
+    const result = await expandMention(mention, createContext({ getProblems }));
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("LSP connection lost");
+  });
 });
 
 // =============================================================================
@@ -410,15 +429,27 @@ describe("expandMention - @problems", () => {
 // =============================================================================
 
 describe("expandMention - @terminal", () => {
-  it("returns error when getTerminalOutput not provided", async () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("uses fallback when getTerminalOutput not provided", async () => {
+    // Mock fs.readFile to simulate no history/logs
+    mockFs.readFile.mockRejectedValue(new Error("ENOENT"));
+
     const mention = createMention("terminal", "");
     const result = await expandMention(mention, createContext());
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("not available");
+    // With fallback, it should succeed (either find output or say none available)
+    expect(result.success).toBe(true);
+    expect(result.content).toContain("@terminal");
   });
 
-  it("expands terminal output when provided", async () => {
+  it("expands terminal output when getTerminalOutput provided", async () => {
     const getTerminalOutput = vi.fn().mockResolvedValue("$ ls\nfile.ts");
 
     const mention = createMention("terminal", "");
@@ -427,6 +458,26 @@ describe("expandMention - @terminal", () => {
     expect(result.success).toBe(true);
     expect(result.content).toContain("$ ls");
   });
+
+  it("shows no output message when empty", async () => {
+    const getTerminalOutput = vi.fn().mockResolvedValue("");
+
+    const mention = createMention("terminal", "");
+    const result = await expandMention(mention, createContext({ getTerminalOutput }));
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain("No terminal output available");
+  });
+
+  it("handles getTerminalOutput throwing error", async () => {
+    const getTerminalOutput = vi.fn().mockRejectedValue(new Error("Terminal disconnected"));
+
+    const mention = createMention("terminal", "");
+    const result = await expandMention(mention, createContext({ getTerminalOutput }));
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Terminal disconnected");
+  });
 });
 
 // =============================================================================
@@ -434,15 +485,29 @@ describe("expandMention - @terminal", () => {
 // =============================================================================
 
 describe("expandMention - @codebase", () => {
-  it("returns error when searchCodebase not provided", async () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("uses fallback search when searchCodebase not provided", async () => {
+    // Mock realpath to resolve to same path
+    mockFs.realpath.mockImplementation(async (p: string) => p);
+    // Mock readdir to return empty directory (no files to search)
+    mockFs.readdir.mockResolvedValue([]);
+
     const mention = createMention("codebase", "auth logic");
     const result = await expandMention(mention, createContext());
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("not available");
+    // With fallback, it should succeed (either find results or say none found)
+    expect(result.success).toBe(true);
+    expect(result.content).toContain("@codebase:auth logic");
   });
 
-  it("expands codebase search when provided", async () => {
+  it("expands codebase search when searchCodebase provided", async () => {
     const searchCodebase = vi.fn().mockResolvedValue("Found in auth.ts:42");
 
     const mention = createMention("codebase", "auth logic");
@@ -451,6 +516,32 @@ describe("expandMention - @codebase", () => {
     expect(result.success).toBe(true);
     expect(result.content).toContain("Found in auth.ts:42");
     expect(searchCodebase).toHaveBeenCalledWith("auth logic");
+  });
+
+  it("returns error for empty query", async () => {
+    const mention = createMention("codebase", "");
+    const result = await expandMention(mention, createContext());
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("requires a query");
+  });
+
+  it("returns error for whitespace-only query", async () => {
+    const mention = createMention("codebase", "   ");
+    const result = await expandMention(mention, createContext());
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("requires a query");
+  });
+
+  it("handles searchCodebase throwing error", async () => {
+    const searchCodebase = vi.fn().mockRejectedValue(new Error("Index not available"));
+
+    const mention = createMention("codebase", "auth");
+    const result = await expandMention(mention, createContext({ searchCodebase }));
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Index not available");
   });
 });
 

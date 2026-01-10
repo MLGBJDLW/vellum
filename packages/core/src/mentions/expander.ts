@@ -391,9 +391,87 @@ const handleGitDiffMention: MentionHandler = async (mention, context, options) =
 };
 
 /**
- * Handle @problems mentions - get LSP diagnostics.
+ * Run TypeScript type checking to detect problems.
  */
-const handleProblemsMention: MentionHandler = async (mention, context, _options) => {
+async function detectTypeScriptProblems(cwd: string): Promise<string[]> {
+  const { exec } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const execAsync = promisify(exec);
+
+  try {
+    // Run tsc with --noEmit to check for errors without emitting files
+    const { stdout, stderr } = await execAsync("npx tsc --noEmit --pretty false 2>&1", {
+      cwd,
+      timeout: 60000, // 60 seconds timeout
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+    });
+
+    const output = stdout || stderr || "";
+    // Parse TypeScript error lines (format: file(line,col): error TSxxxx: message)
+    const errorPattern = /^(.+?)\((\d+),(\d+)\):\s*(error|warning)\s+(TS\d+):\s*(.+)$/gm;
+    const errors: string[] = [];
+
+    let match = errorPattern.exec(output);
+    while (match !== null) {
+      const [, file, line, col, severity, code, message] = match;
+      errors.push(`${file}:${line}:${col} ${severity} ${code}: ${message}`);
+      match = errorPattern.exec(output);
+    }
+
+    return errors;
+  } catch (error) {
+    const err = error as Error & { stdout?: string; stderr?: string };
+    // tsc exits with non-zero when there are errors, which causes exec to reject
+    const output = err.stdout || err.stderr || "";
+    const errorPattern = /^(.+?)\((\d+),(\d+)\):\s*(error|warning)\s+(TS\d+):\s*(.+)$/gm;
+    const errors: string[] = [];
+
+    let match = errorPattern.exec(output);
+    while (match !== null) {
+      const [, file, line, col, severity, code, message] = match;
+      errors.push(`${file}:${line}:${col} ${severity} ${code}: ${message}`);
+      match = errorPattern.exec(output);
+    }
+
+    return errors;
+  }
+}
+
+/**
+ * Run ESLint to detect problems.
+ */
+async function detectEslintProblems(cwd: string): Promise<string[]> {
+  const { exec } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const execAsync = promisify(exec);
+
+  try {
+    const { stdout } = await execAsync("npx eslint . --format compact 2>&1", {
+      cwd,
+      timeout: 60000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    if (!stdout.trim()) return [];
+
+    // Parse ESLint compact format: file: line:col: message [severity/rule]
+    const lines = stdout.split("\n").filter((line) => line.includes(": line "));
+    return lines.slice(0, 50); // Limit to 50 errors
+  } catch (error) {
+    const err = error as Error & { stdout?: string };
+    if (err.stdout) {
+      const lines = err.stdout.split("\n").filter((line) => line.includes(": line "));
+      return lines.slice(0, 50);
+    }
+    return [];
+  }
+}
+
+/**
+ * Handle @problems mentions - get LSP diagnostics or run linters.
+ */
+const handleProblemsMention: MentionHandler = async (mention, context, options) => {
+  // First, try the injected getProblems function (LSP integration)
   if (context.getProblems) {
     try {
       const problems = await context.getProblems();
@@ -405,16 +483,105 @@ const handleProblemsMention: MentionHandler = async (mention, context, _options)
     }
   }
 
-  return failedExpansion(
-    mention,
-    "@problems is not available in this context (LSP integration required)"
-  );
+  // Fallback: Run TypeScript and ESLint to detect problems
+  try {
+    const allProblems: string[] = [];
+
+    // Try TypeScript first
+    const tsProblems = await detectTypeScriptProblems(context.cwd);
+    if (tsProblems.length > 0) {
+      allProblems.push("=== TypeScript Errors ===", ...tsProblems);
+    }
+
+    // Try ESLint
+    const eslintProblems = await detectEslintProblems(context.cwd);
+    if (eslintProblems.length > 0) {
+      if (allProblems.length > 0) allProblems.push("");
+      allProblems.push("=== ESLint Problems ===", ...eslintProblems);
+    }
+
+    if (allProblems.length === 0) {
+      return successExpansion(mention, "--- @problems ---\nNo problems found.");
+    }
+
+    // Truncate if needed
+    const content = `--- @problems ---\n${allProblems.join("\n")}`;
+    const { content: truncatedContent, truncated } = truncateContent(
+      content,
+      options.maxContentLength
+    );
+
+    return successExpansion(mention, truncatedContent, {
+      truncated,
+      lineCount: allProblems.length,
+    });
+  } catch (error) {
+    const err = error as Error;
+    return failedExpansion(mention, `Failed to detect problems: ${err.message}`);
+  }
 };
+
+/**
+ * Get recent shell history.
+ */
+async function getShellHistory(_cwd: string): Promise<string | null> {
+  const os = await import("node:os");
+  const homeDir = os.homedir();
+  const shell = process.env.SHELL || "";
+
+  // Determine history file based on shell
+  let historyFile: string;
+  if (shell.includes("zsh")) {
+    historyFile = path.join(homeDir, ".zsh_history");
+  } else if (shell.includes("fish")) {
+    historyFile = path.join(homeDir, ".local", "share", "fish", "fish_history");
+  } else if (process.platform === "win32") {
+    // PowerShell history location
+    historyFile = path.join(
+      homeDir,
+      "AppData",
+      "Roaming",
+      "Microsoft",
+      "Windows",
+      "PowerShell",
+      "PSReadLine",
+      "ConsoleHost_history.txt"
+    );
+  } else {
+    historyFile = path.join(homeDir, ".bash_history");
+  }
+
+  try {
+    const content = await fs.readFile(historyFile, "utf-8");
+    const lines = content.split("\n").filter(Boolean);
+    // Return last 30 commands
+    return lines.slice(-30).join("\n");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check for Vellum's terminal output log.
+ */
+async function getVellumTerminalOutput(cwd: string): Promise<string | null> {
+  const vellumLogPath = path.join(cwd, ".vellum", "terminal.log");
+
+  try {
+    const content = await fs.readFile(vellumLogPath, "utf-8");
+    const lines = content.split("\n");
+    // Return last 100 lines
+    return lines.slice(-100).join("\n");
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Handle @terminal mentions - get terminal output.
  */
-const handleTerminalMention: MentionHandler = async (mention, context, _options) => {
+const handleTerminalMention: MentionHandler = async (mention, context, options) => {
+  // First, try the injected getTerminalOutput function
   if (context.getTerminalOutput) {
     try {
       const output = await context.getTerminalOutput();
@@ -426,20 +593,261 @@ const handleTerminalMention: MentionHandler = async (mention, context, _options)
     }
   }
 
-  return failedExpansion(
-    mention,
-    "@terminal is not available in this context (terminal integration required)"
-  );
+  // Fallback: Try to get terminal output from various sources
+  try {
+    // First, try Vellum's own terminal log
+    const vellumOutput = await getVellumTerminalOutput(context.cwd);
+    if (vellumOutput) {
+      const content = `--- @terminal (Vellum log) ---\n${vellumOutput}`;
+      const { content: truncatedContent, truncated } = truncateContent(
+        content,
+        options.maxContentLength
+      );
+      return successExpansion(mention, truncatedContent, {
+        truncated,
+      });
+    }
+
+    // Second, try shell history
+    const shellHistory = await getShellHistory(context.cwd);
+    if (shellHistory) {
+      const content = `--- @terminal (shell history) ---\n${shellHistory}`;
+      const { content: truncatedContent, truncated } = truncateContent(
+        content,
+        options.maxContentLength
+      );
+      return successExpansion(mention, truncatedContent, {
+        truncated,
+      });
+    }
+
+    return successExpansion(
+      mention,
+      "--- @terminal ---\nNo terminal output available. Run some commands first."
+    );
+  } catch (error) {
+    const err = error as Error;
+    return failedExpansion(mention, `Failed to get terminal output: ${err.message}`);
+  }
 };
 
+// =============================================================================
+// Codebase Search Helpers
+// =============================================================================
+
+/** File extensions to search in codebase */
+const SEARCHABLE_EXTENSIONS = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".md",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".py",
+  ".go",
+  ".rs",
+  ".java",
+  ".c",
+  ".cpp",
+  ".h",
+  ".hpp",
+  ".cs",
+  ".rb",
+  ".php",
+  ".swift",
+  ".kt",
+  ".scala",
+  ".vue",
+  ".svelte",
+]);
+
+/** Directories to skip in codebase search */
+const SEARCH_SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  ".svn",
+  ".hg",
+  "dist",
+  "build",
+  "out",
+  ".next",
+  ".nuxt",
+  "coverage",
+  "__pycache__",
+  ".pytest_cache",
+  "target",
+  "vendor",
+]);
+
+interface CodebaseMatch {
+  file: string;
+  line: number;
+  content: string;
+  context?: string[];
+}
+
 /**
- * Handle @codebase: mentions - semantic search.
+ * Search codebase using ripgrep (fast, if available).
  */
-const handleCodebaseMention: MentionHandler = async (mention, context, _options) => {
+async function searchWithRipgrep(
+  query: string,
+  cwd: string,
+  maxResults: number
+): Promise<CodebaseMatch[] | null> {
+  const { exec } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const execAsync = promisify(exec);
+
+  try {
+    // Check if ripgrep is available
+    await execAsync("rg --version", { cwd });
+
+    const { stdout } = await execAsync(
+      `rg --json --max-count ${maxResults} --context 2 --ignore-case ${JSON.stringify(query)}`,
+      {
+        cwd,
+        timeout: 30000,
+        maxBuffer: 10 * 1024 * 1024,
+      }
+    );
+
+    if (!stdout.trim()) return [];
+
+    const matches: CodebaseMatch[] = [];
+    const lines = stdout.split("\n").filter(Boolean);
+
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line);
+        if (parsed.type === "match" && parsed.data) {
+          matches.push({
+            file: parsed.data.path?.text || "",
+            line: parsed.data.line_number || 0,
+            content: parsed.data.lines?.text?.trim() || "",
+          });
+        }
+      } catch {
+        // Skip malformed JSON lines
+      }
+    }
+
+    return matches;
+  } catch {
+    // ripgrep not available or failed
+    return null;
+  }
+}
+
+/**
+ * Check if a path should be skipped during scanning.
+ */
+function shouldSkipPath(name: string): boolean {
+  return name.startsWith(".") || SEARCH_SKIP_DIRS.has(name);
+}
+
+/**
+ * Process a single file and extract matching lines.
+ */
+async function processFileForMatches(
+  fullPath: string,
+  cwd: string,
+  queryLower: string,
+  matches: CodebaseMatch[],
+  maxResults: number
+): Promise<void> {
+  const stat = await fs.stat(fullPath);
+  // Skip large files (> 1MB)
+  if (stat.size > 1024 * 1024) return;
+
+  const content = await fs.readFile(fullPath, "utf-8");
+  const lines = content.split("\n");
+
+  for (let i = 0; i < lines.length && matches.length < maxResults; i++) {
+    const line = lines[i];
+    if (line?.toLowerCase().includes(queryLower)) {
+      const relativePath = path.relative(cwd, fullPath);
+      matches.push({
+        file: relativePath,
+        line: i + 1,
+        content: line.trim().slice(0, 200),
+      });
+    }
+  }
+}
+
+/**
+ * Search codebase using built-in file scanning (slower fallback).
+ */
+async function searchWithFileScanning(
+  query: string,
+  cwd: string,
+  maxResults: number
+): Promise<CodebaseMatch[]> {
+  const matches: CodebaseMatch[] = [];
+  const queryLower = query.toLowerCase();
+  const visited = new Set<string>();
+
+  async function processEntry(
+    entry: import("node:fs").Dirent,
+    dir: string,
+    depth: number
+  ): Promise<void> {
+    if (shouldSkipPath(entry.name)) return;
+
+    const fullPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      await scanDirectory(fullPath, depth + 1);
+      return;
+    }
+
+    if (!entry.isFile()) return;
+
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!SEARCHABLE_EXTENSIONS.has(ext)) return;
+
+    await processFileForMatches(fullPath, cwd, queryLower, matches, maxResults).catch(() => {});
+  }
+
+  async function scanDirectory(dir: string, depth: number): Promise<void> {
+    if (depth > 10 || matches.length >= maxResults) return;
+
+    const realDir = await fs.realpath(dir).catch(() => dir);
+    if (visited.has(realDir)) return;
+    visited.add(realDir);
+
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+
+    for (const entry of entries) {
+      if (matches.length >= maxResults) break;
+      await processEntry(entry, dir, depth);
+    }
+  }
+
+  await scanDirectory(cwd, 0);
+  return matches;
+}
+
+/**
+ * Handle @codebase: mentions - semantic search across the codebase.
+ */
+const handleCodebaseMention: MentionHandler = async (mention, context, options) => {
+  const query = mention.value;
+
+  if (!query.trim()) {
+    return failedExpansion(mention, "Codebase search requires a query (e.g., @codebase:auth)");
+  }
+
+  // First, try the injected searchCodebase function (semantic search)
   if (context.searchCodebase) {
     try {
-      const results = await context.searchCodebase(mention.value);
-      const content = `--- @codebase:${mention.value} ---\n${results || "No results found."}`;
+      const results = await context.searchCodebase(query);
+      const content = `--- @codebase:${query} ---\n${results || "No results found."}`;
       return successExpansion(mention, content);
     } catch (error) {
       const err = error as Error;
@@ -447,10 +855,42 @@ const handleCodebaseMention: MentionHandler = async (mention, context, _options)
     }
   }
 
-  return failedExpansion(
-    mention,
-    "@codebase is not available in this context (semantic search integration required)"
-  );
+  // Fallback: Use ripgrep or file scanning
+  try {
+    const maxResults = 30;
+
+    // Try ripgrep first (much faster)
+    let matches = await searchWithRipgrep(query, context.cwd, maxResults);
+
+    // Fall back to file scanning if ripgrep not available
+    if (matches === null) {
+      matches = await searchWithFileScanning(query, context.cwd, maxResults);
+    }
+
+    if (matches.length === 0) {
+      return successExpansion(
+        mention,
+        `--- @codebase:${query} ---\nNo results found for: ${query}`
+      );
+    }
+
+    // Format results
+    const formattedResults = matches.map((m) => `${m.file}:${m.line}: ${m.content}`).join("\n");
+
+    const content = `--- @codebase:${query} (${matches.length} matches) ---\n${formattedResults}`;
+    const { content: truncatedContent, truncated } = truncateContent(
+      content,
+      options.maxContentLength
+    );
+
+    return successExpansion(mention, truncatedContent, {
+      truncated,
+      lineCount: matches.length,
+    });
+  } catch (error) {
+    const err = error as Error;
+    return failedExpansion(mention, `Codebase search failed: ${err.message}`);
+  }
 };
 
 // =============================================================================
