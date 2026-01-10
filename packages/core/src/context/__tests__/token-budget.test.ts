@@ -210,8 +210,9 @@ describe("token-budget", () => {
     });
 
     it("should return correct window for DeepSeek models", () => {
-      expect(getModelContextWindow("deepseek-chat")).toBe(64_000);
-      expect(getModelContextWindow("deepseek-coder")).toBe(64_000);
+      // DeepSeek models have 128K context windows per official documentation
+      expect(getModelContextWindow("deepseek-chat")).toBe(128_000);
+      expect(getModelContextWindow("deepseek-coder")).toBe(128_000);
     });
 
     it("should match versioned model names via prefix", () => {

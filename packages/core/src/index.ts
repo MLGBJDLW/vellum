@@ -12,6 +12,42 @@
  */
 
 // ============================================
+// @ Mention System (Phase: TUI Context Mentions)
+// ============================================
+export {
+  DEFAULT_EXPANSION_OPTIONS,
+  expandAllMentions,
+  expandMention,
+  getAllMentionSuggestions,
+  getMentionFormat,
+  getMentionSuggestions,
+  hasMentions,
+  MENTION_PARTIAL_REGEX,
+  MENTION_REGEX,
+  MENTION_TYPES,
+  MENTION_TYPES_STANDALONE,
+  MENTION_TYPES_WITH_VALUE,
+  MENTION_VALUE_PARTIAL_REGEX,
+  type Mention,
+  MentionErrorCode,
+  type MentionExpansion,
+  type MentionExpansionContext,
+  type MentionExpansionMetadata,
+  type MentionExpansionOptions,
+  type MentionExpansionResult,
+  type MentionHandler,
+  type MentionHandlerRegistry,
+  type MentionSuggestion,
+  type MentionType,
+  mentionIsStandalone,
+  mentionRequiresValue,
+  parseMentions,
+  previewMention,
+  stripMentions,
+  validateMentionValue,
+} from "./mentions/index.js";
+
+// ============================================
 // Phase 19: Multi-Agent Orchestration
 // ============================================
 // This section exports all Phase 19 types for multi-agent orchestration:

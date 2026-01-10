@@ -40,6 +40,11 @@ export {
   useDesktopNotification,
 } from "./useDesktopNotification.js";
 export {
+  type UseFileSuggestionsOptions,
+  type UseFileSuggestionsResult,
+  useFileSuggestions,
+} from "./useFileSuggestions.js";
+export {
   createStandardHotkeys,
   formatHotkey,
   generateHotkeyHelp,
@@ -55,6 +60,13 @@ export {
   type UseInputHistoryReturn,
   useInputHistory,
 } from "./useInputHistory.js";
+// @ Mention autocomplete hooks (Phase: TUI Context Mentions)
+export {
+  type MentionAutocompleteState,
+  type UseMentionAutocompleteOptions,
+  type UseMentionAutocompleteResult,
+  useMentionAutocomplete,
+} from "./useMentionAutocomplete.js";
 // Mode shortcuts hook (T046)
 export {
   type UseModeShortcutsOptions,

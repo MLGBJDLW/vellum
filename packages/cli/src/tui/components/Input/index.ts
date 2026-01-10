@@ -15,4 +15,14 @@ export {
   parseSlashCommand,
   type SlashCommand,
 } from "./CommandInput.js";
+export {
+  EnhancedCommandInput,
+  type EnhancedCommandInputProps,
+} from "./EnhancedCommandInput.js";
+export {
+  type FileSuggestion,
+  MentionAutocomplete,
+  type MentionAutocompleteMode,
+  type MentionAutocompleteProps,
+} from "./MentionAutocomplete.js";
 export { TextInput, type TextInputProps } from "./TextInput.js";

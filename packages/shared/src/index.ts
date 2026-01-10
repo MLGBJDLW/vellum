@@ -6,6 +6,30 @@
 export * from "./config-parser/index.js";
 // Error codes
 export { ErrorCode, ErrorSeverity, inferSeverity } from "./errors/index.js";
+// @ Mention System (Phase: TUI Context Mentions)
+export {
+  countMentions,
+  countMentionsByType,
+  extractTextWithoutMentions,
+  getAllMentionSuggestions,
+  getMentionFormat,
+  getMentionSuggestions,
+  hasMentions,
+  MENTION_PARTIAL_REGEX,
+  MENTION_REGEX,
+  MENTION_TYPES,
+  MENTION_TYPES_STANDALONE,
+  MENTION_TYPES_WITH_VALUE,
+  MENTION_VALUE_PARTIAL_REGEX,
+  type Mention,
+  type MentionSuggestion,
+  type MentionType,
+  mentionIsStandalone,
+  mentionRequiresValue,
+  parseMentions,
+  stripMentions,
+  validateMentionValue,
+} from "./mentions.js";
 // Theme types (Phase 33 - Visual Theme System)
 // Theme utilities (Phase 33 - Visual Theme System)
 export type {
