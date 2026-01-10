@@ -1,85 +1,115 @@
-import type { ApprovalPolicy, CodingMode, ModeManager, SandboxPolicy } from "@vellum/core";
-import { OnboardingWizard as CoreOnboardingWizard } from "@vellum/core";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type {
+  AgentLoop,
+  ApprovalPolicy,
+  CodingMode,
+  CredentialManager,
+  SandboxPolicy,
+  Session,
+  SessionMode,
+  ToolExecutor,
+  ToolRegistry,
+} from "@vellum/core";
+import {
+  OnboardingWizard as CoreOnboardingWizard,
+  createCostService,
+  createModeManager,
+  createSession,
+  createToolRegistry,
+  getTextContent,
+  ProjectMemoryService,
+  registerAllBuiltinTools,
+  SessionListService,
+  StorageManager,
+  updateSessionMetadata,
+} from "@vellum/core";
+import { createId } from "@vellum/shared";
 import { Box, Text, useApp as useInkApp, useInput } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { DefaultContextProvider } from "./commands/index.js";
 import {
-  batchCommand,
+  agentsCommand,
   CommandExecutor,
   CommandRegistry,
   clearCommand,
-  createTestContextProvider,
+  costCommand,
+  costResetCommand,
+  createBatchCommand,
+  createContextProvider,
+  createCredentialManager,
+  createResumeCommand,
+  customAgentsCommand,
   enhancedAuthCommands,
   exitCommand,
   helpCommand,
+  initSlashCommand,
+  languageCommand,
+  memoryCommand,
   metricsCommands,
+  modelCommand,
+  onboardCommand,
+  type ResumeSessionEventData,
+  registerUserCommands,
+  setCostCommandsService,
   setHelpRegistry,
+  setModeCommandsManager,
+  setModelCommandConfig,
   setThemeContext,
   themeSlashCommands,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
+import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
 import { setShutdownCleanup } from "./index.js";
 import { useAgentAdapter } from "./tui/adapters/agent-adapter.js";
-// Adapters
+import { toUIMessages } from "./tui/adapters/message-adapter.js";
 import {
   createMemorySessionStorage,
   type SessionStorage,
   useSessionAdapter,
 } from "./tui/adapters/session-adapter.js";
-// Core components
-import { Header } from "./tui/components/Header.js";
-// Input components - Replace TextInput with CommandInput
+import { Banner } from "./tui/components/Banner/index.js";
+import { BacktrackControls } from "./tui/components/backtrack/BacktrackControls.js";
+import { LoadingIndicator } from "./tui/components/common/Spinner.js";
+import type { AutocompleteOption } from "./tui/components/Input/Autocomplete.js";
 import { CommandInput, type SlashCommand } from "./tui/components/Input/CommandInput.js";
+import { TextInput } from "./tui/components/Input/TextInput.js";
+import { McpPanel } from "./tui/components/index.js";
 import { Layout } from "./tui/components/Layout.js";
 import { MemoryPanel, type MemoryPanelProps } from "./tui/components/MemoryPanel.js";
 import { MessageList } from "./tui/components/Messages/MessageList.js";
-// StatusBar enhancement components
 import { ModelSelector } from "./tui/components/ModelSelector.js";
-// Layout enhancement components
 import { ModeSelector } from "./tui/components/ModeSelector.js";
 import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
 import { StatusBar } from "./tui/components/StatusBar/StatusBar.js";
 import type { TrustMode } from "./tui/components/StatusBar/TrustModeIndicator.js";
 import { SessionPicker } from "./tui/components/session/SessionPicker.js";
-import type { SessionMetadata } from "./tui/components/session/types.js";
-// Message enhancement components
+import type { SessionMetadata, SessionPreviewMessage } from "./tui/components/session/types.js";
 import { ThinkingBlock } from "./tui/components/ThinkingBlock.js";
 import type { TodoItemData } from "./tui/components/TodoItem.js";
 import { TodoPanel } from "./tui/components/TodoPanel.js";
+import { PermissionDialog } from "./tui/components/Tools/PermissionDialog.js";
+import { ToolsPanel } from "./tui/components/Tools/ToolsPanel.js";
 import { UpdateBanner } from "./tui/components/UpdateBanner.js";
 import type { Message } from "./tui/context/MessagesContext.js";
-// Context providers
+import { useMessages } from "./tui/context/MessagesContext.js";
 import { RootProvider } from "./tui/context/RootProvider.js";
-import { useTheme } from "./tui/theme/index.js";
-import { calculateCost, getContextWindow } from "./utils/index.js";
-
-// CodeBlock and DiffView are used within MessageList for rich rendering
-
-import type { AgentLoop, PermissionResponse } from "@vellum/core";
-// Banner component (ASCII Art with shimmer animation)
-import { Banner } from "./tui/components/Banner/index.js";
-// Backtrack components
-import { BacktrackControls } from "./tui/components/backtrack/BacktrackControls.js";
-// Tool/Permission components
-import { ApprovalQueue } from "./tui/components/Tools/ApprovalQueue.js";
-import { PermissionDialog, type RiskLevel } from "./tui/components/Tools/PermissionDialog.js";
-import type { ToolExecution } from "./tui/context/ToolsContext.js";
+import { useTools } from "./tui/context/ToolsContext.js";
 import { useAgentLoop } from "./tui/hooks/useAgentLoop.js";
 import { useAlternateBuffer } from "./tui/hooks/useAlternateBuffer.js";
 import { useBacktrack } from "./tui/hooks/useBacktrack.js";
 import { useCopyMode } from "./tui/hooks/useCopyMode.js";
 import { useDesktopNotification } from "./tui/hooks/useDesktopNotification.js";
-// Hooks
 import { type HotkeyDefinition, useHotkeys } from "./tui/hooks/useHotkeys.js";
 import { useInputHistory } from "./tui/hooks/useInputHistory.js";
 import { useModeShortcuts } from "./tui/hooks/useModeShortcuts.js";
-import { usePermissionHandler } from "./tui/hooks/usePermissionHandler.js";
 import { useScreenReader } from "./tui/hooks/useScreenReader.js";
-// New TUI hooks (T038-T059)
+import { useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
+import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
 import { useVim } from "./tui/hooks/useVim.js";
-// LSP integration (T062)
+import { getBannerSeen, setBannerSeen as saveBannerSeen } from "./tui/i18n/settings-integration.js";
 import { disposeLsp, initializeLsp, type LspIntegrationResult } from "./tui/lsp-integration.js";
-// Plugin system integration (T061)
 import {
   disposePlugins,
   getPluginCommands,
@@ -104,9 +134,10 @@ import { getMetricsManager, type TuiMetricsManager } from "./tui/metrics-integra
 import { createResilientProvider, type ResilientProvider } from "./tui/resilience.js";
 // Sandbox integration (T063)
 import { cleanupSandbox, initializeSandbox } from "./tui/sandbox-integration.js";
-import type { ThemeName } from "./tui/theme/index.js";
+import { type ThemeName, useTheme } from "./tui/theme/index.js";
 // Tip integration (T069)
 import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
+import { calculateCost, getContextWindow } from "./utils/index.js";
 
 /**
  * Get default model for a given provider
@@ -135,6 +166,29 @@ function getDefaultModelForProvider(provider: string): string {
   return defaults[provider] ?? "claude-sonnet-4-20250514";
 }
 
+function approvalPolicyToTrustMode(policy: ApprovalPolicy): TrustMode {
+  switch (policy) {
+    case "suggest":
+      return "ask";
+    case "auto-edit":
+    case "on-request":
+      return "auto";
+    case "full-auto":
+      return "full";
+  }
+}
+
+function getDefaultApprovalPolicyForMode(mode: CodingMode): ApprovalPolicy {
+  switch (mode) {
+    case "vibe":
+      return "full-auto";
+    case "plan":
+      return "auto-edit";
+    case "spec":
+      return "suggest";
+  }
+}
+
 /**
  * Props for the App component.
  * Extended with coding mode options (T037-T040).
@@ -152,9 +206,19 @@ interface AppProps {
   sandbox?: SandboxPolicy;
   /** Optional AgentLoop instance for real agent integration */
   agentLoop?: AgentLoop;
+  /** Optional shared ToolRegistry for the running tool system (avoids internal registry duplication) */
+  toolRegistry?: ToolRegistry;
+  /** Optional shared ToolExecutor for executing tools (defaults to AgentLoop's executor when available) */
+  toolExecutor?: ToolExecutor;
   /** UI theme (dark, parchment, dracula, etc.) */
   theme?: ThemeName;
+  /** Force banner display on startup */
+  banner?: boolean;
 }
+
+type AppContentProps = AppProps & {
+  readonly toolRegistry: ToolRegistry;
+};
 
 /**
  * Cancellation controller for the current agent operation.
@@ -177,6 +241,51 @@ function createMessage(role: Message["role"], content: string): Message {
   };
 }
 
+/**
+ * Map coding mode to session mode for persistence.
+ */
+function mapCodingModeToSessionMode(mode: CodingMode): SessionMode {
+  switch (mode) {
+    case "vibe":
+      return "code";
+    case "plan":
+      return "plan";
+    case "spec":
+      return "plan";
+  }
+}
+
+/**
+ * Derive a session title from messages.
+ */
+type SessionMessage = Session["messages"][number];
+
+function buildSessionTitle(messages: readonly SessionMessage[]): string {
+  const firstUser = messages.find((message) => message.role === "user");
+  const content = firstUser ? getTextContent(firstUser).trim() : "";
+  if (!content) {
+    return "New Session";
+  }
+  return content.length > 60 ? `${content.slice(0, 57)}...` : content;
+}
+
+/**
+ * Derive a summary/preview from messages.
+ */
+function buildSessionSummary(messages: readonly SessionMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (!message) {
+      continue;
+    }
+    const content = getTextContent(message).trim();
+    if (content) {
+      return content.length > 140 ? `${content.slice(0, 137)}...` : content;
+    }
+  }
+  return undefined;
+}
+
 // =============================================================================
 // T036: Command Registry Initialization
 // =============================================================================
@@ -192,8 +301,18 @@ function createCommandRegistry(): CommandRegistry {
   registry.register(clearCommand);
   registry.register(exitCommand);
 
-  // Register batch command (T048)
-  registry.register(batchCommand);
+  // Register additional builtin commands
+  registry.register(languageCommand);
+  registry.register(modelCommand);
+  registry.register(costCommand);
+  registry.register(costResetCommand);
+  registry.register(initSlashCommand);
+  registry.register(onboardCommand);
+  registry.register(agentsCommand);
+  registry.register(customAgentsCommand);
+
+  // Register memory dispatcher (subcommands handled via /memory)
+  registry.register(memoryCommand);
 
   // Register auth commands
   for (const cmd of enhancedAuthCommands) {
@@ -250,10 +369,33 @@ export function App({
   approval: _approval,
   sandbox: _sandbox,
   agentLoop: agentLoopProp,
+  toolRegistry: toolRegistryProp,
+  toolExecutor: toolExecutorProp,
   theme = "parchment",
+  banner,
 }: AppProps) {
+  // Shared tool registry for the running tool system.
+  // This registry is used by commands, the tools UI, and MCP tool registration.
+  const toolRegistry = useMemo(() => {
+    if (toolRegistryProp) {
+      return toolRegistryProp;
+    }
+
+    const registry = createToolRegistry();
+    registerAllBuiltinTools(registry);
+    return registry;
+  }, [toolRegistryProp]);
+
+  // If an AgentLoop is provided, MCP tools must execute via the same ToolExecutor.
+  const toolExecutor: ToolExecutor | undefined = useMemo(() => {
+    if (toolExecutorProp) {
+      return toolExecutorProp;
+    }
+    return agentLoopProp?.getToolExecutor();
+  }, [agentLoopProp, toolExecutorProp]);
+
   return (
-    <RootProvider theme={theme}>
+    <RootProvider theme={theme} toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
       <AppContent
         model={model}
         provider={provider}
@@ -261,6 +403,8 @@ export function App({
         approval={_approval}
         sandbox={_sandbox}
         agentLoop={agentLoopProp}
+        toolRegistry={toolRegistry}
+        banner={banner}
       />
     </RootProvider>
   );
@@ -277,14 +421,16 @@ function AppContent({
   approval: _approval,
   sandbox: _sandbox,
   agentLoop: agentLoopProp,
-}: AppProps) {
+  banner,
+  toolRegistry,
+}: AppContentProps) {
   const { exit } = useInkApp();
   const themeContext = useTheme();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages, addMessage, clearMessages, setMessages } = useMessages();
   const [isLoading, setIsLoading] = useState(false);
-
-  // Fix 5: Startup SplashScreen state
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [interactivePrompt, setInteractivePrompt] = useState<InteractivePrompt | null>(null);
+  const [promptValue, setPromptValue] = useState("");
+  const [pendingOperation, setPendingOperation] = useState<AsyncOperation | null>(null);
 
   // ==========================================================================
   // New TUI Hooks Integration (T038-T059)
@@ -306,12 +452,6 @@ function AppContent({
 
   // Alternate buffer for full-screen modals (T043)
   const alternateBuffer = useAlternateBuffer({ enabled: false });
-
-  // Fix 5: SplashScreen initialization timer
-  useEffect(() => {
-    const timer = setTimeout(() => setIsInitializing(false), 1500);
-    return () => clearTimeout(timer);
-  }, []);
 
   // AgentLoop integration (T038) - use prop if provided
   // Note: The hook is conditionally used based on prop presence
@@ -433,11 +573,81 @@ function AppContent({
   }, [agentLoopProp, agentAdapter]);
 
   // ==========================================================================
+  // Core Services - Tools, Credentials, Sessions
+  // ==========================================================================
+
+  const [credentialManager, setCredentialManager] = useState<CredentialManager | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const initializeCredentials = async () => {
+      try {
+        const manager = await createCredentialManager();
+        if (!cancelled) {
+          setCredentialManager(manager);
+        }
+      } catch (error) {
+        console.warn(
+          "[credentials] Failed to initialize credential manager:",
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    };
+
+    void initializeCredentials();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const storageManagerRef = useRef<StorageManager | null>(null);
+  const sessionListServiceRef = useRef<SessionListService | null>(null);
+  const sessionCacheRef = useRef<Session | null>(null);
+  const [storageReady, setStorageReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const initializeStorage = async () => {
+      try {
+        const manager = await StorageManager.create();
+        const listService = new SessionListService(manager);
+
+        if (!cancelled) {
+          storageManagerRef.current = manager;
+          sessionListServiceRef.current = listService;
+          setStorageReady(true);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn(
+            "[sessions] Failed to initialize session storage:",
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+      }
+    };
+
+    void initializeStorage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ==========================================================================
   // UI State Management
   // ==========================================================================
 
   // Current coding mode state
   const [currentMode, setCurrentMode] = useState<CodingMode>(_mode);
+  const modeManager = useMemo(
+    () => createModeManager({ initialMode: _mode, requireSpecConfirmation: true }),
+    [_mode]
+  );
+  const currentModeRef = useRef<CodingMode>(_mode);
 
   // Modal visibility states
   const [showModeSelector, setShowModeSelector] = useState(false);
@@ -447,10 +657,36 @@ function AppContent({
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isFirstRun, setIsFirstRun] = useState(false);
+  const [bannerSeen, setBannerSeenState] = useState(() => getBannerSeen());
+  const [bannerSplashComplete, setBannerSplashComplete] = useState(false);
 
   // Model selection state (moved earlier for onboarding config loading)
   const [currentModel, setCurrentModel] = useState(model);
   const [currentProvider, setCurrentProvider] = useState(provider);
+
+  useEffect(() => {
+    currentModeRef.current = currentMode;
+  }, [currentMode]);
+
+  useEffect(() => {
+    setModeCommandsManager(modeManager);
+    return () => setModeCommandsManager(null);
+  }, [modeManager]);
+
+  const bannerOverride = banner ?? false;
+  const shouldShowBanner = !showOnboarding && (bannerOverride || !bannerSeen);
+  const bannerCycleDurationMs = 1600;
+  const bannerUpdateIntervalMs = 16;
+  const bannerCycles = 2;
+  const bannerDisplayDurationMs = bannerCycleDurationMs * bannerCycles + 300;
+
+  const handleBannerComplete = useCallback(() => {
+    setBannerSplashComplete(true);
+    if (!bannerSeen) {
+      saveBannerSeen(true);
+      setBannerSeenState(true);
+    }
+  }, [bannerSeen]);
 
   // Check onboarding completion status on mount and load saved config
   useEffect(() => {
@@ -475,14 +711,13 @@ function AppContent({
   }, []);
 
   // Spec mode phase tracking
-  const [specPhase, _setSpecPhase] = useState(1);
-
-  // Approval queue for batch tool approvals
-  const [pendingApprovals, setPendingApprovals] = useState<ToolExecution[]>([]);
+  const [specPhase, setSpecPhase] = useState(1);
 
   // Sidebar visibility states
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [sidebarContent, setSidebarContent] = useState<"memory" | "todo">("memory");
+  const [showSidebar, setShowSidebar] = useState(true);
+  const [sidebarContent, setSidebarContent] = useState<"memory" | "todo" | "tools" | "mcp">(
+    "memory"
+  );
 
   // Thinking state for ThinkingBlock
   const [thinkingContent, setThinkingContent] = useState("");
@@ -491,12 +726,143 @@ function AppContent({
   // FIX 2: Session Management - Connect Real Session Data
   // ==========================================================================
 
-  // Session storage (in-memory for now, can be replaced with file-based storage)
-  const sessionStorage = useMemo<SessionStorage>(() => createMemorySessionStorage(), []);
-
   // Session list state - loaded from storage
   const [sessions, setSessions] = useState<SessionMetadata[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string>(`session-${Date.now()}`);
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => createId());
+  const tokenUsageRef = useRef({ inputTokens: 0, outputTokens: 0, totalCost: 0 });
+  const [tokenUsage, setTokenUsage] = useState({
+    inputTokens: 0,
+    outputTokens: 0,
+    totalCost: 0,
+  });
+  const previousTokenUsageRef = useRef({ inputTokens: 0, outputTokens: 0 });
+
+  const switchToSession = useCallback((sessionId: string, session?: Session) => {
+    sessionCacheRef.current = session ?? null;
+    previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
+    tokenUsageRef.current = { inputTokens: 0, outputTokens: 0, totalCost: 0 };
+    setTokenUsage({ inputTokens: 0, outputTokens: 0, totalCost: 0 });
+    setActiveSessionId(sessionId);
+  }, []);
+
+  const refreshSessions = useCallback(async () => {
+    const listService = sessionListServiceRef.current;
+    if (!listService) {
+      return;
+    }
+
+    try {
+      const recent = await listService.getRecentSessions(50);
+      setSessions(
+        recent.map((session) => ({
+          id: session.id,
+          title: session.title,
+          timestamp: session.lastActive,
+          messageCount: session.messageCount,
+          lastMessage: session.summary,
+        }))
+      );
+    } catch (error) {
+      console.warn(
+        "[sessions] Failed to refresh session list:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }, []);
+
+  // Session storage (file-backed with memory fallback while initializing)
+  const sessionStorage = useMemo<SessionStorage>(() => {
+    const fallbackStorage = createMemorySessionStorage();
+
+    return {
+      async save(sessionId, sessionMessages) {
+        const storage = storageManagerRef.current;
+        if (!storage) {
+          await fallbackStorage.save(sessionId, sessionMessages);
+          return;
+        }
+
+        let session = sessionCacheRef.current;
+        if (!session || session.metadata.id !== sessionId) {
+          try {
+            session = await storage.load(sessionId);
+          } catch {
+            session = createSession({
+              id: sessionId,
+              title: "New Session",
+              mode: mapCodingModeToSessionMode(currentModeRef.current),
+              workingDirectory: process.cwd(),
+              messages: [],
+            });
+          }
+        }
+
+        const title =
+          sessionMessages.length > 0 ? buildSessionTitle(sessionMessages) : session.metadata.title;
+        const summary =
+          sessionMessages.length > 0
+            ? buildSessionSummary(sessionMessages)
+            : session.metadata.summary;
+        const tokenCount = tokenUsageRef.current.inputTokens + tokenUsageRef.current.outputTokens;
+
+        const updatedSession = updateSessionMetadata(
+          {
+            ...session,
+            messages: [...sessionMessages],
+          },
+          {
+            title,
+            summary,
+            lastActive: new Date(),
+            workingDirectory: process.cwd(),
+            messageCount: sessionMessages.length,
+            tokenCount,
+            mode: mapCodingModeToSessionMode(currentModeRef.current),
+          }
+        );
+
+        sessionCacheRef.current = updatedSession;
+        await storage.save(updatedSession);
+        await refreshSessions();
+      },
+
+      async load(sessionId) {
+        const storage = storageManagerRef.current;
+        if (!storage) {
+          return fallbackStorage.load(sessionId);
+        }
+
+        try {
+          const session = await storage.load(sessionId);
+          sessionCacheRef.current = session;
+          return session.messages;
+        } catch {
+          return null;
+        }
+      },
+
+      async clear(sessionId) {
+        const storage = storageManagerRef.current;
+        if (!storage) {
+          await fallbackStorage.clear(sessionId);
+          return;
+        }
+
+        try {
+          await storage.delete(sessionId);
+          if (sessionCacheRef.current?.metadata.id === sessionId) {
+            sessionCacheRef.current = null;
+          }
+          await refreshSessions();
+        } catch (error) {
+          console.warn(
+            "[sessions] Failed to clear session:",
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+      },
+    };
+  }, [refreshSessions]);
 
   // ==========================================================================
   // Adapter Integration - Session Adapter (T060)
@@ -505,7 +871,6 @@ function AppContent({
   // Session adapter for persistence with auto-save
   const {
     saveSession,
-    loadSession,
     clearSession,
     isSaving: _isSaving,
     isLoading: _isSessionLoading,
@@ -518,6 +883,16 @@ function AppContent({
     autoLoad: true, // Load session on mount
   });
 
+  const costService = useMemo(
+    () => createCostService({ sessionId: activeSessionId }),
+    [activeSessionId]
+  );
+
+  useEffect(() => {
+    setCostCommandsService(costService);
+    return () => setCostCommandsService(null);
+  }, [costService]);
+
   // Handle session errors
   useEffect(() => {
     if (sessionError) {
@@ -526,74 +901,187 @@ function AppContent({
     }
   }, [sessionError, notifyError]);
 
-  // Load sessions on mount and save current session
+  // Load sessions when storage is ready
   useEffect(() => {
-    // In a real implementation, this would load from a session list file
-    // For now, we create one session entry for the current session
-    const currentSession: SessionMetadata = {
-      id: activeSessionId,
-      title: "Current Session",
-      timestamp: new Date(),
-      messageCount: messages.length,
-      lastMessage: messages[messages.length - 1]?.content.slice(0, 50),
-    };
-    setSessions([currentSession]);
-
-    // Save current session to storage
-    if (messages.length > 0) {
-      sessionStorage.save(activeSessionId, []);
+    if (storageReady) {
+      void refreshSessions();
     }
-  }, [activeSessionId, messages.length, messages, sessionStorage]);
+  }, [storageReady, refreshSessions]);
 
   // ==========================================================================
   // FIX 4: Real Todo and Memory Data
   // ==========================================================================
 
-  // Todo items - connected to session state (would come from tool results)
-  const [todoItems, setTodoItems] = useState<TodoItemData[]>([]);
+  const { executions } = useTools();
+
+  const loadTodos = useCallback(async (): Promise<readonly TodoItemData[]> => {
+    const todoFilePath = join(process.cwd(), ".vellum", "todos.json");
+
+    try {
+      const content = await readFile(todoFilePath, { encoding: "utf-8" });
+      const parsed = JSON.parse(content) as unknown;
+
+      if (!parsed || typeof parsed !== "object") {
+        return [];
+      }
+
+      const items = (parsed as { items?: unknown }).items;
+      if (!Array.isArray(items)) {
+        return [];
+      }
+
+      return items
+        .map((item): TodoItemData | null => {
+          if (!item || typeof item !== "object") return null;
+
+          const id = (item as { id?: unknown }).id;
+          const text = (item as { text?: unknown }).text;
+          const completed = (item as { completed?: unknown }).completed;
+          const createdAt = (item as { createdAt?: unknown }).createdAt;
+          const completedAt = (item as { completedAt?: unknown }).completedAt;
+
+          if (
+            typeof id !== "number" ||
+            typeof text !== "string" ||
+            typeof completed !== "boolean"
+          ) {
+            return null;
+          }
+
+          const createdAtStr = typeof createdAt === "string" ? createdAt : new Date().toISOString();
+          const completedAtStr = typeof completedAt === "string" ? completedAt : undefined;
+
+          const mapped: TodoItemData = {
+            id,
+            title: text,
+            status: completed ? "completed" : "pending",
+            createdAt: createdAtStr,
+            completedAt: completedAtStr,
+          };
+
+          return mapped;
+        })
+        .filter((item): item is TodoItemData => item !== null);
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const loadMemories = useCallback(async (): Promise<MemoryPanelProps["entries"]> => {
+    const projectEntries: Array<MemoryPanelProps["entries"][number]> = [];
+
+    // 1) Project memory service entries (.vellum/memory.json)
+    try {
+      const service = new ProjectMemoryService();
+      await service.initialize(process.cwd());
+      try {
+        projectEntries.push(...(await service.listEntries()));
+      } finally {
+        await service.close();
+      }
+    } catch {
+      // Best-effort: ignore load failures and fall back to other sources.
+    }
+
+    // 2) save_memory tool entries (.vellum/memory/{namespace}/{key}.json)
+    const toolEntries: Array<MemoryPanelProps["entries"][number]> = [];
+    const toolMemoryBaseDir = join(process.cwd(), ".vellum", "memory");
+
+    try {
+      const namespaceEntries = await readdir(toolMemoryBaseDir, { withFileTypes: true });
+
+      for (const namespaceDirent of namespaceEntries) {
+        if (!namespaceDirent.isDirectory()) continue;
+        const namespace = namespaceDirent.name;
+        const namespaceDir = join(toolMemoryBaseDir, namespace);
+
+        const files = await readdir(namespaceDir, { withFileTypes: true });
+        for (const file of files) {
+          if (!file.isFile()) continue;
+          if (!file.name.endsWith(".json")) continue;
+
+          const memoryFilePath = join(namespaceDir, file.name);
+
+          try {
+            const content = await readFile(memoryFilePath, { encoding: "utf-8" });
+            const parsed = JSON.parse(content) as unknown;
+
+            if (!parsed || typeof parsed !== "object") continue;
+
+            const value = (parsed as { value?: unknown }).value;
+            const storedAt = (parsed as { storedAt?: unknown }).storedAt;
+            const updatedAt = (parsed as { updatedAt?: unknown }).updatedAt;
+            const key = (parsed as { key?: unknown }).key;
+
+            if (typeof value !== "string" || typeof key !== "string") continue;
+
+            const createdAtDate = typeof storedAt === "string" ? new Date(storedAt) : new Date();
+            const updatedAtDate =
+              typeof updatedAt === "string" ? new Date(updatedAt) : createdAtDate;
+
+            toolEntries.push({
+              key: `${namespace}/${key}`,
+              type: "context",
+              content: value,
+              createdAt: createdAtDate,
+              updatedAt: updatedAtDate,
+              metadata: {
+                tags: ["tool:save_memory", `namespace:${namespace}`],
+                importance: 0.5,
+              },
+            });
+          } catch {
+            // Skip unreadable/invalid entries.
+          }
+        }
+      }
+    } catch {
+      // No tool memory directory (or unreadable). Ignore.
+    }
+
+    const combined: Array<MemoryPanelProps["entries"][number]> = [
+      ...projectEntries,
+      ...toolEntries,
+    ];
+    combined.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    return combined;
+  }, []);
+
+  const { todoItems, memoryEntries, refreshTodos } = useSidebarPanelData({
+    sidebarVisible: showSidebar,
+    sidebarContent,
+    executions,
+    loadTodos,
+    loadMemories,
+  });
+
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingCollapsed, setThinkingCollapsed] = useState(true);
 
-  // Trust mode state
-  const [trustMode, _setTrustMode] = useState<TrustMode>("ask");
+  const effectiveApprovalPolicy = useMemo<ApprovalPolicy>(() => {
+    if (_approval) {
+      return _approval;
+    }
+    // Fall back to mode-specific defaults.
+    // Using explicit mapping avoids assumptions about ModeManager's internal config.
+    return getDefaultApprovalPolicyForMode(currentMode);
+  }, [_approval, currentMode]);
+
+  const trustMode = useMemo<TrustMode>(
+    () => approvalPolicyToTrustMode(effectiveApprovalPolicy),
+    [effectiveApprovalPolicy]
+  );
 
   // ==========================================================================
   // FIX 3: Permission System Integration
   // ==========================================================================
 
-  // Permission handler hook - creates handler for tool execution approval
-  const {
-    pendingPermission,
-    isDialogVisible: _isDialogVisible,
-    handler: _permissionHandler,
-    respond: respondToPermission,
-  } = usePermissionHandler();
+  // Drive tool approvals from ToolsContext (source of truth) and resume the AgentLoop
+  // by calling grantPermission()/denyPermission() when the user decides.
+  const { activeApproval, activeRiskLevel, approveActive, rejectActive } =
+    useToolApprovalController({ agentLoop: agentLoopProp });
 
-  // Permission dialog state (derived from permission handler)
-  const [pendingApproval, setPendingApproval] = useState<{
-    execution: ToolExecution;
-    riskLevel: RiskLevel;
-  } | null>(null);
-
-  // Sync permission handler state with dialog state
-  useEffect(() => {
-    if (pendingPermission) {
-      // Convert PendingPermission to ToolExecution format for dialog
-      const execution: ToolExecution = {
-        id: pendingPermission.id,
-        toolName: pendingPermission.info.type,
-        params: pendingPermission.info.metadata ?? {},
-        status: "pending",
-      };
-      // Determine risk level from permission type
-      const riskLevel: RiskLevel = ["bash", "edit", "write"].includes(pendingPermission.info.type)
-        ? "high"
-        : "medium";
-      setPendingApproval({ execution, riskLevel });
-    } else {
-      setPendingApproval(null);
-    }
-  }, [pendingPermission]);
+  const hasActiveApproval = activeApproval !== null;
 
   // Update banner state
   const [updateAvailable, setUpdateAvailable] = useState<{
@@ -654,6 +1142,25 @@ function AppContent({
     persistKey: "vellum-command-history",
   });
 
+  // Backtrack sync helpers
+  // - suppressBacktrackPushRef prevents the message->backtrack sync effect from creating new
+  //   history snapshots when we are *restoring* state (undo/redo/branch switch).
+  // - lastMessageCountRef tracks the last "real" message count that we recorded into backtrack.
+  const suppressBacktrackPushRef = useRef(false);
+  const lastMessageCountRef = useRef(0);
+
+  const applyBacktrackMessages = useCallback(
+    (nextMessages: Message[], announcement?: string) => {
+      suppressBacktrackPushRef.current = true;
+      lastMessageCountRef.current = nextMessages.length;
+      setMessages([...nextMessages]);
+      if (announcement) {
+        announce(announcement);
+      }
+    },
+    [announce, setMessages]
+  );
+
   // Backtrack hook for undo/redo conversation state
   const {
     backtrackState,
@@ -661,42 +1168,154 @@ function AppContent({
     push: pushBacktrack,
     undo: undoBacktrack,
     redo: redoBacktrack,
+    createBranch: createBacktrackBranch,
+    switchBranch: switchBacktrackBranch,
   } = useBacktrack({
     initialState: { messages: [] as Message[] },
     maxHistory: 50,
     enableBranching: true,
     onStateChange: (state, action) => {
       if (action === "undo" || action === "redo") {
-        setMessages(state.messages);
-        announce(`${action === "undo" ? "Undid" : "Redid"} last message`);
+        applyBacktrackMessages(
+          state.messages,
+          `${action === "undo" ? "Undid" : "Redid"} last message`
+        );
       }
     },
   });
 
+  const handleCreateBacktrackBranch = useCallback(() => {
+    // Match useBacktrack's default naming behavior: `Branch ${Object.keys(state.branches).length}`
+    const branchName = `Branch ${branches.length}`;
+    createBacktrackBranch(branchName);
+    notifyTaskComplete(`Created branch: ${branchName}`);
+    announce(`Created branch: ${branchName}`);
+  }, [announce, branches.length, createBacktrackBranch, notifyTaskComplete]);
+
+  const handleSwitchBacktrackBranch = useCallback(
+    (branchId: string) => {
+      const targetBranch = branches.find((b) => b.id === branchId);
+      if (!targetBranch) {
+        notifyError("Branch not found");
+        return;
+      }
+
+      // Update the underlying backtrack state first.
+      switchBacktrackBranch(branchId);
+
+      // Then apply the target branch's latest snapshot to the messages view.
+      const latestSnapshot = targetBranch.history.at(-1);
+      const latestState = latestSnapshot?.state as { messages?: Message[] } | undefined;
+      const nextMessages = latestState?.messages;
+      if (Array.isArray(nextMessages)) {
+        applyBacktrackMessages(nextMessages);
+      }
+
+      notifyTaskComplete(`Switched to branch: ${targetBranch.name}`);
+      announce(`Switched to branch: ${targetBranch.name}`);
+    },
+    [
+      announce,
+      applyBacktrackMessages,
+      branches,
+      notifyError,
+      notifyTaskComplete,
+      switchBacktrackBranch,
+    ]
+  );
+
   // Sync messages with backtrack state
   // Use a ref to track last message count to avoid unnecessary pushBacktrack calls
-  const lastMessageCountRef = useRef(0);
   useEffect(() => {
-    // Only push backtrack when messages are actually added (not just re-renders)
-    if (messages.length > 0 && messages.length !== lastMessageCountRef.current) {
+    if (suppressBacktrackPushRef.current) {
+      suppressBacktrackPushRef.current = false;
+      return;
+    }
+
+    // Only push backtrack when messages are actually added (not undo/redo/branch restores).
+    if (messages.length > lastMessageCountRef.current) {
       lastMessageCountRef.current = messages.length;
-      pushBacktrack({ messages }, "Message added");
+      pushBacktrack({ messages: [...messages] }, "Message added");
     }
   }, [messages, pushBacktrack]);
 
   // Mode shortcuts hook (Ctrl+1/2/3)
-  // Note: ModeManager would be provided by a higher-level context in production
-  const modeManagerRef = useRef<ModeManager | null>(null);
   useModeShortcuts({
-    modeManager: modeManagerRef.current,
-    enabled: !showModeSelector && !pendingApproval,
+    modeManager,
+    enabled:
+      !showModeSelector &&
+      !showModelSelector &&
+      !hasActiveApproval &&
+      !showSessionManager &&
+      !showOnboarding &&
+      !interactivePrompt &&
+      !pendingOperation,
     onModeSwitch: (mode, success) => {
       if (success) {
         setCurrentMode(mode);
         announce(`Switched to ${mode} mode`);
       }
     },
+    onError: (mode, error) => {
+      if (modeManager.isPendingSpecConfirmation()) {
+        return;
+      }
+      announce(`Failed to switch to ${mode}: ${error}`);
+    },
   });
+
+  const openSpecConfirmation = useCallback(() => {
+    if (interactivePrompt || pendingOperation) {
+      return;
+    }
+
+    setPromptValue("");
+    setInteractivePrompt({
+      inputType: "confirm",
+      message: "⚠️ Switch to spec mode? This enables a 6-phase structured workflow.",
+      defaultValue: "n",
+      handler: async (value: string): Promise<CommandResult> => {
+        const confirmed = value.toLowerCase() === "y" || value.toLowerCase() === "yes";
+        if (!confirmed) {
+          modeManager.cancelSpecSwitch();
+          return { kind: "success", message: "Mode switch cancelled." };
+        }
+
+        const result = await modeManager.confirmSpecMode();
+        if (result.success) {
+          return { kind: "success", message: "📐 Switched to spec mode." };
+        }
+
+        return {
+          kind: "error",
+          code: "OPERATION_NOT_ALLOWED",
+          message: result.reason ?? "Unable to switch to spec mode.",
+        };
+      },
+      onCancel: () => {
+        modeManager.cancelSpecSwitch();
+        return { kind: "success", message: "Mode switch cancelled." };
+      },
+    });
+  }, [interactivePrompt, pendingOperation, modeManager]);
+
+  useEffect(() => {
+    const handleModeChanged = (event: { currentMode: CodingMode }) => {
+      setCurrentMode(event.currentMode);
+    };
+
+    const handleSpecRequired = () => {
+      openSpecConfirmation();
+    };
+
+    modeManager.on("mode-changed", handleModeChanged);
+    modeManager.on("spec-confirmation-required", handleSpecRequired);
+
+    return () => {
+      modeManager.off("mode-changed", handleModeChanged);
+      modeManager.off("spec-confirmation-required", handleSpecRequired);
+    };
+  }, [modeManager, openSpecConfirmation]);
 
   // Hotkeys hook for global keyboard shortcuts
   const hotkeyDefinitions: HotkeyDefinition[] = useMemo(
@@ -708,11 +1327,27 @@ function AppContent({
         description: "Toggle mode selector",
         scope: "global",
       },
+      // Alt+M alternative for VS Code terminal compatibility
       {
-        key: "b",
+        key: "m",
+        alt: true,
+        handler: () => setShowModeSelector((prev) => !prev),
+        description: "Toggle mode selector (Alt)",
+        scope: "global",
+      },
+      {
+        key: "k",
         ctrl: true,
         handler: () => setShowSidebar((prev) => !prev),
         description: "Toggle sidebar",
+        scope: "global",
+      },
+      // Alt+K alternative for VS Code terminal compatibility
+      {
+        key: "k",
+        alt: true,
+        handler: () => setShowSidebar((prev) => !prev),
+        description: "Toggle sidebar (Alt)",
         scope: "global",
       },
       {
@@ -725,6 +1360,17 @@ function AppContent({
         description: "Show todo panel",
         scope: "global",
       },
+      // Alt+T alternative for VS Code terminal compatibility
+      {
+        key: "t",
+        alt: true,
+        handler: () => {
+          setShowSidebar(true);
+          setSidebarContent("todo");
+        },
+        description: "Show todo panel (Alt)",
+        scope: "global",
+      },
       {
         key: "p",
         ctrl: true,
@@ -733,6 +1379,59 @@ function AppContent({
           setSidebarContent("memory");
         },
         description: "Show memory panel",
+        scope: "global",
+      },
+      // Alt+P alternative for VS Code terminal compatibility
+      {
+        key: "p",
+        alt: true,
+        handler: () => {
+          setShowSidebar(true);
+          setSidebarContent("memory");
+        },
+        description: "Show memory panel (Alt)",
+        scope: "global",
+      },
+      {
+        key: "g",
+        ctrl: true,
+        handler: () => {
+          setShowSidebar(true);
+          setSidebarContent("tools");
+        },
+        description: "Show tools panel",
+        scope: "global",
+      },
+      // Alt+G alternative for VS Code terminal compatibility
+      {
+        key: "g",
+        alt: true,
+        handler: () => {
+          setShowSidebar(true);
+          setSidebarContent("tools");
+        },
+        description: "Show tools panel (Alt)",
+        scope: "global",
+      },
+      {
+        key: "o",
+        ctrl: true,
+        handler: () => {
+          setShowSidebar(true);
+          setSidebarContent("mcp");
+        },
+        description: "Show MCP panel",
+        scope: "global",
+      },
+      // Alt+O alternative for VS Code terminal compatibility
+      {
+        key: "o",
+        alt: true,
+        handler: () => {
+          setShowSidebar(true);
+          setSidebarContent("mcp");
+        },
+        description: "Show MCP panel (Alt)",
         scope: "global",
       },
       {
@@ -762,36 +1461,6 @@ function AppContent({
           }
         },
         description: "Redo",
-        scope: "global",
-      },
-      {
-        key: "1",
-        ctrl: true,
-        handler: () => {
-          setCurrentMode("vibe");
-          announce("Switched to vibe mode");
-        },
-        description: "Switch to vibe mode",
-        scope: "global",
-      },
-      {
-        key: "2",
-        ctrl: true,
-        handler: () => {
-          setCurrentMode("plan");
-          announce("Switched to plan mode");
-        },
-        description: "Switch to plan mode",
-        scope: "global",
-      },
-      {
-        key: "3",
-        ctrl: true,
-        handler: () => {
-          setCurrentMode("spec");
-          announce("Switched to spec mode");
-        },
-        description: "Switch to spec mode",
         scope: "global",
       },
       // Model selector toggle (Ctrl+Shift+M)
@@ -865,9 +1534,11 @@ function AppContent({
     enabled:
       !showModeSelector &&
       !showModelSelector &&
-      !pendingApproval &&
+      !hasActiveApproval &&
       !showSessionManager &&
-      !showOnboarding,
+      !showOnboarding &&
+      !interactivePrompt &&
+      !pendingOperation,
   });
 
   // T042: Wire theme context to theme commands
@@ -877,6 +1548,11 @@ function AppContent({
   }, [themeContext]);
 
   // T036: Initialize command registry once on mount
+  const [commandRegistryVersion, setCommandRegistryVersion] = useState(0);
+  const bumpCommandRegistryVersion = useCallback(
+    () => setCommandRegistryVersion((prev) => prev + 1),
+    []
+  );
   const commandRegistry = useMemo(() => createCommandRegistry(), []);
 
   // ==========================================================================
@@ -909,6 +1585,7 @@ function AppContent({
 
           // Register plugin commands into the registry
           registerPluginCommands(commandRegistry, result);
+          bumpCommandRegistryVersion();
 
           // Log plugin loading results
           if (result.errors.length > 0) {
@@ -933,7 +1610,36 @@ function AppContent({
       cancelled = true;
       disposePlugins();
     };
-  }, [commandRegistry]);
+  }, [commandRegistry, bumpCommandRegistryVersion]);
+
+  // Load user-defined commands from ~/.vellum/commands
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadUserCommands = async () => {
+      try {
+        const result = await registerUserCommands(commandRegistry);
+        if (cancelled) return;
+
+        if (result.commands.length > 0) {
+          bumpCommandRegistryVersion();
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn(
+            "[user-commands] Failed to load commands:",
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+      }
+    };
+
+    void loadUserCommands();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [commandRegistry, bumpCommandRegistryVersion]);
 
   // ==========================================================================
   // T062: LSP Integration
@@ -991,25 +1697,108 @@ function AppContent({
     };
   }, []);
 
+  const handleCommandEvent = useCallback(
+    (event: string, data?: unknown) => {
+      if (event === "app:exit") {
+        exit();
+        return;
+      }
+
+      if (event === "session:resume") {
+        const payload = data as ResumeSessionEventData | undefined;
+        if (payload?.session) {
+          switchToSession(payload.session.metadata.id, payload.session);
+          setMessages([...toUIMessages(payload.session.messages)]);
+        }
+      }
+    },
+    [exit, setMessages, switchToSession]
+  );
+
+  const contextProviderRef = useRef<DefaultContextProvider | null>(null);
+
   // T036: Create command executor with context provider
   const commandExecutor = useMemo(() => {
-    const contextProvider = createTestContextProvider({
+    if (!credentialManager) {
+      return null;
+    }
+
+    const contextProvider = createContextProvider({
       session: {
-        id: `session-${Date.now()}`,
-        provider,
+        id: activeSessionId,
+        provider: currentProvider,
         cwd: process.cwd(),
       },
-      emit: (event, _data) => {
-        // Handle app events
-        if (event === "app:exit") {
-          exit();
-        }
-        // Log other events for debugging
-        // console.log(`[Event] ${event}`, _data);
-      },
+      credentials: credentialManager,
+      toolRegistry,
+      emit: handleCommandEvent,
     });
+
+    contextProviderRef.current = contextProvider as DefaultContextProvider;
     return new CommandExecutor(commandRegistry, contextProvider);
-  }, [commandRegistry, provider, exit]);
+  }, [
+    commandRegistry,
+    credentialManager,
+    toolRegistry,
+    activeSessionId,
+    currentProvider,
+    handleCommandEvent,
+  ]);
+
+  useEffect(() => {
+    if (!contextProviderRef.current) {
+      return;
+    }
+
+    contextProviderRef.current.updateSession({
+      id: activeSessionId,
+      provider: currentProvider,
+      cwd: process.cwd(),
+    });
+  }, [activeSessionId, currentProvider]);
+
+  useEffect(() => {
+    if (!commandExecutor) {
+      return;
+    }
+
+    try {
+      const batchWithExecutor = createBatchCommand(commandExecutor);
+      commandRegistry.unregister(batchWithExecutor.name);
+      commandRegistry.register(batchWithExecutor);
+      bumpCommandRegistryVersion();
+    } catch (error) {
+      console.warn(
+        "[commands] Failed to register batch command:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }, [commandExecutor, commandRegistry, bumpCommandRegistryVersion]);
+
+  useEffect(() => {
+    if (!storageReady) {
+      return;
+    }
+
+    const storage = storageManagerRef.current;
+    const listService = sessionListServiceRef.current;
+
+    if (!storage || !listService) {
+      return;
+    }
+
+    try {
+      const resumeWithStorage = createResumeCommand(storage, listService);
+      commandRegistry.unregister(resumeWithStorage.name);
+      commandRegistry.register(resumeWithStorage);
+      bumpCommandRegistryVersion();
+    } catch (error) {
+      console.warn(
+        "[commands] Failed to register resume command:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }, [storageReady, commandRegistry, bumpCommandRegistryVersion]);
 
   // Register shutdown cleanup on mount (T030)
   useEffect(() => {
@@ -1026,9 +1815,111 @@ function AppContent({
     };
   }, [saveSession]);
 
+  const handleCommandResult = useCallback(
+    async function process(result: CommandResult): Promise<void> {
+      switch (result.kind) {
+        case "success": {
+          if (result.message) {
+            addMessage({ role: "assistant", content: result.message });
+          }
+          if (result.clearScreen) {
+            clearMessages();
+            void clearSession();
+          }
+          break;
+        }
+
+        case "error": {
+          addMessage({
+            role: "assistant",
+            content: `[x] ${result.message}${
+              result.suggestions ? `\n   Did you mean: ${result.suggestions.join(", ")}?` : ""
+            }`,
+          });
+          break;
+        }
+
+        case "interactive": {
+          setPromptValue("");
+          setInteractivePrompt(result.prompt);
+          break;
+        }
+
+        case "pending": {
+          setPendingOperation(result.operation);
+          try {
+            const resolved = await result.operation.promise;
+            await process(resolved);
+          } catch (error) {
+            addMessage({
+              role: "assistant",
+              content: `[x] ${error instanceof Error ? error.message : String(error)}`,
+            });
+          } finally {
+            setPendingOperation(null);
+          }
+          break;
+        }
+      }
+    },
+    [addMessage, clearMessages, clearSession]
+  );
+
+  const handlePromptSubmit = useCallback(async () => {
+    if (!interactivePrompt) {
+      return;
+    }
+
+    const prompt = interactivePrompt;
+    const input = promptValue.trim();
+    const resolvedValue = input === "" ? (prompt.defaultValue ?? "") : input;
+
+    setInteractivePrompt(null);
+    setPromptValue("");
+
+    try {
+      const result = await prompt.handler(resolvedValue);
+      await handleCommandResult(result);
+    } catch (error) {
+      addMessage({
+        role: "assistant",
+        content: `[x] ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }, [interactivePrompt, promptValue, handleCommandResult, addMessage]);
+
+  const handlePromptCancel = useCallback(() => {
+    if (!interactivePrompt) {
+      return;
+    }
+
+    const prompt = interactivePrompt;
+    setInteractivePrompt(null);
+    setPromptValue("");
+
+    if (prompt.onCancel) {
+      void handleCommandResult(prompt.onCancel());
+    }
+  }, [interactivePrompt, handleCommandResult]);
+
   // Handle Ctrl+C and ESC for cancellation (T031)
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This handler must process multiple input types in a single callback for proper event handling
   useInput((inputChar, key) => {
+    if (interactivePrompt) {
+      if (key.escape) {
+        handlePromptCancel();
+      }
+      return;
+    }
+
+    if (pendingOperation) {
+      if (key.escape && pendingOperation.cancel) {
+        pendingOperation.cancel();
+        setPendingOperation(null);
+      }
+      return;
+    }
+
     // Handle vim mode key processing (T041)
     if (vimEnabled && vim.enabled) {
       const vimAction = vim.handleKey(inputChar, { ctrl: key.ctrl, shift: key.shift });
@@ -1085,7 +1976,7 @@ function AppContent({
         // Cancel running operation
         cancellationRef.current.cancel("user_escape");
         setIsLoading(false);
-        setMessages((prev) => [...prev, createMessage("assistant", "[Operation cancelled]")]);
+        addMessage({ role: "assistant", content: "[Operation cancelled]" });
       } else {
         // No operation running, exit app
         exit();
@@ -1098,10 +1989,7 @@ function AppContent({
       if (isLoading && cancellationRef.current) {
         cancellationRef.current.cancel("user_ctrl_c");
         setIsLoading(false);
-        setMessages((prev) => [
-          ...prev,
-          createMessage("assistant", "[Operation cancelled by Ctrl+C]"),
-        ]);
+        addMessage({ role: "assistant", content: "[Operation cancelled by Ctrl+C]" });
       }
       // Note: If not loading, let the default Ctrl+C behavior (exit) happen
       return;
@@ -1115,45 +2003,27 @@ function AppContent({
         return false; // Not a slash command
       }
 
-      // Execute command
-      const result = await commandExecutor.execute(text);
+      if (!commandExecutor) {
+        addMessage({
+          role: "assistant",
+          content: "[x] Command system not ready yet. Please try again in a moment.",
+        });
+        return true;
+      }
 
-      // Handle result
-      switch (result.kind) {
-        case "success":
-          if (result.message) {
-            setMessages((prev) => [...prev, createMessage("assistant", result.message ?? "")]);
-          }
-          if (result.clearScreen) {
-            setMessages([]);
-            // Also clear session storage when clearing screen
-            void clearSession();
-          }
-          break;
-
-        case "error":
-          setMessages((prev) => [
-            ...prev,
-            createMessage(
-              "assistant",
-              `[x] ${result.message}${result.suggestions ? `\n   Did you mean: ${result.suggestions.join(", ")}?` : ""}`
-            ),
-          ]);
-          break;
-
-        case "interactive":
-          // For now, show the prompt message - full interactive handling to be added
-          setMessages((prev) => [...prev, createMessage("assistant", result.prompt.message)]);
-          break;
-
-        case "pending":
-          setMessages((prev) => [...prev, createMessage("assistant", result.operation.message)]);
-          break;
+      try {
+        const result = await commandExecutor.execute(text);
+        await handleCommandResult(result);
+      } catch (error) {
+        addMessage({
+          role: "assistant",
+          content: `[x] ${error instanceof Error ? error.message : String(error)}`,
+        });
       }
 
       return true; // Was a slash command
     },
-    [commandExecutor, clearSession]
+    [commandExecutor, addMessage, handleCommandResult]
   );
 
   // Handle message submission (for CommandInput onMessage)
@@ -1161,13 +2031,74 @@ function AppContent({
     async (text: string) => {
       if (!text.trim()) return;
 
-      // Add to input history
-      addToHistory(text);
+      // Apply coding-mode handler transformations (vibe/plan/spec) and keep UI phase
+      // progress in sync with SpecModeHandler's injected metadata.
+      let processedText = text;
+      try {
+        const handlerResult = await modeManager.processMessage({
+          content: text,
+          timestamp: Date.now(),
+        });
 
-      setMessages((prev) => [...prev, createMessage("user", text)]);
+        const modified = handlerResult.modifiedMessage;
+        if (modified?.content) {
+          processedText = modified.content;
+        }
+
+        const phaseNumber = modified?.metadata?.phaseNumber;
+        if (typeof phaseNumber === "number" && Number.isFinite(phaseNumber)) {
+          setSpecPhase(phaseNumber);
+        } else if (currentMode !== "spec") {
+          // Keep PhaseProgressIndicator stable when leaving spec mode.
+          setSpecPhase(1);
+        }
+
+        if (handlerResult.requiresCheckpoint) {
+          // Pause downstream processing until the user approves the checkpoint.
+          setPromptValue("");
+          setInteractivePrompt({
+            inputType: "confirm",
+            message: "Checkpoint required. Continue?",
+            defaultValue: "n",
+            handler: async (value: string): Promise<CommandResult> => {
+              const confirmed = value.toLowerCase() === "y" || value.toLowerCase() === "yes";
+              if (!confirmed) {
+                return { kind: "success", message: "Checkpoint declined." };
+              }
+
+              // Advance plan/spec handler state when possible.
+              const checkpointResult = await modeManager.processMessage({
+                content: "yes",
+                timestamp: Date.now(),
+                metadata: { advancePhase: true },
+              });
+
+              const checkpointPhase = checkpointResult.modifiedMessage?.metadata?.phaseNumber;
+              if (typeof checkpointPhase === "number" && Number.isFinite(checkpointPhase)) {
+                setSpecPhase(checkpointPhase);
+              }
+
+              return { kind: "success", message: "Checkpoint approved." };
+            },
+            onCancel: () => ({ kind: "success", message: "Checkpoint cancelled." }),
+          });
+          return;
+        }
+      } catch (error) {
+        // Mode handling should never block primary chat; fall back to raw text.
+        console.warn(
+          "[mode] Failed to process message through mode handler:",
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+
+      // Add to input history
+      addToHistory(processedText);
+
+      addMessage({ role: "user", content: processedText });
 
       // Announce for screen reader
-      announce(`You said: ${text}`);
+      announce(`You said: ${processedText}`);
 
       setIsLoading(true);
       setIsThinking(true);
@@ -1184,21 +2115,17 @@ function AppContent({
         };
 
         try {
-          await agentLoopHook.run(text);
+          await agentLoopHook.run(processedText);
           // Sync messages from AgentLoop to local state
           const agentMessages = agentLoopHook.messages.map((m) => createMessage(m.role, m.content));
-          setMessages((prev) => {
-            // Remove the user message we already added, then add all from agent
-            const withoutLast = prev.slice(0, -1);
-            return [...withoutLast, ...agentMessages];
-          });
+          setMessages(agentMessages);
           // Notify on completion (T059)
           notifyTaskComplete("Response received");
           announce("Response received");
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           notifyError(errorMsg);
-          setMessages((prev) => [...prev, createMessage("assistant", `[x] Error: ${errorMsg}`)]);
+          addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
         } finally {
           setIsThinking(false);
           setThinkingContent("");
@@ -1227,7 +2154,7 @@ function AppContent({
             setThinkingContent("Generating response...");
             setTimeout(() => {
               if (!cancelled) {
-                setMessages((prev) => [...prev, createMessage("assistant", `[Echo] ${text}`)]);
+                addMessage({ role: "assistant", content: `[Echo] ${processedText}` });
                 notifyTaskComplete("Response received");
                 announce("Response received");
               }
@@ -1255,7 +2182,17 @@ function AppContent({
       setIsLoading(false);
       cancellationRef.current = null;
     },
-    [addToHistory, announce, agentLoopHook, notifyTaskComplete, notifyError]
+    [
+      addToHistory,
+      addMessage,
+      announce,
+      agentLoopHook,
+      currentMode,
+      modeManager,
+      notifyTaskComplete,
+      notifyError,
+      setMessages,
+    ]
   );
 
   // Handle slash command submission (for CommandInput onCommand)
@@ -1267,71 +2204,129 @@ function AppContent({
       // Execute via the command executor
       const wasCommand = await handleSlashCommand(command.raw);
       if (!wasCommand) {
-        setMessages((prev) => [
-          ...prev,
-          createMessage("assistant", `Unknown command: /${command.name}`),
-        ]);
+        addMessage({ role: "assistant", content: `Unknown command: /${command.name}` });
       }
     },
-    [addToHistory, handleSlashCommand]
+    [addToHistory, addMessage, handleSlashCommand]
   );
 
-  // Get available command names for CommandInput autocomplete
-  const commandNames = useMemo(() => {
-    return commandRegistry.list().map((cmd) => cmd.name);
-  }, [commandRegistry]);
+  // Category order and labels for grouped slash command menu
+  const categoryOrder = useMemo(
+    () => ["system", "session", "navigation", "tools", "config", "auth", "debug"] as const,
+    []
+  );
+
+  const categoryLabels = useMemo(
+    () => ({
+      system: "System",
+      session: "Session",
+      navigation: "Navigation",
+      tools: "Tools",
+      config: "Config",
+      auth: "Authentication",
+      debug: "Debug",
+    }),
+    []
+  );
+
+  // Get available command options for CommandInput autocomplete (structured with categories)
+  const commandOptions = useMemo((): AutocompleteOption[] => {
+    // Recompute when commands are registered dynamically (plugins/user commands).
+    void commandRegistryVersion;
+
+    const options: AutocompleteOption[] = [];
+    const seenNames = new Set<string>();
+
+    for (const cmd of commandRegistry.list()) {
+      // Skip aliases as separate entries - they clutter the menu
+      // (aliases still work when typed directly)
+      if (!seenNames.has(cmd.name)) {
+        seenNames.add(cmd.name);
+        options.push({
+          name: cmd.name,
+          description: cmd.description,
+          category: cmd.category,
+        });
+      }
+    }
+
+    return options;
+  }, [commandRegistry, commandRegistryVersion]);
+
+  // Get subcommands for a command (for two-level autocomplete)
+  const getSubcommands = useCallback(
+    (commandName: string): AutocompleteOption[] | undefined => {
+      const cmd = commandRegistry.get(commandName);
+      if (!cmd?.subcommands || cmd.subcommands.length === 0) {
+        return undefined;
+      }
+      return cmd.subcommands.map((sub) => ({
+        name: sub.name,
+        description: sub.description,
+      }));
+    },
+    [commandRegistry]
+  );
 
   // Handle permission dialog responses
   const handleApprove = useCallback(() => {
-    if (pendingApproval && pendingPermission) {
-      announce("Tool execution approved");
-
-      // FIX 3: Actually execute the approved tool via permission handler
-      // Use correct PermissionResponse type: "once" | "always" | "reject"
-      respondToPermission("once" as PermissionResponse);
-
-      // Add tool execution message
-      setMessages((prev) => [
-        ...prev,
-        createMessage("assistant", `Executing tool: ${pendingApproval.execution.toolName}...`),
-      ]);
-
-      // Tool result will come through the agent adapter in production
-      // For now, we clear the approval state
-      setPendingApproval(null);
+    if (!activeApproval) {
+      return;
     }
-  }, [pendingApproval, pendingPermission, respondToPermission, announce]);
+
+    announce("Tool execution approved");
+    approveActive("once");
+  }, [activeApproval, approveActive, announce]);
+
+  const handleApproveAlways = useCallback(() => {
+    if (!activeApproval) {
+      return;
+    }
+
+    announce("Tool execution approved (always)");
+    approveActive("always");
+  }, [activeApproval, approveActive, announce]);
 
   const handleReject = useCallback(() => {
-    if (pendingApproval && pendingPermission) {
-      announce("Tool execution rejected");
-
-      // FIX 3: Respond to permission handler with rejection
-      respondToPermission("reject" as PermissionResponse);
-
-      setMessages((prev) => [
-        ...prev,
-        createMessage(
-          "assistant",
-          `Tool execution rejected: ${pendingApproval.execution.toolName}`
-        ),
-      ]);
-      setPendingApproval(null);
+    if (!activeApproval) {
+      return;
     }
-  }, [pendingApproval, pendingPermission, respondToPermission, announce]);
+
+    announce("Tool execution rejected");
+    rejectActive();
+  }, [activeApproval, rejectActive, announce]);
+
+  const requestModeSwitch = useCallback(
+    async (mode: CodingMode) => {
+      const result = await modeManager.switchMode(mode);
+
+      if (result.success) {
+        setShowModeSelector(false);
+        process.env.VELLUM_MODE = mode;
+        announce(`Mode changed to ${mode}`);
+        return;
+      }
+
+      if (result.requiresConfirmation) {
+        setShowModeSelector(false);
+        openSpecConfirmation();
+        return;
+      }
+
+      addMessage({
+        role: "assistant",
+        content: `Unable to switch to ${mode}: ${result.reason ?? "Unknown error"}`,
+      });
+    },
+    [modeManager, openSpecConfirmation, addMessage, announce]
+  );
 
   // Handle mode selection with persistence (FIX 5)
   const handleModeSelect = useCallback(
     (mode: CodingMode) => {
-      setCurrentMode(mode);
-      setShowModeSelector(false);
-      announce(`Mode changed to ${mode}`);
-
-      // FIX 5: Persist mode (in production, write to config file)
-      // This could use a config adapter in production
-      process.env.VELLUM_MODE = mode;
+      void requestModeSwitch(mode);
     },
-    [announce]
+    [requestModeSwitch]
   );
 
   // Handle model selection
@@ -1345,6 +2340,10 @@ function AppContent({
     [announce]
   );
 
+  useEffect(() => {
+    setModelCommandConfig(currentProvider, currentModel, handleModelSelect);
+  }, [currentProvider, currentModel, handleModelSelect]);
+
   // Handle onboarding completion
   const handleOnboardingComplete = useCallback(
     (result: { provider: string; mode: string; credentialsConfigured: boolean }) => {
@@ -1356,87 +2355,21 @@ function AppContent({
       const defaultModel = getDefaultModelForProvider(result.provider);
       setCurrentModel(defaultModel);
       setCurrentMode(result.mode as CodingMode);
+      void modeManager.forceSwitch(result.mode as CodingMode);
       // Task 5: Persist configuration (environment-based for now, config file in production)
       process.env.VELLUM_PROVIDER = result.provider;
       process.env.VELLUM_MODEL = defaultModel;
       process.env.VELLUM_MODE = result.mode;
       announce("Welcome to Vellum! Onboarding complete.");
     },
-    [announce]
+    [announce, modeManager]
   );
-
-  // Handle approval queue actions
-  const handleQueueApprove = useCallback(
-    (id: string) => {
-      setPendingApprovals((prev) => prev.filter((p) => p.id !== id));
-      announce("Tool execution approved");
-    },
-    [announce]
-  );
-
-  const handleQueueReject = useCallback(
-    (id: string) => {
-      setPendingApprovals((prev) => prev.filter((p) => p.id !== id));
-      announce("Tool execution rejected");
-    },
-    [announce]
-  );
-
-  const handleQueueApproveAll = useCallback(() => {
-    setPendingApprovals([]);
-    announce("All tool executions approved");
-  }, [announce]);
-
-  const handleQueueRejectAll = useCallback(() => {
-    setPendingApprovals([]);
-    announce("All tool executions rejected");
-  }, [announce]);
-
-  // Memory entries - connected to memory files
-  const [memoryEntries, setMemoryEntries] = useState<MemoryPanelProps["entries"]>([]);
-
-  // Load memory entries from .vellum/memories directory
-  useEffect(() => {
-    // In production, this would load from actual memory files
-    // The memoryEntries would be populated by the memory adapter
-    // For now, we initialize empty and populate as tool results come in
-    setMemoryEntries([]);
-  }, []);
-
-  // Update todo items when tool results include todo operations
-  const handleTodoToolResult = useCallback((action: string, item?: TodoItemData) => {
-    if (action === "add" && item) {
-      setTodoItems((prev) => [...prev, item]);
-    } else if (action === "complete" && item) {
-      setTodoItems((prev) =>
-        prev.map((t) =>
-          t.id === item.id
-            ? { ...t, status: "completed", completedAt: new Date().toISOString() }
-            : t
-        )
-      );
-    } else if (action === "remove" && item) {
-      setTodoItems((prev) => prev.filter((t) => t.id !== item.id));
-    }
-  }, []);
-
-  // Expose handleTodoToolResult for tool execution results
-  // This would be called when a tool like manage_todo_list returns results
-  useEffect(() => {
-    // Register the handler (in production, this would wire to the agent adapter)
-    // For demonstration, we ensure the handler is available
-    void handleTodoToolResult;
-  }, [handleTodoToolResult]);
-
-  // Token tracking state for CostDisplay and TokenCounter
-  const [tokenUsage, setTokenUsage] = useState({
-    inputTokens: 0,
-    outputTokens: 0,
-    totalCost: 0,
-  });
 
   // Get context window for the current model
-  const contextWindow = useMemo(() => getContextWindow(provider, model), [provider, model]);
+  const contextWindow = useMemo(
+    () => getContextWindow(currentProvider, currentModel),
+    [currentProvider, currentModel]
+  );
 
   // Update token usage when messages change (simulated for now)
   useEffect(() => {
@@ -1451,92 +2384,399 @@ function AppContent({
     const inputTokens = Math.ceil(inputChars / 4);
     const outputTokens = Math.ceil(outputChars / 4);
     // Calculate cost using model-specific pricing
-    const totalCost = calculateCost(provider, model, inputTokens, outputTokens);
+    const totalCost = calculateCost(currentProvider, currentModel, inputTokens, outputTokens);
 
     setTokenUsage({ inputTokens, outputTokens, totalCost });
-  }, [messages, provider, model]);
+  }, [messages, currentProvider, currentModel]);
+
+  useEffect(() => {
+    tokenUsageRef.current = tokenUsage;
+
+    const prev = previousTokenUsageRef.current;
+    const deltaInput = tokenUsage.inputTokens - prev.inputTokens;
+    const deltaOutput = tokenUsage.outputTokens - prev.outputTokens;
+
+    if (deltaInput > 0 || deltaOutput > 0) {
+      costService.trackUsage(
+        {
+          inputTokens: Math.max(deltaInput, 0),
+          outputTokens: Math.max(deltaOutput, 0),
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          thinkingTokens: 0,
+        },
+        currentModel,
+        currentProvider
+      );
+    }
+
+    previousTokenUsageRef.current = {
+      inputTokens: tokenUsage.inputTokens,
+      outputTokens: tokenUsage.outputTokens,
+    };
+  }, [tokenUsage, costService, currentModel, currentProvider]);
 
   // Calculate total tokens for StatusBar
   const totalTokens = tokenUsage.inputTokens + tokenUsage.outputTokens;
 
-  // ==========================================================================
-  // Sidebar Content Renderer
-  // ==========================================================================
-  const renderSidebar = () => {
-    if (!showSidebar) return undefined;
+  const dismissUpdateBanner = useCallback(() => {
+    setUpdateAvailable(null);
+  }, []);
 
-    if (sidebarContent === "todo") {
-      return (
-        <TodoPanel
-          items={todoItems}
-          isFocused={showSidebar}
-          maxHeight={20}
-          onActivateItem={(item) => {
-            announce(`Selected: ${item.title}`);
-          }}
-        />
-      );
-    }
+  const cancelOnboarding = useCallback(() => {
+    setShowOnboarding(false);
+  }, []);
 
-    return <MemoryPanel entries={memoryEntries} isFocused={showSidebar} maxHeight={20} />;
-  };
+  const closeSessionManager = useCallback(() => {
+    setShowSessionManager(false);
+  }, []);
 
-  // ==========================================================================
-  // Enhanced Status Bar with Indicators
-  // ==========================================================================
-  const renderEnhancedStatusBar = () => (
-    <StatusBar
-      mode={currentMode}
-      modelName={currentModel}
-      tokens={{ current: totalTokens, max: contextWindow }}
-      cost={tokenUsage.totalCost}
-      trustMode={trustMode}
-      thinking={{ active: isThinking }}
-    />
+  const handleSessionSelected = useCallback(
+    (id: string) => {
+      announce(`Selected session: ${id}`);
+      switchToSession(id);
+      setShowSessionManager(false);
+    },
+    [announce, switchToSession]
   );
 
-  // ==========================================================================
-  // Main Render
-  // ==========================================================================
+  const loadSessionPreviewMessages = useCallback(
+    async (sessionId: string): Promise<readonly SessionPreviewMessage[] | null> => {
+      const storage = storageManagerRef.current;
+      if (!storage) {
+        return null;
+      }
 
-  // Fix 5: Early return for Banner during initialization
-  if (isInitializing) {
-    return (
-      <Banner
-        showVersion
-        version="0.1.0"
-        animated
-        autoHide
-        displayDuration={1500}
-        onComplete={() => setIsInitializing(false)}
-      />
-    );
-  }
+      try {
+        const session = await storage.load(sessionId);
+        const messages = session.messages;
 
-  // Fix 1: Early return when onboarding is showing (hide main layout)
-  if (showOnboarding) {
-    return (
-      <OnboardingWizard
-        onComplete={handleOnboardingComplete}
-        onCancel={() => setShowOnboarding(false)}
-      />
-    );
-  }
+        // Keep preview lightweight: show last few messages only.
+        const tail = messages.slice(Math.max(0, messages.length - 6));
+
+        return tail
+          .map((message) => {
+            const content = getTextContent(message).trim();
+            if (!content) {
+              return null;
+            }
+
+            const role: SessionPreviewMessage["role"] =
+              message.role === "tool_result"
+                ? "tool"
+                : message.role === "user"
+                  ? "user"
+                  : message.role === "assistant"
+                    ? "assistant"
+                    : "system";
+
+            return {
+              id: message.id,
+              role,
+              content,
+              timestamp: new Date(message.metadata.createdAt),
+            };
+          })
+          .filter((msg): msg is NonNullable<typeof msg> => msg !== null);
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
+  const promptPlaceholder = useMemo(() => {
+    if (!interactivePrompt) {
+      return "";
+    }
+
+    if (interactivePrompt.placeholder) {
+      return interactivePrompt.placeholder;
+    }
+
+    if (interactivePrompt.inputType === "confirm") {
+      return interactivePrompt.defaultValue?.toLowerCase() === "y" ? "Y/n" : "y/N";
+    }
+
+    if (interactivePrompt.inputType === "select" && interactivePrompt.options?.length) {
+      return `Choose 1-${interactivePrompt.options.length}`;
+    }
+
+    return "";
+  }, [interactivePrompt]);
 
   return (
+    <AppContentView
+      announce={announce}
+      activeApproval={activeApproval}
+      activeRiskLevel={activeRiskLevel}
+      activeSessionId={activeSessionId}
+      backtrackState={backtrackState}
+      bannerCycleDurationMs={bannerCycleDurationMs}
+      bannerCycles={bannerCycles}
+      bannerDisplayDurationMs={bannerDisplayDurationMs}
+      bannerSplashComplete={bannerSplashComplete}
+      bannerUpdateIntervalMs={bannerUpdateIntervalMs}
+      branches={branches}
+      cancelOnboarding={cancelOnboarding}
+      closeSessionManager={closeSessionManager}
+      commandOptions={commandOptions}
+      getSubcommands={getSubcommands}
+      categoryOrder={categoryOrder}
+      categoryLabels={categoryLabels}
+      contextWindow={contextWindow}
+      currentMode={currentMode}
+      currentModel={currentModel}
+      currentProvider={currentProvider}
+      currentTip={currentTip}
+      dismissUpdateBanner={dismissUpdateBanner}
+      handleApprove={handleApprove}
+      handleApproveAlways={handleApproveAlways}
+      handleBannerComplete={handleBannerComplete}
+      handleCommand={handleCommand}
+      handleCreateBacktrackBranch={handleCreateBacktrackBranch}
+      handleMessage={handleMessage}
+      handleModeSelect={handleModeSelect}
+      handleModelSelect={handleModelSelect}
+      handleOnboardingComplete={handleOnboardingComplete}
+      handlePromptSubmit={handlePromptSubmit}
+      handleReject={handleReject}
+      handleSessionSelected={handleSessionSelected}
+      handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
+      interactivePrompt={interactivePrompt}
+      loadSessionPreviewMessages={loadSessionPreviewMessages}
+      isLoading={isLoading}
+      isThinking={isThinking}
+      memoryEntries={memoryEntries}
+      messages={messages}
+      pendingOperation={pendingOperation}
+      promptPlaceholder={promptPlaceholder}
+      promptValue={promptValue}
+      setPromptValue={setPromptValue}
+      setThinkingCollapsed={setThinkingCollapsed}
+      sessions={sessions}
+      shouldShowBanner={shouldShowBanner}
+      showModeSelector={showModeSelector}
+      showModelSelector={showModelSelector}
+      showOnboarding={showOnboarding}
+      showSessionManager={showSessionManager}
+      showSidebar={showSidebar}
+      sidebarContent={sidebarContent}
+      specPhase={specPhase}
+      themeContext={themeContext}
+      thinkingCollapsed={thinkingCollapsed}
+      thinkingContent={thinkingContent}
+      todoItems={todoItems}
+      refreshTodos={refreshTodos}
+      toolRegistry={toolRegistry}
+      tokenUsage={tokenUsage}
+      totalTokens={totalTokens}
+      trustMode={trustMode}
+      undoBacktrack={undoBacktrack}
+      updateAvailable={updateAvailable}
+      redoBacktrack={redoBacktrack}
+    />
+  );
+}
+
+type ThemeContextValue = ReturnType<typeof useTheme>;
+type TipValue = ReturnType<typeof useTipEngine>["currentTip"];
+type ToolApprovalState = ReturnType<typeof useToolApprovalController>;
+
+interface AppContentViewProps {
+  readonly announce: (message: string) => void;
+  readonly activeApproval: ToolApprovalState["activeApproval"];
+  readonly activeRiskLevel: ToolApprovalState["activeRiskLevel"];
+  readonly activeSessionId: string;
+  readonly backtrackState: ReturnType<typeof useBacktrack>["backtrackState"];
+  readonly bannerCycleDurationMs: number;
+  readonly bannerCycles: number;
+  readonly bannerDisplayDurationMs: number;
+  readonly bannerSplashComplete: boolean;
+  readonly bannerUpdateIntervalMs: number;
+  readonly branches: ReturnType<typeof useBacktrack>["branches"];
+  readonly cancelOnboarding: () => void;
+  readonly closeSessionManager: () => void;
+  readonly commandOptions: readonly AutocompleteOption[];
+  readonly getSubcommands: (commandName: string) => AutocompleteOption[] | undefined;
+  readonly categoryOrder: readonly string[];
+  readonly categoryLabels: Record<string, string>;
+  readonly contextWindow: number;
+  readonly currentMode: CodingMode;
+  readonly currentModel: string;
+  readonly currentProvider: string;
+  readonly currentTip: TipValue;
+  readonly dismissUpdateBanner: () => void;
+  readonly handleApprove: () => void;
+  readonly handleApproveAlways: () => void;
+  readonly handleBannerComplete: () => void;
+  readonly handleCommand: (command: SlashCommand) => void;
+  readonly handleCreateBacktrackBranch: () => void;
+  readonly handleMessage: (text: string) => void;
+  readonly handleModeSelect: (mode: CodingMode) => void;
+  readonly handleModelSelect: (selectedProvider: string, selectedModel: string) => void;
+  readonly handleOnboardingComplete: (result: {
+    provider: string;
+    mode: string;
+    credentialsConfigured: boolean;
+  }) => void;
+  readonly handlePromptSubmit: () => void;
+  readonly handleReject: () => void;
+  readonly handleSessionSelected: (id: string) => void;
+  readonly handleSwitchBacktrackBranch: (branchId: string) => void;
+  readonly interactivePrompt: InteractivePrompt | null;
+  readonly loadSessionPreviewMessages: (
+    sessionId: string
+  ) => Promise<readonly SessionPreviewMessage[] | null>;
+  readonly isLoading: boolean;
+  readonly isThinking: boolean;
+  readonly memoryEntries: MemoryPanelProps["entries"];
+  readonly messages: readonly Message[];
+  readonly pendingOperation: AsyncOperation | null;
+  readonly promptPlaceholder: string;
+  readonly promptValue: string;
+  readonly setPromptValue: (value: string) => void;
+  readonly setThinkingCollapsed: (value: boolean | ((prev: boolean) => boolean)) => void;
+  readonly sessions: SessionMetadata[];
+  readonly shouldShowBanner: boolean;
+  readonly showModeSelector: boolean;
+  readonly showModelSelector: boolean;
+  readonly showOnboarding: boolean;
+  readonly showSessionManager: boolean;
+  readonly showSidebar: boolean;
+  readonly sidebarContent: "memory" | "todo" | "tools" | "mcp";
+  readonly specPhase: number;
+  readonly themeContext: ThemeContextValue;
+  readonly thinkingCollapsed: boolean;
+  readonly thinkingContent: string;
+  readonly todoItems: readonly TodoItemData[];
+  readonly refreshTodos: () => void;
+  readonly toolRegistry: ToolRegistry;
+  readonly tokenUsage: { inputTokens: number; outputTokens: number; totalCost: number };
+  readonly totalTokens: number;
+  readonly trustMode: TrustMode;
+  readonly undoBacktrack: () => void;
+  readonly redoBacktrack: () => void;
+  readonly updateAvailable: { current: string; latest: string } | null;
+}
+
+function renderSidebarContent({
+  announce,
+  showSidebar,
+  sidebarContent,
+  todoItems,
+  refreshTodos,
+  memoryEntries,
+  toolRegistry,
+}: {
+  readonly announce: (message: string) => void;
+  readonly showSidebar: boolean;
+  readonly sidebarContent: "memory" | "todo" | "tools" | "mcp";
+  readonly todoItems: readonly TodoItemData[];
+  readonly refreshTodos: () => void;
+  readonly memoryEntries: MemoryPanelProps["entries"];
+  readonly toolRegistry: ToolRegistry;
+}): React.ReactNode | undefined {
+  if (!showSidebar) return undefined;
+
+  if (sidebarContent === "todo") {
+    return (
+      <TodoPanel
+        items={todoItems}
+        isFocused={showSidebar}
+        maxHeight={20}
+        onRefresh={refreshTodos}
+        onActivateItem={(item) => {
+          announce(`Selected: ${item.title}`);
+        }}
+      />
+    );
+  }
+
+  if (sidebarContent === "tools") {
+    return <ToolsPanel isFocused={showSidebar} maxItems={20} />;
+  }
+
+  if (sidebarContent === "mcp") {
+    return <McpPanel isFocused={showSidebar} toolRegistry={toolRegistry} />;
+  }
+
+  return <MemoryPanel entries={memoryEntries} isFocused={showSidebar} maxHeight={20} />;
+}
+
+interface AppOverlaysProps {
+  readonly activeApproval: ToolApprovalState["activeApproval"];
+  readonly activeRiskLevel: ToolApprovalState["activeRiskLevel"];
+  readonly activeSessionId: string;
+  readonly closeSessionManager: () => void;
+  readonly currentMode: CodingMode;
+  readonly currentModel: string;
+  readonly currentProvider: string;
+  readonly dismissUpdateBanner: () => void;
+  readonly handleApprove: () => void;
+  readonly handleApproveAlways: () => void;
+  readonly handleModeSelect: (mode: CodingMode) => void;
+  readonly handleModelSelect: (selectedProvider: string, selectedModel: string) => void;
+  readonly handlePromptSubmit: () => void;
+  readonly handleReject: () => void;
+  readonly handleSessionSelected: (id: string) => void;
+  readonly interactivePrompt: InteractivePrompt | null;
+  readonly loadSessionPreviewMessages: (
+    sessionId: string
+  ) => Promise<readonly import("./tui/components/session/types.js").SessionPreviewMessage[] | null>;
+  readonly pendingOperation: AsyncOperation | null;
+  readonly promptPlaceholder: string;
+  readonly promptValue: string;
+  readonly setPromptValue: (value: string) => void;
+  readonly sessions: SessionMetadata[];
+  readonly showModeSelector: boolean;
+  readonly showModelSelector: boolean;
+  readonly showSessionManager: boolean;
+  readonly themeContext: ThemeContextValue;
+  readonly updateAvailable: { current: string; latest: string } | null;
+}
+
+function AppOverlays({
+  activeApproval,
+  activeRiskLevel,
+  activeSessionId,
+  closeSessionManager,
+  currentMode,
+  currentModel,
+  currentProvider,
+  dismissUpdateBanner,
+  handleApprove,
+  handleApproveAlways,
+  handleModeSelect,
+  handleModelSelect,
+  handlePromptSubmit,
+  handleReject,
+  handleSessionSelected,
+  interactivePrompt,
+  loadSessionPreviewMessages,
+  pendingOperation,
+  promptPlaceholder,
+  promptValue,
+  setPromptValue,
+  sessions,
+  showModeSelector,
+  showModelSelector,
+  showSessionManager,
+  themeContext,
+  updateAvailable,
+}: AppOverlaysProps): React.JSX.Element {
+  return (
     <>
-      {/* Update Banner */}
       {updateAvailable && (
         <UpdateBanner
           currentVersion={updateAvailable.current}
           latestVersion={updateAvailable.latest}
           dismissible
-          onDismiss={() => setUpdateAvailable(null)}
+          onDismiss={dismissUpdateBanner}
           compact
         />
       )}
 
-      {/* Mode Selector Modal */}
       {showModeSelector && (
         <Box
           position="absolute"
@@ -1555,7 +2795,6 @@ function AppContent({
         </Box>
       )}
 
-      {/* Session Manager Modal */}
       {showSessionManager && (
         <Box
           position="absolute"
@@ -1568,21 +2807,15 @@ function AppContent({
           <SessionPicker
             sessions={sessions}
             activeSessionId={activeSessionId}
-            onSelect={(id) => {
-              announce(`Selected session: ${id}`);
-              setActiveSessionId(id);
-              setShowSessionManager(false);
-              // Load the selected session's messages via adapter
-              void loadSession();
-            }}
-            onClose={() => setShowSessionManager(false)}
+            loadPreviewMessages={loadSessionPreviewMessages}
+            onSelect={handleSessionSelected}
+            onClose={closeSessionManager}
             isOpen={showSessionManager}
           />
         </Box>
       )}
 
-      {/* Permission Dialog */}
-      {pendingApproval && (
+      {activeApproval && (
         <Box
           position="absolute"
           marginTop={5}
@@ -1592,16 +2825,16 @@ function AppContent({
           padding={1}
         >
           <PermissionDialog
-            execution={pendingApproval.execution}
-            riskLevel={pendingApproval.riskLevel}
+            execution={activeApproval}
+            riskLevel={activeRiskLevel}
             onApprove={handleApprove}
+            onApproveAlways={handleApproveAlways}
             onReject={handleReject}
             isFocused
           />
         </Box>
       )}
 
-      {/* Model Selector Modal */}
       {showModelSelector && (
         <Box
           position="absolute"
@@ -1621,73 +2854,285 @@ function AppContent({
         </Box>
       )}
 
-      {/* Approval Queue for batch tool approvals */}
-      {pendingApprovals.length > 0 && !pendingApproval && (
+      {interactivePrompt && (
         <Box
           position="absolute"
-          marginTop={3}
-          marginLeft={5}
+          marginTop={4}
+          marginLeft={8}
           borderStyle="round"
-          borderColor={themeContext.theme.colors.warning}
+          borderColor={themeContext.theme.colors.info}
           padding={1}
+          flexDirection="column"
+          minWidth={50}
         >
-          <ApprovalQueue
-            executions={pendingApprovals}
-            onApprove={handleQueueApprove}
-            onReject={handleQueueReject}
-            onApproveAll={handleQueueApproveAll}
-            onRejectAll={handleQueueRejectAll}
-            isFocused={pendingApprovals.length > 0}
-          />
+          <Text>{interactivePrompt.message}</Text>
+          {interactivePrompt.inputType === "select" && interactivePrompt.options && (
+            <Box flexDirection="column" marginTop={1}>
+              {interactivePrompt.options.map((option, index) => (
+                <Text key={option}>{`${index + 1}. ${option}`}</Text>
+              ))}
+            </Box>
+          )}
+          <Box marginTop={1}>
+            <TextInput
+              value={promptValue}
+              onChange={setPromptValue}
+              onSubmit={handlePromptSubmit}
+              placeholder={promptPlaceholder}
+              focused
+              minHeight={1}
+              mask={interactivePrompt.inputType === "password" ? "*" : undefined}
+            />
+          </Box>
+          <Text dimColor>Press Esc to cancel</Text>
         </Box>
       )}
 
-      {/* Main Layout */}
+      {pendingOperation && (
+        <Box
+          position="absolute"
+          marginTop={4}
+          marginLeft={8}
+          borderStyle="round"
+          borderColor={themeContext.theme.colors.warning}
+          padding={1}
+          flexDirection="column"
+          minWidth={40}
+        >
+          <LoadingIndicator message={pendingOperation.message} />
+          {pendingOperation.cancel && <Text dimColor>Press Esc to cancel</Text>}
+        </Box>
+      )}
+    </>
+  );
+}
+
+interface AppHeaderProps {
+  readonly backtrackState: ReturnType<typeof useBacktrack>["backtrackState"];
+  readonly branches: ReturnType<typeof useBacktrack>["branches"];
+  readonly currentMode: CodingMode;
+  readonly currentTip: TipValue;
+  readonly handleCreateBacktrackBranch: () => void;
+  readonly handleSwitchBacktrackBranch: (branchId: string) => void;
+  readonly redoBacktrack: () => void;
+  readonly specPhase: number;
+  readonly themeContext: ThemeContextValue;
+  readonly undoBacktrack: () => void;
+}
+
+function AppHeader({
+  backtrackState,
+  branches,
+  currentMode,
+  currentTip,
+  handleCreateBacktrackBranch,
+  handleSwitchBacktrackBranch,
+  redoBacktrack,
+  specPhase,
+  themeContext,
+  undoBacktrack,
+}: AppHeaderProps): React.JSX.Element {
+  return (
+    <Box flexDirection="column">
+      {currentTip && (
+        <Box
+          marginTop={1}
+          paddingX={1}
+          borderStyle="single"
+          borderColor={themeContext.theme.colors.info}
+        >
+          <Text>
+            <Text color={themeContext.theme.colors.info}>{currentTip.icon ?? "[i]"} </Text>
+            <Text bold>{currentTip.title}: </Text>
+            <Text>{currentTip.content}</Text>
+            <Text color={themeContext.theme.colors.muted}> (press any key to dismiss)</Text>
+          </Text>
+        </Box>
+      )}
+      {currentMode === "spec" && (
+        <PhaseProgressIndicator currentPhase={specPhase} showLabels showPercentage />
+      )}
+      {backtrackState.historyLength > 1 && (
+        <BacktrackControls
+          backtrackState={backtrackState}
+          branches={branches}
+          onUndo={undoBacktrack}
+          onRedo={redoBacktrack}
+          onCreateBranch={handleCreateBacktrackBranch}
+          onSwitchBranch={handleSwitchBacktrackBranch}
+        />
+      )}
+    </Box>
+  );
+}
+
+function AppContentView({
+  announce,
+  activeApproval,
+  activeRiskLevel,
+  activeSessionId,
+  backtrackState,
+  bannerCycleDurationMs,
+  bannerCycles,
+  bannerDisplayDurationMs,
+  bannerSplashComplete,
+  bannerUpdateIntervalMs,
+  branches,
+  cancelOnboarding,
+  closeSessionManager,
+  commandOptions,
+  getSubcommands,
+  categoryOrder,
+  categoryLabels,
+  contextWindow,
+  currentMode,
+  currentModel,
+  currentProvider,
+  currentTip,
+  dismissUpdateBanner,
+  handleApprove,
+  handleApproveAlways,
+  handleBannerComplete,
+  handleCommand,
+  handleCreateBacktrackBranch,
+  handleMessage,
+  handleModeSelect,
+  handleModelSelect,
+  handleOnboardingComplete,
+  handlePromptSubmit,
+  handleReject,
+  handleSessionSelected,
+  handleSwitchBacktrackBranch,
+  interactivePrompt,
+  loadSessionPreviewMessages,
+  isLoading,
+  isThinking,
+  memoryEntries,
+  messages,
+  pendingOperation,
+  promptPlaceholder,
+  promptValue,
+  setPromptValue,
+  setThinkingCollapsed,
+  sessions,
+  shouldShowBanner,
+  showModeSelector,
+  showModelSelector,
+  showOnboarding,
+  showSessionManager,
+  showSidebar,
+  sidebarContent,
+  specPhase,
+  themeContext,
+  thinkingCollapsed,
+  thinkingContent,
+  todoItems,
+  refreshTodos,
+  toolRegistry,
+  tokenUsage,
+  totalTokens,
+  trustMode,
+  undoBacktrack,
+  redoBacktrack,
+  updateAvailable,
+}: AppContentViewProps): React.JSX.Element {
+  const sidebar = renderSidebarContent({
+    announce,
+    showSidebar,
+    sidebarContent,
+    todoItems,
+    refreshTodos,
+    memoryEntries,
+    toolRegistry,
+  });
+
+  const footer = (
+    <StatusBar
+      mode={currentMode}
+      modelName={currentModel}
+      tokens={{ current: totalTokens, max: contextWindow }}
+      cost={tokenUsage.totalCost}
+      trustMode={trustMode}
+      thinking={{ active: isThinking }}
+    />
+  );
+
+  if (showOnboarding) {
+    return <OnboardingWizard onComplete={handleOnboardingComplete} onCancel={cancelOnboarding} />;
+  }
+
+  if (shouldShowBanner && !bannerSplashComplete) {
+    return (
+      <Box
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        height={process.stdout.rows ?? 24}
+      >
+        <Banner
+          animated
+          autoHide
+          cycles={bannerCycles}
+          displayDuration={bannerDisplayDurationMs}
+          cycleDuration={bannerCycleDurationMs}
+          updateInterval={bannerUpdateIntervalMs}
+          onComplete={handleBannerComplete}
+        />
+      </Box>
+    );
+  }
+
+  return (
+    <>
+      <AppOverlays
+        activeApproval={activeApproval}
+        activeRiskLevel={activeRiskLevel}
+        activeSessionId={activeSessionId}
+        closeSessionManager={closeSessionManager}
+        currentMode={currentMode}
+        currentModel={currentModel}
+        currentProvider={currentProvider}
+        dismissUpdateBanner={dismissUpdateBanner}
+        handleApprove={handleApprove}
+        handleApproveAlways={handleApproveAlways}
+        handleModeSelect={handleModeSelect}
+        handleModelSelect={handleModelSelect}
+        handlePromptSubmit={handlePromptSubmit}
+        handleReject={handleReject}
+        handleSessionSelected={handleSessionSelected}
+        interactivePrompt={interactivePrompt}
+        loadSessionPreviewMessages={loadSessionPreviewMessages}
+        pendingOperation={pendingOperation}
+        promptPlaceholder={promptPlaceholder}
+        promptValue={promptValue}
+        setPromptValue={setPromptValue}
+        sessions={sessions}
+        showModeSelector={showModeSelector}
+        showModelSelector={showModelSelector}
+        showSessionManager={showSessionManager}
+        themeContext={themeContext}
+        updateAvailable={updateAvailable}
+      />
+
       <Layout
         header={
-          <Box flexDirection="column">
-            {/* Fix 4: Tip Banner moved inside Layout header */}
-            {currentTip && (
-              <Box
-                marginBottom={1}
-                paddingX={1}
-                borderStyle="single"
-                borderColor={themeContext.theme.colors.info}
-              >
-                <Text>
-                  <Text color={themeContext.theme.colors.info}>{currentTip.icon ?? "[i]"} </Text>
-                  <Text bold>{currentTip.title}: </Text>
-                  <Text>{currentTip.content}</Text>
-                  <Text color={themeContext.theme.colors.muted}> (press any key to dismiss)</Text>
-                </Text>
-              </Box>
-            )}
-            <Header mode={currentMode} specPhase={specPhase} />
-            {/* Phase Progress Indicator for spec mode */}
-            {currentMode === "spec" && (
-              <PhaseProgressIndicator currentPhase={specPhase} showLabels showPercentage />
-            )}
-            {/* Backtrack Controls when history is available */}
-            {backtrackState.historyLength > 1 && (
-              <BacktrackControls
-                backtrackState={backtrackState}
-                branches={branches}
-                onUndo={undoBacktrack}
-                onRedo={redoBacktrack}
-                onCreateBranch={() => {}}
-                onSwitchBranch={() => {}}
-              />
-            )}
-          </Box>
+          <AppHeader
+            backtrackState={backtrackState}
+            branches={branches}
+            currentMode={currentMode}
+            currentTip={currentTip}
+            handleCreateBacktrackBranch={handleCreateBacktrackBranch}
+            handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
+            redoBacktrack={redoBacktrack}
+            specPhase={specPhase}
+            themeContext={themeContext}
+            undoBacktrack={undoBacktrack}
+          />
         }
-        footer={
-          // Fix 3: Consolidated footer - StatusBar now includes cost display
-          renderEnhancedStatusBar()
-        }
-        sidebar={renderSidebar()}
+        footer={footer}
+        sidebar={sidebar}
         showSidebar={showSidebar}
       >
-        {/* Thinking Block */}
         {isThinking && (
           <ThinkingBlock
             content={thinkingContent}
@@ -1697,23 +3142,26 @@ function AppContent({
           />
         )}
 
-        {/* Message List */}
         <MessageList messages={messages} />
 
-        {/* Command Input (replaces TextInput) */}
         <CommandInput
           onMessage={handleMessage}
           onCommand={handleCommand}
-          commands={commandNames}
+          commands={commandOptions}
+          getSubcommands={getSubcommands}
+          groupedCommands={true}
+          categoryOrder={categoryOrder}
+          categoryLabels={categoryLabels}
           placeholder={isLoading ? "Thinking..." : "Type a message or /command..."}
-          disabled={isLoading}
+          disabled={isLoading || !!interactivePrompt || !!pendingOperation}
           focused={
             !isLoading &&
             !showModeSelector &&
             !showModelSelector &&
             !showSessionManager &&
-            !pendingApproval &&
-            pendingApprovals.length === 0
+            !activeApproval &&
+            !interactivePrompt &&
+            !pendingOperation
           }
           historyKey="vellum-command-history"
         />

@@ -225,3 +225,9 @@ export type {
   TelemetryMetrics,
 } from "./telemetry.js";
 export { InstrumentedProvider, instrumentProvider } from "./telemetry.js";
+
+// =============================================================================
+// Model Metadata (Single Source of Truth)
+// =============================================================================
+
+export * from "./models/index.js";

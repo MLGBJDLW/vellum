@@ -33,6 +33,7 @@ import type { TelemetryInstrumentor } from "../telemetry/instrumentor.js";
 import {
   type ExecutionResult,
   type PermissionChecker,
+  type PermissionDecision,
   PermissionDeniedError,
   ToolExecutor,
   ToolNotFoundError,
@@ -974,52 +975,66 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Create tool context
       const toolContext = this.createToolContext(call.id);
 
-      // Emit tool start event
-      this.emit("toolStart", call.id, call.name, call.input);
-
       try {
-        // Check permission first using executeWithPermissionCheck
-        const checkResult = await this.toolExecutor.executeWithPermissionCheck(
+        // Tool not found
+        if (!this.toolExecutor.getTool(call.name)) {
+          this.emit("error", new ToolNotFoundError(call.name));
+          this.emit("toolEnd", call.id, call.name, {
+            result: { success: false, error: `Tool not found: ${call.name}` },
+            timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+            toolName: call.name,
+            callId: call.id,
+          });
+          continue;
+        }
+
+        // Check permission before emitting toolStart
+        const permission: PermissionDecision = await this.toolExecutor.checkPermission(
           call.name,
           call.input,
           toolContext
         );
 
-        switch (checkResult.status) {
-          case "completed":
-            // Tool executed successfully
-            this.emit("toolEnd", call.id, call.name, checkResult.result);
-            break;
-
-          case "permission_required":
-            // Handle wait_permission state (T015)
-            await this.handlePermissionRequired(call.id, call.name, call.input);
-            break;
-
-          case "denied":
-            // Permission was denied
-            this.emit("permissionDenied", call.id, call.name, checkResult.error);
-            this.emit("toolEnd", call.id, call.name, {
-              result: { success: false, error: checkResult.error },
-              timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-              toolName: call.name,
-              callId: call.id,
-            });
-            break;
-
-          case "not_found":
-            // Tool not found
-            this.emit("error", new ToolNotFoundError(call.name));
-            this.emit("toolEnd", call.id, call.name, {
-              result: { success: false, error: `Tool not found: ${call.name}` },
-              timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-              toolName: call.name,
-              callId: call.id,
-            });
-            break;
+        if (permission === "deny") {
+          const error = `Permission denied for tool: ${call.name}`;
+          this.emit("permissionDenied", call.id, call.name, error);
+          this.emit("toolEnd", call.id, call.name, {
+            result: { success: false, error },
+            timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+            toolName: call.name,
+            callId: call.id,
+          });
+          continue;
         }
+
+        if (permission === "ask") {
+          // Handle wait_permission state (T015)
+          await this.handlePermissionRequired(call.id, call.name, call.input);
+          continue;
+        }
+
+        // Permission allowed - now we can emit toolStart and execute
+        this.emit("toolStart", call.id, call.name, call.input);
+        const result = await this.toolExecutor.execute(call.name, call.input, toolContext);
+        this.emit("toolEnd", call.id, call.name, result);
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
+
+        if (err instanceof PermissionDeniedError) {
+          this.emit("permissionDenied", call.id, call.name, err.message);
+        }
+
+        if (err instanceof ToolNotFoundError) {
+          this.emit("error", err);
+          this.emit("toolEnd", call.id, call.name, {
+            result: { success: false, error: err.message },
+            timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+            toolName: call.name,
+            callId: call.id,
+          });
+          continue;
+        }
+
         this.emit("error", err);
         this.emit("toolEnd", call.id, call.name, {
           result: { success: false, error: err.message },
@@ -1167,7 +1182,12 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Execute the tool now that permission is granted
       const toolContext = this.createToolContext(callId);
       try {
-        const result = await this.toolExecutor.execute(name, input, toolContext);
+        // toolStart should represent actual execution start (after approval)
+        this.emit("toolStart", callId, name, input);
+
+        const result = await this.toolExecutor.execute(name, input, toolContext, {
+          permissionOverride: "allow",
+        });
         this.emit("toolEnd", callId, name, result);
       } catch (error) {
         if (error instanceof PermissionDeniedError) {

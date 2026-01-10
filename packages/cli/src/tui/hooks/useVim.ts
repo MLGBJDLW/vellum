@@ -184,6 +184,12 @@ export function useVim(): UseVimReturn {
       return { type: "mode", target: "NORMAL" };
     }
 
+    // In Vim mode we generally ignore Ctrl+<key> combos so global hotkeys can run.
+    // (Explicit Ctrl combos like Ctrl+C / Ctrl+[ are handled above or in other modes.)
+    if (modifiers?.ctrl) {
+      return null;
+    }
+
     // Motion keys
     if (key in MOTION_KEYS) {
       const direction = MOTION_KEYS[key] as VimMotionAction["direction"];
@@ -234,6 +240,17 @@ export function useVim(): UseVimReturn {
     if (key === "escape" || (modifiers?.ctrl && key === "c")) {
       setModeState("NORMAL");
       return { type: "mode", target: "NORMAL" };
+    }
+
+    // Ctrl+[ is equivalent to Escape
+    if (modifiers?.ctrl && key === "[") {
+      setModeState("NORMAL");
+      return { type: "mode", target: "NORMAL" };
+    }
+
+    // Ignore other Ctrl+<key> combos so global hotkeys can run.
+    if (modifiers?.ctrl) {
+      return null;
     }
 
     // Motion keys work in VISUAL mode

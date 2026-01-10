@@ -98,7 +98,7 @@ export const modeCommand: SlashCommand = {
   name: "mode",
   description: "Show current coding mode and options",
   kind: "builtin",
-  category: "system",
+  category: "workflow",
   aliases: ["modes"],
   positionalArgs: [
     {
@@ -113,6 +113,11 @@ export const modeCommand: SlashCommand = {
     "/mode vibe   - Switch to vibe mode",
     "/mode plan   - Switch to plan mode",
     "/mode spec   - Switch to spec mode",
+  ],
+  subcommands: [
+    { name: "vibe", description: "Quick autonomous mode" },
+    { name: "plan", description: "Plan before execute mode" },
+    { name: "spec", description: "Full specification workflow" },
   ],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
@@ -221,7 +226,9 @@ async function executeSwitch(targetMode: CodingMode): Promise<CommandResult> {
     return error("OPERATION_NOT_ALLOWED", "Mode system not initialized", []);
   }
 
-  const result = await modeManager.switchMode(targetMode);
+  const result = await modeManager.switchMode(targetMode, {
+    skipConfirmation: targetMode === "spec",
+  });
 
   if (result.success) {
     const emoji = getModeEmoji(targetMode);
@@ -253,7 +260,7 @@ export const vibeCommand: SlashCommand = {
   name: "vibe",
   description: "Switch to vibe mode (fast autonomous coding)",
   kind: "builtin",
-  category: "system",
+  category: "workflow",
   aliases: [],
   examples: ["/vibe - Switch to fast autonomous mode"],
 
@@ -276,7 +283,7 @@ export const planCommand: SlashCommand = {
   name: "plan",
   description: "Switch to plan mode (plan-then-execute)",
   kind: "builtin",
-  category: "system",
+  category: "workflow",
   aliases: [],
   examples: ["/plan - Switch to plan-then-execute mode"],
 
@@ -306,7 +313,7 @@ export const specCommand: SlashCommand = {
   name: "spec",
   description: "Switch to spec mode (6-phase structured workflow)",
   kind: "builtin",
-  category: "system",
+  category: "workflow",
   aliases: [],
   examples: ["/spec - Switch to 6-phase structured workflow"],
 

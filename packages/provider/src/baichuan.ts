@@ -7,6 +7,7 @@
  * @module @vellum/provider/baichuan
  */
 
+import { BAICHUAN_MODELS } from "./models/providers/baichuan.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo } from "./types.js";
 
@@ -51,73 +52,7 @@ export class BaichuanProvider extends OpenAICompatibleProvider {
    * @returns Array of available Baichuan models
    */
   protected getModelCatalog(): ModelInfo[] {
-    return [
-      {
-        id: "Baichuan4",
-        name: "Baichuan 4",
-        provider: "baichuan",
-        contextWindow: 32000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: true,
-        supportsStreaming: true,
-        inputPrice: 0.1,
-        outputPrice: 0.1,
-      },
-      {
-        id: "Baichuan3-Turbo",
-        name: "Baichuan 3 Turbo",
-        provider: "baichuan",
-        contextWindow: 32000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.012,
-        outputPrice: 0.012,
-      },
-      {
-        id: "Baichuan3-Turbo-128k",
-        name: "Baichuan 3 Turbo 128K",
-        provider: "baichuan",
-        contextWindow: 128000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.024,
-        outputPrice: 0.024,
-      },
-      {
-        id: "Baichuan2-Turbo",
-        name: "Baichuan 2 Turbo",
-        provider: "baichuan",
-        contextWindow: 32000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.008,
-        outputPrice: 0.008,
-      },
-      {
-        id: "Baichuan2-Turbo-192k",
-        name: "Baichuan 2 Turbo 192K",
-        provider: "baichuan",
-        contextWindow: 192000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.016,
-        outputPrice: 0.016,
-      },
-    ];
+    return BAICHUAN_MODELS;
   }
 
   /**

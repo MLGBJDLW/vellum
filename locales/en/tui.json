@@ -96,7 +96,17 @@
     "model": "Change model",
     "theme": "Change theme",
     "history": "Show history",
-    "compact": "Toggle compact mode"
+    "compact": "Toggle compact mode",
+    "categories": {
+      "system": "System",
+      "workflow": "Workflow",
+      "session": "Session",
+      "navigation": "Navigation",
+      "tools": "Tools",
+      "config": "Config",
+      "auth": "Authentication",
+      "debug": "Debug"
+    }
   },
   "errors": {
     "connectionFailed": "Connection failed",
@@ -129,7 +139,10 @@
     "selectProvider": "Select your AI Provider:",
     "providerNav": "Use ↑/↓ to navigate, Enter to select",
     "apiKeyRequired": "(requires API key)",
-    "noApiKeyNeeded": "(local, no key needed)"
+    "noApiKeyNeeded": "(local, no key needed)",
+    "selectMode": "Select your coding mode:",
+    "modeNav": "Use ↑/↓ to navigate, Enter to select",
+    "modeSwitchHint": "You can change this anytime with /mode"
   },
   "providers": {
     "anthropic": {

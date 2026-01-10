@@ -12,6 +12,7 @@ import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { HotkeyHints } from "./common/HotkeyHints.js";
 import { TodoItem, type TodoItemData } from "./TodoItem.js";
 
 // =============================================================================
@@ -174,6 +175,23 @@ export function TodoPanel({
 }: TodoPanelProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
+
+  const hints = useMemo(
+    () => [
+      {
+        keys: process.platform === "win32" ? "Ctrl/Alt+K" : "Ctrl+\\ / Alt+K",
+        label: "Sidebar",
+      },
+      { keys: "Ctrl/Alt+G", label: "Tools" },
+      { keys: "Ctrl/Alt+O", label: "MCP" },
+      { keys: "Ctrl/Alt+P", label: "Memory" },
+      { keys: "Ctrl/Alt+T", label: "Todo" },
+      { keys: "Ctrl+S", label: "Sessions" },
+      { keys: "Ctrl+Z", label: "Undo" },
+      { keys: "Ctrl+Y", label: "Redo" },
+    ],
+    []
+  );
 
   // Track selection, scroll, filter, and expansion
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -429,8 +447,9 @@ export function TodoPanel({
 
       {/* Help hint */}
       {isFocused && (
-        <Box marginTop={1} paddingX={1}>
+        <Box marginTop={1} paddingX={1} flexDirection="column">
           <Text dimColor>{t("todo.keybindings")}</Text>
+          <HotkeyHints hints={hints} />
         </Box>
       )}
     </Box>

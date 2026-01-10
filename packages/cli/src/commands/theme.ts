@@ -102,6 +102,10 @@ export const themeCommand: SlashCommand = {
     "/theme light     - Switch to light theme",
     "/theme dracula   - Switch to Dracula theme",
   ],
+  subcommands: availableThemes.map((t) => ({
+    name: t,
+    description: `Apply ${t} theme`,
+  })),
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
     const requestedTheme = ctx.parsedArgs.positional[0] as string | undefined;
@@ -195,39 +199,13 @@ function switchToTheme(themeName: string): CommandResult {
 }
 
 // =============================================================================
-// Theme Shortcut Commands
-// =============================================================================
-
-/**
- * Create a shortcut command for a specific theme.
- *
- * @param themeName - Theme name for the shortcut
- * @returns Slash command for switching to that theme
- */
-const createThemeShortcut = (themeName: string): SlashCommand => ({
-  name: themeName,
-  description: `Switch to ${themeName} theme`,
-  kind: "builtin",
-  category: "config",
-  aliases: [],
-  examples: [`/${themeName} - Switch to ${themeName} theme`],
-
-  execute: async (_ctx: CommandContext): Promise<CommandResult> => {
-    return switchToTheme(themeName);
-  },
-});
-
-// =============================================================================
-// Export All Theme Commands
+// Export Theme Command
 // =============================================================================
 
 /**
  * All theme-related slash commands for registration.
  *
- * Includes the main /theme command and shortcuts for popular themes.
+ * Note: Theme shortcuts (e.g., /dark, /light) have been removed.
+ * Use /theme <name> for theme switching with subcommand autocomplete.
  */
-export const themeSlashCommands: SlashCommand[] = [
-  themeCommand,
-  // Create shortcuts for all available themes
-  ...availableThemes.map(createThemeShortcut),
-];
+export const themeSlashCommands: SlashCommand[] = [themeCommand];

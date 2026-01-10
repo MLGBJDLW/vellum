@@ -6,6 +6,7 @@
 
 import { render } from "ink-testing-library";
 import type React from "react";
+import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/index.js";
 import { Autocomplete } from "../Autocomplete.js";
@@ -90,7 +91,9 @@ describe("Autocomplete", () => {
       );
 
       const frame = lastFrame() ?? "";
-      expect(frame.trim()).toBe("");
+      // Empty input shows all options (useful for '/' picker)
+      expect(frame).toContain("help");
+      expect(frame).toContain("history");
     });
   });
 
@@ -209,10 +212,25 @@ describe("Autocomplete", () => {
       expect(frame).not.toContain("more");
     });
 
-    it("should use default maxVisible of 5", () => {
+    it("should use default maxVisible of 10", () => {
       const onSelect = vi.fn();
       const onCancel = vi.fn();
-      const manyOptions = ["/a1", "/a2", "/a3", "/a4", "/a5", "/a6", "/a7", "/a8"];
+      // Need more than 10 options to see overflow
+      const manyOptions = [
+        "/a1",
+        "/a2",
+        "/a3",
+        "/a4",
+        "/a5",
+        "/a6",
+        "/a7",
+        "/a8",
+        "/a9",
+        "/a10",
+        "/a11",
+        "/a12",
+        "/a13",
+      ];
 
       const { lastFrame } = renderWithTheme(
         <Autocomplete
@@ -225,7 +243,7 @@ describe("Autocomplete", () => {
       );
 
       const frame = lastFrame() ?? "";
-      // Default is 5, so should show "3 more" for 8 options
+      // Default is 10, so should show "3 more" for 13 options
       expect(frame).toContain("3 more");
     });
   });
@@ -247,6 +265,50 @@ describe("Autocomplete", () => {
 
       const frame = lastFrame() ?? "";
       // Should have the selection indicator (›)
+      expect(frame).toContain("›");
+    });
+
+    it("keeps the selected option visible when navigating beyond maxVisible", async () => {
+      const onSelect = vi.fn();
+      const onCancel = vi.fn();
+      const manyOptions = ["/a1", "/a2", "/a3", "/a4", "/a5"];
+
+      const { lastFrame, stdin } = renderWithTheme(
+        <Autocomplete
+          input=""
+          options={manyOptions}
+          onSelect={onSelect}
+          onCancel={onCancel}
+          visible={true}
+          maxVisible={2}
+        />
+      );
+
+      // Initially shows first window
+      expect(lastFrame()).toContain("a1");
+      expect(lastFrame()).toContain("a2");
+      expect(lastFrame()).toContain("›");
+
+      // Move selection down 3 times: should scroll window and keep highlight visible
+      await act(async () => {
+        stdin.write("\u001b[B");
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      await act(async () => {
+        stdin.write("\u001b[B");
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      await act(async () => {
+        stdin.write("\u001b[B");
+        await new Promise((r) => setTimeout(r, 0));
+      });
+
+      const frame = lastFrame() ?? "";
+
+      // With maxVisible=2 and selection index=3, the window should include a3 and a4
+      expect(frame).toContain("a3");
+      expect(frame).toContain("a4");
+      // Ensure highlight indicator never disappears
       expect(frame).toContain("›");
     });
   });

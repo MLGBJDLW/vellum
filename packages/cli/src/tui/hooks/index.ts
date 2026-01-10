@@ -75,6 +75,11 @@ export {
   useScreenReader,
 } from "./useScreenReader.js";
 export {
+  type ToolApprovalViewModel,
+  type UseToolApprovalControllerOptions,
+  useToolApprovalController,
+} from "./useToolApprovalController.js";
+export {
   type KeyModifiers,
   type UseVimReturn,
   useVim,

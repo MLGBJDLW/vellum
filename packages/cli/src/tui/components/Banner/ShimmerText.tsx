@@ -63,7 +63,11 @@ function rgbToHex(r: number, g: number, b: number): string {
 /**
  * Interpolate between two colors based on intensity (0-1).
  */
-function interpolateColor(baseColor: string, highlightColor: string, intensity: number): string {
+export function interpolateColor(
+  baseColor: string,
+  highlightColor: string,
+  intensity: number
+): string {
   const base = hexToRgb(baseColor);
   const highlight = hexToRgb(highlightColor);
 

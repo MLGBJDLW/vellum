@@ -99,6 +99,7 @@ export interface NamedArg {
  */
 export type CommandCategory =
   | "system" // /help, /clear, /version
+  | "workflow" // /mode, /vibe, /plan, /spec, /tutorial
   | "auth" // /login, /logout, /credentials
   | "session" // /new, /history, /export
   | "navigation" // /cd, /pwd, /ls
@@ -115,6 +116,33 @@ export type CommandCategory =
  * - user: User-defined custom commands
  */
 export type CommandKind = "builtin" | "plugin" | "mcp" | "user";
+
+// =============================================================================
+// T004: Subcommand Definition
+// =============================================================================
+
+/**
+ * Definition for a subcommand within a parent command
+ *
+ * Used for two-level autocomplete and help display.
+ *
+ * @example
+ * ```typescript
+ * const subcommand: SubcommandDef = {
+ *   name: 'list',
+ *   description: 'List all items',
+ *   aliases: ['ls'],
+ * };
+ * ```
+ */
+export interface SubcommandDef {
+  /** Subcommand name */
+  readonly name: string;
+  /** Human-readable description for help text */
+  readonly description: string;
+  /** Alternative names for the subcommand */
+  readonly aliases?: readonly string[];
+}
 
 // =============================================================================
 // T004: SlashCommand Interface
@@ -173,6 +201,8 @@ export interface SlashCommand {
   readonly examples?: readonly string[];
   /** Security policy for resource access control (T052) */
   readonly securityPolicy?: CommandSecurityPolicy;
+  /** Subcommands for two-level autocomplete */
+  readonly subcommands?: readonly SubcommandDef[];
   /** Command execution handler */
   readonly execute: (ctx: CommandContext) => Promise<CommandResult>;
 }

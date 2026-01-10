@@ -11,6 +11,7 @@
  * @module @vellum/provider/local
  */
 
+import { LMSTUDIO_MODELS, OLLAMA_MODELS } from "./models/providers/local.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type {
   CredentialValidationResult,
@@ -210,14 +211,12 @@ export class OllamaProvider extends LocalProvider {
   /**
    * Get the model catalog from Ollama
    *
-   * Returns empty array - use listModelsAsync() for dynamic discovery.
+   * Returns static catalog as fallback - use listModelsAsync() for dynamic discovery.
    *
-   * @returns Empty array (static catalog not available for local models)
+   * @returns Static catalog (for fallback when server unavailable)
    */
   protected getModelCatalog(): ModelInfo[] {
-    // Local providers don't have a static catalog
-    // Models are discovered dynamically via listModelsAsync
-    return [];
+    return OLLAMA_MODELS;
   }
 
   /**
@@ -375,13 +374,12 @@ export class LMStudioProvider extends LocalProvider {
   /**
    * Get the model catalog from LM Studio
    *
-   * Returns empty array - use listModelsAsync() for dynamic discovery.
+   * Returns static catalog as fallback - use listModelsAsync() for dynamic discovery.
    *
-   * @returns Empty array (static catalog not available for local models)
+   * @returns Static catalog (for fallback when server unavailable)
    */
   protected getModelCatalog(): ModelInfo[] {
-    // Local providers don't have a static catalog
-    return [];
+    return LMSTUDIO_MODELS;
   }
 
   /**

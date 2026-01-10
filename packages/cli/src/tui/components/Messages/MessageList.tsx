@@ -336,7 +336,7 @@ export function MessageList({
   // Empty state
   if (messages.length === 0) {
     return (
-      <Box flexDirection="column" paddingX={1}>
+      <Box flexDirection="column" flexGrow={1} paddingX={1}>
         <Text color={mutedColor} italic>
           No messages yet. Start a conversation!
         </Text>
@@ -349,7 +349,7 @@ export function MessageList({
   const showScrollDown = effectiveMaxHeight && messages.length > effectiveMaxHeight && !isAtBottom;
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" flexGrow={1}>
       {/* Scroll up indicator */}
       {showScrollUp && (
         <Box justifyContent="center" borderBottom borderColor={borderColor}>

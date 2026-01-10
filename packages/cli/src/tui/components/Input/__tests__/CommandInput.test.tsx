@@ -12,6 +12,7 @@
 
 import { render } from "ink-testing-library";
 import type React from "react";
+import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/index.js";
 import { CommandInput, parseSlashCommand, type SlashCommand } from "../CommandInput.js";
@@ -21,6 +22,10 @@ import { CommandInput, parseSlashCommand, type SlashCommand } from "../CommandIn
  */
 function renderWithTheme(element: React.ReactElement) {
   return render(<ThemeProvider>{element}</ThemeProvider>);
+}
+
+async function tick(): Promise<void> {
+  await new Promise((r) => setTimeout(r, 0));
 }
 
 // =============================================================================
@@ -276,6 +281,68 @@ describe("CommandInput", () => {
       );
 
       expect(lastFrame()).toBeDefined();
+    });
+  });
+
+  describe("Slash autocomplete behavior", () => {
+    it("keeps autocomplete visible after typing arguments (filters by first token)", async () => {
+      const onMessage = vi.fn();
+      const onCommand = vi.fn();
+      // With two-level autocomplete, provide getSubcommands to show level 2 options
+      const getSubcommands = vi.fn().mockReturnValue([
+        { name: "sub1", description: "Subcommand 1" },
+        { name: "sub2", description: "Subcommand 2" },
+      ]);
+
+      const { stdin, lastFrame } = renderWithTheme(
+        <CommandInput
+          onMessage={onMessage}
+          onCommand={onCommand}
+          commands={["help", "hello"]}
+          getSubcommands={getSubcommands}
+        />
+      );
+
+      await act(async () => {
+        stdin.write("/he");
+        await tick();
+      });
+
+      const frameBeforeArgs = lastFrame() ?? "";
+      expect(frameBeforeArgs).toContain("›");
+      expect(frameBeforeArgs).toContain("help");
+
+      await act(async () => {
+        stdin.write("lp "); // Complete "help" command and add space
+        await tick();
+      });
+
+      const frameAfterArgs = lastFrame() ?? "";
+      // Level 2 shows subcommands
+      expect(frameAfterArgs).toContain("sub1");
+    });
+
+    it("does not hijack Enter submission once arguments are being typed", async () => {
+      const onMessage = vi.fn();
+      const onCommand = vi.fn();
+
+      const { stdin } = renderWithTheme(
+        <CommandInput onMessage={onMessage} onCommand={onCommand} commands={["help", "hello"]} />
+      );
+
+      await act(async () => {
+        stdin.write("/help arg");
+        await tick();
+      });
+
+      await act(async () => {
+        stdin.write("\r");
+        await tick();
+      });
+
+      expect(onCommand).toHaveBeenCalledTimes(1);
+      expect(onCommand).toHaveBeenCalledWith({ name: "help", args: ["arg"], raw: "/help arg" });
+      expect(onMessage).toHaveBeenCalledTimes(0);
     });
   });
 });

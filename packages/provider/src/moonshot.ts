@@ -7,6 +7,7 @@
  * @module @vellum/provider/moonshot
  */
 
+import { MOONSHOT_MODELS } from "./models/providers/moonshot.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo } from "./types.js";
 
@@ -50,47 +51,7 @@ export class MoonshotProvider extends OpenAICompatibleProvider {
    * @returns Array of available Moonshot models
    */
   protected getModelCatalog(): ModelInfo[] {
-    return [
-      {
-        id: "moonshot-v1-8k",
-        name: "Moonshot V1 8K",
-        provider: "moonshot",
-        contextWindow: 8000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.012,
-        outputPrice: 0.012,
-      },
-      {
-        id: "moonshot-v1-32k",
-        name: "Moonshot V1 32K",
-        provider: "moonshot",
-        contextWindow: 32000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.024,
-        outputPrice: 0.024,
-      },
-      {
-        id: "moonshot-v1-128k",
-        name: "Moonshot V1 128K",
-        provider: "moonshot",
-        contextWindow: 128000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.06,
-        outputPrice: 0.06,
-      },
-    ];
+    return MOONSHOT_MODELS;
   }
 
   /**

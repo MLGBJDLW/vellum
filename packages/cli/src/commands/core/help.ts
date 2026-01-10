@@ -19,6 +19,7 @@ import { error, success } from "../types.js";
  */
 const CATEGORY_NAMES: Record<CommandCategory, string> = {
   system: "System",
+  workflow: "Workflow",
   auth: "Authentication",
   session: "Session",
   navigation: "Navigation",
@@ -32,11 +33,11 @@ const CATEGORY_NAMES: Record<CommandCategory, string> = {
  */
 const CATEGORY_ORDER: CommandCategory[] = [
   "system",
-  "auth",
+  "workflow",
   "session",
-  "navigation",
-  "tools",
   "config",
+  "auth",
+  "tools",
   "debug",
 ];
 

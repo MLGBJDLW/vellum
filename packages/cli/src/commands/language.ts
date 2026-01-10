@@ -159,6 +159,11 @@ export const languageCommand: SlashCommand = {
     "/language zh - Switch to Chinese",
     "/language auto - Use auto-detection",
   ],
+  subcommands: [
+    { name: "en", description: "English" },
+    { name: "zh", description: "中文" },
+    { name: "auto", description: "Auto-detect" },
+  ],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
     const { parsedArgs } = ctx;

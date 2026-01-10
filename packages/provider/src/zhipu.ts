@@ -8,6 +8,7 @@
  * @module @vellum/provider/zhipu
  */
 
+import { ZHIPU_MODELS } from "./models/providers/zhipu.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo, ProviderOptions } from "./types.js";
 
@@ -160,73 +161,7 @@ export class ZhipuProvider extends OpenAICompatibleProvider {
    * @returns Array of available Zhipu models
    */
   protected getModelCatalog(): ModelInfo[] {
-    return [
-      {
-        id: "glm-4",
-        name: "GLM-4",
-        provider: "zhipu",
-        contextWindow: 128000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.1,
-        outputPrice: 0.1,
-      },
-      {
-        id: "glm-4-plus",
-        name: "GLM-4 Plus",
-        provider: "zhipu",
-        contextWindow: 128000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: true,
-        supportsStreaming: true,
-        inputPrice: 0.05,
-        outputPrice: 0.05,
-      },
-      {
-        id: "glm-4-flash",
-        name: "GLM-4 Flash",
-        provider: "zhipu",
-        contextWindow: 128000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.0001,
-        outputPrice: 0.0001,
-      },
-      {
-        id: "glm-4v",
-        name: "GLM-4V",
-        provider: "zhipu",
-        contextWindow: 8192,
-        maxOutputTokens: 1024,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.05,
-        outputPrice: 0.05,
-      },
-      {
-        id: "glm-4v-plus",
-        name: "GLM-4V Plus",
-        provider: "zhipu",
-        contextWindow: 8192,
-        maxOutputTokens: 1024,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.01,
-        outputPrice: 0.01,
-      },
-    ];
+    return ZHIPU_MODELS;
   }
 
   /**

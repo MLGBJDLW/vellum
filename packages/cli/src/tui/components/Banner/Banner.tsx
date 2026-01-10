@@ -10,8 +10,9 @@
 import { Box, Text, useStdout } from "ink";
 import Gradient from "ink-gradient";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { selectAsciiArt } from "./AsciiArt.js";
+import { interpolateColor } from "./ShimmerText.js";
 import { useShimmer } from "./useShimmer.js";
 
 // =============================================================================
@@ -30,12 +31,18 @@ export interface BannerProps {
   readonly version?: string;
   /** Whether shimmer animation is enabled (default: true) */
   readonly animated?: boolean;
+  /** Shimmer cycle duration in milliseconds (default: 3000) */
+  readonly cycleDuration?: number;
+  /** Shimmer update interval in milliseconds (default: 100) */
+  readonly updateInterval?: number;
   /** Callback when banner fade-out completes */
   readonly onComplete?: () => void;
   /** Duration to display before fading (ms, default: 2000) */
   readonly displayDuration?: number;
   /** Whether to auto-hide after displayDuration */
   readonly autoHide?: boolean;
+  /** Number of animation cycles before stopping (default: infinite) */
+  readonly cycles?: number;
 }
 
 // =============================================================================
@@ -55,6 +62,30 @@ const PARCHMENT_GRADIENT = [
   "#FFFACD", // Lemon Chiffon
 ];
 
+/** Interpolated steps per gradient segment for smoother shimmer shifts. */
+const GRADIENT_STEPS_PER_SEGMENT = 12;
+
+const PARCHMENT_GRADIENT_STEPS = buildGradientSteps(PARCHMENT_GRADIENT, GRADIENT_STEPS_PER_SEGMENT);
+
+function buildGradientSteps(colors: readonly string[], stepsPerSegment: number): string[] {
+  if (colors.length === 0) return [];
+  if (colors.length === 1) return [colors[0] ?? "#000000"];
+
+  const steps: string[] = [];
+
+  for (let i = 0; i < colors.length - 1; i += 1) {
+    const start = colors[i] ?? "#000000";
+    const end = colors[i + 1] ?? start;
+    for (let step = 0; step < stepsPerSegment; step += 1) {
+      const t = step / stepsPerSegment;
+      steps.push(interpolateColor(start, end, t));
+    }
+  }
+
+  steps.push(colors[colors.length - 1] ?? "#000000");
+  return steps;
+}
+
 // =============================================================================
 // Sub-Components
 // =============================================================================
@@ -67,23 +98,30 @@ interface AnimatedGradientProps {
   readonly position: number;
 }
 
-function AnimatedGradient({ children, position }: AnimatedGradientProps): React.JSX.Element {
-  // Shift gradient colors based on shimmer position
+/**
+ * Animated gradient text with shimmer sweep effect.
+ * Memoized to prevent unnecessary re-renders.
+ */
+const AnimatedGradient = memo(function AnimatedGradient({
+  children,
+  position,
+}: AnimatedGradientProps): React.JSX.Element {
+  // Calculate discrete color shift to reduce re-computation
+  // Only recalculates when shift index actually changes
+  const colorShift =
+    Math.floor(position * PARCHMENT_GRADIENT_STEPS.length) % PARCHMENT_GRADIENT_STEPS.length;
+
+  // Shift gradient colors based on discrete colorShift value
   const shiftedColors = useMemo(() => {
-    const shift = Math.floor(position * PARCHMENT_GRADIENT.length);
-    const colors = [...PARCHMENT_GRADIENT];
-
-    // Rotate colors to create movement effect
-    for (let i = 0; i < shift; i++) {
-      const first = colors.shift();
-      if (first) colors.push(first);
-    }
-
-    return colors;
-  }, [position]);
+    if (colorShift === 0) return PARCHMENT_GRADIENT_STEPS;
+    return [
+      ...PARCHMENT_GRADIENT_STEPS.slice(colorShift),
+      ...PARCHMENT_GRADIENT_STEPS.slice(0, colorShift),
+    ];
+  }, [colorShift]); // Depend on discrete value, not continuous position
 
   return <Gradient colors={shiftedColors}>{children}</Gradient>;
-}
+});
 
 /**
  * Static version display.
@@ -138,13 +176,17 @@ export function Banner({
   showVersion = false,
   version = "0.1.0",
   animated = true,
+  cycleDuration,
+  updateInterval,
   onComplete,
   displayDuration = 2000,
   autoHide = false,
+  cycles,
 }: BannerProps): React.JSX.Element | null {
   const { stdout } = useStdout();
   const [visible, setVisible] = useState(true);
   const [opacity, setOpacity] = useState(1);
+  const [animationComplete, setAnimationComplete] = useState(false);
 
   // Refs for nested timer cleanup
   const step1Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -158,11 +200,14 @@ export function Banner({
     return customArt ?? selectAsciiArt(terminalWidth);
   }, [customArt, terminalWidth]);
 
-  // Shimmer animation - use slower cycle for smoother effect
+  // Shimmer animation tuned for smoother motion without excessive redraws
+  // Stop animation when cycles complete
   const { position } = useShimmer({
-    cycleDuration: 3000,
-    updateInterval: 150,
-    enabled: animated && visible,
+    cycleDuration: cycleDuration ?? 3000,
+    updateInterval,
+    enabled: animated && visible && !animationComplete,
+    maxCycles: cycles,
+    onComplete: () => setAnimationComplete(true),
   });
 
   // Auto-hide timer with smooth transition
@@ -194,6 +239,9 @@ export function Banner({
 
   if (!visible) return null;
 
+  // Determine if animation should show (not complete or no cycles limit)
+  const showAnimation = animated && !animationComplete;
+
   return (
     <Box
       flexDirection="column"
@@ -202,20 +250,22 @@ export function Banner({
       paddingX={1}
       paddingY={1}
     >
-      {animated ? (
+      {showAnimation ? (
         <AnimatedGradient position={position}>{asciiArt}</AnimatedGradient>
       ) : (
         <Gradient colors={PARCHMENT_GRADIENT}>{asciiArt}</Gradient>
       )}
 
-      {showVersion && <VersionDisplay version={version} />}
+      {showVersion && version ? <VersionDisplay version={version} /> : null}
 
-      {/* Loading indicator */}
-      <Box marginTop={1}>
-        <Text color={opacity < 1 ? "#666" : "#8B4513"} dimColor={opacity < 0.5}>
-          {opacity < 0.5 ? "Starting..." : "Initializing..."}
-        </Text>
-      </Box>
+      {/* Loading indicator - hide after animation complete */}
+      {!animationComplete && (
+        <Box marginTop={1}>
+          <Text color={opacity < 1 ? "#666" : "#8B4513"} dimColor={opacity < 0.5}>
+            {opacity < 0.5 ? "Starting..." : "Initializing..."}
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -239,5 +289,54 @@ export function MinimalBanner(): React.JSX.Element {
     <Text color="#DAA520" bold>
       VELLUM
     </Text>
+  );
+}
+
+// =============================================================================
+// Header Banner (Compact CLI Header)
+// =============================================================================
+
+/**
+ * Props for the HeaderBanner component.
+ */
+export interface HeaderBannerProps {
+  /** Whether shimmer animation is enabled (default: true) */
+  readonly animated?: boolean;
+}
+
+/**
+ * Compact header banner with animated gradient for use at CLI top.
+ * Displays a single-line parchment-styled logo with continuous shimmer.
+ */
+export function HeaderBanner({ animated = true }: HeaderBannerProps): React.JSX.Element {
+  const { position } = useShimmer({
+    cycleDuration: 3000,
+    enabled: animated,
+  });
+
+  // Calculate discrete color shift to reduce re-computation
+  const colorShift =
+    Math.floor(position * PARCHMENT_GRADIENT_STEPS.length) % PARCHMENT_GRADIENT_STEPS.length;
+
+  // Shift gradient colors based on discrete colorShift value
+  const shiftedColors = useMemo(() => {
+    if (colorShift === 0) return PARCHMENT_GRADIENT_STEPS;
+    return [
+      ...PARCHMENT_GRADIENT_STEPS.slice(colorShift),
+      ...PARCHMENT_GRADIENT_STEPS.slice(0, colorShift),
+    ];
+  }, [colorShift]); // Depend on discrete value, not continuous position
+
+  // Compact ASCII art for header (single line with decorations)
+  const headerArt = "═══╣ ◊ ╠═══  V E L L U M  ═══╣ ◊ ╠═══";
+
+  return (
+    <Box justifyContent="center" width="100%">
+      {animated ? (
+        <Gradient colors={shiftedColors}>{headerArt}</Gradient>
+      ) : (
+        <Gradient colors={PARCHMENT_GRADIENT}>{headerArt}</Gradient>
+      )}
+    </Box>
   );
 }

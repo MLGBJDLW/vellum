@@ -10,12 +10,26 @@ The Vellum TUI is a React-based terminal interface built with [Ink](https://gith
 
 - [Architecture](#architecture)
 - [Components](#components)
+- [Quick keybindings](#quick-keybindings)
 - [Context Providers](#context-providers)
 - [Hooks](#hooks)
 - [Themes](#themes)
 - [Usage Examples](#usage-examples)
 
 ---
+
+## Quick keybindings
+
+Vellum’s sidebar panels are designed to be discoverable via keyboard. When the TUI is focused, these shortcuts jump directly to common panels:
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+\` | Toggle sidebar |
+| `Ctrl+G` | Open **Tools** panel |
+| `Ctrl+O` | Open **MCP** panel |
+| `Ctrl+P` | Open **Memory** panel |
+| `Ctrl+T` | Open **Todo** panel |
+| `Ctrl+S` | Open **Sessions** picker |
 
 ## Architecture
 

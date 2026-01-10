@@ -116,7 +116,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
   // Context hooks
   const { addMessage, appendToMessage, updateMessage, clearMessages } = useMessages();
-  const { addExecution, updateExecution, clearExecutions } = useTools();
+  const { addExecution, updateExecution, clearExecutions, registerCallId } = useTools();
 
   // Track connection state
   const connectedLoopRef = useRef<AgentLoop | null>(null);
@@ -177,17 +177,31 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
    */
   const handleToolStart = useCallback(
     (callId: string, name: string, input: Record<string, unknown>) => {
+      const existingExecutionId = toolIdMapRef.current.get(callId);
+
+      // If we already created a pending execution due to permissionRequired,
+      // treat toolStart as an update (not a new execution) to avoid duplicates.
+      if (existingExecutionId) {
+        updateExecution(existingExecutionId, {
+          status: "running",
+          startedAt: new Date(),
+        });
+        return;
+      }
+
       // Add execution to tools context
       const executionId = addExecution({
         toolName: name,
         params: input,
+        status: "running",
         startedAt: new Date(),
       });
 
       // Map the AgentLoop callId to our execution ID
       toolIdMapRef.current.set(callId, executionId);
+      registerCallId(callId, executionId);
     },
-    [addExecution]
+    [addExecution, registerCallId, updateExecution]
   );
 
   /**
@@ -225,12 +239,14 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       const executionId = addExecution({
         toolName: name,
         params: input,
+        status: "pending",
       });
 
       // Map the callId to execution ID
       toolIdMapRef.current.set(callId, executionId);
+      registerCallId(callId, executionId);
     },
-    [addExecution]
+    [addExecution, registerCallId]
   );
 
   /**
@@ -392,6 +408,7 @@ export interface AdapterDispatchers {
   addExecution: (execution: {
     toolName: string;
     params: Record<string, unknown>;
+    status?: "pending" | "approved" | "rejected" | "running" | "complete" | "error";
     startedAt?: Date;
   }) => string;
   /** Update a tool execution */
@@ -462,6 +479,7 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
     const executionId = dispatchers.addExecution({
       toolName: name,
       params: input,
+      status: "running",
       startedAt: new Date(),
     });
     toolIdMap.set(callId, executionId);
@@ -488,6 +506,7 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
     const executionId = dispatchers.addExecution({
       toolName: name,
       params: input,
+      status: "pending",
     });
     toolIdMap.set(callId, executionId);
   };

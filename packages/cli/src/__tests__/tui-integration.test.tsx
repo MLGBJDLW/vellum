@@ -34,7 +34,9 @@ import {
   RootProvider,
   StreamingText,
   ToolCall,
+  ToolsPanel,
   useMessages,
+  useToolApprovalController,
   useTools,
 } from "../tui/index.js";
 
@@ -520,6 +522,134 @@ describe("Integration: Tool Request → Approval Dialog", () => {
     expect(frame).toContain("read_file");
     expect(frame).toContain("write_file");
     expect(frame).toContain("execute_command");
+  });
+});
+
+// =============================================================================
+// Flow 3b: Tool Approval Controller → Resume AgentLoop
+// =============================================================================
+
+describe("Integration: Tool Approval Controller → Resume", () => {
+  it("approves the active pending tool and calls grantPermission()", async () => {
+    const permissionGate = {
+      grantPermission: vi.fn(),
+      denyPermission: vi.fn(),
+    };
+
+    function TestComponent() {
+      const { addExecution, executions } = useTools();
+      const { activeApproval, approveActive } = useToolApprovalController({
+        agentLoop: permissionGate,
+      });
+
+      useEffect(() => {
+        addExecution({ toolName: "read_file", params: { path: "/test.txt" } });
+      }, [addExecution]);
+
+      useEffect(() => {
+        if (activeApproval) {
+          approveActive("once");
+        }
+      }, [activeApproval, approveActive]);
+
+      return <Text>{executions[0]?.status ?? "none"}</Text>;
+    }
+
+    const { lastFrame } = render(
+      <RootProvider>
+        <TestComponent />
+      </RootProvider>
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(permissionGate.grantPermission).toHaveBeenCalledTimes(1);
+    expect(permissionGate.denyPermission).toHaveBeenCalledTimes(0);
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("approved");
+  });
+
+  it("rejects the active pending tool and calls denyPermission()", async () => {
+    const permissionGate = {
+      grantPermission: vi.fn(),
+      denyPermission: vi.fn(),
+    };
+
+    function TestComponent() {
+      const { addExecution, executions } = useTools();
+      const { activeApproval, rejectActive } = useToolApprovalController({
+        agentLoop: permissionGate,
+      });
+
+      useEffect(() => {
+        addExecution({ toolName: "write_file", params: { path: "/out.txt" } });
+      }, [addExecution]);
+
+      useEffect(() => {
+        if (activeApproval) {
+          rejectActive();
+        }
+      }, [activeApproval, rejectActive]);
+
+      return <Text>{executions[0]?.status ?? "none"}</Text>;
+    }
+
+    const { lastFrame } = render(
+      <RootProvider>
+        <TestComponent />
+      </RootProvider>
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(permissionGate.denyPermission).toHaveBeenCalledTimes(1);
+    expect(permissionGate.grantPermission).toHaveBeenCalledTimes(0);
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("rejected");
+  });
+});
+
+// =============================================================================
+// Flow 3c: Tools Panel → Execution Rendering
+// =============================================================================
+
+describe("Integration: ToolsPanel", () => {
+  it("renders recent tool executions and pending count", async () => {
+    function TestComponent() {
+      const { addExecution, updateExecution } = useTools();
+
+      useEffect(() => {
+        const first = addExecution({ toolName: "read_file", params: { path: "/a.txt" } });
+        const second = addExecution({ toolName: "write_file", params: { path: "/b.txt" } });
+        updateExecution(first, { status: "complete", completedAt: new Date() });
+        updateExecution(second, { status: "pending" });
+      }, [addExecution, updateExecution]);
+
+      return <ToolsPanel maxItems={10} />;
+    }
+
+    const { lastFrame } = render(
+      <RootProvider>
+        <TestComponent />
+      </RootProvider>
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Tools");
+    expect(frame).toContain("Pending: 1");
+    expect(frame).toContain("Total: 2");
+    expect(frame).toContain("read_file");
+    expect(frame).toContain("write_file");
   });
 });
 

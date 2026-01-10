@@ -21,6 +21,7 @@ import {
 } from "@google/genai";
 import { ErrorCode } from "@vellum/shared";
 import { createProviderError, ProviderError } from "./errors.js";
+import { GOOGLE_MODELS } from "./models/providers/google.js";
 import type {
   CompletionMessage,
   CompletionParams,
@@ -61,77 +62,6 @@ const GOOGLE_KEY_PATTERN = /^AIza/;
  * Default maximum tokens for completions
  */
 const DEFAULT_MAX_TOKENS = 8192;
-
-/**
- * Model information for Google Gemini models
- */
-const GOOGLE_MODELS: ModelInfo[] = [
-  {
-    id: "gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
-    provider: "google",
-    contextWindow: 1048576, // 1M tokens
-    maxOutputTokens: 65536,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: true,
-    supportsStreaming: true,
-    inputPrice: 1.25, // per million input tokens (<=200K)
-    outputPrice: 10.0, // per million output tokens (<=200K)
-  },
-  {
-    id: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
-    provider: "google",
-    contextWindow: 1048576, // 1M tokens
-    maxOutputTokens: 65536,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: true,
-    supportsStreaming: true,
-    inputPrice: 0.15, // per million input tokens (<=200K)
-    outputPrice: 0.6, // per million output tokens (<=200K, non-thinking)
-  },
-  {
-    id: "gemini-1.5-pro",
-    name: "Gemini 1.5 Pro",
-    provider: "google",
-    contextWindow: 2097152, // 2M tokens
-    maxOutputTokens: 8192,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    inputPrice: 1.25,
-    outputPrice: 5.0,
-  },
-  {
-    id: "gemini-1.5-flash",
-    name: "Gemini 1.5 Flash",
-    provider: "google",
-    contextWindow: 1048576, // 1M tokens
-    maxOutputTokens: 8192,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    inputPrice: 0.075,
-    outputPrice: 0.3,
-  },
-  {
-    id: "gemini-1.5-flash-8b",
-    name: "Gemini 1.5 Flash 8B",
-    provider: "google",
-    contextWindow: 1048576, // 1M tokens
-    maxOutputTokens: 8192,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    inputPrice: 0.0375,
-    outputPrice: 0.15,
-  },
-];
 
 // =============================================================================
 // Provider Options

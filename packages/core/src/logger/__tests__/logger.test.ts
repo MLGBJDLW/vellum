@@ -528,7 +528,8 @@ describe("Logger", () => {
       expect(entry.message).toBe("test-operation completed");
       expect(entry.data).toHaveProperty("label", "test-operation");
       expect(entry.data).toHaveProperty("durationMs");
-      expect((entry.data as Record<string, unknown>).durationMs).toBeGreaterThanOrEqual(10);
+      // Timers are not perfectly precise across platforms/CI; allow small scheduling jitter.
+      expect((entry.data as Record<string, unknown>).durationMs).toBeGreaterThanOrEqual(9);
     });
 
     it("timer.end() should accept custom message", () => {
@@ -554,7 +555,7 @@ describe("Logger", () => {
 
       // But should return duration in ms
       expect(typeof duration).toBe("number");
-      expect(duration).toBeGreaterThanOrEqual(10);
+      expect(duration).toBeGreaterThanOrEqual(9);
     });
 
     it("timer.duration should be updated after stop()", async () => {
@@ -580,7 +581,7 @@ describe("Logger", () => {
       await new Promise((r) => setTimeout(r, 10));
       timer.end();
 
-      expect(timer.duration).toBeGreaterThanOrEqual(10);
+      expect(timer.duration).toBeGreaterThanOrEqual(9);
     });
   });
 

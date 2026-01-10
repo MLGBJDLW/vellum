@@ -66,7 +66,7 @@ function createMockModeManager(currentMode: "vibe" | "plan" | "spec" = "vibe"): 
       name: `${currentMode}-mode`,
       description: `${currentMode} mode description`,
     }),
-    switchMode: vi.fn().mockImplementation(async (mode) => ({
+    switchMode: vi.fn().mockImplementation(async (mode, _options) => ({
       success: true,
       previousMode: currentMode,
       currentMode: mode,
@@ -224,7 +224,7 @@ describe("T041: Mode Slash Commands", () => {
     it("should have correct command metadata", () => {
       expect(modeCommand.name).toBe("mode");
       expect(modeCommand.kind).toBe("builtin");
-      expect(modeCommand.category).toBe("system");
+      expect(modeCommand.category).toBe("workflow");
 
       expect(vibeCommand.name).toBe("vibe");
       expect(planCommand.name).toBe("plan");
@@ -274,7 +274,7 @@ describe("T041: Mode Slash Commands", () => {
       const result = await modeCommand.execute(ctx);
 
       expect(result.kind).toBe("success");
-      expect(mockManager.switchMode).toHaveBeenCalledWith("plan");
+      expect(mockManager.switchMode).toHaveBeenCalledWith("plan", { skipConfirmation: false });
     });
 
     it("should error on invalid mode argument", async () => {
@@ -300,7 +300,7 @@ describe("T041: Mode Slash Commands", () => {
       const result = await vibeCommand.execute(ctx);
 
       expect(result.kind).toBe("success");
-      expect(mockManager.switchMode).toHaveBeenCalledWith("vibe");
+      expect(mockManager.switchMode).toHaveBeenCalledWith("vibe", { skipConfirmation: false });
     });
 
     it("should report already in vibe mode", async () => {
@@ -327,7 +327,7 @@ describe("T041: Mode Slash Commands", () => {
       const result = await planCommand.execute(ctx);
 
       expect(result.kind).toBe("success");
-      expect(mockManager.switchMode).toHaveBeenCalledWith("plan");
+      expect(mockManager.switchMode).toHaveBeenCalledWith("plan", { skipConfirmation: false });
     });
   });
 
@@ -359,7 +359,7 @@ describe("T041: Mode Slash Commands", () => {
         // Simulate user confirming
         const confirmResult = await result.prompt.handler("y");
         expect(confirmResult.kind).toBe("success");
-        expect(mockManager.switchMode).toHaveBeenCalledWith("spec");
+        expect(mockManager.switchMode).toHaveBeenCalledWith("spec", { skipConfirmation: true });
       }
     });
 
@@ -438,7 +438,7 @@ describe("CLI Mode Integration", () => {
     const planCtx = createMockContext();
     const planResult = await planCommand.execute(planCtx);
     expect(planResult.kind).toBe("success");
-    expect(mockManager.switchMode).toHaveBeenCalledWith("plan");
+    expect(mockManager.switchMode).toHaveBeenCalledWith("plan", { skipConfirmation: false });
   });
 
   it("mode commands should have proper descriptions", () => {

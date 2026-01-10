@@ -136,6 +136,12 @@ function getInkKeyFlag(inkKey: Key, normalizedHotkey: string): boolean | undefin
  * Check if the key component matches (ignoring modifiers).
  */
 function keyMatches(normalizedInput: string, normalizedHotkey: string, inkKey: Key): boolean {
+  // Windows/Ink may deliver Ctrl+\\ as the raw control character 0x1C (File Separator)
+  // instead of a literal "\\" input key. Treat that control byte as "\\" for matching.
+  if (normalizedHotkey === "\\" && normalizedInput === "\x1c") {
+    return true;
+  }
+
   // Direct string match
   if (normalizedInput === normalizedHotkey) {
     return true;
@@ -176,7 +182,11 @@ function matchesHotkey(inputKey: string, inkKey: Key, hotkey: HotkeyDefinition):
   }
 
   // Then check modifiers
-  return modifiersMatch(inkKey, hotkey);
+  // If Ink delivers Ctrl+\\ as \x1c without setting the ctrl modifier, interpret \x1c as Ctrl+\\.
+  const inkKeyWithCtrlBackslashFix: Key =
+    normalizedHotkey === "\\" && normalizedInput === "\x1c" ? { ...inkKey, ctrl: true } : inkKey;
+
+  return modifiersMatch(inkKeyWithCtrlBackslashFix, hotkey);
 }
 
 // =============================================================================

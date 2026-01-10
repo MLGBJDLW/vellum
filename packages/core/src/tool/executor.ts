@@ -304,6 +304,17 @@ export interface ExecuteOptions {
    * When aborted, execution will be cancelled and return TOOL_ABORTED error.
    */
   abortSignal?: AbortSignal;
+
+  /**
+   * Optional permission override for this execution.
+   *
+   * When provided, ToolExecutor will not call the configured PermissionChecker
+   * and will instead use this decision.
+   *
+   * This is primarily used by AgentLoop to resume a tool after an external
+   * permission approval has already been granted.
+   */
+  permissionOverride?: PermissionDecision;
 }
 
 // =============================================================================
@@ -564,8 +575,9 @@ export class ToolExecutor {
       throw new ToolNotFoundError(name);
     }
 
-    // Check permission
-    const permission = await this.checkPermission(name, params, context);
+    // Check permission (or honor explicit override)
+    const permission: PermissionDecision =
+      options?.permissionOverride ?? (await this.checkPermission(name, params, context));
 
     if (permission === "deny") {
       throw new PermissionDeniedError(name);

@@ -11,6 +11,7 @@ import type { CodingMode } from "@vellum/core";
 import { Box, Text } from "ink";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import type { AgentLevel } from "./AgentModeIndicator.js";
 import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 import { ModelIndicator } from "./ModelIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
@@ -26,6 +27,8 @@ import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeInd
 export interface StatusBarProps {
   /** Current coding mode */
   readonly mode?: CodingMode;
+  /** Agent level for spec mode (0=orchestrator, 1=sub-orchestrator, 2=worker) */
+  readonly agentLevel?: AgentLevel;
   /** Model name (e.g., 'claude-sonnet-4') */
   readonly modelName?: string;
   /** Token usage information (displayed with visual progress bar) */
@@ -79,11 +82,12 @@ function formatCost(cost: number): string {
  *
  * Unified Footer Layout:
  * ```
- * ◐ vibe  ◇ Think  ◈ Orch │ claude-sonnet │ ▓▓▓░░ 45% │ $0.02
+ * ◐ vibe  ◇ planning  ◈ spec L1 │ claude-sonnet │ ▓▓▓░░ 45% │ $0.02
  * ```
  *
  * Features:
  * - All modes shown with active one highlighted
+ * - Agent level indicator for spec mode (L0/L1/L2)
  * - Model name only (no provider prefix)
  * - Context progress with visual bar
  * - Cost display
@@ -100,6 +104,7 @@ function formatCost(cost: number): string {
  */
 export function StatusBar({
   mode = "vibe",
+  agentLevel,
   modelName,
   tokens,
   trustMode,
@@ -112,6 +117,20 @@ export function StatusBar({
 
   // Use primary/accent color for status bar border
   const borderColor = theme.colors.primary;
+
+  // Level indicator labels
+  const levelLabels: Record<AgentLevel, string> = {
+    0: "L0",
+    1: "L1",
+    2: "L2",
+  };
+
+  // Agent level icons for spec mode (text symbols, no emoji)
+  const levelIcons: Record<AgentLevel, string> = {
+    0: "♾",
+    1: "◈",
+    2: "◇",
+  };
 
   // Render mode selector (all modes shown, active highlighted)
   const modeSection = (
@@ -140,6 +159,17 @@ export function StatusBar({
   // Model indicator (compact, name only)
   if (modelName) {
     rightIndicators.push(<ModelIndicator key="model" model={modelName} compact />);
+  }
+
+  // Agent level indicator (only for spec mode with defined level)
+  if (mode === "spec" && agentLevel !== undefined) {
+    rightIndicators.push(
+      <Box key="agent-level">
+        <Text color={theme.colors.info}>
+          {levelIcons[agentLevel]} {levelLabels[agentLevel]}
+        </Text>
+      </Box>
+    );
   }
 
   // Context progress
@@ -177,6 +207,18 @@ export function StatusBar({
     rightIndicators.push(
       <Box key="cost">
         <Text color={theme.colors.success}>{formatCost(cost)}</Text>
+      </Box>
+    );
+  }
+
+  // Sidebar toggle hint (show only if there's room - not shown when many indicators present)
+  // Skip when there are 4+ indicators to avoid terminal overflow
+  if (rightIndicators.length < 4) {
+    rightIndicators.push(
+      <Box key="sidebar-hint">
+        <Text color={theme.semantic.text.muted} dimColor>
+          ^\ bar
+        </Text>
       </Box>
     );
   }

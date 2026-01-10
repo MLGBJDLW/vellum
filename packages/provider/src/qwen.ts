@@ -7,6 +7,7 @@
  * @module @vellum/provider/qwen
  */
 
+import { QWEN_MODELS } from "./models/providers/qwen.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo } from "./types.js";
 
@@ -51,60 +52,7 @@ export class QwenProvider extends OpenAICompatibleProvider {
    * @returns Array of available Qwen models
    */
   protected getModelCatalog(): ModelInfo[] {
-    return [
-      {
-        id: "qwen-turbo",
-        name: "Qwen Turbo",
-        provider: "qwen",
-        contextWindow: 128000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.3,
-        outputPrice: 0.6,
-      },
-      {
-        id: "qwen-plus",
-        name: "Qwen Plus",
-        provider: "qwen",
-        contextWindow: 128000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.8,
-        outputPrice: 2.0,
-      },
-      {
-        id: "qwen-max",
-        name: "Qwen Max",
-        provider: "qwen",
-        contextWindow: 128000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: true,
-        supportsStreaming: true,
-        inputPrice: 2.4,
-        outputPrice: 9.6,
-      },
-      {
-        id: "qwen-coder-turbo",
-        name: "Qwen Coder Turbo",
-        provider: "qwen",
-        contextWindow: 128000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.3,
-        outputPrice: 0.6,
-      },
-    ];
+    return QWEN_MODELS;
   }
 
   /**

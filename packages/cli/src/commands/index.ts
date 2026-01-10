@@ -27,6 +27,7 @@ export type {
   PositionalArg,
   Session,
   SlashCommand as SlashCommandDef,
+  SubcommandDef,
 } from "./types.js";
 
 export { error, interactive, pending, success } from "./types.js";

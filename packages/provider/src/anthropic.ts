@@ -25,6 +25,7 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import { ErrorCode } from "@vellum/shared";
 import { createProviderError, ProviderError } from "./errors.js";
+import { ANTHROPIC_MODELS } from "./models/providers/anthropic.js";
 import type {
   CompletionMessage,
   CompletionParams,
@@ -65,64 +66,6 @@ const ANTHROPIC_KEY_PATTERN = /^sk-ant-api03-/;
  * Default maximum tokens for completions
  */
 const DEFAULT_MAX_TOKENS = 4096;
-
-/**
- * Model information for Anthropic models
- */
-const ANTHROPIC_MODELS: ModelInfo[] = [
-  {
-    id: "claude-sonnet-4-20250514",
-    name: "Claude Sonnet 4",
-    provider: "anthropic",
-    contextWindow: 200000,
-    maxOutputTokens: 16000,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: true,
-    supportsStreaming: true,
-    inputPrice: 3.0,
-    outputPrice: 15.0,
-  },
-  {
-    id: "claude-3-5-sonnet-20241022",
-    name: "Claude 3.5 Sonnet",
-    provider: "anthropic",
-    contextWindow: 200000,
-    maxOutputTokens: 8192,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: true,
-    supportsStreaming: true,
-    inputPrice: 3.0,
-    outputPrice: 15.0,
-  },
-  {
-    id: "claude-3-5-haiku-20241022",
-    name: "Claude 3.5 Haiku",
-    provider: "anthropic",
-    contextWindow: 200000,
-    maxOutputTokens: 8192,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    inputPrice: 0.8,
-    outputPrice: 4.0,
-  },
-  {
-    id: "claude-3-opus-20240229",
-    name: "Claude 3 Opus",
-    provider: "anthropic",
-    contextWindow: 200000,
-    maxOutputTokens: 4096,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    inputPrice: 15.0,
-    outputPrice: 75.0,
-  },
-];
 
 // =============================================================================
 // Provider Options

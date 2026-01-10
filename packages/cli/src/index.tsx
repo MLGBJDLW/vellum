@@ -114,6 +114,8 @@ export interface ChatOptions {
   fullAuto?: boolean;
   /** UI theme (dark, parchment, dracula, etc.) */
   theme?: string;
+  /** Force banner display on startup */
+  banner?: boolean;
 }
 
 /**
@@ -183,6 +185,7 @@ program
   .option("--full-auto", "Shortcut for --mode=vibe --approval=full-auto", false)
   // Theme selection
   .option("--theme <theme>", "UI theme (dark|parchment|dracula|etc.)", "parchment")
+  .option("--banner", "Show banner on startup", false)
   .action((options: ChatOptions) => {
     // T040: Apply --full-auto shortcut
     let effectiveMode = options.mode;
@@ -203,6 +206,7 @@ program
         approval={effectiveApproval}
         sandbox={options.sandbox}
         theme={options.theme as import("./tui/theme/index.js").ThemeName}
+        banner={options.banner}
       />
     );
   });

@@ -7,7 +7,7 @@
  * @module tui/components/Banner/useShimmer
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // =============================================================================
 // Types
@@ -17,12 +17,16 @@ import { useEffect, useState } from "react";
  * Configuration options for the shimmer animation.
  */
 export interface ShimmerConfig {
-  /** Duration of one complete shimmer cycle in milliseconds (default: 2000) */
+  /** Duration of one complete shimmer cycle in milliseconds (default: 3000) */
   readonly cycleDuration?: number;
-  /** Update interval in milliseconds (default: 50) */
+  /** Update interval in milliseconds (default: 100) */
   readonly updateInterval?: number;
   /** Whether animation is enabled (default: true) */
   readonly enabled?: boolean;
+  /** Maximum number of cycles before stopping (undefined = infinite) */
+  readonly maxCycles?: number;
+  /** Callback when max cycles reached */
+  readonly onComplete?: () => void;
 }
 
 /**
@@ -39,6 +43,10 @@ export interface ShimmerState {
   readonly pause: () => void;
   /** Resume the shimmer animation */
   readonly resume: () => void;
+  /** Current cycle count (0-based) */
+  readonly cycleCount: number;
+  /** Whether max cycles completed */
+  readonly isComplete: boolean;
 }
 
 // =============================================================================
@@ -48,8 +56,30 @@ export interface ShimmerState {
 /** Default shimmer cycle duration (3 seconds - slower for smoother effect) */
 const DEFAULT_CYCLE_DURATION = 3000;
 
-/** Default update interval (150ms = ~6.7fps - optimized for performance) */
-const DEFAULT_UPDATE_INTERVAL = 150;
+/** Default update interval (100ms = 10fps for smoother motion without aggressive redraws) */
+const DEFAULT_UPDATE_INTERVAL = resolveDefaultUpdateInterval();
+
+const SHIMMER_DEBUG_ENABLED =
+  process.env.VELLUM_TUI_SHIMMER_DEBUG === "1" || process.env.VELLUM_TUI_SHIMMER_DEBUG === "true";
+
+function resolveDefaultUpdateInterval(): number {
+  const intervalOverride = Number(process.env.VELLUM_TUI_SHIMMER_INTERVAL_MS);
+  if (Number.isFinite(intervalOverride) && intervalOverride > 0) {
+    return Math.round(intervalOverride);
+  }
+
+  const fpsOverride = Number(process.env.VELLUM_TUI_SHIMMER_FPS);
+  if (Number.isFinite(fpsOverride) && fpsOverride > 0) {
+    return Math.max(16, Math.round(1000 / fpsOverride));
+  }
+
+  return 100;
+}
+
+function debugShimmer(message: string): void {
+  if (!SHIMMER_DEBUG_ENABLED) return;
+  process.stderr.write(`[shimmer] ${message}\n`);
+}
 
 // =============================================================================
 // Hook Implementation
@@ -74,33 +104,94 @@ export function useShimmer(config: ShimmerConfig = {}): ShimmerState {
     cycleDuration = DEFAULT_CYCLE_DURATION,
     updateInterval = DEFAULT_UPDATE_INTERVAL,
     enabled = true,
+    maxCycles,
+    onComplete,
   } = config;
 
   const [position, setPosition] = useState(0);
   const [isActive, setIsActive] = useState(enabled);
+  const [cycleCount, setCycleCount] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
+
+  const positionRef = useRef(0);
+  const cycleCountRef = useRef(0);
+  const lastTickRef = useRef<number | null>(null);
+  const lastDebugRef = useRef<number>(0);
+
+  // Track onComplete callback in ref to avoid effect re-runs
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || isComplete) return;
 
-    // Use simpler incremental position update for better performance
-    const step = updateInterval / cycleDuration;
-    // Start from current position (captured at effect setup time)
-    let currentPosition = 0;
+    lastTickRef.current = Date.now();
 
     const timer = setInterval(() => {
-      currentPosition = (currentPosition + step) % 1;
-      setPosition(currentPosition);
+      const now = Date.now();
+      const lastTick = lastTickRef.current ?? now;
+      lastTickRef.current = now;
+
+      const deltaMs = now - lastTick;
+      const step = deltaMs / cycleDuration;
+      let nextPosition = positionRef.current + step;
+
+      if (nextPosition >= 1) {
+        const cyclesCompleted = Math.floor(nextPosition);
+        const updatedCycleCount = cycleCountRef.current + cyclesCompleted;
+        cycleCountRef.current = updatedCycleCount;
+        setCycleCount(updatedCycleCount);
+
+        if (maxCycles !== undefined && updatedCycleCount >= maxCycles) {
+          clearInterval(timer);
+          setIsActive(false);
+          setIsComplete(true);
+          // Set final position to a nice resting state (golden ratio position)
+          positionRef.current = 0.618;
+          setPosition(0.618);
+          onCompleteRef.current?.();
+          return;
+        }
+
+        nextPosition = nextPosition % 1;
+      }
+
+      positionRef.current = nextPosition;
+      setPosition(nextPosition);
+
+      if (SHIMMER_DEBUG_ENABLED) {
+        const lastDebug = lastDebugRef.current;
+        if (now - lastDebug >= 1000) {
+          lastDebugRef.current = now;
+          debugShimmer(
+            `deltaMs=${deltaMs.toFixed(1)} position=${nextPosition.toFixed(3)} cycle=${cycleCountRef.current}`
+          );
+        }
+      }
     }, updateInterval);
 
     return () => clearInterval(timer);
-  }, [isActive, cycleDuration, updateInterval]);
+  }, [isActive, cycleDuration, updateInterval, maxCycles, isComplete]);
+
+  useEffect(() => {
+    if (enabled && !isComplete) {
+      setIsActive(true);
+      return;
+    }
+
+    if (!enabled) {
+      setIsActive(false);
+    }
+  }, [enabled, isComplete]);
 
   // Calculate intensity using cosine for smooth falloff
   // Peak intensity at current position, smoothly fading around it
   const intensity = Math.cos(position * Math.PI * 2 - Math.PI) * 0.5 + 0.5;
 
   const pause = () => setIsActive(false);
-  const resume = () => setIsActive(true);
+  const resume = () => {
+    if (!isComplete) setIsActive(true);
+  };
 
   return {
     position,
@@ -108,6 +199,8 @@ export function useShimmer(config: ShimmerConfig = {}): ShimmerState {
     isActive,
     pause,
     resume,
+    cycleCount,
+    isComplete,
   };
 }
 

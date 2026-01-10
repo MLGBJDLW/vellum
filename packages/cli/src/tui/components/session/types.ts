@@ -84,6 +84,17 @@ export interface SessionPickerProps {
   readonly sessions: readonly SessionMetadata[];
   /** ID of the currently active session */
   readonly activeSessionId?: string;
+  /**
+   * Optional loader for real preview messages.
+   *
+   * When provided, SessionPicker will fetch messages for the selected session
+   * and cache results per session id.
+   *
+   * Return null when preview is unavailable.
+   */
+  readonly loadPreviewMessages?: (
+    sessionId: string
+  ) => Promise<readonly SessionPreviewMessage[] | null>;
   /** Callback when a session is selected */
   readonly onSelect: (sessionId: string) => void;
   /** Callback to close the picker */

@@ -33,7 +33,9 @@ export type ProviderType =
   | "moonshot"
   | "mistral"
   | "yi"
-  | "baichuan";
+  | "baichuan"
+  | "doubao"
+  | "minimax";
 
 // =============================================================================
 // T002: Provider Options and Completion Parameters

@@ -96,7 +96,17 @@
     "model": "切换模型",
     "theme": "切换主题",
     "history": "显示历史",
-    "compact": "切换紧凑模式"
+    "compact": "切换紧凑模式",
+    "categories": {
+      "system": "系统",
+      "workflow": "工作流",
+      "session": "会话",
+      "navigation": "导航",
+      "tools": "工具",
+      "config": "配置",
+      "auth": "认证",
+      "debug": "调试"
+    }
   },
   "errors": {
     "connectionFailed": "连接失败",
@@ -129,7 +139,10 @@
     "selectProvider": "选择您的 AI 提供商：",
     "providerNav": "使用 ↑/↓ 导航，Enter 确认选择",
     "apiKeyRequired": "(需要 API Key)",
-    "noApiKeyNeeded": "(本地运行，无需 API Key)"
+    "noApiKeyNeeded": "(本地运行，无需 API Key)",
+    "selectMode": "选择您的编码模式：",
+    "modeNav": "使用 ↑/↓ 导航，Enter 确认选择",
+    "modeSwitchHint": "您可以随时使用 /mode 更改"
   },
   "providers": {
     "anthropic": {

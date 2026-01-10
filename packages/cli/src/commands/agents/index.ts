@@ -256,6 +256,11 @@ export const agentsCommand: SlashCommand = {
     "/agents validate ./AGENTS.md - Validate specific file",
     "/agents generate --dry-run  - Preview generated config",
   ],
+  subcommands: [
+    { name: "show", description: "Show agent details" },
+    { name: "validate", description: "Validate agents" },
+    { name: "generate", description: "Generate agent" },
+  ],
 
   execute: executeAgents,
 };

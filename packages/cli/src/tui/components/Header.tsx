@@ -1,7 +1,7 @@
 import type { CodingMode } from "@vellum/core";
 import { getIcons } from "@vellum/shared";
 import { Box, Text } from "ink";
-import { useTheme } from "../theme/index.js";
+import { interpolateColor, useShimmer } from "./Banner/index.js";
 
 // =============================================================================
 // Constants
@@ -10,11 +10,10 @@ import { useTheme } from "../theme/index.js";
 /** Goldenrod brand color */
 const BRAND_COLOR = "#DAA520";
 
-/** Mode icons for the badge */
-const MODE_ICONS: Record<CodingMode, string> = {
-  vibe: "◐",
-  plan: "◇",
-  spec: "◈",
+/** Parchment gradient colors for shimmer effect */
+const PARCHMENT_COLORS = {
+  dark: "#8B4513", // Saddle Brown
+  light: "#FFD700", // Gold
 };
 
 // =============================================================================
@@ -26,39 +25,42 @@ interface HeaderProps {
   mode?: CodingMode;
   /** Current spec phase for spec mode (T056) */
   specPhase?: number;
+  /** Whether shimmer animation is enabled (default: true) */
+  animated?: boolean;
 }
 
 // =============================================================================
 // Main Component
 // =============================================================================
 
-export function Header({ mode, specPhase }: HeaderProps) {
+export function Header({ mode: _mode, specPhase: _specPhase, animated = true }: HeaderProps) {
   const icons = getIcons();
-  const { theme } = useTheme();
+  const { position } = useShimmer({
+    cycleDuration: 3000,
+    enabled: animated,
+  });
 
-  // Get mode badge content
-  const modeIcon = mode ? MODE_ICONS[mode] : "◐";
-  const modeName = mode ?? "vibe";
-  const phaseDisplay = mode === "spec" && specPhase ? ` ${specPhase}/6` : "";
+  // Calculate color based on shimmer position
+  // position 0-0.5: dark → light, position 0.5-1: light → dark
+  // Using sine wave for smooth transition
+  const color = animated
+    ? interpolateColor(PARCHMENT_COLORS.dark, PARCHMENT_COLORS.light, Math.sin(position * Math.PI))
+    : BRAND_COLOR;
+
+  // Mode badge removed - now displayed in StatusBar footer instead
+  // Props kept for API compatibility
 
   return (
     <Box flexDirection="row" justifyContent="space-between" width="100%">
       {/* Left: Logo */}
       <Box>
-        <Text bold color={BRAND_COLOR}>
+        <Text bold color={color}>
           {icons.logo} Vellum
         </Text>
       </Box>
 
-      {/* Right: Mode Badge */}
-      <Box>
-        <Text color={theme.semantic.text.muted}>[</Text>
-        <Text color={BRAND_COLOR}>
-          {modeIcon} {modeName}
-        </Text>
-        {phaseDisplay && <Text color={theme.semantic.text.secondary}>{phaseDisplay}</Text>}
-        <Text color={theme.semantic.text.muted}>]</Text>
-      </Box>
+      {/* Right: Empty - mode indicator moved to StatusBar */}
+      <Box />
     </Box>
   );
 }

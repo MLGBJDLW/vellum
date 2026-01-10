@@ -24,15 +24,27 @@ export {
   Banner,
   type BannerProps,
   CompactBanner,
+  HeaderBanner,
+  type HeaderBannerProps,
   MinimalBanner,
 } from "./Banner.js";
+// Shimmer context for shared timer
+export {
+  ShimmerProvider,
+  type ShimmerProviderProps,
+  useIsInShimmerProvider,
+  useSharedShimmer,
+} from "./ShimmerContext.js";
+
 // Shimmer text component
 export {
   BannerShimmerText,
   type BannerShimmerTextProps,
+  interpolateColor,
   MultiLineShimmer,
   type MultiLineShimmerProps,
 } from "./ShimmerText.js";
+
 // Shimmer animation hook
 export {
   calculateShimmerIntensity,

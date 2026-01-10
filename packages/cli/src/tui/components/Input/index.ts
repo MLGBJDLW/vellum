@@ -4,7 +4,11 @@
  * Components for user input handling in the Vellum TUI.
  */
 
-export { Autocomplete, type AutocompleteProps } from "./Autocomplete.js";
+export {
+  Autocomplete,
+  type AutocompleteOption,
+  type AutocompleteProps,
+} from "./Autocomplete.js";
 export {
   CommandInput,
   type CommandInputProps,

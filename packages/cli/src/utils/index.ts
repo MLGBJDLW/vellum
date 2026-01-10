@@ -6,14 +6,19 @@
  * @module cli/utils
  */
 
+// For backward compatibility, also export ModelMetadata as an alias
+export type { ModelInfo as ModelMetadata } from "@vellum/provider";
+
+// Re-export model utilities from @vellum/provider (Single Source of Truth)
 export {
   calculateCost,
   getContextWindow,
   getModelInfo,
   getProviderModels,
   getSupportedProviders,
-  type ModelMetadata,
-} from "./model-info.js";
+  type ModelInfo,
+} from "@vellum/provider";
+
 export {
   formatResumeHint,
   getShortId,

@@ -14,6 +14,7 @@ import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { HotkeyHints } from "./common/HotkeyHints.js";
 
 // =============================================================================
 // Types
@@ -264,6 +265,23 @@ export function MemoryPanel({
   const { theme } = useTheme();
   const { t } = useTUITranslation();
 
+  const hints = useMemo(
+    () => [
+      {
+        keys: process.platform === "win32" ? "Ctrl/Alt+K" : "Ctrl+\\ / Alt+K",
+        label: "Sidebar",
+      },
+      { keys: "Ctrl/Alt+G", label: "Tools" },
+      { keys: "Ctrl/Alt+O", label: "MCP" },
+      { keys: "Ctrl/Alt+P", label: "Memory" },
+      { keys: "Ctrl/Alt+T", label: "Todo" },
+      { keys: "Ctrl+S", label: "Sessions" },
+      { keys: "Ctrl+Z", label: "Undo" },
+      { keys: "Ctrl+Y", label: "Redo" },
+    ],
+    []
+  );
+
   // Track selection and scroll
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -363,7 +381,7 @@ export function MemoryPanel({
       <Box flexDirection="column" paddingX={1}>
         <Box marginBottom={1}>
           <Text color={theme.colors.primary} bold>
-            📚 {t("memory.title")}
+            {t("memory.title")}
           </Text>
         </Box>
         <Text dimColor>{t("memory.empty")}</Text>
@@ -380,7 +398,7 @@ export function MemoryPanel({
       {/* Header */}
       <Box marginBottom={1} paddingX={1}>
         <Text color={theme.colors.primary} bold>
-          📚 {t("memory.title")}
+          {t("memory.title")}
         </Text>
         <Text dimColor>
           {" "}
@@ -423,8 +441,9 @@ export function MemoryPanel({
 
       {/* Help hint */}
       {isFocused && (
-        <Box marginTop={1} paddingX={1}>
+        <Box marginTop={1} paddingX={1} flexDirection="column">
           <Text dimColor>{t("memory.keybindings")}</Text>
+          <HotkeyHints hints={hints} />
         </Box>
       )}
     </Box>

@@ -10,7 +10,7 @@
 import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "../../theme/index.js";
 import { SessionPreview } from "./SessionPreview.js";
 import type { SessionMetadata, SessionPickerProps, SessionPreviewMessage } from "./types.js";
@@ -66,24 +66,22 @@ function truncateText(text: string, maxLength: number): string {
 }
 
 /**
- * Generate mock preview messages from session metadata.
- * In a real implementation, this would fetch actual messages.
+ * Build a minimal preview from session metadata.
+ * Used as a graceful fallback when message preview data is unavailable.
  */
-function getMockPreviewMessages(session: SessionMetadata): SessionPreviewMessage[] {
+function buildFallbackPreviewMessages(session: SessionMetadata): SessionPreviewMessage[] {
   const messages: SessionPreviewMessage[] = [];
 
-  // Add a mock user message
   messages.push({
-    id: `${session.id}-preview-user`,
+    id: `${session.id}-preview-fallback-title`,
     role: "user",
     content: session.title,
-    timestamp: new Date(session.timestamp.getTime() - 60000), // 1 minute before
+    timestamp: new Date(Math.max(0, session.timestamp.getTime() - 60000)),
   });
 
-  // Add a mock assistant response if there's a last message
   if (session.lastMessage) {
     messages.push({
-      id: `${session.id}-preview-assistant`,
+      id: `${session.id}-preview-fallback-last`,
       role: "assistant",
       content: session.lastMessage,
       timestamp: session.timestamp,
@@ -168,6 +166,7 @@ function PickerItem({
 export function SessionPicker({
   sessions,
   activeSessionId,
+  loadPreviewMessages,
   onSelect,
   onClose,
   isOpen,
@@ -194,11 +193,60 @@ export function SessionPicker({
   // Get selected session
   const selectedSession = sessions[selectedIndex];
 
-  // Get preview messages for selected session
-  const previewMessages = useMemo(
-    () => (selectedSession ? getMockPreviewMessages(selectedSession) : []),
-    [selectedSession]
-  );
+  // Preview messages cache and state (performance: cache per session id)
+  const previewCacheRef = useRef<Map<string, readonly SessionPreviewMessage[]>>(new Map());
+  const [previewMessages, setPreviewMessages] = useState<readonly SessionPreviewMessage[]>([]);
+  const previewRequestIdRef = useRef(0);
+
+  // Keep preview messages in sync with selected session.
+  // Uses cache when available; otherwise loads via loadPreviewMessages and stores per id.
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (!selectedSession) {
+      setPreviewMessages([]);
+      return;
+    }
+
+    const cached = previewCacheRef.current.get(selectedSession.id);
+    if (cached) {
+      setPreviewMessages(cached);
+      return;
+    }
+
+    previewRequestIdRef.current += 1;
+    const requestId = previewRequestIdRef.current;
+
+    const load = async () => {
+      if (!loadPreviewMessages) {
+        const fallback = buildFallbackPreviewMessages(selectedSession);
+        previewCacheRef.current.set(selectedSession.id, fallback);
+        if (previewRequestIdRef.current === requestId) {
+          setPreviewMessages(fallback);
+        }
+        return;
+      }
+
+      try {
+        const loaded = await loadPreviewMessages(selectedSession.id);
+        const messages = loaded ?? buildFallbackPreviewMessages(selectedSession);
+        previewCacheRef.current.set(selectedSession.id, messages);
+        if (previewRequestIdRef.current === requestId) {
+          setPreviewMessages(messages);
+        }
+      } catch {
+        const fallback = buildFallbackPreviewMessages(selectedSession);
+        previewCacheRef.current.set(selectedSession.id, fallback);
+        if (previewRequestIdRef.current === requestId) {
+          setPreviewMessages(fallback);
+        }
+      }
+    };
+
+    void load();
+  }, [isOpen, selectedSession, loadPreviewMessages]);
 
   // Scroll indicators
   const canScrollUp = scrollOffset > 0;

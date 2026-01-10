@@ -38,6 +38,14 @@ export interface TextInputProps {
   readonly focused?: boolean;
   /** Minimum height in lines (default: 1 for single-line, 3 for multiline) */
   readonly minHeight?: number;
+  /** Optional mask character for password-style input */
+  readonly mask?: string;
+  /** When true, suppress Enter from submitting (for autocomplete integration) */
+  readonly suppressEnter?: boolean;
+  /** When true, move cursor to end of value on next render */
+  readonly cursorToEnd?: boolean;
+  /** Callback when cursorToEnd is consumed */
+  readonly onCursorMoved?: () => void;
 }
 
 // =============================================================================
@@ -111,14 +119,21 @@ export function TextInput({
   maxLength,
   focused = true,
   minHeight,
+  mask,
+  suppressEnter = false,
+  cursorToEnd = false,
+  onCursorMoved,
 }: TextInputProps) {
   const { theme } = useTheme();
 
-  // Calculate effective min height (default 3 for multiline, 1 for single-line)
-  const effectiveMinHeight = minHeight ?? (multiline ? 3 : 1);
+  // Calculate effective min height (default 5 for multiline, 1 for single-line)
+  const effectiveMinHeight = minHeight ?? (multiline ? 5 : 1);
 
   // Cursor position within the value
   const [cursorPosition, setCursorPosition] = useState(value.length);
+
+  // Track if Enter was handled externally (e.g., by autocomplete)
+  const [enterHandledExternally, setEnterHandledExternally] = useState(false);
 
   // Sync cursor position when value changes externally
   useEffect(() => {
@@ -126,6 +141,21 @@ export function TextInput({
       setCursorPosition(value.length);
     }
   }, [value, cursorPosition]);
+
+  // Handle cursorToEnd prop - move cursor to end when requested
+  useEffect(() => {
+    if (cursorToEnd) {
+      setCursorPosition(value.length);
+      onCursorMoved?.();
+    }
+  }, [cursorToEnd, value.length, onCursorMoved]);
+
+  // Update enterHandledExternally when suppressEnter changes
+  useEffect(() => {
+    if (suppressEnter) {
+      setEnterHandledExternally(true);
+    }
+  }, [suppressEnter]);
 
   /**
    * Handle character input
@@ -302,13 +332,17 @@ export function TextInput({
    */
   const handleReturn = useCallback(
     (ctrl: boolean) => {
+      // Skip if Enter was already handled externally (e.g., by autocomplete)
+      if (enterHandledExternally) {
+        return;
+      }
       if (multiline && !ctrl) {
         handleNewline();
       } else {
         handleSubmit();
       }
     },
-    [multiline, handleNewline, handleSubmit]
+    [multiline, handleNewline, handleSubmit, enterHandledExternally]
   );
 
   /**
@@ -400,9 +434,10 @@ export function TextInput({
 
   const isEmpty = value.length === 0;
   const showPlaceholder = isEmpty && placeholder;
+  const displayValue = mask ? value.replace(/./g, mask) : value;
 
   // Split value into lines for multiline display
-  const lines = multiline ? value.split("\n") : [value];
+  const lines = multiline ? displayValue.split("\n") : [displayValue];
 
   // Pre-calculate line start positions for stable keys and rendering
   const lineData = useMemo(() => {

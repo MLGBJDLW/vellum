@@ -109,6 +109,14 @@ export interface AppendToMessageAction {
 }
 
 /**
+ * Replace the entire message list
+ */
+export interface SetMessagesAction {
+  readonly type: "SET_MESSAGES";
+  readonly messages: readonly Message[];
+}
+
+/**
  * Clear all messages
  */
 export interface ClearMessagesAction {
@@ -130,6 +138,7 @@ export type MessagesAction =
   | AddMessageAction
   | UpdateMessageAction
   | AppendToMessageAction
+  | SetMessagesAction
   | ClearMessagesAction
   | SetStreamingAction;
 
@@ -202,6 +211,16 @@ function messagesReducer(state: MessagesState, action: MessagesAction): Messages
       };
     }
 
+    case "SET_MESSAGES": {
+      const updatedMessages = [...action.messages];
+      const isStreaming = updatedMessages.some((m) => m.isStreaming === true);
+      return {
+        ...state,
+        messages: updatedMessages,
+        isStreaming,
+      };
+    }
+
     case "CLEAR_MESSAGES":
       return {
         ...initialState,
@@ -256,6 +275,8 @@ export interface MessagesContextValue {
   readonly updateMessage: (id: string, updates: Partial<Omit<Message, "id">>) => void;
   /** Append content to a message (for streaming) */
   readonly appendToMessage: (id: string, content: string) => void;
+  /** Replace the entire message list */
+  readonly setMessages: (messages: readonly Message[]) => void;
   /** Clear all messages */
   readonly clearMessages: () => void;
 }
@@ -408,6 +429,13 @@ export function MessagesProvider({
   }, []);
 
   /**
+   * Replace the entire message list
+   */
+  const setMessages = useCallback((messages: readonly Message[]): void => {
+    dispatch({ type: "SET_MESSAGES", messages });
+  }, []);
+
+  /**
    * Memoized context value
    */
   const contextValue = useMemo<MessagesContextValue>(
@@ -418,9 +446,10 @@ export function MessagesProvider({
       addMessage,
       updateMessage,
       appendToMessage,
+      setMessages,
       clearMessages,
     }),
-    [state, addMessage, updateMessage, appendToMessage, clearMessages]
+    [state, addMessage, updateMessage, appendToMessage, setMessages, clearMessages]
   );
 
   return <MessagesContext value={contextValue}>{children}</MessagesContext>;

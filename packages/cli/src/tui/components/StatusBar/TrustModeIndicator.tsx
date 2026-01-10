@@ -47,17 +47,17 @@ interface TrustModeConfig {
 const TRUST_MODE_CONFIG: Record<TrustMode, TrustModeConfig> = {
   ask: {
     icon: "◎",
-    label: "Ask",
+    label: "Approval: Ask",
     description: "Manual approval required",
   },
   auto: {
     icon: "◉",
-    label: "Auto",
+    label: "Approval: Auto",
     description: "Auto-approve safe actions",
   },
   full: {
     icon: "●",
-    label: "Full",
+    label: "Approval: Full",
     description: "Auto-approve all actions",
   },
 };

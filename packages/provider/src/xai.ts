@@ -7,6 +7,7 @@
  * @module @vellum/provider/xai
  */
 
+import { XAI_MODELS } from "./models/providers/xai.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo } from "./types.js";
 
@@ -50,47 +51,7 @@ export class XAIProvider extends OpenAICompatibleProvider {
    * @returns Array of available xAI models
    */
   protected getModelCatalog(): ModelInfo[] {
-    return [
-      {
-        id: "grok-2",
-        name: "Grok 2",
-        provider: "xai",
-        contextWindow: 131072,
-        maxOutputTokens: 32768,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 2.0,
-        outputPrice: 10.0,
-      },
-      {
-        id: "grok-2-mini",
-        name: "Grok 2 Mini",
-        provider: "xai",
-        contextWindow: 131072,
-        maxOutputTokens: 32768,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.2,
-        outputPrice: 1.0,
-      },
-      {
-        id: "grok-beta",
-        name: "Grok Beta",
-        provider: "xai",
-        contextWindow: 131072,
-        maxOutputTokens: 32768,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 5.0,
-        outputPrice: 15.0,
-      },
-    ];
+    return XAI_MODELS;
   }
 
   /**

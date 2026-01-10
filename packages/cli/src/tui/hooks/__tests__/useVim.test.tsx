@@ -329,6 +329,41 @@ describe("useVim", () => {
     });
   });
 
+  describe("Ctrl hotkeys in Vim mode", () => {
+    it.each([
+      ["o"], // Ctrl+O (MCP panel)
+      ["p"], // Ctrl+P (Memory)
+      ["t"], // Ctrl+T (Todo)
+      ["g"], // Ctrl+G (Tools)
+      ["z"], // Ctrl+Z (Backtrack undo)
+      ["y"], // Ctrl+Y (Backtrack redo)
+    ])("does not handle Ctrl+%s in NORMAL mode", (key) => {
+      const result = renderVimHook();
+      result.current.toggle();
+      result.rerender();
+
+      const action = result.current.handleKey(key, { ctrl: true });
+      result.rerender();
+
+      expect(action).toBeNull();
+      expect(result.current.mode).toBe("NORMAL");
+    });
+
+    it("does not handle Ctrl+y in VISUAL mode", () => {
+      const result = renderVimHook();
+      result.current.toggle();
+      result.rerender();
+      result.current.setMode("VISUAL");
+      result.rerender();
+
+      const action = result.current.handleKey("y", { ctrl: true });
+      result.rerender();
+
+      expect(action).toBeNull();
+      expect(result.current.mode).toBe("VISUAL");
+    });
+  });
+
   describe("INSERT mode", () => {
     it("returns to NORMAL mode on escape", () => {
       const result = renderVimHook();

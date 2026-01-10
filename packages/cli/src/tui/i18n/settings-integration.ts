@@ -18,6 +18,7 @@ import { isLocaleSupported, type LocaleCode } from "./language-config.js";
  */
 interface VellumSettings {
   language?: LocaleCode;
+  bannerSeen?: boolean;
   [key: string]: unknown;
 }
 
@@ -163,4 +164,28 @@ export function clearSavedLanguage(): void {
   // Remove the language property while preserving others
   const { language: _, ...rest } = settings;
   writeSettings(rest as VellumSettings);
+}
+
+/**
+ * Check whether the startup banner has been shown before.
+ *
+ * @returns True if the banner has been shown, false otherwise
+ */
+export function getBannerSeen(): boolean {
+  const settings = readSettings();
+  return settings?.bannerSeen === true;
+}
+
+/**
+ * Persist the banner seen flag.
+ *
+ * @param seen - Whether the banner has been shown
+ */
+export function setBannerSeen(seen: boolean): void {
+  const existingSettings = readSettings() ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    bannerSeen: seen,
+  };
+  writeSettings(newSettings);
 }

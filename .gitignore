@@ -26,6 +26,9 @@ Thumbs.db
 npm-debug.log*
 pnpm-debug.log*
 
+# Tool reports
+biome-report.json
+
 # Test coverage
 coverage/
 

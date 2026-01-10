@@ -7,6 +7,7 @@
  * @module @vellum/provider/yi
  */
 
+import { YI_MODELS } from "./models/providers/yi.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo } from "./types.js";
 
@@ -51,73 +52,7 @@ export class YiProvider extends OpenAICompatibleProvider {
    * @returns Array of available Yi models
    */
   protected getModelCatalog(): ModelInfo[] {
-    return [
-      {
-        id: "yi-large",
-        name: "Yi Large",
-        provider: "yi",
-        contextWindow: 32000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.12,
-        outputPrice: 0.12,
-      },
-      {
-        id: "yi-large-turbo",
-        name: "Yi Large Turbo",
-        provider: "yi",
-        contextWindow: 16000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.012,
-        outputPrice: 0.012,
-      },
-      {
-        id: "yi-medium",
-        name: "Yi Medium",
-        provider: "yi",
-        contextWindow: 16000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.0025,
-        outputPrice: 0.0025,
-      },
-      {
-        id: "yi-medium-200k",
-        name: "Yi Medium 200K",
-        provider: "yi",
-        contextWindow: 200000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.012,
-        outputPrice: 0.012,
-      },
-      {
-        id: "yi-vision",
-        name: "Yi Vision",
-        provider: "yi",
-        contextWindow: 16000,
-        maxOutputTokens: 4096,
-        supportsTools: false,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.006,
-        outputPrice: 0.006,
-      },
-    ];
+    return YI_MODELS;
   }
 
   /**

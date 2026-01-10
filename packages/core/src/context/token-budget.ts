@@ -12,6 +12,7 @@
  * @see REQ-TOK-002 Token Budget Allocation
  */
 
+import { getContextWindow } from "@vellum/provider";
 import type { TokenBudget } from "./types.js";
 
 // ============================================================================
@@ -32,46 +33,6 @@ const MODEL_RESERVE_THRESHOLDS = [
   { maxContext: 128_000, reserve: 30_000 },
   { maxContext: 200_000, reserve: 40_000 },
 ] as const;
-
-/**
- * Common model context window sizes.
- *
- * Maps model identifiers to their maximum context window in tokens.
- * Used by `getModelContextWindow()` for lookup.
- */
-const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
-  // Anthropic
-  "claude-3-5-sonnet": 200_000,
-  "claude-3-5-haiku": 200_000,
-  "claude-3-opus": 200_000,
-  "claude-3-sonnet": 200_000,
-  "claude-3-haiku": 200_000,
-  "claude-2": 100_000,
-
-  // OpenAI
-  "gpt-4o": 128_000,
-  "gpt-4o-mini": 128_000,
-  "gpt-4-turbo": 128_000,
-  "gpt-4": 8_192,
-  "gpt-3.5-turbo": 16_385,
-  o1: 200_000,
-  "o1-mini": 128_000,
-  "o1-preview": 128_000,
-  o3: 200_000,
-  "o3-mini": 200_000,
-
-  // Google
-  "gemini-2.0-flash": 1_048_576,
-  "gemini-1.5-pro": 2_097_152,
-  "gemini-1.5-flash": 1_048_576,
-
-  // DeepSeek
-  "deepseek-chat": 64_000,
-  "deepseek-coder": 64_000,
-
-  // Default fallback
-  default: 128_000,
-} as const;
 
 /** Default system reserve when not specified */
 const DEFAULT_SYSTEM_RESERVE = 4_000;
@@ -287,43 +248,65 @@ export function calculateBudgetUsage(currentTokens: number, budget: TokenBudget)
  * @param modelId - Model identifier (e.g., "claude-3-5-sonnet", "gpt-4o")
  * @returns Context window size in tokens
  *
- * @example Exact match
+ * @example With provider
  * ```typescript
- * getModelContextWindow('claude-3-5-sonnet'); // 200_000
- * getModelContextWindow('gpt-4o');            // 128_000
+ * getModelContextWindow('anthropic', 'claude-3-5-sonnet'); // 200_000
+ * getModelContextWindow('openai', 'gpt-4o');               // 128_000
  * ```
  *
  * @example Partial match (version suffix)
  * ```typescript
- * getModelContextWindow('claude-3-5-sonnet-20241022'); // 200_000
- * getModelContextWindow('gpt-4o-2024-08-06');          // 128_000
+ * getModelContextWindow('anthropic', 'claude-3-5-sonnet-20241022'); // 200_000
+ * getModelContextWindow('openai', 'gpt-4o-2024-08-06');             // 128_000
  * ```
  *
  * @example Unknown model (fallback)
  * ```typescript
- * getModelContextWindow('unknown-model'); // 128_000 (default)
+ * getModelContextWindow('openai', 'unknown-model'); // 128_000 (default)
+ * ```
+ *
+ * @example Legacy single-argument (backward compatible)
+ * ```typescript
+ * getModelContextWindow('gpt-4o'); // Uses 'openai' as default provider
  * ```
  */
-export function getModelContextWindow(modelId: string): number {
-  // Normalize model ID to lowercase for matching
-  const normalizedId = modelId.toLowerCase();
-
-  // Try exact match first
-  const exactMatch = MODEL_CONTEXT_WINDOWS[normalizedId];
-  if (exactMatch !== undefined) {
-    return exactMatch;
-  }
-
-  // Try prefix matching for versioned model names
-  // e.g., "claude-3-5-sonnet-20241022" should match "claude-3-5-sonnet"
-  for (const [knownModel, windowSize] of Object.entries(MODEL_CONTEXT_WINDOWS)) {
-    if (knownModel !== "default" && normalizedId.startsWith(knownModel)) {
-      return windowSize;
+export function getModelContextWindow(providerOrModel: string, modelId?: string): number {
+  // Support legacy single-argument usage
+  if (modelId === undefined) {
+    // Legacy: try to infer provider from model name
+    const model = providerOrModel.toLowerCase();
+    if (
+      model.includes("claude") ||
+      model.includes("haiku") ||
+      model.includes("opus") ||
+      model.includes("sonnet")
+    ) {
+      return getContextWindow("anthropic", providerOrModel);
     }
+    if (model.includes("gemini")) {
+      return getContextWindow("google", providerOrModel);
+    }
+    if (model.includes("deepseek")) {
+      return getContextWindow("deepseek", providerOrModel);
+    }
+    if (model.includes("grok")) {
+      return getContextWindow("xai", providerOrModel);
+    }
+    if (model.includes("qwen")) {
+      return getContextWindow("qwen", providerOrModel);
+    }
+    if (model.includes("mistral") || model.includes("codestral")) {
+      return getContextWindow("mistral", providerOrModel);
+    }
+    if (model.includes("llama") || model.includes("mixtral")) {
+      return getContextWindow("groq", providerOrModel);
+    }
+    // Default to OpenAI for unknown models
+    return getContextWindow("openai", providerOrModel);
   }
 
-  // Fallback to default (128K)
-  return MODEL_CONTEXT_WINDOWS.default ?? 128_000;
+  // New: use provider and model directly
+  return getContextWindow(providerOrModel, modelId);
 }
 
 // ============================================================================

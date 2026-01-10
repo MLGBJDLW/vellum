@@ -15,7 +15,7 @@
  * Large VELLUM ASCII Art with scroll decorations.
  * Designed for terminals 80+ columns wide.
  */
-export const VELLUM_LARGE = `
+export const VELLUM_LARGE = trimAscii(`
     ╭─────────────────────────────────────────────────────────────────────────╮
     │  ┌───────────────────────────────────────────────────────────────────┐  │
     │  │                                                                   │  │
@@ -30,7 +30,7 @@ export const VELLUM_LARGE = `
     │  │                                                                   │  │
     │  └───────────────────────────────────────────────────────────────────┘  │
     ╰─────────────────────────────────────────────────────────────────────────╯
-`.trim();
+`);
 
 // =============================================================================
 // Medium ASCII Art (60-79 columns)
@@ -40,7 +40,7 @@ export const VELLUM_LARGE = `
  * Medium VELLUM ASCII Art.
  * Designed for terminals 60-79 columns wide.
  */
-export const VELLUM_MEDIUM = `
+export const VELLUM_MEDIUM = trimAscii(`
   ╭───────────────────────────────────────────────────────╮
   │ ┌─────────────────────────────────────────────────┐   │
   │ │                                                 │   │
@@ -54,7 +54,7 @@ export const VELLUM_MEDIUM = `
   │ │       ~ Ancient Wisdom for Modern Code ~        │   │
   │ └─────────────────────────────────────────────────┘   │
   ╰───────────────────────────────────────────────────────╯
-`.trim();
+`);
 
 // =============================================================================
 // Small ASCII Art (40-59 columns)
@@ -64,7 +64,7 @@ export const VELLUM_MEDIUM = `
  * Small VELLUM ASCII Art.
  * Designed for terminals 40-59 columns wide.
  */
-export const VELLUM_SMALL = `
+export const VELLUM_SMALL = trimAscii(`
 ╭────────────────────────────────────╮
 │ ╔════════════════════════════════╗ │
 │ ║  ╦  ╦╔═╗╦  ╦  ╦ ╦╔╦╗           ║ │
@@ -74,7 +74,7 @@ export const VELLUM_SMALL = `
 │ ║ ~ Ancient Wisdom, Modern Code ~║ │
 │ ╚════════════════════════════════╝ │
 ╰────────────────────────────────────╯
-`.trim();
+`);
 
 // =============================================================================
 // Minimal ASCII Art (<40 columns)
@@ -84,13 +84,13 @@ export const VELLUM_SMALL = `
  * Minimal VELLUM display.
  * For very narrow terminals.
  */
-export const VELLUM_MINIMAL = `
+export const VELLUM_MINIMAL = trimAscii(`
 ╭────────────────────╮
 │ ╔════════════════╗ │
 │ ║  V E L L U M   ║ │
 │ ╚════════════════╝ │
 ╰────────────────────╯
-`.trim();
+`);
 
 // =============================================================================
 // Scroll Decorations
@@ -99,18 +99,18 @@ export const VELLUM_MINIMAL = `
 /**
  * Top scroll decoration for parchment effect.
  */
-export const SCROLL_TOP = `
+export const SCROLL_TOP = trimAscii(`
     ════╣ ◊ ╠═══════════════════════════════════════════════════════════╣ ◊ ╠════
     ╔═══════════════════════════════════════════════════════════════════════════╗
-`.trim();
+`);
 
 /**
  * Bottom scroll decoration for parchment effect.
  */
-export const SCROLL_BOTTOM = `
+export const SCROLL_BOTTOM = trimAscii(`
     ╚═══════════════════════════════════════════════════════════════════════════╝
     ════╣ ◊ ╠═══════════════════════════════════════════════════════════╣ ◊ ╠════
-`.trim();
+`);
 
 // =============================================================================
 // Utility Functions
@@ -145,3 +145,11 @@ export const ASCII_VARIANTS = {
 } as const;
 
 export type AsciiVariant = keyof typeof ASCII_VARIANTS;
+
+// =============================================================================
+// Internal Helpers
+// =============================================================================
+
+function trimAscii(value: string): string {
+  return value.replace(/^\n/, "").trimEnd();
+}

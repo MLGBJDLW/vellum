@@ -7,6 +7,7 @@
  * @module @vellum/provider/mistral
  */
 
+import { MISTRAL_MODELS } from "./models/providers/mistral.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo } from "./types.js";
 
@@ -53,99 +54,7 @@ export class MistralProvider extends OpenAICompatibleProvider {
    * @returns Array of available Mistral models
    */
   protected getModelCatalog(): ModelInfo[] {
-    return [
-      {
-        id: "mistral-large-latest",
-        name: "Mistral Large",
-        provider: "mistral",
-        contextWindow: 128000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: true,
-        supportsStreaming: true,
-        inputPrice: 2.0,
-        outputPrice: 6.0,
-      },
-      {
-        id: "mistral-small-latest",
-        name: "Mistral Small",
-        provider: "mistral",
-        contextWindow: 32000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.1,
-        outputPrice: 0.3,
-      },
-      {
-        id: "codestral-latest",
-        name: "Codestral",
-        provider: "mistral",
-        contextWindow: 32000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.3,
-        outputPrice: 0.9,
-      },
-      {
-        id: "open-mixtral-8x22b",
-        name: "Open Mixtral 8x22B",
-        provider: "mistral",
-        contextWindow: 64000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 2.0,
-        outputPrice: 6.0,
-      },
-      {
-        id: "open-mixtral-8x7b",
-        name: "Open Mixtral 8x7B",
-        provider: "mistral",
-        contextWindow: 32000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.7,
-        outputPrice: 0.7,
-      },
-      {
-        id: "open-mistral-7b",
-        name: "Open Mistral 7B",
-        provider: "mistral",
-        contextWindow: 32000,
-        maxOutputTokens: 8192,
-        supportsTools: false,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.25,
-        outputPrice: 0.25,
-      },
-      {
-        id: "pixtral-large-latest",
-        name: "Pixtral Large",
-        provider: "mistral",
-        contextWindow: 128000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 2.0,
-        outputPrice: 6.0,
-      },
-    ];
+    return MISTRAL_MODELS;
   }
 
   /**

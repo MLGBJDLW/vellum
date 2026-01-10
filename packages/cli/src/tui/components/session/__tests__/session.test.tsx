@@ -10,6 +10,7 @@
 import { getIcons } from "@vellum/shared";
 import { render } from "ink-testing-library";
 import type React from "react";
+import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/index.js";
 import { SessionItem } from "../SessionItem.js";
@@ -311,5 +312,97 @@ describe("SessionPicker", () => {
 
     // Preview should show the session title
     expect(lastFrame()).toContain("Debug Session");
+  });
+
+  it("loads real preview messages when loadPreviewMessages is provided", async () => {
+    const sessions = [createTestSession({ id: "s1", title: "Session 1" })];
+
+    const loadPreviewMessages = vi.fn(async () => {
+      return [
+        {
+          id: "m1",
+          role: "user" as const,
+          content: "Loaded user message",
+          timestamp: new Date("2025-12-30T10:00:00"),
+        },
+        {
+          id: "m2",
+          role: "assistant" as const,
+          content: "Loaded assistant message",
+          timestamp: new Date("2025-12-30T10:01:00"),
+        },
+      ];
+    });
+
+    const { lastFrame } = renderWithTheme(
+      <SessionPicker
+        sessions={sessions}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        isOpen={true}
+        loadPreviewMessages={loadPreviewMessages}
+      />
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(loadPreviewMessages).toHaveBeenCalledWith("s1");
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Loaded user message");
+    // The preview panel may truncate content depending on available space.
+    // Assert stable indicators that the assistant message exists.
+    expect(frame).toContain("2 messages");
+    expect(frame).toContain("Assistant");
+  });
+
+  it("caches preview messages per session id", async () => {
+    const sessions = [
+      createTestSession({ id: "s1", title: "Session 1" }),
+      createTestSession({ id: "s2", title: "Session 2" }),
+    ];
+
+    const loadPreviewMessages = vi.fn(async (sessionId: string) => {
+      return [
+        {
+          id: `preview-${sessionId}`,
+          role: "assistant" as const,
+          content: `Preview for ${sessionId}`,
+          timestamp: new Date("2025-12-30T10:01:00"),
+        },
+      ];
+    });
+
+    const { stdin } = renderWithTheme(
+      <SessionPicker
+        sessions={sessions}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        isOpen={true}
+        loadPreviewMessages={loadPreviewMessages}
+      />
+    );
+
+    // Initial selection loads s1
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // Move down to s2
+    await act(async () => {
+      stdin.write("\u001b[B");
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // Move back up to s1 (should hit cache, no new load)
+    await act(async () => {
+      stdin.write("\u001b[A");
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(loadPreviewMessages).toHaveBeenCalledTimes(2);
+    expect(loadPreviewMessages).toHaveBeenNthCalledWith(1, "s1");
+    expect(loadPreviewMessages).toHaveBeenNthCalledWith(2, "s2");
   });
 });

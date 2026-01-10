@@ -70,6 +70,10 @@ export {
 } from "./theme/index.js";
 export type { AgentConfig, AgentState } from "./types/agent.js";
 export type { Message, MessageRole } from "./types/message.js";
+/**
+ * @deprecated Import ModelInfo from @vellum/provider instead.
+ * @deprecated Import ProviderConfig from @vellum/core instead.
+ */
 export type { ModelInfo, ProviderConfig } from "./types/provider.js";
 export type { Result } from "./types/result.js";
 // Result type (shared to avoid circular deps between core and provider)

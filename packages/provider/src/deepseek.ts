@@ -7,6 +7,7 @@
  * @module @vellum/provider/deepseek
  */
 
+import { DEEPSEEK_MODELS } from "./models/providers/deepseek.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo } from "./types.js";
 
@@ -50,47 +51,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
    * @returns Array of available DeepSeek models
    */
   protected getModelCatalog(): ModelInfo[] {
-    return [
-      {
-        id: "deepseek-chat",
-        name: "DeepSeek Chat",
-        provider: "deepseek",
-        contextWindow: 64000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.14,
-        outputPrice: 0.28,
-      },
-      {
-        id: "deepseek-coder",
-        name: "DeepSeek Coder",
-        provider: "deepseek",
-        contextWindow: 64000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.14,
-        outputPrice: 0.28,
-      },
-      {
-        id: "deepseek-reasoner",
-        name: "DeepSeek Reasoner",
-        provider: "deepseek",
-        contextWindow: 64000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: true,
-        supportsStreaming: true,
-        inputPrice: 0.55,
-        outputPrice: 2.19,
-      },
-    ];
+    return DEEPSEEK_MODELS;
   }
 
   /**

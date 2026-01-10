@@ -15,3 +15,4 @@ export {
 } from "./PermissionDialog.js";
 export { ToolCall, type ToolCallProps } from "./ToolCall.js";
 export { ToolParams, type ToolParamsProps } from "./ToolParams.js";
+export { ToolsPanel, type ToolsPanelProps } from "./ToolsPanel.js";

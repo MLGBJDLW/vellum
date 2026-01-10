@@ -7,15 +7,11 @@
  * @module tui/components/ModelSelector
  */
 
+import { getProviderModels, getSupportedProviders, type ModelInfo } from "@vellum/provider";
 import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
-import {
-  getProviderModels,
-  getSupportedProviders,
-  type ModelMetadata,
-} from "../../utils/model-info.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 
@@ -46,7 +42,7 @@ export interface ModelSelectorProps {
  */
 interface ModelOption {
   provider: string;
-  model: ModelMetadata;
+  model: ModelInfo;
 }
 
 // =============================================================================
@@ -278,8 +274,8 @@ export function ModelSelector({
                     <Box marginLeft={4}>
                       <Text dimColor>
                         {icons.context} {formatContextWindow(opt.model.contextWindow)} ctx •{" "}
-                        {formatPrice(opt.model.inputPricePer1M)} in •{" "}
-                        {formatPrice(opt.model.outputPricePer1M)} out
+                        {formatPrice(opt.model.inputPrice ?? 0)} in •{" "}
+                        {formatPrice(opt.model.outputPrice ?? 0)} out
                       </Text>
                     </Box>
                   )}

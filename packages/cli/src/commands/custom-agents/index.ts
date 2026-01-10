@@ -353,6 +353,14 @@ export const customAgentsCommand: SlashCommand = {
     "/custom-agents export my-agent -o ./out.yaml",
     "/custom-agents import ./agent.yaml       - Import agent",
   ],
+  subcommands: [
+    { name: "list", description: "List custom agents", aliases: ["ls"] },
+    { name: "create", description: "Create custom agent" },
+    { name: "validate", description: "Validate agent" },
+    { name: "edit", description: "Edit agent" },
+    { name: "export", description: "Export agent" },
+    { name: "import", description: "Import agent" },
+  ],
 
   execute: executeCustomAgents,
 };

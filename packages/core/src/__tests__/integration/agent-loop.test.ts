@@ -10,6 +10,7 @@
 
 import type { TokenUsage } from "@vellum/provider";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
 import type { SessionMessage } from "../../session/index.js";
 import { type PermissionChecker, ToolExecutor } from "../../tool/index.js";
@@ -80,7 +81,7 @@ describe("AgentLoop Integration (T034)", () => {
     vi.clearAllMocks();
 
     mockPermissionChecker = {
-      checkPermission: vi.fn().mockResolvedValue({ allowed: true }),
+      checkPermission: vi.fn().mockResolvedValue("allow"),
     };
 
     mockToolExecutor = new ToolExecutor({
@@ -160,15 +161,15 @@ describe("AgentLoop Integration (T034)", () => {
         createMockStream(events) as ReturnType<typeof LLM.stream>
       );
 
-      // Mock tool execution
-      vi.spyOn(mockToolExecutor, "executeWithPermissionCheck").mockResolvedValue({
-        status: "completed",
-        result: {
-          result: { success: true, output: "file contents" },
-          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 10 },
-          toolName: "read_file",
-          callId: "tool-1",
+      // Register a mock tool and mock its execution
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "read_file",
+          description: "Mock read_file tool",
+          parameters: z.object({ path: z.string() }),
+          kind: "read",
         },
+        execute: vi.fn(async () => ({ success: true as const, output: "file contents" })),
       });
 
       const loop = new AgentLoop(config);
@@ -188,6 +189,68 @@ describe("AgentLoop Integration (T034)", () => {
       expect(toolCalls[0]).toEqual({ id: "tool-1", name: "read_file" });
       expect(toolStarts).toContain("tool-1:read_file");
       expect(toolEnds).toContain("tool-1:read_file");
+    });
+
+    it("resumes tool execution after permission is granted", async () => {
+      const events = [
+        {
+          type: "toolCall",
+          id: "tool-ask-1",
+          name: "test_tool",
+          input: { value: "x" },
+        },
+        { type: "done", stopReason: "tool_use" },
+      ];
+
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream(events) as ReturnType<typeof LLM.stream>
+      );
+
+      const askPermissionChecker: PermissionChecker = {
+        checkPermission: vi.fn().mockResolvedValue("ask"),
+      };
+
+      const executor = new ToolExecutor({
+        permissionChecker: askPermissionChecker,
+      });
+
+      const toolExecute = vi.fn(async () => ({ success: true as const, output: "ok" }));
+      executor.registerTool({
+        definition: {
+          name: "test_tool",
+          description: "Mock tool that requires approval",
+          parameters: z.object({ value: z.string() }),
+          kind: "read",
+        },
+        execute: toolExecute,
+      });
+
+      const loop = new AgentLoop({
+        ...config,
+        toolExecutor: executor,
+        permissionChecker: askPermissionChecker,
+      });
+
+      const eventOrder: string[] = [];
+      loop.on("permissionRequired", () => {
+        eventOrder.push("permissionRequired");
+        // grant after pendingPermission has been registered
+        setTimeout(() => loop.grantPermission(), 0);
+      });
+      loop.on("permissionGranted", () => eventOrder.push("permissionGranted"));
+      loop.on("toolStart", () => eventOrder.push("toolStart"));
+      loop.on("toolEnd", () => eventOrder.push("toolEnd"));
+
+      loop.addMessage(createSessionMessage("user", "Use tool"));
+      await loop.run();
+
+      expect(toolExecute).toHaveBeenCalledTimes(1);
+      expect(eventOrder).toEqual([
+        "permissionRequired",
+        "permissionGranted",
+        "toolStart",
+        "toolEnd",
+      ]);
     });
 
     it("tracks token usage correctly", async () => {
@@ -334,14 +397,14 @@ describe("AgentLoop Integration (T034)", () => {
         createMockStream(events) as ReturnType<typeof LLM.stream>
       );
 
-      vi.spyOn(mockToolExecutor, "executeWithPermissionCheck").mockResolvedValue({
-        status: "completed",
-        result: {
-          result: { success: true, output: "done" },
-          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 5 },
-          toolName: "test_tool",
-          callId: "tool-1",
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "test_tool",
+          description: "Mock test_tool",
+          parameters: z.object({}),
+          kind: "read",
         },
+        execute: vi.fn(async () => ({ success: true as const, output: "done" })),
       });
 
       const loop = new AgentLoop(config);

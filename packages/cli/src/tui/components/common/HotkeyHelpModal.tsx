@@ -149,7 +149,7 @@ export function HotkeyHelpModal({
       {/* Title */}
       <Box marginBottom={1}>
         <Text color={theme.colors.primary} bold>
-          ⌨️ {title}
+          {title}
         </Text>
       </Box>
 

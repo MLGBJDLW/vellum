@@ -7,6 +7,12 @@
  * @module tui/context/ToolsContext
  */
 
+import type {
+  AskContext,
+  PermissionAskHandler,
+  PermissionInfo,
+  PermissionResponse,
+} from "@vellum/core";
 import React, {
   createContext,
   type Dispatch,
@@ -15,6 +21,7 @@ import React, {
   useContext,
   useMemo,
   useReducer,
+  useRef,
 } from "react";
 
 // =============================================================================
@@ -44,6 +51,28 @@ export interface ToolExecution {
   readonly params: Record<string, unknown>;
   /** Current status of the execution */
   readonly status: ToolExecutionStatus;
+  /** Result of the execution, if completed */
+  readonly result?: unknown;
+  /** Error that occurred during execution */
+  readonly error?: Error;
+  /** Timestamp when execution started */
+  readonly startedAt?: Date;
+  /** Timestamp when execution completed */
+  readonly completedAt?: Date;
+}
+
+/**
+ * Input shape for creating a new execution.
+ *
+ * Status defaults to "pending" for backwards compatibility with existing UI/tests.
+ */
+export interface NewToolExecution {
+  /** Name of the tool being executed */
+  readonly toolName: string;
+  /** Parameters passed to the tool */
+  readonly params: Record<string, unknown>;
+  /** Initial status (default: "pending") */
+  readonly status?: ToolExecutionStatus;
   /** Result of the execution, if completed */
   readonly result?: unknown;
   /** Error that occurred during execution */
@@ -293,11 +322,17 @@ export interface ToolsContextValue {
   /** Tool executions pending approval */
   readonly pendingApproval: readonly ToolExecution[];
   /** Add a new tool execution, returns the generated ID */
-  readonly addExecution: (tool: Omit<ToolExecution, "id" | "status">) => string;
+  readonly addExecution: (tool: NewToolExecution) => string;
+  /** Register a tool callId -> executionId mapping for correlation */
+  readonly registerCallId: (callId: string, executionId: string) => void;
   /** Approve a pending tool execution */
   readonly approveExecution: (id: string) => void;
   /** Reject a pending tool execution */
   readonly rejectExecution: (id: string) => void;
+  /** Respond to a pending permission prompt associated with an execution */
+  readonly respondToPermissionRequest: (executionId: string, response: PermissionResponse) => void;
+  /** PermissionAskHandler that surfaces permission prompts through ToolsContext */
+  readonly permissionAskHandler: PermissionAskHandler;
   /** Approve all pending tool executions */
   readonly approveAll: () => void;
   /** Update an existing tool execution */
@@ -421,20 +456,70 @@ export function ToolsProvider({
     }
   );
 
+  // Correlate core ToolContext.callId -> ToolExecution.id
+  const callIdMapRef = useRef<Map<string, string>>(new Map());
+
+  type PendingResolver = {
+    readonly resolve: (result: PermissionResponse | undefined) => void;
+    readonly signal: AbortSignal;
+    readonly abortHandler: () => void;
+  };
+
+  // Pending permission prompts keyed by ToolExecution.id
+  const pendingPermissionResolversRef = useRef<Map<string, PendingResolver>>(new Map());
+
   /**
    * Add a new tool execution
    * @returns The generated execution ID
    */
-  const addExecution = useCallback((tool: Omit<ToolExecution, "id" | "status">): string => {
+  const addExecution = useCallback((tool: NewToolExecution): string => {
     const id = generateExecutionId();
+    const status: ToolExecutionStatus = tool.status ?? "pending";
     const fullExecution: ToolExecution = {
-      ...tool,
       id,
-      status: "pending",
+      toolName: tool.toolName,
+      params: tool.params,
+      status,
+      result: tool.result,
+      error: tool.error,
+      startedAt: tool.startedAt,
+      completedAt: tool.completedAt,
     };
     dispatch({ type: "ADD_EXECUTION", execution: fullExecution });
     return id;
   }, []);
+
+  /**
+   * Register callId mapping for correlation.
+   */
+  const registerCallId = useCallback((callId: string, executionId: string): void => {
+    callIdMapRef.current.set(callId, executionId);
+  }, []);
+
+  /**
+   * Respond to an active permission request (if any) associated with a ToolExecution.
+   */
+  const respondToPermissionRequest = useCallback(
+    (executionId: string, response: PermissionResponse): void => {
+      const pending = pendingPermissionResolversRef.current.get(executionId);
+
+      // Update UI state immediately.
+      dispatch({
+        type: response === "reject" ? "REJECT_EXECUTION" : "APPROVE_EXECUTION",
+        id: executionId,
+      });
+
+      if (!pending) {
+        return;
+      }
+
+      // Clean up abort handler and resolve the ask promise.
+      pending.signal.removeEventListener("abort", pending.abortHandler);
+      pendingPermissionResolversRef.current.delete(executionId);
+      pending.resolve(response);
+    },
+    []
+  );
 
   /**
    * Approve a pending tool execution
@@ -449,6 +534,74 @@ export function ToolsProvider({
   const rejectExecution = useCallback((id: string): void => {
     dispatch({ type: "REJECT_EXECUTION", id });
   }, []);
+
+  /**
+   * Ask handler implementation that drives permission prompts through ToolsContext.
+   *
+   * This allows core permission checks to block until the user responds in the TUI.
+   */
+  const permissionAskHandler: PermissionAskHandler = useCallback(
+    async (info: PermissionInfo, context: AskContext): Promise<PermissionResponse | undefined> => {
+      const toolNameFromMeta =
+        typeof info.metadata?.toolName === "string"
+          ? (info.metadata.toolName as string)
+          : undefined;
+
+      const toolName =
+        toolNameFromMeta ??
+        info.title
+          .replace(/^Allow\s+/i, "")
+          .replace(/\?$/, "")
+          .trim();
+
+      const paramsFromMeta =
+        info.metadata && typeof info.metadata.params === "object" && info.metadata.params !== null
+          ? (info.metadata.params as Record<string, unknown>)
+          : {};
+
+      const mappedExecutionId = info.callId ? callIdMapRef.current.get(info.callId) : undefined;
+      const executionId =
+        mappedExecutionId ??
+        addExecution({
+          toolName,
+          params: paramsFromMeta,
+          status: "pending",
+        });
+
+      // Ensure the execution reflects the prompt state.
+      dispatch({
+        type: "UPDATE_EXECUTION",
+        id: executionId,
+        updates: {
+          toolName,
+          params: paramsFromMeta,
+          status: "pending",
+        },
+      });
+
+      return new Promise<PermissionResponse | undefined>((resolve) => {
+        const abortHandler = () => {
+          // Only resolve if this execution is still pending.
+          const pending = pendingPermissionResolversRef.current.get(executionId);
+          if (!pending || pending.resolve !== resolve) {
+            return;
+          }
+
+          pendingPermissionResolversRef.current.delete(executionId);
+          resolve(undefined);
+        };
+
+        pendingPermissionResolversRef.current.set(executionId, {
+          resolve,
+          signal: context.signal,
+          abortHandler,
+        });
+
+        context.signal.addEventListener("abort", abortHandler, { once: true });
+      });
+    },
+    [addExecution]
+  );
 
   /**
    * Approve all pending tool executions
@@ -481,8 +634,11 @@ export function ToolsProvider({
       executions: state.executions,
       pendingApproval: state.pendingApproval,
       addExecution,
+      registerCallId,
       approveExecution,
       rejectExecution,
+      respondToPermissionRequest,
+      permissionAskHandler,
       approveAll,
       updateExecution,
       clearExecutions,
@@ -490,8 +646,11 @@ export function ToolsProvider({
     [
       state,
       addExecution,
+      registerCallId,
       approveExecution,
       rejectExecution,
+      respondToPermissionRequest,
+      permissionAskHandler,
       approveAll,
       updateExecution,
       clearExecutions,

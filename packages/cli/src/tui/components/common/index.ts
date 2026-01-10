@@ -17,6 +17,9 @@ export {
   type HotkeyHelpModalProps,
 } from "./HotkeyHelpModal.js";
 
+// HotkeyHints (sidebar footer hints)
+export { type HotkeyHint, HotkeyHints, type HotkeyHintsProps } from "./HotkeyHints.js";
+
 // Spinner (Chain 21)
 export {
   LoadingIndicator,

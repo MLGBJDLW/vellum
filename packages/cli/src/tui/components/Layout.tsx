@@ -21,8 +21,8 @@ import { useTheme } from "../theme/index.js";
 // Constants
 // =============================================================================
 
-/** Compact mode threshold in columns */
-const COMPACT_THRESHOLD = 80;
+/** Compact mode threshold in columns (lowered from 80 for better sidebar visibility) */
+const COMPACT_THRESHOLD = 60;
 
 /** Default sidebar width percentage */
 const SIDEBAR_WIDTH_PERCENT = 25;
@@ -162,10 +162,10 @@ function SidebarRegion({ children, width, borderColor }: SidebarRegionProps): Re
       width={width}
       borderStyle="single"
       borderColor={borderColor}
-      borderRight={true}
+      borderRight={false}
       borderTop={false}
       borderBottom={false}
-      borderLeft={false}
+      borderLeft={true}
       paddingX={1}
     >
       {children}
@@ -248,7 +248,7 @@ export function Layout({
   compactMode,
 }: LayoutProps): React.JSX.Element {
   const { theme } = useTheme();
-  const { columns } = useTerminalSize();
+  const { columns, rows } = useTerminalSize();
 
   // Determine if we should be in compact mode
   const isCompact = useMemo(() => {
@@ -283,21 +283,21 @@ export function Layout({
   const sidebarBorderColor = theme.semantic.border.default;
 
   return (
-    <Box flexDirection="column" width="100%">
+    <Box flexDirection="column" width="100%" height={rows}>
       {/* Header Region */}
       {header && <HeaderRegion borderColor={headerBorderColor}>{header}</HeaderRegion>}
 
-      {/* Middle Section: Sidebar + Content */}
-      <Box flexDirection="row" flexGrow={1}>
-        {/* Sidebar Region (optional) */}
+      {/* Middle Section: Content + Sidebar (sidebar on right) */}
+      <Box flexDirection="row" flexGrow={1} minHeight={0}>
+        {/* Content Region */}
+        <ContentRegion>{children}</ContentRegion>
+
+        {/* Sidebar Region (optional, on right) */}
         {sidebarVisible && sidebar && (
           <SidebarRegion width={sidebarWidth} borderColor={sidebarBorderColor}>
             {sidebar}
           </SidebarRegion>
         )}
-
-        {/* Content Region */}
-        <ContentRegion>{children}</ContentRegion>
       </Box>
 
       {/* Footer Region */}

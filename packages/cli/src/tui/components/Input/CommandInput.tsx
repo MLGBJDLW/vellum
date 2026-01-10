@@ -11,6 +11,7 @@
 import { Box, useInput } from "ink";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useInputHistory } from "../../hooks/useInputHistory.js";
+import type { AutocompleteOption } from "./Autocomplete.js";
 import { Autocomplete } from "./Autocomplete.js";
 import { TextInput } from "./TextInput.js";
 
@@ -38,8 +39,16 @@ export interface CommandInputProps {
   readonly onMessage: (text: string) => void;
   /** Callback when a slash command is submitted */
   readonly onCommand: (command: SlashCommand) => void;
-  /** Available command names for validation (without slash prefix) */
-  readonly commands?: readonly string[];
+  /** Available command names for validation (without slash prefix) - string[] for backward compat */
+  readonly commands?: readonly string[] | readonly AutocompleteOption[];
+  /** Get subcommands for a command (for two-level autocomplete) */
+  readonly getSubcommands?: (commandName: string) => readonly AutocompleteOption[] | undefined;
+  /** Enable grouped display with categories (default: false) */
+  readonly groupedCommands?: boolean;
+  /** Category display order for grouped mode */
+  readonly categoryOrder?: readonly string[];
+  /** Category labels for i18n */
+  readonly categoryLabels?: Record<string, string>;
   /** Placeholder text shown when input is empty */
   readonly placeholder?: string;
   /** Disable input interactions */
@@ -197,6 +206,10 @@ export function CommandInput({
   onMessage,
   onCommand,
   commands,
+  getSubcommands,
+  groupedCommands = false,
+  categoryOrder,
+  categoryLabels,
   placeholder = "Type a message or /command...",
   disabled = false,
   focused = true,
@@ -205,14 +218,53 @@ export function CommandInput({
 }: CommandInputProps): React.ReactElement {
   const [value, setValue] = useState("");
 
+  // Track when autocomplete just completed (to suppress Enter and move cursor)
+  const [autocompleteJustCompleted, setAutocompleteJustCompleted] = useState(false);
+
   // Ref for TextInput to manage focus
   const inputRef = useRef<{ focus: () => void } | null>(null);
 
-  // Show autocomplete when typing slash commands
-  const showAutocomplete = useMemo(
-    () => value.startsWith("/") && value.length > 1 && !value.includes(" "),
-    [value]
-  );
+  // Slash autocomplete behavior:
+  // - Level 1: Command name completion (before first space)
+  // - Level 2: Subcommand completion (after first space)
+  // - Filter by the appropriate token based on level
+  // - Capture keys only when autocomplete should be active
+  const slashAutocomplete = useMemo(() => {
+    if (!value.startsWith("/")) {
+      return { visible: false, active: false, query: "", level: 1 as const, commandName: "" };
+    }
+
+    const withoutSlash = value.slice(1);
+    const spaceIndex = withoutSlash.indexOf(" ");
+
+    if (spaceIndex === -1) {
+      // Level 1: command name completion
+      return {
+        visible: true,
+        active: true,
+        query: withoutSlash,
+        level: 1 as const,
+        commandName: "",
+      };
+    }
+
+    // Level 2: subcommand completion
+    const commandName = withoutSlash.slice(0, spaceIndex);
+    const afterSpace = withoutSlash.slice(spaceIndex + 1);
+    // Check if there's a second space (args after subcommand)
+    const secondSpaceIndex = afterSpace.indexOf(" ");
+    const subQuery = secondSpaceIndex === -1 ? afterSpace : afterSpace.slice(0, secondSpaceIndex);
+    // Only active if we're still typing the subcommand (no second space yet)
+    const isActive = secondSpaceIndex === -1;
+
+    return {
+      visible: true,
+      active: isActive,
+      query: subQuery,
+      level: 2 as const,
+      commandName,
+    };
+  }, [value]);
 
   // Track if we're navigating history (to restore original input)
   const originalInputRef = useRef<string | null>(null);
@@ -281,11 +333,7 @@ export function CommandInput({
         const command = parseSlashCommand(trimmed);
 
         // Optional: validate command exists
-        if (commands && commands.length > 0 && !commands.includes(command.name)) {
-          // Command not in allowed list - still dispatch, let handler deal with it
-          // This allows for "unknown command" handling at a higher level
-        }
-
+        // Note: validation is done at a higher level, we just dispatch
         onCommand(command);
       } else {
         // Dispatch as regular message
@@ -295,12 +343,13 @@ export function CommandInput({
       // Clear input after submission
       setValue("");
     },
-    [addToHistory, commands, onCommand, onMessage]
+    [addToHistory, onCommand, onMessage]
   );
 
   /**
    * Handle up/down arrow keys for history navigation.
    * Only active when not in multiline mode (multiline uses arrows for cursor movement).
+   * Disabled when autocomplete is visible (autocomplete uses arrows for selection).
    */
   useInput(
     (_input, key) => {
@@ -310,41 +359,81 @@ export function CommandInput({
         handleHistoryDown();
       }
     },
-    { isActive: focused && !disabled && !multiline }
+    { isActive: focused && !disabled && !multiline && !slashAutocomplete.active }
   );
 
+  // Get autocomplete options based on level
+  const autocompleteOptions = useMemo(() => {
+    if (slashAutocomplete.level === 1) {
+      return commands ?? [];
+    }
+    // Level 2: get subcommands for the command
+    if (getSubcommands && slashAutocomplete.commandName) {
+      return getSubcommands(slashAutocomplete.commandName) ?? [];
+    }
+    return [];
+  }, [slashAutocomplete.level, slashAutocomplete.commandName, commands, getSubcommands]);
+
   // Handle autocomplete selection
-  const handleAutocompleteSelect = useCallback((cmd: string) => {
-    setValue(`/${cmd} `);
-    inputRef.current?.focus();
-  }, []);
+  const handleAutocompleteSelect = useCallback(
+    (selected: string) => {
+      if (slashAutocomplete.level === 1) {
+        // Level 1: selected is command name
+        setValue(`/${selected} `);
+      } else {
+        // Level 2: selected is subcommand name, preserve command
+        setValue(`/${slashAutocomplete.commandName} ${selected} `);
+      }
+      // Signal that autocomplete just completed - this will:
+      // 1. Suppress the next Enter from submitting
+      // 2. Move cursor to end of completed text
+      setAutocompleteJustCompleted(true);
+      inputRef.current?.focus();
+    },
+    [slashAutocomplete.level, slashAutocomplete.commandName]
+  );
 
   // Handle autocomplete cancel
   const handleAutocompleteCancel = useCallback(() => {
     inputRef.current?.focus();
   }, []);
 
+  // Callback when cursor has been moved to end (reset the flag)
+  const handleCursorMoved = useCallback(() => {
+    setAutocompleteJustCompleted(false);
+  }, []);
+
+  // Determine if autocomplete should be visible
+  const showAutocomplete = slashAutocomplete.visible && autocompleteOptions.length > 0;
+
   return (
     <Box flexDirection="column">
-      {/* Autocomplete dropdown - render above input */}
-      {showAutocomplete && commands && commands.length > 0 && (
-        <Autocomplete
-          input={value.slice(1)}
-          options={commands}
-          onSelect={handleAutocompleteSelect}
-          onCancel={handleAutocompleteCancel}
-          visible={showAutocomplete}
-        />
-      )}
       <TextInput
         value={value}
         onChange={handleChange}
         onSubmit={handleSubmit}
         placeholder={placeholder}
         disabled={disabled}
-        focused={focused && !showAutocomplete}
+        focused={focused}
         multiline={multiline}
+        suppressEnter={autocompleteJustCompleted}
+        cursorToEnd={autocompleteJustCompleted}
+        onCursorMoved={handleCursorMoved}
       />
+      {/* Autocomplete dropdown - render below input */}
+      {showAutocomplete && (
+        <Autocomplete
+          input={slashAutocomplete.query}
+          options={autocompleteOptions}
+          onSelect={handleAutocompleteSelect}
+          onCancel={handleAutocompleteCancel}
+          visible={slashAutocomplete.visible}
+          active={slashAutocomplete.active}
+          grouped={slashAutocomplete.level === 1 && groupedCommands}
+          categoryOrder={slashAutocomplete.level === 1 ? categoryOrder : undefined}
+          categoryLabels={slashAutocomplete.level === 1 ? categoryLabels : undefined}
+        />
+      )}
     </Box>
   );
 }

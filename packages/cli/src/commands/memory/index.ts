@@ -134,6 +134,11 @@ export const memoryCommand: SlashCommand = {
   kind: "builtin",
   category: "session",
   aliases: ["mem"],
+  subcommands: [
+    { name: "list", description: "List memories", aliases: ["ls"] },
+    { name: "search", description: "Search memories" },
+    { name: "export", description: "Export memories" },
+  ],
   execute: handleMemory,
 };
 

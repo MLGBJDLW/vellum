@@ -23,6 +23,7 @@ import type {
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
 import { createProviderError, ProviderError } from "./errors.js";
+import { OPENAI_MODELS } from "./models/providers/openai.js";
 import type {
   CompletionMessage,
   CompletionParams,
@@ -70,129 +71,6 @@ const O_SERIES_MODEL_PATTERN = /^o[13](-|$)/;
  * Default maximum tokens for completions
  */
 const DEFAULT_MAX_TOKENS = 4096;
-
-/**
- * Model information for OpenAI models
- */
-const OPENAI_MODELS: ModelInfo[] = [
-  {
-    id: "gpt-4o",
-    name: "GPT-4o",
-    provider: "openai",
-    contextWindow: 128000,
-    maxOutputTokens: 16384,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    inputPrice: 2.5,
-    outputPrice: 10.0,
-  },
-  {
-    id: "gpt-4o-mini",
-    name: "GPT-4o Mini",
-    provider: "openai",
-    contextWindow: 128000,
-    maxOutputTokens: 16384,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    inputPrice: 0.15,
-    outputPrice: 0.6,
-  },
-  {
-    id: "gpt-4-turbo",
-    name: "GPT-4 Turbo",
-    provider: "openai",
-    contextWindow: 128000,
-    maxOutputTokens: 4096,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    inputPrice: 10.0,
-    outputPrice: 30.0,
-  },
-  {
-    id: "gpt-4",
-    name: "GPT-4",
-    provider: "openai",
-    contextWindow: 8192,
-    maxOutputTokens: 4096,
-    supportsTools: true,
-    supportsVision: false,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    inputPrice: 30.0,
-    outputPrice: 60.0,
-  },
-  {
-    id: "o1",
-    name: "O1",
-    provider: "openai",
-    contextWindow: 200000,
-    maxOutputTokens: 100000,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: true,
-    supportsStreaming: false, // O-series doesn't support streaming
-    inputPrice: 15.0,
-    outputPrice: 60.0,
-  },
-  {
-    id: "o1-pro",
-    name: "O1 Pro",
-    provider: "openai",
-    contextWindow: 200000,
-    maxOutputTokens: 100000,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: true,
-    supportsStreaming: false,
-    inputPrice: 150.0,
-    outputPrice: 600.0,
-  },
-  {
-    id: "o1-mini",
-    name: "O1 Mini",
-    provider: "openai",
-    contextWindow: 128000,
-    maxOutputTokens: 65536,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: true,
-    supportsStreaming: false,
-    inputPrice: 3.0,
-    outputPrice: 12.0,
-  },
-  {
-    id: "o3",
-    name: "O3",
-    provider: "openai",
-    contextWindow: 200000,
-    maxOutputTokens: 100000,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: true,
-    supportsStreaming: false,
-    inputPrice: 20.0,
-    outputPrice: 80.0,
-  },
-  {
-    id: "o3-mini",
-    name: "O3 Mini",
-    provider: "openai",
-    contextWindow: 200000,
-    maxOutputTokens: 100000,
-    supportsTools: true,
-    supportsVision: true,
-    supportsReasoning: true,
-    supportsStreaming: false,
-    inputPrice: 1.1,
-    outputPrice: 4.4,
-  },
-];
 
 // =============================================================================
 // Provider Options

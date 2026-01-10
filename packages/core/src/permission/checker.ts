@@ -223,7 +223,7 @@ export class DefaultPermissionChecker implements PermissionChecker {
     }
 
     // Step 4: Ask user (if handler is set)
-    const askResult = await this.#askUser(toolName, permissionType, pattern, context);
+    const askResult = await this.#askUser(toolName, permissionType, pattern, params, context);
     this.#emitGrantedOrDenied(toolName, permissionType, askResult, context.sessionId, pattern);
     return askResult;
   }
@@ -469,6 +469,7 @@ export class DefaultPermissionChecker implements PermissionChecker {
     toolName: string,
     permissionType: PermissionType,
     pattern: string | undefined,
+    params: unknown,
     context: ToolContext
   ): Promise<PermissionResolutionResult> {
     // Check auto-approval limit
@@ -490,7 +491,15 @@ export class DefaultPermissionChecker implements PermissionChecker {
       {
         pattern,
         callId: context.callId,
-        metadata: { toolName },
+        metadata: {
+          toolName,
+          // Surface params for UI renderers (e.g., TUI PermissionDialog).
+          // NOTE: Callers should take care not to persist/log sensitive values.
+          params:
+            params && typeof params === "object" && params !== null
+              ? (params as Record<string, unknown>)
+              : { value: params },
+        },
       }
     );
 

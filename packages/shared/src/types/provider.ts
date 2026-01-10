@@ -6,12 +6,28 @@
  * - For Credential types: import { Credential, CredentialType } from "@vellum/core"
  * - For ConfigCredential: import { ConfigCredentialSchema } from "@vellum/core"
  * - For Provider interface: import { Provider } from "@vellum/provider"
+ * - For ModelInfo: import { ModelInfo } from "@vellum/provider"
  *
  * This file will be removed in a future version.
  */
 
 /**
- * @deprecated Use ConfigCredential from @vellum/core instead
+ * @deprecated Use ModelInfo from @vellum/provider instead.
+ * This is a stub type for backward compatibility during migration.
+ */
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+}
+
+/**
+ * @deprecated Use ConfigCredential from @vellum/core instead.
+ * Will be removed in a future version.
+ *
+ * Migration: import { LLMProviderSchema } from "@vellum/core"
  *
  * The apiKey field has been removed. Use the credential field from
  * LLMProviderSchema in @vellum/core for flexible credential management:
@@ -35,16 +51,4 @@ export interface ProviderConfig {
   // NOTE: apiKey field removed in T015B - use credential from @vellum/core
   baseUrl?: string;
   defaultModel: string;
-}
-
-/**
- * @deprecated Consider using provider-specific model info from @vellum/provider
- */
-export interface ModelInfo {
-  id: string;
-  name: string;
-  contextWindow: number;
-  maxOutputTokens: number;
-  supportsStreaming: boolean;
-  supportsTools: boolean;
 }

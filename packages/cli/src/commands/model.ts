@@ -12,8 +12,8 @@ import {
   getModelInfo,
   getProviderModels,
   getSupportedProviders,
-  type ModelMetadata,
-} from "../utils/model-info.js";
+  type ModelInfo,
+} from "@vellum/provider";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, success } from "./types.js";
 
@@ -109,11 +109,11 @@ function getProviderEmoji(provider: string): string {
 /**
  * Format model info for display.
  */
-function formatModelInfo(_provider: string, model: ModelMetadata, isCurrent: boolean): string {
+function formatModelInfo(_provider: string, model: ModelInfo, isCurrent: boolean): string {
   const marker = isCurrent ? " (current)" : "";
   const ctx = formatContextWindow(model.contextWindow);
-  const priceIn = formatPrice(model.inputPricePer1M);
-  const priceOut = formatPrice(model.outputPricePer1M);
+  const priceIn = formatPrice(model.inputPrice ?? 0);
+  const priceOut = formatPrice(model.outputPrice ?? 0);
   return `    ${model.name}${marker} [${ctx} ctx, ${priceIn}/${priceOut}]`;
 }
 
@@ -175,8 +175,8 @@ function showModelInfo(): CommandResult {
     lines.push(`Current: ${emoji} ${currentConfig.provider}/${info.name}`);
     lines.push(
       `  Context: ${formatContextWindow(info.contextWindow)} • ` +
-        `Input: ${formatPrice(info.inputPricePer1M)} • ` +
-        `Output: ${formatPrice(info.outputPricePer1M)}`
+        `Input: ${formatPrice(info.inputPrice ?? 0)} • ` +
+        `Output: ${formatPrice(info.outputPrice ?? 0)}`
     );
     lines.push("");
   } else {
@@ -253,8 +253,8 @@ function switchToModel(modelSpec: string): CommandResult {
     return success(
       `Switched to ${emoji} ${info.name}\n` +
         `  Context: ${formatContextWindow(info.contextWindow)} • ` +
-        `Input: ${formatPrice(info.inputPricePer1M)} • ` +
-        `Output: ${formatPrice(info.outputPricePer1M)}`
+        `Input: ${formatPrice(info.inputPrice ?? 0)} • ` +
+        `Output: ${formatPrice(info.outputPrice ?? 0)}`
     );
   }
 

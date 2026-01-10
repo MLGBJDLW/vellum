@@ -424,7 +424,7 @@ export const tutorialCommand: SlashCommand = {
   name: "tutorial",
   aliases: ["learn", "lessons"],
   description: "Interactive tutorials to learn Vellum",
-  category: "system",
+  category: "workflow",
   kind: "builtin",
   positionalArgs: [
     {
@@ -449,6 +449,15 @@ export const tutorialCommand: SlashCommand = {
     "/tutorial status          - Show progress",
     "/tutorial reset           - Reset all progress",
     "/tutorial reset basics    - Reset specific lesson",
+  ],
+  subcommands: [
+    { name: "start", description: "Start tutorial" },
+    { name: "stop", description: "Stop tutorial" },
+    { name: "next", description: "Next step" },
+    { name: "prev", description: "Previous step" },
+    { name: "status", description: "Show status" },
+    { name: "help", description: "Show help" },
+    { name: "demo", description: "Run demo" },
   ],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {

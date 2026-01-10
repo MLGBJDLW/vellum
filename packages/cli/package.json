@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "tsup src/index.tsx --format esm",
-    "dev": "tsx src/index.tsx",
+    "dev": "tsx src/index.tsx --banner",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
