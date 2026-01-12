@@ -101,7 +101,7 @@ export class TutorialSystem {
     // Check prerequisites
     const completedLessons = await this.progressTracker.getCompletedLessonIds();
     if (!checkPrerequisites(lessonId, completedLessons)) {
-      const unmet = lesson.prerequisites.filter((p) => !completedLessons.includes(p));
+      const unmet = lesson.prerequisites.filter((p: string) => !completedLessons.includes(p));
       throw new Error(`Prerequisites not met: ${unmet.join(", ")}`);
     }
 

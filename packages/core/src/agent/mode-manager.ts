@@ -5,6 +5,8 @@
 // ============================================
 
 import { EventEmitter } from "node:events";
+import type { AgentConfig } from "./agent-config.js";
+import { AgentRegistry } from "./agent-registry.js";
 import type { CodingMode, CodingModeConfig } from "./coding-modes.js";
 import { BUILTIN_CODING_MODES } from "./coding-modes.js";
 import { type DetectionResult, ModeDetector, type ModeDetectorConfig } from "./mode-detection.js";
@@ -249,6 +251,52 @@ export class ModeManager extends TypedEventEmitter {
    */
   getModeConfig(mode: CodingMode): CodingModeConfig {
     return this.modes[mode];
+  }
+
+  /**
+   * Get the AgentConfig for a coding mode.
+   *
+   * Resolves the agent via AgentRegistry using the mode's agentName.
+   * Falls back to a default worker agent config if no agentName is specified
+   * or if the agent is not found in the registry.
+   *
+   * @param mode - The CodingModeConfig to resolve agent for
+   * @returns The AgentConfig, or undefined if not found and no fallback available
+   *
+   * @example
+   * ```typescript
+   * const manager = new ModeManager();
+   * const modeConfig = manager.getModeConfig('vibe');
+   * const agentConfig = manager.getAgentConfig(modeConfig);
+   * console.log(agentConfig?.name); // 'vibe-agent'
+   * console.log(agentConfig?.level); // 2 (worker)
+   * ```
+   */
+  getAgentConfig(mode: CodingModeConfig): AgentConfig | undefined {
+    // If mode has an agentName, resolve via registry
+    if (mode.agentName) {
+      const registry = AgentRegistry.getInstance();
+      const agent = registry.get(mode.agentName);
+      if (agent) {
+        return agent;
+      }
+    }
+
+    // Fallback to default worker agent (vibe-agent)
+    const registry = AgentRegistry.getInstance();
+    return registry.get("vibe-agent");
+  }
+
+  /**
+   * Get the AgentConfig for the current mode.
+   *
+   * Convenience method that combines getCurrentMode and getAgentConfig.
+   *
+   * @returns The AgentConfig for the current mode
+   */
+  getCurrentAgentConfig(): AgentConfig | undefined {
+    const mode = this.getModeConfig(this.getCurrentMode());
+    return this.getAgentConfig(mode);
   }
 
   /**

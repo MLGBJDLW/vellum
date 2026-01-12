@@ -471,6 +471,8 @@ export interface StreamUsageEvent {
   inputTokens: number;
   /** Number of tokens in the output/completion */
   outputTokens: number;
+  /** Number of tokens used for thinking/reasoning (if applicable) */
+  thinkingTokens?: number;
   /** Number of tokens read from cache (if applicable) */
   cacheReadTokens?: number;
   /** Number of tokens written to cache (if applicable) */

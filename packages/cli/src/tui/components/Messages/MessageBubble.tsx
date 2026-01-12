@@ -10,7 +10,7 @@
 
 import { getIcons, getRoleBorderColor, getRoleTextColor, type VellumTheme } from "@vellum/shared";
 import { Box, Text } from "ink";
-import type { Message } from "../../context/MessagesContext.js";
+import type { Message, MessageTokenUsage } from "../../context/MessagesContext.js";
 import { useTheme } from "../../theme/index.js";
 import { StreamingText } from "./StreamingText.js";
 
@@ -30,6 +30,8 @@ export interface MessageBubbleProps {
   readonly showAvatar?: boolean;
   /** Whether to use compact mode for dense display (default: false) */
   readonly compact?: boolean;
+  /** Whether to show token usage for assistant messages (default: false) */
+  readonly showTokenUsage?: boolean;
 }
 
 // =============================================================================
@@ -44,6 +46,33 @@ function formatTimestamp(date: Date): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * Formats a number with K suffix for compact display.
+ */
+function formatTokens(count: number): string {
+  if (count < 1000) {
+    return count.toString();
+  }
+  const k = count / 1000;
+  return k >= 10 ? `${Math.round(k)}K` : `${k.toFixed(1)}K`;
+}
+
+/**
+ * Format token usage for inline display.
+ */
+function formatTokenUsage(usage: MessageTokenUsage): string {
+  const parts: string[] = [];
+  parts.push(`in=${formatTokens(usage.inputTokens)}`);
+  parts.push(`out=${formatTokens(usage.outputTokens)}`);
+  if (usage.thinkingTokens && usage.thinkingTokens > 0) {
+    parts.push(`think=${formatTokens(usage.thinkingTokens)}`);
+  }
+  if (usage.cacheReadTokens && usage.cacheReadTokens > 0) {
+    parts.push(`cache=${formatTokens(usage.cacheReadTokens)}`);
+  }
+  return `[tokens: ${parts.join(" ")}]`;
 }
 
 /**
@@ -134,6 +163,12 @@ function getAlignment(role: Message["role"]): "flex-start" | "center" | "flex-en
  *   message={message}
  *   compact
  * />
+ *
+ * // With token usage display
+ * <MessageBubble
+ *   message={message}
+ *   showTokenUsage
+ * />
  * ```
  */
 export function MessageBubble({
@@ -141,6 +176,7 @@ export function MessageBubble({
   showTimestamp = false,
   showAvatar = false,
   compact = false,
+  showTokenUsage = false,
 }: MessageBubbleProps): React.JSX.Element {
   const { theme } = useTheme();
 
@@ -159,6 +195,13 @@ export function MessageBubble({
   const paddingLeft = alignment === "flex-end" ? 4 : 0;
   const paddingRight = alignment === "flex-start" ? 4 : 0;
 
+  // Show token usage for assistant messages when enabled and available
+  const shouldShowTokens =
+    showTokenUsage &&
+    message.role === "assistant" &&
+    message.tokenUsage &&
+    !message.isStreaming;
+
   return (
     <Box
       flexDirection="column"
@@ -175,7 +218,7 @@ export function MessageBubble({
         paddingX={1}
         paddingY={compact ? 0 : 0}
       >
-        {/* Message header: avatar/icon, label, and timestamp */}
+        {/* Message header: avatar/icon, label, timestamp, and token usage */}
         <Box>
           <Text>
             {showAvatar && <>{icon} </>}
@@ -183,6 +226,12 @@ export function MessageBubble({
               {label}
             </Text>
             {showTimestamp && <Text color={mutedColor}> • {timestamp}</Text>}
+            {shouldShowTokens && message.tokenUsage && (
+              <Text color={mutedColor} dimColor>
+                {" "}
+                {formatTokenUsage(message.tokenUsage)}
+              </Text>
+            )}
             {message.isStreaming && (
               <Text color={mutedColor} italic>
                 {" "}

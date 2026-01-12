@@ -22,6 +22,7 @@
   "dependencies": {
     "@inquirer/prompts": "^7.2.1",
     "@vellum/core": "workspace:*",
+    "zod": "^4.3.5",
     "@vellum/lsp": "workspace:*",
     "@vellum/mcp": "workspace:*",
     "@vellum/plugin": "workspace:*",

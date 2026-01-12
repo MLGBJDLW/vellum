@@ -538,7 +538,6 @@ describe("TaskPacket Protocol", () => {
           description: "Worker",
           tools: { edit: true, bash: true },
           prompt: "Work",
-          level: AgentLevel.worker,
         },
       };
 

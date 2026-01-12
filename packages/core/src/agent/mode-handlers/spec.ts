@@ -13,6 +13,7 @@ import type {
   WorkflowResult,
 } from "../../spec/index.js";
 import { SpecWorkflowEngine } from "../../spec/index.js";
+import { BUILT_IN_AGENTS } from "../agent-config.js";
 import type { CodingModeConfig, SpecPhase, SpecPhaseToolAccess } from "../coding-modes.js";
 import { SPEC_PHASE_CONFIG, SPEC_PHASES } from "../coding-modes.js";
 import type { AgentLevel } from "../level.js";
@@ -494,11 +495,17 @@ export class SpecModeHandler extends BaseModeHandler {
 
   /**
    * Get the agent level for Spec mode.
+   * Level is looked up from the agent config via agentName.
    *
    * @returns AgentLevel.orchestrator
    */
   get agentLevel(): AgentLevel {
-    return this.config.level;
+    const agentName = this.config.agentName;
+    if (agentName && agentName in BUILT_IN_AGENTS) {
+      return BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS].level;
+    }
+    // Default to orchestrator level for spec mode
+    return 0 as AgentLevel;
   }
 
   /**
@@ -521,20 +528,29 @@ export class SpecModeHandler extends BaseModeHandler {
 
   /**
    * Check if this mode can spawn other agents.
+   * Looks up from the agent config via agentName.
    *
    * @returns true - Spec mode can spawn specialized agents
    */
   get canSpawnAgents(): boolean {
-    return this.config.canSpawnAgents !== undefined && this.config.canSpawnAgents.length > 0;
+    const agentName = this.config.agentName;
+    if (agentName && agentName in BUILT_IN_AGENTS) {
+      return BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS].canSpawnAgents;
+    }
+    return false;
   }
 
   /**
    * Get the list of agents this mode can spawn.
+   * Note: The specific agent list is now managed at the orchestrator level,
+   * not in the mode config.
    *
-   * @returns Array of agent slugs
+   * @returns Array of agent slugs (empty for now, managed externally)
    */
   get spawnableAgents(): string[] {
-    return this.config.canSpawnAgents ?? [];
+    // Spawnable agents are now managed at the orchestrator/registry level
+    // Return empty array - orchestrator determines what can be spawned
+    return [];
   }
 
   // ============================================

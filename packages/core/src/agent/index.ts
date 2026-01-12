@@ -2,6 +2,29 @@
 // Agent Module - Barrel Export
 // ============================================
 
+// Agent Config (T001, T002)
+export {
+  type AgentConfig,
+  AgentConfigSchema,
+  AgentLevel,
+  AgentLevelSchema,
+  BUILT_IN_AGENTS,
+  type FileRestrictions,
+  FileRestrictionsSchema,
+  PLAN_AGENT,
+  SPEC_ORCHESTRATOR,
+  VIBE_AGENT,
+} from "./agent-config.js";
+// Agent Factory (T050, T056)
+export {
+  AgentFactory,
+  type AgentFactoryOptions,
+  type AgentFactoryResult,
+  applyFactoryToConfig,
+  createAgentFactory,
+} from "./agent-factory.js";
+// Agent Registry (T003)
+export { AgentRegistry, DuplicateAgentError } from "./agent-registry.js";
 // Prompt System (T027)
 export * from "../prompts/index.js";
 export {
@@ -66,8 +89,8 @@ export {
   type NormalizationResult,
   normalizeMode,
 } from "./legacy-modes.js";
-// Agent Level Hierarchy (T001)
-export { AgentLevel, AgentLevelSchema, canSpawn } from "./level.js";
+// Agent Level Hierarchy (T001) - canSpawn function, T013 - canAgentSpawn function
+export { canAgentSpawn, canSpawn } from "./level.js";
 export {
   AgentLoop,
   type AgentLoopConfig,
@@ -136,7 +159,7 @@ export {
   TypedEventEmitter,
 } from "./mode-manager.js";
 // Mode Registry (T005)
-export { createModeRegistry, type ModeRegistry } from "./mode-registry.js";
+export { createModeRegistry, CUSTOM_AGENT_PREFIX, type ModeRegistry } from "./mode-registry.js";
 // Mode Switching (T031, T032, T033, T034)
 export {
   type ActivityTracker,

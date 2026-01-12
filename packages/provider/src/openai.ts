@@ -24,6 +24,8 @@ import type {
 } from "openai/resources/chat/completions";
 import { createProviderError, ProviderError } from "./errors.js";
 import { OPENAI_MODELS } from "./models/providers/openai.js";
+import { openaiTransform } from "./transforms/openai.js";
+import type { TransformConfig } from "./transforms/types.js";
 import type {
   CompletionMessage,
   CompletionParams,
@@ -460,13 +462,40 @@ export class OpenAIProvider {
   }
 
   /**
+   * Create transform config for OpenAI API calls.
+   * @param model - Optional model ID for model-specific features
+   */
+  protected createTransformConfig(model?: string): TransformConfig {
+    return {
+      provider: "openai",
+      modelId: model,
+    };
+  }
+
+  /**
    * Build the OpenAI API request from completion params
    */
   private buildRequest(
     params: CompletionParams,
     isOSeries: boolean
   ): ChatCompletionCreateParamsNonStreaming {
-    const messages = this.convertMessages(params.messages, isOSeries);
+    const config = this.createTransformConfig(params.model);
+    const { data: transformedMessages } = openaiTransform.transformMessages(
+      params.messages,
+      config
+    );
+    // Cast to SDK type and handle O-series system message conversion
+    const messages = (isOSeries
+      ? transformedMessages.map((m) => {
+          if (m.role === "system") {
+            return {
+              role: "user" as const,
+              content: `[System Instructions]\n${m.content}`,
+            };
+          }
+          return m;
+        })
+      : transformedMessages) as ChatCompletionMessageParam[];
 
     // Build base request
     const request: ChatCompletionCreateParamsNonStreaming = {
@@ -521,7 +550,13 @@ export class OpenAIProvider {
    * Build streaming request
    */
   private buildStreamingRequest(params: CompletionParams): ChatCompletionCreateParamsStreaming {
-    const messages = this.convertMessages(params.messages, false);
+    const config = this.createTransformConfig(params.model);
+    const { data: transformedMessages } = openaiTransform.transformMessages(
+      params.messages,
+      config
+    );
+    // Cast to SDK type
+    const messages = transformedMessages as ChatCompletionMessageParam[];
 
     const request: ChatCompletionCreateParamsStreaming = {
       model: params.model,
@@ -555,143 +590,6 @@ export class OpenAIProvider {
     }
 
     return request;
-  }
-
-  /**
-   * Convert our message format to OpenAI format
-   *
-   * For O-series models, system messages are converted to user messages
-   * as O-series doesn't support system role.
-   */
-  private convertMessages(
-    messages: CompletionMessage[],
-    isOSeries: boolean
-  ): ChatCompletionMessageParam[] {
-    return messages.map((m) => this.convertMessage(m, isOSeries));
-  }
-
-  /**
-   * Convert a single message to OpenAI format
-   */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Message conversion requires handling O-series, tools, and multimodal content
-  private convertMessage(
-    message: CompletionMessage,
-    isOSeries: boolean
-  ): ChatCompletionMessageParam {
-    // Handle system messages for O-series
-    let role: "system" | "user" | "assistant" = message.role;
-    if (isOSeries && message.role === "system") {
-      // O-series models don't support system role - convert to user
-      role = "user";
-    }
-
-    if (typeof message.content === "string") {
-      // For O-series, prefix system content to indicate it was a system message
-      const content =
-        isOSeries && message.role === "system"
-          ? `[System Instructions]\n${message.content}`
-          : message.content;
-
-      if (role === "assistant") {
-        return { role: "assistant", content };
-      } else if (role === "system") {
-        return { role: "system", content };
-      } else {
-        return { role: "user", content };
-      }
-    }
-
-    // Convert content parts
-    const content: OpenAI.Chat.ChatCompletionContentPart[] = [];
-    const toolCalls: OpenAI.Chat.ChatCompletionMessageToolCall[] = [];
-    let hasToolResults = false;
-    const toolResults: Array<{ toolCallId: string; content: string }> = [];
-
-    for (const part of message.content) {
-      switch (part.type) {
-        case "text":
-          content.push({ type: "text", text: part.text });
-          break;
-
-        case "image":
-          content.push({
-            type: "image_url",
-            image_url: {
-              url: part.source.startsWith("data:")
-                ? part.source
-                : `data:${part.mimeType};base64,${part.source}`,
-            },
-          });
-          break;
-
-        case "tool_use":
-          toolCalls.push({
-            id: part.id,
-            type: "function",
-            function: {
-              name: part.name,
-              arguments: JSON.stringify(part.input),
-            },
-          });
-          break;
-
-        case "tool_result":
-          hasToolResults = true;
-          toolResults.push({
-            toolCallId: part.toolUseId,
-            content: typeof part.content === "string" ? part.content : JSON.stringify(part.content),
-          });
-          break;
-      }
-    }
-
-    // Handle tool results as separate tool role messages
-    if (hasToolResults && toolResults.length > 0) {
-      // Return first tool result; others will need separate messages
-      // This is a simplification - in practice, tool results should be
-      // passed as separate messages in the conversation
-      const firstResult = toolResults[0];
-      if (!firstResult) {
-        throw new Error("Unexpected empty tool results array");
-      }
-      return {
-        role: "tool",
-        tool_call_id: firstResult.toolCallId,
-        content: firstResult.content,
-      };
-    }
-
-    // Handle assistant messages with tool calls
-    if (role === "assistant" && toolCalls.length > 0) {
-      // Assistant messages with tool calls can only have text content
-      const textContent = content
-        .filter((p): p is OpenAI.Chat.ChatCompletionContentPartText => p.type === "text")
-        .map((p) => p.text)
-        .join("");
-      return {
-        role: "assistant",
-        content: textContent || null,
-        tool_calls: toolCalls,
-      };
-    }
-
-    // Handle regular assistant messages
-    if (role === "assistant") {
-      // Assistant messages can only have text content (no images)
-      const textContent = content
-        .filter((p): p is OpenAI.Chat.ChatCompletionContentPartText => p.type === "text")
-        .map((p) => p.text)
-        .join("");
-      return {
-        role: "assistant",
-        content: textContent || "",
-      };
-    }
-
-    return {
-      role: "user",
-      content: content.length > 0 ? content : "",
-    };
   }
 
   /**

@@ -7,8 +7,54 @@ import type { z } from "zod";
 import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { ErrorCode, VellumError } from "../errors/index.js";
 import type { IGitSnapshotService } from "../git/types.js";
+import type { Logger } from "../logger/logger.js";
 import { createDefaultPermissionChecker } from "../permission/checker.js";
 import type { Tool, ToolContext, ToolResult } from "../types/tool.js";
+
+// =============================================================================
+// T068: Enterprise Hooks
+// =============================================================================
+
+/**
+ * Information about a tool call for enterprise hooks.
+ */
+export interface EnterpriseToolCallInfo {
+  /** Name of the tool being called */
+  toolName: string;
+  /** MCP server name if applicable */
+  serverName?: string;
+  /** Tool arguments/parameters */
+  arguments?: Record<string, unknown>;
+}
+
+/**
+ * Enterprise hooks for tool execution.
+ *
+ * These hooks enable enterprise features like:
+ * - Pre-execution validation and blocking
+ * - Post-execution audit logging
+ * - Server connection validation (for MCP)
+ * - User action tracking
+ */
+export interface EnterpriseHooks {
+  /**
+   * Hook called before tool execution for validation.
+   * If `allowed` is false, tool execution is blocked.
+   *
+   * @param tool - Tool call information
+   * @returns Validation result with allowed flag and optional reason
+   */
+  onBeforeToolCall: (tool: EnterpriseToolCallInfo) => Promise<{ allowed: boolean; reason?: string }>;
+
+  /**
+   * Hook called after tool execution for audit logging.
+   *
+   * @param tool - Tool call information
+   * @param result - Tool execution result
+   * @param durationMs - Execution duration in milliseconds
+   */
+  onAfterToolCall: (tool: EnterpriseToolCallInfo, result: unknown, durationMs: number) => Promise<void>;
+}
 
 // =============================================================================
 // T037a: Structured Logging Types
@@ -383,6 +429,18 @@ export interface ToolExecutorConfig {
    * changed files are detected after execution.
    */
   gitSnapshotService?: IGitSnapshotService;
+
+  /**
+   * T068: Optional enterprise hooks for validation and audit logging.
+   * When provided, hooks are called before/after tool execution.
+   * Errors in hooks are logged but do not block execution.
+   */
+  enterpriseHooks?: EnterpriseHooks;
+
+  /**
+   * Optional logger for enterprise hook errors.
+   */
+  enterpriseLogger?: Logger;
 }
 
 /**
@@ -435,6 +493,12 @@ export class ToolExecutor {
   /** T024: Optional git snapshot service for tracking file changes */
   private readonly gitSnapshotService?: IGitSnapshotService;
 
+  /** T068: Optional enterprise hooks for validation and audit logging */
+  private enterpriseHooks?: EnterpriseHooks;
+
+  /** Logger for enterprise hook errors */
+  private enterpriseLogger?: Logger;
+
   constructor(config: ToolExecutorConfig = {}) {
     // T035: Use default permission checker if requested and no explicit checker provided
     if (config.permissionChecker) {
@@ -450,6 +514,9 @@ export class ToolExecutor {
     this.enableLogging = config.enableLogging ?? true;
     // T024: Store git snapshot service reference
     this.gitSnapshotService = config.gitSnapshotService;
+    // T068: Store enterprise hooks reference
+    this.enterpriseHooks = config.enterpriseHooks;
+    this.enterpriseLogger = config.enterpriseLogger;
   }
 
   /**
@@ -522,6 +589,38 @@ export class ToolExecutor {
   }
 
   /**
+   * Set enterprise hooks for validation and audit logging.
+   *
+   * This method allows setting hooks after ToolExecutor creation,
+   * which is useful when hooks are loaded asynchronously.
+   *
+   * @param hooks - Enterprise hooks object, or null to disable
+   * @param logger - Optional logger for hook errors
+   *
+   * @example
+   * ```typescript
+   * const executor = new ToolExecutor();
+   * // Later, after enterprise config loads...
+   * executor.setEnterpriseHooks(createEnterpriseHooks(), console);
+   * ```
+   */
+  setEnterpriseHooks(hooks: EnterpriseHooks | null, logger?: Logger): void {
+    this.enterpriseHooks = hooks ?? undefined;
+    if (logger) {
+      this.enterpriseLogger = logger;
+    }
+  }
+
+  /**
+   * Get the current enterprise hooks (if set).
+   *
+   * @returns Enterprise hooks or undefined
+   */
+  getEnterpriseHooks(): EnterpriseHooks | undefined {
+    return this.enterpriseHooks;
+  }
+
+  /**
    * Check permission for tool execution.
    *
    * @param toolName - Name of the tool
@@ -587,6 +686,46 @@ export class ToolExecutor {
       // Return a special result indicating permission is needed
       // The caller (AgentLoop) should handle this by transitioning to wait_permission
       throw new PermissionDeniedError(name, `User confirmation required for tool: ${name}`);
+    }
+
+    // T068: Enterprise pre-tool validation (optional)
+    if (this.enterpriseHooks) {
+      try {
+        const enterpriseToolInfo: EnterpriseToolCallInfo = {
+          toolName: name,
+          arguments: typeof params === "object" && params !== null
+            ? (params as Record<string, unknown>)
+            : undefined,
+        };
+        const validation = await this.enterpriseHooks.onBeforeToolCall(enterpriseToolInfo);
+        if (!validation.allowed) {
+          const completedAt = Date.now();
+          const error = validation.reason ?? "Blocked by enterprise policy";
+          this.enterpriseLogger?.warn("[enterprise] Tool blocked by enterprise hooks", {
+            toolName: name,
+            reason: error,
+          });
+          return {
+            result: {
+              success: false,
+              error: `Enterprise policy: ${error}`,
+            },
+            timing: {
+              startedAt,
+              completedAt,
+              durationMs: completedAt - startedAt,
+            },
+            toolName: this.getOriginalName(name),
+            callId: context.callId,
+          };
+        }
+      } catch (hookError) {
+        // Log but don't block - enterprise hooks should not break tool execution
+        this.enterpriseLogger?.warn("[enterprise] Error in onBeforeToolCall hook", {
+          toolName: name,
+          error: hookError instanceof Error ? hookError.message : String(hookError),
+        });
+      }
     }
 
     // Validate parameters
@@ -666,6 +805,29 @@ export class ToolExecutor {
       } catch {
         // Gracefully ignore patch errors - result is still valid
         executionResult.preToolSnapshot = preToolSnapshot;
+      }
+    }
+
+    // T068: Enterprise post-tool audit logging (optional)
+    if (this.enterpriseHooks) {
+      try {
+        const enterpriseToolInfo: EnterpriseToolCallInfo = {
+          toolName: name,
+          arguments: typeof params === "object" && params !== null
+            ? (params as Record<string, unknown>)
+            : undefined,
+        };
+        await this.enterpriseHooks.onAfterToolCall(
+          enterpriseToolInfo,
+          executionResult.result,
+          executionResult.timing.durationMs
+        );
+      } catch (hookError) {
+        // Log but don't fail - audit logging should not affect result
+        this.enterpriseLogger?.warn("[enterprise] Error in onAfterToolCall hook", {
+          toolName: name,
+          error: hookError instanceof Error ? hookError.message : String(hookError),
+        });
       }
     }
 

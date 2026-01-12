@@ -1,7 +1,6 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AgentLevel } from "../level.js";
 import {
   createModeLoader,
   ModeFileNotFoundError,
@@ -52,7 +51,7 @@ tools:
 
       expect(mode.name).toBe("coder");
       expect(mode.description).toBe("Coder Agent");
-      expect(mode.level).toBe(AgentLevel.worker);
+      // Note: level is now in AgentConfig, not ExtendedModeConfig
       expect(mode.prompt).toBe("You are a coding expert.");
       expect(mode.tools.edit).toBe(true);
       expect(mode.tools.bash).toBe(true);
@@ -74,7 +73,7 @@ customInstructions: "Always consider scalability."
       expect(mode.prompt).toBe("You are a system architect.\n\nAlways consider scalability.");
     });
 
-    it("should load mode with numeric level", async () => {
+    it("should load mode and ignore level field (now in AgentConfig)", async () => {
       const yamlContent = `
 name: "Orchestrator"
 slug: "orchestrator"
@@ -86,10 +85,12 @@ roleDefinition: "You coordinate agents."
 
       const mode = await loader.loadFromFile(filePath);
 
-      expect(mode.level).toBe(AgentLevel.orchestrator);
+      // Level is parsed from YAML but not returned in ExtendedModeConfig
+      expect(mode.name).toBe("orchestrator");
+      expect(mode.prompt).toBe("You coordinate agents.");
     });
 
-    it("should load mode with all optional fields", async () => {
+    it("should load mode with all optional fields (agent fields ignored)", async () => {
       const yamlContent = `
 name: "Full Mode"
 slug: "full"
@@ -128,19 +129,17 @@ maxConcurrentSubagents: 5
 
       expect(mode.name).toBe("full");
       expect(mode.description).toBe("A mode with all fields");
-      expect(mode.level).toBe(AgentLevel.orchestrator);
+      // Agent hierarchy fields (level, canSpawnAgents, fileRestrictions, maxConcurrentSubagents)
+      // are no longer returned in ExtendedModeConfig - they belong in AgentConfig
       expect(mode.tools.bash).toBe("readonly");
       expect(mode.tools.web).toBe(true);
       expect(mode.tools.mcp).toBe(false);
       expect(mode.temperature).toBe(0.5);
       expect(mode.maxTokens).toBe(4096);
       expect(mode.extendedThinking).toBe(true);
-      expect(mode.canSpawnAgents).toEqual(["worker-a", "worker-b"]);
-      expect(mode.fileRestrictions).toHaveLength(2);
-      expect(mode.fileRestrictions?.[0]).toEqual({ pattern: "src/**/*.ts", access: "write" });
+      // These are still supported on ExtendedModeConfig
       expect(mode.toolGroups).toHaveLength(2);
       expect(mode.parentMode).toBe("base-orchestrator");
-      expect(mode.maxConcurrentSubagents).toBe(5);
     });
 
     it("should throw ModeFileNotFoundError for non-existent file", async () => {

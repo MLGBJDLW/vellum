@@ -2,9 +2,12 @@
 // ModeManager Tests
 // ============================================
 // T036: Write ModeManager unit tests
+// T012: Add tests for getAgentConfig
 // ============================================
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PLAN_AGENT, SPEC_ORCHESTRATOR, VIBE_AGENT } from "../agent-config.js";
+import { AgentRegistry } from "../agent-registry.js";
 import { type CodingMode, PLAN_MODE, SPEC_MODE, VIBE_MODE } from "../coding-modes.js";
 import type { ModeHandler } from "../mode-handlers/types.js";
 import {
@@ -518,5 +521,113 @@ describe("ModeManager activity blocking", () => {
     const result = await manager.switchMode("plan", { force: true });
 
     expect(result.success).toBe(true);
+  });
+});
+
+// =============================================================================
+// T012: getAgentConfig Tests
+// =============================================================================
+
+describe("ModeManager.getAgentConfig (T012)", () => {
+  let manager: ModeManager;
+
+  beforeEach(() => {
+    // Reset registry before each test
+    AgentRegistry.getInstance().reset();
+    AgentRegistry.getInstance().reinitialize();
+    manager = new ModeManager();
+  });
+
+  afterEach(() => {
+    // Reset registry after tests
+    AgentRegistry.getInstance().reset();
+    AgentRegistry.getInstance().reinitialize();
+  });
+
+  describe("getAgentConfig", () => {
+    it("should return vibe-agent for VIBE_MODE", () => {
+      const agentConfig = manager.getAgentConfig(VIBE_MODE);
+      expect(agentConfig).toBeDefined();
+      expect(agentConfig?.name).toBe("vibe-agent");
+      expect(agentConfig?.level).toBe(2); // worker level
+      expect(agentConfig?.canSpawnAgents).toBe(false);
+    });
+
+    it("should return plan-agent for PLAN_MODE", () => {
+      const agentConfig = manager.getAgentConfig(PLAN_MODE);
+      expect(agentConfig).toBeDefined();
+      expect(agentConfig?.name).toBe("plan-agent");
+      expect(agentConfig?.level).toBe(1); // workflow level
+      expect(agentConfig?.canSpawnAgents).toBe(true);
+    });
+
+    it("should return spec-orchestrator for SPEC_MODE", () => {
+      const agentConfig = manager.getAgentConfig(SPEC_MODE);
+      expect(agentConfig).toBeDefined();
+      expect(agentConfig?.name).toBe("spec-orchestrator");
+      expect(agentConfig?.level).toBe(0); // orchestrator level
+      expect(agentConfig?.canSpawnAgents).toBe(true);
+    });
+
+    it("should fallback to vibe-agent when mode has no agentName", () => {
+      const modeWithoutAgent = { ...VIBE_MODE, agentName: undefined };
+      const agentConfig = manager.getAgentConfig(modeWithoutAgent);
+      expect(agentConfig).toBeDefined();
+      expect(agentConfig?.name).toBe("vibe-agent");
+    });
+
+    it("should fallback to vibe-agent when agent not found in registry", () => {
+      const modeWithUnknownAgent = { ...VIBE_MODE, agentName: "unknown-agent" };
+      const agentConfig = manager.getAgentConfig(modeWithUnknownAgent);
+      expect(agentConfig).toBeDefined();
+      expect(agentConfig?.name).toBe("vibe-agent");
+    });
+  });
+
+  describe("getCurrentAgentConfig", () => {
+    it("should return agent config for current mode", () => {
+      const agentConfig = manager.getCurrentAgentConfig();
+      expect(agentConfig).toBeDefined();
+      expect(agentConfig?.name).toBe("vibe-agent");
+    });
+
+    it("should update after mode switch", async () => {
+      await manager.switchMode("plan");
+      const agentConfig = manager.getCurrentAgentConfig();
+      expect(agentConfig?.name).toBe("plan-agent");
+    });
+
+    it("should return spec-orchestrator after switching to spec", async () => {
+      await manager.switchMode("spec", { skipConfirmation: true });
+      const agentConfig = manager.getCurrentAgentConfig();
+      expect(agentConfig?.name).toBe("spec-orchestrator");
+    });
+  });
+
+  describe("AgentRegistry.get integration", () => {
+    it("should resolve agent via AgentRegistry.get", () => {
+      const registry = AgentRegistry.getInstance();
+      const vibeAgent = registry.get("vibe-agent");
+      const planAgent = registry.get("plan-agent");
+      const specAgent = registry.get("spec-orchestrator");
+
+      expect(vibeAgent).toEqual(VIBE_AGENT);
+      expect(planAgent).toEqual(PLAN_AGENT);
+      expect(specAgent).toEqual(SPEC_ORCHESTRATOR);
+    });
+
+    it("should return correct agent for each mode via manager", () => {
+      // Vibe mode -> vibe-agent
+      const vibeConfig = manager.getAgentConfig(manager.getModeConfig("vibe"));
+      expect(vibeConfig?.name).toBe("vibe-agent");
+
+      // Plan mode -> plan-agent
+      const planConfig = manager.getAgentConfig(manager.getModeConfig("plan"));
+      expect(planConfig?.name).toBe("plan-agent");
+
+      // Spec mode -> spec-orchestrator
+      const specConfig = manager.getAgentConfig(manager.getModeConfig("spec"));
+      expect(specConfig?.name).toBe("spec-orchestrator");
+    });
   });
 });

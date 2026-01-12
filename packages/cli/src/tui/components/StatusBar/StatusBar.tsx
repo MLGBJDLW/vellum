@@ -15,6 +15,7 @@ import type { AgentLevel } from "./AgentModeIndicator.js";
 import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 import { ModelIndicator } from "./ModelIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
+import { TokenBreakdown, type TokenStats } from "./TokenBreakdown.js";
 import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeIndicator.js";
 
 // =============================================================================
@@ -22,17 +23,32 @@ import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeInd
 // =============================================================================
 
 /**
+ * Extended token usage with granular breakdown.
+ * Extends ContextProgressProps with detailed token stats.
+ */
+export interface ExtendedTokenProps extends ContextProgressProps {
+  /** Detailed breakdown of token usage */
+  readonly breakdown?: TokenStats;
+  /** Current turn's token usage (for per-turn display) */
+  readonly turnUsage?: TokenStats;
+  /** Whether to show granular breakdown (default: false) */
+  readonly showBreakdown?: boolean;
+}
+
+/**
  * Props for the StatusBar component.
  */
 export interface StatusBarProps {
   /** Current coding mode */
   readonly mode?: CodingMode;
+  /** Agent name for display (e.g., 'orchestrator', 'coder') */
+  readonly agentName?: string;
   /** Agent level for spec mode (0=orchestrator, 1=sub-orchestrator, 2=worker) */
   readonly agentLevel?: AgentLevel;
   /** Model name (e.g., 'claude-sonnet-4') */
   readonly modelName?: string;
   /** Token usage information (displayed with visual progress bar) */
-  readonly tokens?: ContextProgressProps;
+  readonly tokens?: ExtendedTokenProps;
   /** Trust mode setting */
   readonly trustMode?: TrustModeIndicatorProps["mode"];
   /** Thinking mode status */
@@ -56,9 +72,33 @@ const BRAND_COLOR = "#DAA520";
 /** Mode display configuration */
 const MODES_CONFIG: Array<{ mode: CodingMode; icon: string; label: string }> = [
   { mode: "vibe", icon: "◐", label: "vibe" },
-  { mode: "plan", icon: "◇", label: "Think" },
-  { mode: "spec", icon: "◈", label: "Orch" },
+  { mode: "plan", icon: "◇", label: "plan" },
+  { mode: "spec", icon: "◈", label: "spec" },
 ];
+
+/** Agent name to abbreviation mapping for status bar display */
+const AGENT_ABBREVIATIONS: Record<string, string> = {
+  // Core Agents
+  "vibe-agent": "Vibe",
+  "plan-agent": "Plan",
+  "spec-orchestrator": "Spec",
+
+  // Spec Workflow Workers
+  researcher: "Rsrch",
+  requirements: "Reqs",
+  design: "Dsgn",
+  tasks: "Tasks",
+  validator: "Valid",
+
+  // Builtin Workers
+  coder: "Code",
+  qa: "QA",
+  writer: "Write",
+  analyst: "Anlst",
+  architect: "Arch",
+  devops: "DevOp",
+  security: "Secur",
+};
 
 // =============================================================================
 // Main Component
@@ -104,6 +144,7 @@ function formatCost(cost: number): string {
  */
 export function StatusBar({
   mode = "vibe",
+  agentName,
   agentLevel,
   modelName,
   tokens,
@@ -115,26 +156,25 @@ export function StatusBar({
   const { theme } = useTheme();
   const { t } = useTUITranslation();
 
+  // Log deprecation warning for agentLevel prop (T017)
+  if (agentLevel !== undefined && process.env.NODE_ENV !== "production") {
+    console.warn(
+      "DEPRECATION WARNING: The 'agentLevel' prop is deprecated in StatusBar. " +
+        "Agent level is now derived from agent state in spec mode workflows."
+    );
+  }
+
   // Use primary/accent color for status bar border
   const borderColor = theme.colors.primary;
 
-  // Level indicator labels
-  const levelLabels: Record<AgentLevel, string> = {
-    0: "L0",
-    1: "L1",
-    2: "L2",
-  };
-
-  // Agent level icons for spec mode (text symbols, no emoji)
-  const levelIcons: Record<AgentLevel, string> = {
-    0: "♾",
-    1: "◈",
-    2: "◇",
-  };
+  // Get agent abbreviation for display (fallback: first 5 chars)
+  const agentAbbrev = agentName
+    ? (AGENT_ABBREVIATIONS[agentName] ?? agentName.slice(0, 5))
+    : undefined;
 
   // Render mode selector (all modes shown, active highlighted)
   const modeSection = (
-    <Box key="modes">
+    <Box key="modes" flexDirection="row">
       {MODES_CONFIG.map((modeConfig, index) => {
         const isActive = modeConfig.mode === mode;
         return (
@@ -150,6 +190,15 @@ export function StatusBar({
           </Text>
         );
       })}
+      {/* Agent level indicator: │ Orch·L0 */}
+      {agentAbbrev !== undefined && agentLevel !== undefined && (
+        <Text>
+          <Text color={theme.semantic.border.muted}> │ </Text>
+          <Text color={BRAND_COLOR} bold>
+            {agentAbbrev}·L{agentLevel}
+          </Text>
+        </Text>
+      )}
     </Box>
   );
 
@@ -161,28 +210,31 @@ export function StatusBar({
     rightIndicators.push(<ModelIndicator key="model" model={modelName} compact />);
   }
 
-  // Agent level indicator (only for spec mode with defined level)
-  if (mode === "spec" && agentLevel !== undefined) {
-    rightIndicators.push(
-      <Box key="agent-level">
-        <Text color={theme.colors.info}>
-          {levelIcons[agentLevel]} {levelLabels[agentLevel]}
-        </Text>
-      </Box>
-    );
-  }
-
-  // Context progress
+  // Context progress and/or token breakdown
   if (tokens) {
-    rightIndicators.push(
-      <ContextProgress
-        key="tokens"
-        current={tokens.current}
-        max={tokens.max}
-        showLabel={false}
-        barWidth={tokens.barWidth ?? 5}
-      />
-    );
+    // Show granular breakdown if requested and data available
+    if (tokens.showBreakdown && tokens.breakdown) {
+      rightIndicators.push(
+        <TokenBreakdown
+          key="token-breakdown"
+          turn={tokens.turnUsage}
+          total={tokens.breakdown}
+          compact={true}
+          showTurn={!!tokens.turnUsage}
+        />
+      );
+    } else {
+      // Default: show progress bar
+      rightIndicators.push(
+        <ContextProgress
+          key="tokens"
+          current={tokens.current}
+          max={tokens.max}
+          showLabel={false}
+          barWidth={tokens.barWidth ?? 5}
+        />
+      );
+    }
   }
 
   // Trust mode (if provided)

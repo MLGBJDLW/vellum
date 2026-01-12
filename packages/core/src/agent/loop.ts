@@ -38,6 +38,7 @@ import {
   ToolExecutor,
   ToolNotFoundError,
 } from "../tool/index.js";
+import { getToolsForMode } from "../tool/mode-filter.js";
 import type { Result } from "../types/result.js";
 import type { ToolContext } from "../types/tool.js";
 import { CancellationToken } from "./cancellation.js";
@@ -400,6 +401,46 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    */
   getModeManager(): import("./mode-manager.js").ModeManager | undefined {
     return this.modeManager;
+  }
+
+  /**
+   * Get tools filtered by current coding mode (T057).
+   *
+   * If a ModeManager is configured, filters the available tools
+   * to only those allowed for the current mode.
+   * Falls back to all configured tools if no ModeManager.
+   *
+   * @returns Filtered tool definitions for current mode
+   */
+  private getFilteredTools(): ToolDefinition[] | undefined {
+    // No tools configured, return undefined
+    if (!this.config.tools) {
+      return undefined;
+    }
+
+    // No ModeManager, return all tools (backward compatibility)
+    if (!this.modeManager) {
+      return this.config.tools;
+    }
+
+    // Get current mode and allowed tools
+    const currentMode = this.modeManager.getCurrentMode();
+    const allowedToolNames = new Set(getToolsForMode(currentMode));
+
+    // Filter tools by allowed names
+    const filtered = this.config.tools.filter((tool) => allowedToolNames.has(tool.name));
+
+    // Log if tools were filtered
+    if (filtered.length !== this.config.tools.length) {
+      this.logger?.debug("Tools filtered by mode", {
+        mode: currentMode,
+        totalTools: this.config.tools.length,
+        allowedTools: filtered.length,
+        filteredOut: this.config.tools.length - filtered.length,
+      });
+    }
+
+    return filtered;
   }
 
   /**
@@ -796,7 +837,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         model: this.config.model,
         messages: providerMessages,
         system: systemPrompt,
-        tools: this.config.tools,
+        tools: this.getFilteredTools(),
         thinking: this.config.thinking,
         abortSignal: this.abortController.signal,
       });
@@ -1292,10 +1333,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         break;
 
       case "usage":
-        // Emit usage statistics
+        // Emit usage statistics (including thinkingTokens for extended thinking models)
         this.emit("usage", {
           inputTokens: event.inputTokens,
           outputTokens: event.outputTokens,
+          thinkingTokens: event.thinkingTokens,
           cacheReadTokens: event.cacheReadTokens,
           cacheWriteTokens: event.cacheWriteTokens,
         });

@@ -12,6 +12,7 @@
  */
 
 import { ContextBuilder } from "./context-builder.js";
+import type { PromptLoader } from "./prompt-loader.js";
 import {
   type AgentRole,
   MAX_PROMPT_SIZE,
@@ -19,6 +20,7 @@ import {
   type PromptLayerSource,
   type PromptPriority,
   PromptSizeError,
+  type PromptVariables,
   type SessionContext,
 } from "./types.js";
 
@@ -79,9 +81,201 @@ export class PromptBuilder {
   /** Variable substitutions to apply during build */
   #variables: Map<string, string> = new Map();
 
+  /** Optional PromptLoader instance for external prompt loading */
+  #loader: PromptLoader | null = null;
+
+  /** Complete system prompt override (replaces all layers when set) */
+  #systemPromptOverride: string | null = null;
+
+  /** Custom instructions to append */
+  #customInstructions: string | null = null;
+
   // ===========================================================================
   // Fluent Methods
   // ===========================================================================
+
+  /**
+   * Sets the PromptLoader instance for loading external prompts.
+   *
+   * @param loader - The PromptLoader instance to use
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * const loader = new PromptLoader({ discovery: { workspacePath: '/project' } });
+   * builder.withLoader(loader);
+   * ```
+   */
+  withLoader(loader: PromptLoader): this {
+    this.#loader = loader;
+    return this;
+  }
+
+  /**
+   * Loads an external role prompt from markdown files.
+   *
+   * Replaces hardcoded role prompts with externalized versions.
+   * Requires a PromptLoader to be set via withLoader().
+   *
+   * @param role - The role name to load (e.g., 'coder', 'orchestrator')
+   * @returns This builder for chaining
+   * @throws Error if no loader is configured
+   *
+   * @example
+   * ```typescript
+   * await builder
+   *   .withLoader(loader)
+   *   .withExternalRole('coder');
+   * ```
+   */
+  async withExternalRole(role: string): Promise<this> {
+    if (!this.#loader) {
+      throw new Error("PromptLoader required for external role loading. Call withLoader() first.");
+    }
+
+    const content = await this.#loader.loadRole(role as AgentRole);
+    if (content) {
+      this.#addLayer(content, 2, "role");
+    }
+
+    return this;
+  }
+
+  /**
+   * Sets a complete system prompt override.
+   *
+   * When set, this completely replaces all other layers during build.
+   * Used for system-prompt-{mode}.md files that fully replace the default prompt.
+   *
+   * @param content - The complete system prompt content
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * builder.withSystemPromptOverride(customSystemPrompt);
+   * // All other layers are ignored when building
+   * ```
+   */
+  withSystemPromptOverride(content: string): this {
+    this.#systemPromptOverride = content;
+    return this;
+  }
+
+  /**
+   * Appends custom instructions to the prompt.
+   *
+   * Custom instructions are appended after all other layers.
+   * Multiple calls will replace previous custom instructions.
+   *
+   * @param instructions - The custom instructions to append
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * builder.withCustomInstructions("Always respond in Spanish.");
+   * ```
+   */
+  withCustomInstructions(instructions: string): this {
+    this.#customInstructions = instructions;
+    return this;
+  }
+
+  /**
+   * Sets multiple runtime variables for interpolation.
+   *
+   * Variables are replaced in the final prompt using `{{KEY}}` syntax.
+   * Accepts a partial PromptVariables object.
+   *
+   * @param vars - Partial PromptVariables object
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * builder.setRuntimeVariables({
+   *   os: 'darwin',
+   *   shell: 'zsh',
+   *   cwd: '/home/user/project',
+   *   mode: 'vibe',
+   *   provider: 'anthropic'
+   * });
+   * ```
+   */
+  setRuntimeVariables(vars: Partial<PromptVariables>): this {
+    for (const [key, value] of Object.entries(vars)) {
+      if (typeof value === "string") {
+        this.setVariable(key.toUpperCase(), value);
+      }
+    }
+    return this;
+  }
+
+  /**
+   * Adds external rules content as a layer.
+   *
+   * Rules are additive and appended to the prompt with priority 3.5 (between mode and context).
+   * Integrates with ExternalRulesLoader to inject .vellum/rules/ content.
+   *
+   * @param rulesContent - The concatenated rules content
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * const rulesLoader = new ExternalRulesLoader();
+   * const content = await rulesLoader.getMergedRulesContent('/project', 'coder');
+   * builder.withRulesContent(content);
+   * ```
+   */
+  withRulesContent(rulesContent: string): this {
+    if (rulesContent && rulesContent.trim().length > 0) {
+      // Rules go between mode (3) and context (4)
+      // Using 3 with 'mode' source since layers are stable sorted
+      this.#addLayer(rulesContent.trim(), 3, "mode");
+    }
+    return this;
+  }
+
+  /**
+   * Adds provider-specific header content.
+   *
+   * Provider headers are prepended to the system prompt with highest priority.
+   *
+   * @param providerContent - The provider header content
+   * @returns This builder for chaining
+   *
+   * @example
+   * ```typescript
+   * const header = await loader.loadProviderHeader('anthropic');
+   * if (header) {
+   *   builder.withProviderHeader(header);
+   * }
+   * ```
+   */
+  withProviderHeader(providerContent: string): this {
+    if (providerContent && providerContent.trim().length > 0) {
+      // Provider headers get highest priority (0-ish, before base)
+      this.#addLayer(providerContent.trim(), 1, "base");
+    }
+    return this;
+  }
+
+  /**
+   * Checks if a system prompt override is currently set.
+   *
+   * @returns True if an override is set, false otherwise
+   */
+  hasSystemPromptOverride(): boolean {
+    return this.#systemPromptOverride !== null;
+  }
+
+  /**
+   * Clears the system prompt override if set.
+   *
+   * @returns This builder for chaining
+   */
+  clearSystemPromptOverride(): this {
+    this.#systemPromptOverride = null;
+    return this;
+  }
 
   /**
    * Adds base system instructions (priority 1).
@@ -207,6 +401,9 @@ export class PromptBuilder {
    * Combines all layers in priority order (1→2→3→4),
    * applies variable substitutions, and validates size.
    *
+   * If a system prompt override is set, it completely replaces all layers.
+   * Custom instructions are appended after all other content.
+   *
    * @returns The complete prompt string
    * @throws {PromptSizeError} If the result exceeds MAX_PROMPT_SIZE
    *
@@ -219,14 +416,26 @@ export class PromptBuilder {
    * ```
    */
   build(): string {
-    // Sort layers by priority (ascending: 1, 2, 3, 4)
-    const sortedLayers = [...this.#layers].sort((a, b) => a.priority - b.priority);
+    let result: string;
 
-    // Concatenate content with double newlines between layers
-    let result = sortedLayers
-      .map((layer) => layer.content)
-      .filter((content) => content.length > 0)
-      .join("\n\n");
+    // Check for complete system prompt override
+    if (this.#systemPromptOverride !== null) {
+      result = this.#systemPromptOverride;
+    } else {
+      // Sort layers by priority (ascending: 1, 2, 3, 4)
+      const sortedLayers = [...this.#layers].sort((a, b) => a.priority - b.priority);
+
+      // Concatenate content with double newlines between layers
+      result = sortedLayers
+        .map((layer) => layer.content)
+        .filter((content) => content.length > 0)
+        .join("\n\n");
+    }
+
+    // Append custom instructions if present
+    if (this.#customInstructions) {
+      result = `${result}\n\n${this.#customInstructions}`;
+    }
 
     // Apply variable substitutions
     result = this.#applyVariables(result);
@@ -254,12 +463,23 @@ export class PromptBuilder {
    * ```
    */
   getSize(): number {
-    // Build temporarily to get accurate size with substitutions
-    const sortedLayers = [...this.#layers].sort((a, b) => a.priority - b.priority);
-    let result = sortedLayers
-      .map((layer) => layer.content)
-      .filter((content) => content.length > 0)
-      .join("\n\n");
+    // Use the build logic to get accurate size
+    let result: string;
+
+    if (this.#systemPromptOverride !== null) {
+      result = this.#systemPromptOverride;
+    } else {
+      const sortedLayers = [...this.#layers].sort((a, b) => a.priority - b.priority);
+      result = sortedLayers
+        .map((layer) => layer.content)
+        .filter((content) => content.length > 0)
+        .join("\n\n");
+    }
+
+    if (this.#customInstructions) {
+      result = `${result}\n\n${this.#customInstructions}`;
+    }
+
     result = this.#applyVariables(result);
     return result.length;
   }

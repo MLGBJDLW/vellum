@@ -4,6 +4,7 @@
 // T022: Implement PlanModeHandler class
 // ============================================
 
+import { BUILT_IN_AGENTS } from "../agent-config.js";
 import type { AgentLevel } from "../level.js";
 import { BaseModeHandler } from "./base.js";
 import type { HandlerResult, ToolAccessConfig, UserMessage } from "./types.js";
@@ -182,11 +183,17 @@ export class PlanModeHandler extends BaseModeHandler {
 
   /**
    * Get the agent level for Plan mode.
+   * Level is looked up from the agent config via agentName.
    *
    * @returns AgentLevel.workflow
    */
   get agentLevel(): AgentLevel {
-    return this.config.level;
+    const agentName = this.config.agentName;
+    if (agentName && agentName in BUILT_IN_AGENTS) {
+      return BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS].level;
+    }
+    // Default to workflow level for plan mode
+    return 1 as AgentLevel;
   }
 
   /**

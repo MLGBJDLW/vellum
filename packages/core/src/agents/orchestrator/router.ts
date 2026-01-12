@@ -3,8 +3,31 @@
 // ============================================
 // T033: Add routing rules for spec-* agents
 
+import { BUILT_IN_AGENTS } from "../../agent/agent-config.js";
 import type { AgentLevel } from "../../agent/level.js";
 import type { ModeRegistry } from "../../agent/mode-registry.js";
+
+// ============================================
+// Helper: Get agent level from mode slug
+// ============================================
+
+/**
+ * Get the agent level for a mode slug by looking up the corresponding agent.
+ * Returns worker level (2) as default if not found.
+ */
+function getAgentLevelForMode(modeSlug: string): AgentLevel {
+  const modeToAgent: Record<string, keyof typeof BUILT_IN_AGENTS> = {
+    code: "vibe-agent",
+    plan: "plan-agent",
+  };
+  
+  const agentName = modeToAgent[modeSlug];
+  if (agentName && agentName in BUILT_IN_AGENTS) {
+    return BUILT_IN_AGENTS[agentName].level;
+  }
+  
+  return 2 as AgentLevel;
+}
 
 /**
  * Represents a candidate agent for handling a task.
@@ -217,7 +240,8 @@ class TaskRouterImpl implements TaskRouter {
       if (match) {
         // Verify the agent exists and is at the correct level
         const mode = this.modeRegistry.get(rule.agentSlug);
-        if (mode && mode.level === level) {
+        const modeLevel = getAgentLevelForMode(rule.agentSlug);
+        if (mode && modeLevel === level) {
           candidates.push({
             agentSlug: rule.agentSlug,
             confidence: this.computeRuleConfidence(normalizedTask, rule),

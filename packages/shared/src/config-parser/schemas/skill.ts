@@ -20,6 +20,7 @@ export const skillTriggerTypes = [
   "file_pattern",
   "command",
   "context",
+  "mode",
   "always",
 ] as const;
 
@@ -30,6 +31,7 @@ export const skillTriggerTypes = [
  * - file_pattern: Glob match on context files (multiplier: 5)
  * - command: Exact slash command match (multiplier: 100)
  * - context: Key:value match on project context (multiplier: 3)
+ * - mode: Exact match on current coding mode (multiplier: 8)
  * - always: Always active, lowest priority (multiplier: 1)
  */
 export const skillTriggerTypeSchema = z.enum(skillTriggerTypes);

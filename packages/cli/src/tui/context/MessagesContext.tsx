@@ -43,6 +43,20 @@ export interface ToolCallInfo {
 }
 
 /**
+ * Token usage information for a message turn.
+ */
+export interface MessageTokenUsage {
+  /** Number of input tokens */
+  readonly inputTokens: number;
+  /** Number of output tokens */
+  readonly outputTokens: number;
+  /** Number of tokens used for thinking/reasoning (if applicable) */
+  readonly thinkingTokens?: number;
+  /** Number of tokens read from cache (if applicable) */
+  readonly cacheReadTokens?: number;
+}
+
+/**
  * A single message in the conversation
  */
 export interface Message {
@@ -58,6 +72,8 @@ export interface Message {
   readonly isStreaming?: boolean;
   /** Tool calls associated with this message */
   readonly toolCalls?: readonly ToolCallInfo[];
+  /** Token usage for this message turn (assistant messages only) */
+  readonly tokenUsage?: MessageTokenUsage;
 }
 
 /**

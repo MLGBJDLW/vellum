@@ -49,8 +49,8 @@ const THRESHOLDS = {
   // 90%+: red
 } as const;
 
-/** Default bar width */
-const DEFAULT_BAR_WIDTH = 10;
+/** Default bar width - compact for status bar usage */
+const DEFAULT_BAR_WIDTH = 8;
 
 // =============================================================================
 // Helper Functions

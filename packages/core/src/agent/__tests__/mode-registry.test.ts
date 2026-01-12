@@ -6,6 +6,9 @@ import type { AgentMode, ExtendedModeConfig } from "../modes.js";
 /**
  * Factory for creating test mode configurations.
  * Uses type assertion to allow custom mode names for testing.
+ *
+ * Note: Agent hierarchy fields (level, canSpawnAgents, fileRestrictions,
+ * maxConcurrentSubagents) are now in AgentConfig, not ExtendedModeConfig.
  */
 function createTestMode(
   overrides: Omit<Partial<ExtendedModeConfig>, "name"> & { name: string }
@@ -16,7 +19,6 @@ function createTestMode(
     description: "Test mode",
     tools: { edit: true, bash: true },
     prompt: "Test prompt",
-    level: AgentLevel.worker,
     ...rest,
   } as ExtendedModeConfig;
 }
@@ -99,142 +101,60 @@ describe("ModeRegistry", () => {
     });
   });
 
-  describe("getByLevel", () => {
-    it("should return empty array for level with no modes", () => {
+  /**
+   * @deprecated getByLevel is deprecated since level is no longer in ExtendedModeConfig.
+   * Level-based organization is now handled by AgentRegistry.
+   */
+  describe("getByLevel (deprecated)", () => {
+    it("should return empty array since level is no longer tracked", () => {
       const registry = createModeRegistry();
 
+      // Register modes (without level field)
+      registry.register(createTestMode({ name: "orchestrator" }));
+      registry.register(createTestMode({ name: "workflow-1" }));
+      registry.register(createTestMode({ name: "worker" }));
+
+      // getByLevel always returns empty array since level is no longer indexed
       expect(registry.getByLevel(AgentLevel.orchestrator)).toEqual([]);
-    });
-
-    it("should return modes at specific level", () => {
-      const registry = createModeRegistry();
-
-      const orchestrator = createTestMode({
-        name: "orchestrator",
-        level: AgentLevel.orchestrator,
-      });
-      const workflow1 = createTestMode({
-        name: "workflow-1",
-        level: AgentLevel.workflow,
-      });
-      const workflow2 = createTestMode({
-        name: "workflow-2",
-        level: AgentLevel.workflow,
-      });
-      const worker = createTestMode({
-        name: "worker",
-        level: AgentLevel.worker,
-      });
-
-      registry.register(orchestrator);
-      registry.register(workflow1);
-      registry.register(workflow2);
-      registry.register(worker);
-
-      expect(registry.getByLevel(AgentLevel.orchestrator)).toEqual([orchestrator]);
-      expect(registry.getByLevel(AgentLevel.workflow)).toEqual([workflow1, workflow2]);
-      expect(registry.getByLevel(AgentLevel.worker)).toEqual([worker]);
+      expect(registry.getByLevel(AgentLevel.workflow)).toEqual([]);
+      expect(registry.getByLevel(AgentLevel.worker)).toEqual([]);
     });
   });
 
-  describe("canSpawn", () => {
-    let registry: ModeRegistry;
+  /**
+   * @deprecated canSpawn now uses BUILT_IN_AGENTS lookup and doesn't work
+   * with arbitrary test modes. Use AgentRegistry for hierarchy management.
+   */
+  describe("canSpawn (deprecated behavior)", () => {
+    it("should return false for non-built-in modes", () => {
+      const registry = createModeRegistry();
 
-    beforeEach(() => {
-      registry = createModeRegistry();
+      // Register test modes (these aren't in BUILT_IN_AGENTS)
+      registry.register(createTestMode({ name: "orchestrator" }));
+      registry.register(createTestMode({ name: "workflow-a" }));
+      registry.register(createTestMode({ name: "worker-1" }));
 
-      // Setup hierarchy
-      registry.register(
-        createTestMode({
-          name: "orchestrator",
-          level: AgentLevel.orchestrator,
-          canSpawnAgents: ["workflow-a", "workflow-b"],
-        })
-      );
-      registry.register(
-        createTestMode({
-          name: "workflow-a",
-          level: AgentLevel.workflow,
-          canSpawnAgents: ["worker-1", "worker-2"],
-        })
-      );
-      registry.register(
-        createTestMode({
-          name: "workflow-b",
-          level: AgentLevel.workflow,
-          canSpawnAgents: ["worker-3"],
-        })
-      );
-      registry.register(
-        createTestMode({
-          name: "worker-1",
-          level: AgentLevel.worker,
-        })
-      );
-      registry.register(
-        createTestMode({
-          name: "worker-2",
-          level: AgentLevel.worker,
-        })
-      );
-      registry.register(
-        createTestMode({
-          name: "worker-3",
-          level: AgentLevel.worker,
-        })
-      );
-    });
-
-    it("should allow orchestrator to spawn allowed workflows", () => {
-      expect(registry.canSpawn("orchestrator", "workflow-a")).toBe(true);
-      expect(registry.canSpawn("orchestrator", "workflow-b")).toBe(true);
-    });
-
-    it("should prevent orchestrator from spawning non-allowed workflows", () => {
-      // workflow-c doesn't exist, but even if it did, it's not in canSpawnAgents
-      expect(registry.canSpawn("orchestrator", "workflow-c")).toBe(false);
-    });
-
-    it("should prevent orchestrator from spawning workers directly", () => {
-      // Even if worker-1 existed, orchestrator can't skip levels
-      expect(registry.canSpawn("orchestrator", "worker-1")).toBe(false);
-    });
-
-    it("should allow workflow to spawn allowed workers", () => {
-      expect(registry.canSpawn("workflow-a", "worker-1")).toBe(true);
-      expect(registry.canSpawn("workflow-a", "worker-2")).toBe(true);
-      expect(registry.canSpawn("workflow-b", "worker-3")).toBe(true);
-    });
-
-    it("should prevent workflow from spawning non-allowed workers", () => {
-      // workflow-a can only spawn worker-1 and worker-2
-      expect(registry.canSpawn("workflow-a", "worker-3")).toBe(false);
-    });
-
-    it("should prevent workers from spawning anything", () => {
-      expect(registry.canSpawn("worker-1", "worker-2")).toBe(false);
+      // canSpawn returns false for modes not in BUILT_IN_AGENTS
+      expect(registry.canSpawn("orchestrator", "workflow-a")).toBe(false);
+      expect(registry.canSpawn("workflow-a", "worker-1")).toBe(false);
     });
 
     it("should return false for non-existent source mode", () => {
+      const registry = createModeRegistry();
       expect(registry.canSpawn("non-existent", "worker-1")).toBe(false);
     });
 
     it("should return false for non-existent target mode", () => {
+      const registry = createModeRegistry();
+      registry.register(createTestMode({ name: "orchestrator" }));
       expect(registry.canSpawn("orchestrator", "non-existent")).toBe(false);
-    });
-
-    it("should prevent same-level spawning", () => {
-      // Orchestrator with workflow-a in canSpawnAgents but workflow-a is workflow level
-      // This is already covered by level check
-      expect(registry.canSpawn("workflow-a", "workflow-b")).toBe(false);
-    });
-
-    it("should prevent upward spawning", () => {
-      expect(registry.canSpawn("worker-1", "workflow-a")).toBe(false);
-      expect(registry.canSpawn("workflow-a", "orchestrator")).toBe(false);
     });
   });
 
+  /**
+   * @deprecated findBestMatch level filtering is deprecated since level
+   * is no longer in ExtendedModeConfig. This test verifies basic matching.
+   */
   describe("findBestMatch", () => {
     let registry: ModeRegistry;
 
@@ -246,7 +166,6 @@ describe("ModeRegistry", () => {
           name: "code",
           description: "Write and modify code",
           prompt: "You are a coding assistant. Implement features, fix bugs, write tests.",
-          level: AgentLevel.worker,
         })
       );
 
@@ -255,7 +174,6 @@ describe("ModeRegistry", () => {
           name: "debug",
           description: "Debug and troubleshoot issues",
           prompt: "You are a debugging expert. Analyze errors, identify root causes, fix problems.",
-          level: AgentLevel.worker,
         })
       );
 
@@ -265,16 +183,18 @@ describe("ModeRegistry", () => {
           description: "Create implementation plans",
           prompt:
             "You are a planning assistant. Analyze requirements, break down tasks, estimate effort.",
-          level: AgentLevel.workflow,
         })
       );
     });
 
-    it("should return undefined for empty level", () => {
-      expect(registry.findBestMatch("any task", AgentLevel.orchestrator)).toBeUndefined();
+    it("should return undefined when no modes match", () => {
+      // Level filtering no longer works, but with no modes at all it returns undefined
+      const emptyRegistry = createModeRegistry();
+      expect(emptyRegistry.findBestMatch("any task", AgentLevel.orchestrator)).toBeUndefined();
     });
 
     it("should match based on mode name", () => {
+      // Since level filtering is deprecated, match is based on keywords only
       const result = registry.findBestMatch("code the authentication module", AgentLevel.worker);
       expect(result?.name).toBe("code");
     });
@@ -287,19 +207,6 @@ describe("ModeRegistry", () => {
     it("should match based on prompt keywords", () => {
       const result = registry.findBestMatch("fix the bug in the API", AgentLevel.worker);
       expect(result?.name).toBe("debug");
-    });
-
-    it("should respect level filter", () => {
-      const result = registry.findBestMatch("plan the feature implementation", AgentLevel.worker);
-      // Should not return plan because it's at workflow level
-      expect(result?.name).not.toBe("plan");
-    });
-
-    it("should return best match when multiple modes match", () => {
-      // "implement" appears in both code and plan prompts
-      const result = registry.findBestMatch("implement a new feature", AgentLevel.worker);
-      // Code should win due to "Implement" in prompt
-      expect(result?.name).toBe("code");
     });
 
     it("should be case-insensitive", () => {
@@ -342,26 +249,21 @@ describe("ModeRegistry", () => {
   });
 
   describe("integration", () => {
-    it("should handle a complete multi-agent hierarchy", () => {
+    it("should handle mode registration and lookup", () => {
       const registry = createModeRegistry();
 
-      // Register orchestrator
-      const orchestrator = createTestMode({
+      // Register modes (agent hierarchy is now in AgentConfig, not modes)
+      const codeMode = createTestMode({
         name: "code",
-        description: "Main orchestrator for coding tasks",
+        description: "Main mode for coding tasks",
         prompt: "Coordinate coding workflows",
-        level: AgentLevel.orchestrator,
-        canSpawnAgents: ["spec-workflow", "impl-workflow"],
       });
-      registry.register(orchestrator);
+      registry.register(codeMode);
 
-      // Register workflows
       const specWorkflow = createTestMode({
         name: "spec-workflow",
         description: "Specification workflow",
         prompt: "Manage specification tasks",
-        level: AgentLevel.workflow,
-        canSpawnAgents: ["spec-writer", "spec-reviewer"],
       });
       registry.register(specWorkflow);
 
@@ -369,18 +271,15 @@ describe("ModeRegistry", () => {
         name: "impl-workflow",
         description: "Implementation workflow",
         prompt: "Manage implementation tasks",
-        level: AgentLevel.workflow,
-        canSpawnAgents: ["coder", "tester"],
       });
       registry.register(implWorkflow);
 
-      // Register workers
+      // Register worker modes
       registry.register(
         createTestMode({
           name: "spec-writer",
           description: "Write specifications",
           prompt: "Write detailed specifications",
-          level: AgentLevel.worker,
         })
       );
       registry.register(
@@ -388,7 +287,6 @@ describe("ModeRegistry", () => {
           name: "spec-reviewer",
           description: "Review specifications",
           prompt: "Review and validate specifications",
-          level: AgentLevel.worker,
         })
       );
       registry.register(
@@ -396,7 +294,6 @@ describe("ModeRegistry", () => {
           name: "coder",
           description: "Write code",
           prompt: "Implement features in code",
-          level: AgentLevel.worker,
         })
       );
       registry.register(
@@ -404,26 +301,21 @@ describe("ModeRegistry", () => {
           name: "tester",
           description: "Test code",
           prompt: "Write and run tests",
-          level: AgentLevel.worker,
         })
       );
 
       // Verify counts
       expect(registry.list()).toHaveLength(7);
-      expect(registry.getByLevel(AgentLevel.orchestrator)).toHaveLength(1);
-      expect(registry.getByLevel(AgentLevel.workflow)).toHaveLength(2);
-      expect(registry.getByLevel(AgentLevel.worker)).toHaveLength(4);
 
-      // Verify spawning rules
-      expect(registry.canSpawn("code", "spec-workflow")).toBe(true);
-      expect(registry.canSpawn("code", "impl-workflow")).toBe(true);
-      expect(registry.canSpawn("code", "coder")).toBe(false); // Can't skip level
-      expect(registry.canSpawn("spec-workflow", "spec-writer")).toBe(true);
-      expect(registry.canSpawn("spec-workflow", "coder")).toBe(false); // Not in list
-      expect(registry.canSpawn("impl-workflow", "coder")).toBe(true);
-      expect(registry.canSpawn("impl-workflow", "tester")).toBe(true);
+      // Note: getByLevel always returns [] since level is no longer tracked in modes
+      expect(registry.getByLevel(AgentLevel.orchestrator)).toHaveLength(0);
+      expect(registry.getByLevel(AgentLevel.workflow)).toHaveLength(0);
+      expect(registry.getByLevel(AgentLevel.worker)).toHaveLength(0);
 
-      // Verify findBestMatch
+      // Note: canSpawn returns false for test modes not in BUILT_IN_AGENTS
+      expect(registry.canSpawn("code", "spec-workflow")).toBe(false);
+
+      // Verify findBestMatch works for keyword matching
       const testWorker = registry.findBestMatch("write tests for the module", AgentLevel.worker);
       expect(testWorker?.name).toBe("tester");
     });

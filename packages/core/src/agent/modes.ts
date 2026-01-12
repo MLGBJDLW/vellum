@@ -3,13 +3,7 @@
 // ============================================
 
 import { z } from "zod";
-import { AgentLevel, AgentLevelSchema } from "./level.js";
-import {
-  type FileRestriction,
-  FileRestrictionSchema,
-  type ToolGroupEntry,
-  ToolGroupEntrySchema,
-} from "./restrictions.js";
+import { type ToolGroupEntry, ToolGroupEntrySchema } from "./restrictions.js";
 
 /**
  * Available agent modes.
@@ -109,89 +103,73 @@ export const ModeConfigSchema = z.object({
 export const DEFAULT_MAX_CONCURRENT_SUBAGENTS = 3;
 
 /**
- * Extended mode configuration for multi-agent orchestration.
+ * Extended mode configuration for additional mode settings.
  *
- * Extends the base ModeConfig with hierarchy, spawning, and restriction fields
- * required for multi-agent coordination.
+ * Extends the base ModeConfig with tool group and inheritance fields.
+ *
+ * @deprecated Agent hierarchy fields (level, canSpawnAgents, fileRestrictions, maxConcurrentSubagents)
+ * have been moved to AgentConfig. Use mode.agentName with AgentRegistry.get() instead.
  *
  * @example
  * ```typescript
- * const orchestratorMode: ExtendedModeConfig = {
- *   name: "code",
- *   description: "Main orchestrator",
- *   tools: { edit: true, bash: true },
- *   prompt: "You are an orchestrator...",
- *   level: AgentLevel.orchestrator,
- *   canSpawnAgents: ["spec-worker", "impl-worker"],
- *   maxConcurrentSubagents: 5,
- * };
+ * // Old way (deprecated):
+ * const level = mode.level;
  *
- * const workerMode: ExtendedModeConfig = {
+ * // New way:
+ * import { AgentRegistry } from './agent-registry.js';
+ * const agent = AgentRegistry.getInstance().get(mode.agentName);
+ * const level = agent?.level;
+ * ```
+ *
+ * @example
+ * ```typescript
+ * const extendedMode: ExtendedModeConfig = {
  *   name: "code",
- *   description: "Implementation worker",
- *   tools: { edit: true, bash: false },
- *   prompt: "You are a worker...",
- *   level: AgentLevel.worker,
- *   parentMode: "orchestrator",
- *   fileRestrictions: [{ pattern: "src/**", access: "write" }],
+ *   description: "Custom mode",
+ *   tools: { edit: true, bash: true },
+ *   prompt: "You are a coding assistant...",
+ *   toolGroups: [{ group: "web", access: "read" }],
+ *   parentMode: "base-mode",
  * };
  * ```
  */
 export interface ExtendedModeConfig extends ModeConfig {
-  /** Agent's level in the hierarchy (orchestrator, workflow, worker) */
-  level: AgentLevel;
-  /** List of agent slugs this mode can spawn (only orchestrator and workflow can spawn) */
-  canSpawnAgents?: string[];
-  /** File access restrictions for this mode */
-  fileRestrictions?: FileRestriction[];
   /** Tool group access rules for this mode */
   toolGroups?: ToolGroupEntry[];
   /** Parent mode slug for configuration inheritance */
   parentMode?: string;
-  /** Maximum number of concurrent subagents (default: 3) */
-  maxConcurrentSubagents?: number;
 }
 
 /**
  * Zod schema for ExtendedModeConfig validation.
  *
- * Extends ModeConfigSchema with multi-agent orchestration fields:
- * - level: Agent hierarchy level (orchestrator, workflow, worker)
- * - canSpawnAgents: Which agents this mode can spawn
- * - fileRestrictions: File access control rules
+ * Extends ModeConfigSchema with additional mode settings:
  * - toolGroups: Tool group access control
  * - parentMode: For configuration inheritance
- * - maxConcurrentSubagents: Limit on parallel subagents
+ *
+ * Note: Agent hierarchy fields (level, canSpawnAgents, fileRestrictions,
+ * maxConcurrentSubagents) are now in AgentConfigSchema.
  *
  * @example
  * ```typescript
  * const result = ExtendedModeConfigSchema.safeParse({
  *   name: "code",
- *   description: "Orchestrator mode",
+ *   description: "Custom mode",
  *   tools: { edit: true, bash: true },
  *   prompt: "System prompt...",
- *   level: 0, // AgentLevel.orchestrator
- *   canSpawnAgents: ["worker-1", "worker-2"],
+ *   toolGroups: [{ group: "web", access: "read" }],
  * });
  *
  * if (result.success) {
- *   console.log(result.data.level); // 0
+ *   console.log(result.data.toolGroups);
  * }
  * ```
  */
 export const ExtendedModeConfigSchema = ModeConfigSchema.extend({
-  /** Agent's level in the hierarchy */
-  level: AgentLevelSchema,
-  /** List of agent slugs this mode can spawn */
-  canSpawnAgents: z.array(z.string()).optional(),
-  /** File access restrictions */
-  fileRestrictions: z.array(FileRestrictionSchema).optional(),
   /** Tool group access rules */
   toolGroups: z.array(ToolGroupEntrySchema).optional(),
   /** Parent mode slug for inheritance */
   parentMode: z.string().optional(),
-  /** Maximum concurrent subagents (default: 3) */
-  maxConcurrentSubagents: z.number().int().positive().default(DEFAULT_MAX_CONCURRENT_SUBAGENTS),
 });
 
 // ============================================
@@ -366,16 +344,15 @@ export function getTemperature(mode: AgentMode): number {
  * Converts a base ModeConfig to an ExtendedModeConfig with sensible defaults.
  *
  * This function is used to upgrade Phase 06 mode configurations to the
- * multi-agent orchestration format. All original ModeConfig fields are
- * preserved, and ExtendedModeConfig fields are added with safe defaults.
+ * extended format. All original ModeConfig fields are preserved, and
+ * ExtendedModeConfig fields are added with safe defaults.
  *
  * Default values:
- * - `level`: `AgentLevel.worker` (most restrictive)
- * - `canSpawnAgents`: `[]` (cannot spawn by default)
- * - `fileRestrictions`: `[]` (no restrictions)
  * - `toolGroups`: `[]` (all tools enabled)
  * - `parentMode`: `undefined` (no parent)
- * - `maxConcurrentSubagents`: `DEFAULT_MAX_CONCURRENT_SUBAGENTS` (3)
+ *
+ * Note: Agent hierarchy fields (level, canSpawnAgents, fileRestrictions,
+ * maxConcurrentSubagents) are now in AgentConfig, not ExtendedModeConfig.
  *
  * @param config - The base ModeConfig to convert
  * @returns An ExtendedModeConfig with all original fields plus defaults
@@ -390,9 +367,8 @@ export function getTemperature(mode: AgentMode): number {
  * };
  *
  * const extended = toExtendedMode(baseConfig);
- * // extended.level === AgentLevel.worker
- * // extended.canSpawnAgents === []
- * // extended.maxConcurrentSubagents === 3
+ * // extended.toolGroups === []
+ * // extended.parentMode === undefined
  * ```
  */
 export function toExtendedMode(config: ModeConfig): ExtendedModeConfig {
@@ -400,11 +376,7 @@ export function toExtendedMode(config: ModeConfig): ExtendedModeConfig {
     // Preserve all original ModeConfig fields
     ...config,
     // Add ExtendedModeConfig fields with sensible defaults
-    level: AgentLevel.worker, // Most restrictive default
-    canSpawnAgents: [], // Cannot spawn by default
-    fileRestrictions: [], // No restrictions by default
     toolGroups: [], // All tools enabled by default
     parentMode: undefined, // No parent by default
-    maxConcurrentSubagents: DEFAULT_MAX_CONCURRENT_SUBAGENTS, // 3
   };
 }

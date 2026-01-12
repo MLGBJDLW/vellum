@@ -4,6 +4,7 @@
 // T020: Implement VibeModeHandler class
 // ============================================
 
+import { BUILT_IN_AGENTS } from "../agent-config.js";
 import type { AgentLevel } from "../level.js";
 import { BaseModeHandler } from "./base.js";
 import type { HandlerResult, ToolAccessConfig, UserMessage } from "./types.js";
@@ -89,11 +90,17 @@ export class VibeModeHandler extends BaseModeHandler {
    * Get the agent level for Vibe mode.
    *
    * Vibe mode operates at the worker level (leaf executor).
+   * Level is looked up from the agent config via agentName.
    *
    * @returns AgentLevel.worker
    */
   get agentLevel(): AgentLevel {
-    return this.config.level;
+    const agentName = this.config.agentName;
+    if (agentName && agentName in BUILT_IN_AGENTS) {
+      return BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS].level;
+    }
+    // Default to worker level for vibe mode
+    return 2 as AgentLevel;
   }
 
   /**
@@ -120,6 +127,10 @@ export class VibeModeHandler extends BaseModeHandler {
    * @returns false - Vibe mode (worker level) cannot spawn agents
    */
   get canSpawnAgents(): boolean {
-    return this.config.canSpawnAgents !== undefined && this.config.canSpawnAgents.length > 0;
+    const agentName = this.config.agentName;
+    if (agentName && agentName in BUILT_IN_AGENTS) {
+      return BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS].canSpawnAgents;
+    }
+    return false;
   }
 }

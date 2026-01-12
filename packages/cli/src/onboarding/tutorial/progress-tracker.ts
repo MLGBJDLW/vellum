@@ -304,7 +304,7 @@ export class ProgressTracker {
   async getCompletedLessonIds(): Promise<string[]> {
     const progress = await this.getProgress();
     return Object.entries(progress.lessons)
-      .filter(([_, p]) => p.completed)
+      .filter(([_, p]) => (p as { completed: boolean }).completed)
       .map(([id]) => id);
   }
 

@@ -18,7 +18,8 @@
  */
 
 import { OpenAIProvider } from "./openai.js";
-import type { ModelInfo, ProviderOptions } from "./types.js";
+import type { TransformConfig } from "./transforms/types.js";
+import type { ModelInfo, ProviderOptions, ProviderType } from "./types.js";
 
 // =============================================================================
 // OpenAICompatibleProvider Abstract Base Class
@@ -116,5 +117,18 @@ export abstract class OpenAICompatibleProvider extends OpenAIProvider {
     const models = this.getModelCatalog();
     const firstModel = models[0];
     return firstModel ? firstModel.id : "gpt-4o";
+  }
+
+  /**
+   * Create transform config for OpenAI-compatible provider.
+   * Uses the provider-specific transform from the registry.
+   *
+   * @param model - Optional model ID for model-specific features
+   */
+  protected override createTransformConfig(model?: string): TransformConfig {
+    return {
+      provider: this.providerName as ProviderType,
+      modelId: model,
+    };
   }
 }

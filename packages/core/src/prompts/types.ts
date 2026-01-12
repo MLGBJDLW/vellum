@@ -243,3 +243,85 @@ export class PromptSizeError extends Error {
     }
   }
 }
+
+// =============================================================================
+// Externalized Prompt System Types (REQ-001)
+// =============================================================================
+
+/**
+ * Source locations where prompts can be discovered.
+ *
+ * - `builtin`: Shipped with Vellum core
+ * - `project`: Found in project's .vellum/prompts/ directory
+ * - `user`: Found in user's ~/.vellum/prompts/ directory
+ * - `legacy`: Hardcoded prompts being migrated
+ */
+export type PromptSource = "builtin" | "project" | "user" | "legacy";
+
+/**
+ * Category of prompt content.
+ *
+ * - `role`: Agent role definitions (orchestrator, coder, qa, etc.)
+ * - `worker`: Worker-specific prompt modifications
+ * - `spec`: Specification workflow prompts
+ * - `provider`: Provider-specific prompt adjustments
+ * - `custom`: User-defined custom prompts
+ */
+export type PromptCategory = "role" | "worker" | "spec" | "provider" | "custom";
+
+/**
+ * Location information for a discovered prompt.
+ * Used by the prompt discovery system to track where prompts came from.
+ */
+export interface PromptLocation {
+  /** Source type where the prompt was found */
+  source: PromptSource;
+  /** Absolute path to the prompt file */
+  path: string;
+  /** Priority for conflict resolution (lower number = higher priority) */
+  priority: number;
+}
+
+/**
+ * A loaded and parsed prompt with all metadata.
+ * Represents a fully resolved prompt ready for use.
+ */
+export interface PromptLoaded {
+  /** Unique identifier for the prompt */
+  id: string;
+  /** Human-readable name */
+  name: string;
+  /** Category of the prompt */
+  category: PromptCategory;
+  /** The actual prompt content (markdown body) */
+  content: string;
+  /** Location metadata */
+  location: PromptLocation;
+  /** Parsed frontmatter as key-value pairs */
+  frontmatter: Record<string, unknown>;
+  /** Optional version string */
+  version?: string;
+}
+
+/**
+ * Variable interpolation context for prompt rendering.
+ * These variables are available for {{variable}} substitution in prompts.
+ */
+export interface PromptVariables {
+  /** Operating system name (e.g., 'darwin', 'win32', 'linux') */
+  os: string;
+  /** Current shell (e.g., 'bash', 'zsh', 'powershell') */
+  shell: string;
+  /** Current working directory */
+  cwd: string;
+  /** Current date in ISO format */
+  date: string;
+  /** Current coding mode (e.g., 'vibe', 'plan', 'spec') */
+  mode: string;
+  /** Current LLM provider name */
+  provider: string;
+  /** Current model identifier */
+  model: string;
+  /** Allow additional string properties */
+  [key: string]: string;
+}

@@ -145,7 +145,7 @@ describe("Lesson Content", () => {
     });
 
     it("should have unique step IDs", () => {
-      const ids = basicsLesson.steps.map((s) => s.id);
+      const ids = basicsLesson.steps.map((s: { id: string }) => s.id);
       const uniqueIds = new Set(ids);
       expect(uniqueIds.size).toBe(ids.length);
     });

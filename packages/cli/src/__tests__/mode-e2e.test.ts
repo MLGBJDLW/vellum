@@ -300,11 +300,10 @@ describe("E2E: Mode Configuration Integration", () => {
     expect(config).toEqual(BUILTIN_CODING_MODES.plan);
   });
 
-  it("spec mode can spawn agents", () => {
-    // Spec mode is orchestrator level and can spawn subagents
-    expect(BUILTIN_CODING_MODES.spec.canSpawnAgents).toBeDefined();
-    expect(Array.isArray(BUILTIN_CODING_MODES.spec.canSpawnAgents)).toBe(true);
-    expect(BUILTIN_CODING_MODES.spec.canSpawnAgents?.length).toBeGreaterThan(0);
+  it("spec mode references orchestrator agent that can spawn", () => {
+    // Spec mode references spec-orchestrator agent which has canSpawnAgents: true
+    // Agent spawning is now controlled via AgentConfig, not CodingModeConfig
+    expect(BUILTIN_CODING_MODES.spec.agentName).toBe("spec-orchestrator");
   });
 
   it("modes have correct checkpoint counts", () => {

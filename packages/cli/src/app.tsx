@@ -5,6 +5,8 @@ import type {
   ApprovalPolicy,
   CodingMode,
   CredentialManager,
+  EnterpriseHooks as CoreEnterpriseHooks,
+  EnterpriseToolCallInfo,
   SandboxPolicy,
   Session,
   SessionMode,
@@ -12,6 +14,8 @@ import type {
   ToolRegistry,
 } from "@vellum/core";
 import {
+  BUILTIN_CODING_MODES,
+  BuiltinAgentRegistry,
   OnboardingWizard as CoreOnboardingWizard,
   createCostService,
   createModeManager,
@@ -57,6 +61,7 @@ import {
   setModelCommandConfig,
   setThemeContext,
   themeSlashCommands,
+  tutorialCommand,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
@@ -87,6 +92,7 @@ import type { TrustMode } from "./tui/components/StatusBar/TrustModeIndicator.js
 import { SessionPicker } from "./tui/components/session/SessionPicker.js";
 import type { SessionMetadata, SessionPreviewMessage } from "./tui/components/session/types.js";
 import { ThinkingBlock } from "./tui/components/ThinkingBlock.js";
+import { TipBanner } from "./tui/components/TipBanner.js";
 import type { TodoItemData } from "./tui/components/TodoItem.js";
 import { TodoPanel } from "./tui/components/TodoPanel.js";
 import { PermissionDialog } from "./tui/components/Tools/PermissionDialog.js";
@@ -109,7 +115,7 @@ import { useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
 import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
 import { useVim } from "./tui/hooks/useVim.js";
 import { getBannerSeen, setBannerSeen as saveBannerSeen } from "./tui/i18n/settings-integration.js";
-import { disposeLsp, initializeLsp, type LspIntegrationResult } from "./tui/lsp-integration.js";
+import { disposeLsp, initializeLsp, type LspIntegrationOptions, type LspIntegrationResult } from "./tui/lsp-integration.js";
 import {
   disposePlugins,
   getPluginCommands,
@@ -313,6 +319,9 @@ function createCommandRegistry(): CommandRegistry {
 
   // Register memory dispatcher (subcommands handled via /memory)
   registry.register(memoryCommand);
+
+  // Register tutorial command (Phase 38)
+  registry.register(tutorialCommand);
 
   // Register auth commands
   for (const cmd of enhancedAuthCommands) {
@@ -518,7 +527,7 @@ function AppContent({
   }, [messages.length, metricsManager]);
 
   // T068: Enterprise integration
-  const [_enterpriseHooks, setEnterpriseHooks] = useState<EnterpriseHooks | null>(null);
+  const [enterpriseHooks, setEnterpriseHooks] = useState<EnterpriseHooks | null>(null);
   useEffect(() => {
     let cancelled = false;
 
@@ -538,11 +547,54 @@ function AppContent({
     };
   }, []);
 
+  // T068: Wire enterprise hooks to ToolExecutor when both are available
+  useEffect(() => {
+    if (!enterpriseHooks) {
+      return;
+    }
+
+    // Get the tool executor from the agent loop
+    const toolExecutor = agentLoopProp?.getToolExecutor();
+    if (!toolExecutor) {
+      return;
+    }
+
+    // Wire the hooks using the adapter interface (EnterpriseToolCallInfo → ToolCallInfo)
+    const coreHooks: CoreEnterpriseHooks = {
+      onBeforeToolCall: async (tool: EnterpriseToolCallInfo) => {
+        return enterpriseHooks.onBeforeToolCall({
+          serverName: tool.serverName ?? "vellum",
+          toolName: tool.toolName,
+          arguments: tool.arguments,
+        });
+      },
+      onAfterToolCall: async (tool: EnterpriseToolCallInfo, result: unknown, durationMs: number) => {
+        return enterpriseHooks.onAfterToolCall(
+          {
+            serverName: tool.serverName ?? "vellum",
+            toolName: tool.toolName,
+            arguments: tool.arguments,
+          },
+          result,
+          durationMs
+        );
+      },
+    };
+    toolExecutor.setEnterpriseHooks(coreHooks);
+
+    console.debug("[enterprise] Wired enterprise hooks to ToolExecutor");
+
+    return () => {
+      // Clear hooks on cleanup
+      toolExecutor.setEnterpriseHooks(null);
+    };
+  }, [enterpriseHooks, agentLoopProp]);
+
   // T069: Tip engine integration
   const {
     currentTip,
     showTip,
-    dismissTip: _dismissTip,
+    dismissTip,
     tipsEnabled,
   } = useTipEngine({
     enabled: true,
@@ -729,19 +781,60 @@ function AppContent({
   // Session list state - loaded from storage
   const [sessions, setSessions] = useState<SessionMetadata[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>(() => createId());
-  const tokenUsageRef = useRef({ inputTokens: 0, outputTokens: 0, totalCost: 0 });
+
+  // Extended token usage state (Fix 2: TUI layer token counting)
+  const tokenUsageRef = useRef({
+    inputTokens: 0,
+    outputTokens: 0,
+    thinkingTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    totalCost: 0,
+  });
   const [tokenUsage, setTokenUsage] = useState({
     inputTokens: 0,
     outputTokens: 0,
+    thinkingTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
     totalCost: 0,
+  });
+  // Per-turn token usage for granular display
+  const [turnUsage, setTurnUsage] = useState({
+    inputTokens: 0,
+    outputTokens: 0,
+    thinkingTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
   });
   const previousTokenUsageRef = useRef({ inputTokens: 0, outputTokens: 0 });
 
   const switchToSession = useCallback((sessionId: string, session?: Session) => {
     sessionCacheRef.current = session ?? null;
     previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
-    tokenUsageRef.current = { inputTokens: 0, outputTokens: 0, totalCost: 0 };
-    setTokenUsage({ inputTokens: 0, outputTokens: 0, totalCost: 0 });
+    tokenUsageRef.current = {
+      inputTokens: 0,
+      outputTokens: 0,
+      thinkingTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      totalCost: 0,
+    };
+    setTokenUsage({
+      inputTokens: 0,
+      outputTokens: 0,
+      thinkingTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      totalCost: 0,
+    });
+    setTurnUsage({
+      inputTokens: 0,
+      outputTokens: 0,
+      thinkingTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
     setActiveSessionId(sessionId);
   }, []);
 
@@ -1657,6 +1750,7 @@ function AppContent({
       try {
         const result = await initializeLsp({
           workspaceRoot: process.cwd(),
+          toolRegistry: toolRegistry as LspIntegrationOptions["toolRegistry"],
           autoInstall: false, // Don't auto-install servers
           logger: {
             debug: (msg) => console.debug(`[lsp] ${msg}`),
@@ -2031,6 +2125,15 @@ function AppContent({
     async (text: string) => {
       if (!text.trim()) return;
 
+      // Fix 4: Reset turn usage when a new turn starts
+      setTurnUsage({
+        inputTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      });
+
       // Apply coding-mode handler transformations (vibe/plan/spec) and keep UI phase
       // progress in sync with SpecModeHandler's injected metadata.
       let processedText = text;
@@ -2371,9 +2474,79 @@ function AppContent({
     [currentProvider, currentModel]
   );
 
-  // Update token usage when messages change (simulated for now)
+  // ==========================================================================
+  // FIX 1: Subscribe to AgentLoop usage events for real token counting
+  // ==========================================================================
   useEffect(() => {
-    // Approximate token count: ~4 chars per token
+    if (!agentLoopProp) {
+      return;
+    }
+
+    // Handle real usage events from AgentLoop
+    const handleUsage = (usage: {
+      inputTokens: number;
+      outputTokens: number;
+      thinkingTokens?: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+    }) => {
+      // Update turn usage (per-turn tracking)
+      setTurnUsage({
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        thinkingTokens: usage.thinkingTokens ?? 0,
+        cacheReadTokens: usage.cacheReadTokens ?? 0,
+        cacheWriteTokens: usage.cacheWriteTokens ?? 0,
+      });
+
+      // Update cumulative usage
+      setTokenUsage((prev) => {
+        const newUsage = {
+          inputTokens: prev.inputTokens + usage.inputTokens,
+          outputTokens: prev.outputTokens + usage.outputTokens,
+          thinkingTokens: prev.thinkingTokens + (usage.thinkingTokens ?? 0),
+          cacheReadTokens: prev.cacheReadTokens + (usage.cacheReadTokens ?? 0),
+          cacheWriteTokens: prev.cacheWriteTokens + (usage.cacheWriteTokens ?? 0),
+          totalCost: calculateCost(
+            currentProvider,
+            currentModel,
+            prev.inputTokens + usage.inputTokens,
+            prev.outputTokens + usage.outputTokens
+          ),
+        };
+        tokenUsageRef.current = newUsage;
+        return newUsage;
+      });
+
+      // Track usage in cost service
+      costService.trackUsage(
+        {
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          cacheReadTokens: usage.cacheReadTokens ?? 0,
+          cacheWriteTokens: usage.cacheWriteTokens ?? 0,
+          thinkingTokens: usage.thinkingTokens ?? 0,
+        },
+        currentModel,
+        currentProvider
+      );
+    };
+
+    agentLoopProp.on("usage", handleUsage);
+
+    return () => {
+      agentLoopProp.off("usage", handleUsage);
+    };
+  }, [agentLoopProp, currentModel, currentProvider, costService]);
+
+  // Fallback: Update token usage from messages when no AgentLoop (simulated)
+  useEffect(() => {
+    // Only use fallback when no agentLoop is provided
+    if (agentLoopProp) {
+      return;
+    }
+
+    // Approximate token count: ~4 chars per token (fallback only)
     const inputChars = messages
       .filter((m) => m.role === "user")
       .reduce((sum, m) => sum + m.content.length, 0);
@@ -2383,38 +2556,15 @@ function AppContent({
 
     const inputTokens = Math.ceil(inputChars / 4);
     const outputTokens = Math.ceil(outputChars / 4);
-    // Calculate cost using model-specific pricing
     const totalCost = calculateCost(currentProvider, currentModel, inputTokens, outputTokens);
 
-    setTokenUsage({ inputTokens, outputTokens, totalCost });
-  }, [messages, currentProvider, currentModel]);
-
-  useEffect(() => {
-    tokenUsageRef.current = tokenUsage;
-
-    const prev = previousTokenUsageRef.current;
-    const deltaInput = tokenUsage.inputTokens - prev.inputTokens;
-    const deltaOutput = tokenUsage.outputTokens - prev.outputTokens;
-
-    if (deltaInput > 0 || deltaOutput > 0) {
-      costService.trackUsage(
-        {
-          inputTokens: Math.max(deltaInput, 0),
-          outputTokens: Math.max(deltaOutput, 0),
-          cacheReadTokens: 0,
-          cacheWriteTokens: 0,
-          thinkingTokens: 0,
-        },
-        currentModel,
-        currentProvider
-      );
-    }
-
-    previousTokenUsageRef.current = {
-      inputTokens: tokenUsage.inputTokens,
-      outputTokens: tokenUsage.outputTokens,
-    };
-  }, [tokenUsage, costService, currentModel, currentProvider]);
+    setTokenUsage((prev) => ({
+      ...prev,
+      inputTokens,
+      outputTokens,
+      totalCost,
+    }));
+  }, [messages, currentProvider, currentModel, agentLoopProp]);
 
   // Calculate total tokens for StatusBar
   const totalTokens = tokenUsage.inputTokens + tokenUsage.outputTokens;
@@ -2505,8 +2655,15 @@ function AppContent({
     return "";
   }, [interactivePrompt]);
 
+  // Get agent level from AgentConfig via registry
+  const agentName = BUILTIN_CODING_MODES[currentMode].agentName;
+  const agentConfig = agentName ? BuiltinAgentRegistry.getInstance().get(agentName) : undefined;
+  const agentLevel = (agentConfig?.level ?? 2) as 0 | 1 | 2;
+
   return (
     <AppContentView
+      agentLevel={agentLevel}
+      agentName={agentName}
       announce={announce}
       activeApproval={activeApproval}
       activeRiskLevel={activeRiskLevel}
@@ -2529,6 +2686,7 @@ function AppContent({
       currentModel={currentModel}
       currentProvider={currentProvider}
       currentTip={currentTip}
+      dismissTip={dismissTip}
       dismissUpdateBanner={dismissUpdateBanner}
       handleApprove={handleApprove}
       handleApproveAlways={handleApproveAlways}
@@ -2570,6 +2728,7 @@ function AppContent({
       refreshTodos={refreshTodos}
       toolRegistry={toolRegistry}
       tokenUsage={tokenUsage}
+      turnUsage={turnUsage}
       totalTokens={totalTokens}
       trustMode={trustMode}
       undoBacktrack={undoBacktrack}
@@ -2584,6 +2743,8 @@ type TipValue = ReturnType<typeof useTipEngine>["currentTip"];
 type ToolApprovalState = ReturnType<typeof useToolApprovalController>;
 
 interface AppContentViewProps {
+  readonly agentLevel: 0 | 1 | 2;
+  readonly agentName?: string;
   readonly announce: (message: string) => void;
   readonly activeApproval: ToolApprovalState["activeApproval"];
   readonly activeRiskLevel: ToolApprovalState["activeRiskLevel"];
@@ -2606,6 +2767,7 @@ interface AppContentViewProps {
   readonly currentModel: string;
   readonly currentProvider: string;
   readonly currentTip: TipValue;
+  readonly dismissTip: () => void;
   readonly dismissUpdateBanner: () => void;
   readonly handleApprove: () => void;
   readonly handleApproveAlways: () => void;
@@ -2652,7 +2814,21 @@ interface AppContentViewProps {
   readonly todoItems: readonly TodoItemData[];
   readonly refreshTodos: () => void;
   readonly toolRegistry: ToolRegistry;
-  readonly tokenUsage: { inputTokens: number; outputTokens: number; totalCost: number };
+  readonly tokenUsage: {
+    inputTokens: number;
+    outputTokens: number;
+    thinkingTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    totalCost: number;
+  };
+  readonly turnUsage: {
+    inputTokens: number;
+    outputTokens: number;
+    thinkingTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+  };
   readonly totalTokens: number;
   readonly trustMode: TrustMode;
   readonly undoBacktrack: () => void;
@@ -2912,11 +3088,11 @@ interface AppHeaderProps {
   readonly branches: ReturnType<typeof useBacktrack>["branches"];
   readonly currentMode: CodingMode;
   readonly currentTip: TipValue;
+  readonly dismissTip: () => void;
   readonly handleCreateBacktrackBranch: () => void;
   readonly handleSwitchBacktrackBranch: (branchId: string) => void;
   readonly redoBacktrack: () => void;
   readonly specPhase: number;
-  readonly themeContext: ThemeContextValue;
   readonly undoBacktrack: () => void;
 }
 
@@ -2925,30 +3101,16 @@ function AppHeader({
   branches,
   currentMode,
   currentTip,
+  dismissTip,
   handleCreateBacktrackBranch,
   handleSwitchBacktrackBranch,
   redoBacktrack,
   specPhase,
-  themeContext,
   undoBacktrack,
 }: AppHeaderProps): React.JSX.Element {
   return (
     <Box flexDirection="column">
-      {currentTip && (
-        <Box
-          marginTop={1}
-          paddingX={1}
-          borderStyle="single"
-          borderColor={themeContext.theme.colors.info}
-        >
-          <Text>
-            <Text color={themeContext.theme.colors.info}>{currentTip.icon ?? "[i]"} </Text>
-            <Text bold>{currentTip.title}: </Text>
-            <Text>{currentTip.content}</Text>
-            <Text color={themeContext.theme.colors.muted}> (press any key to dismiss)</Text>
-          </Text>
-        </Box>
-      )}
+      <TipBanner tip={currentTip} onDismiss={dismissTip} compact />
       {currentMode === "spec" && (
         <PhaseProgressIndicator currentPhase={specPhase} showLabels showPercentage />
       )}
@@ -2967,6 +3129,8 @@ function AppHeader({
 }
 
 function AppContentView({
+  agentLevel,
+  agentName,
   announce,
   activeApproval,
   activeRiskLevel,
@@ -2989,6 +3153,7 @@ function AppContentView({
   currentModel,
   currentProvider,
   currentTip,
+  dismissTip,
   dismissUpdateBanner,
   handleApprove,
   handleApproveAlways,
@@ -3030,6 +3195,7 @@ function AppContentView({
   refreshTodos,
   toolRegistry,
   tokenUsage,
+  turnUsage,
   totalTokens,
   trustMode,
   undoBacktrack,
@@ -3049,8 +3215,28 @@ function AppContentView({
   const footer = (
     <StatusBar
       mode={currentMode}
+      agentName={agentName}
+      agentLevel={agentLevel}
       modelName={currentModel}
-      tokens={{ current: totalTokens, max: contextWindow }}
+      tokens={{
+        current: totalTokens,
+        max: contextWindow,
+        breakdown: {
+          inputTokens: tokenUsage.inputTokens,
+          outputTokens: tokenUsage.outputTokens,
+          thinkingTokens: tokenUsage.thinkingTokens,
+          cacheReadTokens: tokenUsage.cacheReadTokens,
+          cacheWriteTokens: tokenUsage.cacheWriteTokens,
+        },
+        turnUsage: {
+          inputTokens: turnUsage.inputTokens,
+          outputTokens: turnUsage.outputTokens,
+          thinkingTokens: turnUsage.thinkingTokens,
+          cacheReadTokens: turnUsage.cacheReadTokens,
+          cacheWriteTokens: turnUsage.cacheWriteTokens,
+        },
+        showBreakdown: true,
+      }}
       cost={tokenUsage.totalCost}
       trustMode={trustMode}
       thinking={{ active: isThinking }}
@@ -3121,11 +3307,11 @@ function AppContentView({
             branches={branches}
             currentMode={currentMode}
             currentTip={currentTip}
+            dismissTip={dismissTip}
             handleCreateBacktrackBranch={handleCreateBacktrackBranch}
             handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
             redoBacktrack={redoBacktrack}
             specPhase={specPhase}
-            themeContext={themeContext}
             undoBacktrack={undoBacktrack}
           />
         }

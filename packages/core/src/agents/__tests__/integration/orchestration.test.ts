@@ -19,6 +19,9 @@ import {
 /**
  * Factory for creating test mode configurations.
  * Uses type assertion to allow custom slug names for testing.
+ *
+ * Note: Agent hierarchy fields (level, canSpawnAgents, fileRestrictions,
+ * maxConcurrentSubagents) are now in AgentConfig, not ExtendedModeConfig.
  */
 function createTestMode(
   overrides: Omit<Partial<ExtendedModeConfig>, "name"> & { name: string }
@@ -29,50 +32,40 @@ function createTestMode(
     description: "Test mode",
     tools: { edit: true, bash: true },
     prompt: "Test prompt",
-    level: AgentLevel.worker,
     ...rest,
   } as ExtendedModeConfig;
 }
 
 // Test mode configs using correct interface structure
+// Note: level and canSpawnAgents are now in AgentConfig, not modes
 const orchestratorMode = createTestMode({
   name: "orchestrator",
   description: "Main orchestrator for testing - handles task coordination",
   prompt: "You are the main orchestrator. Coordinate tasks across agents.",
-  level: AgentLevel.orchestrator,
-  canSpawnAgents: ["workflow", "coder", "qa", "writer"],
 });
 
 const workflowMode = createTestMode({
   name: "workflow",
   description: "Workflow agent for testing - manages task sequences",
   prompt: "You are a workflow agent. Manage task sequences.",
-  level: AgentLevel.workflow,
-  canSpawnAgents: ["coder", "qa", "writer"],
 });
 
 const coderMode = createTestMode({
   name: "coder",
   description: "Coder worker for implementation - implement features and write code",
   prompt: "You are a coder. Implement features and write code.",
-  level: AgentLevel.worker,
-  canSpawnAgents: [],
 });
 
 const qaMode = createTestMode({
   name: "qa",
   description: "QA worker for testing - write and run tests",
   prompt: "You are a QA engineer. Write and run tests.",
-  level: AgentLevel.worker,
-  canSpawnAgents: [],
 });
 
 const writerMode = createTestMode({
   name: "writer",
   description: "Documentation writer - write documentation and docs",
   prompt: "You are a technical writer. Write documentation.",
-  level: AgentLevel.worker,
-  canSpawnAgents: [],
 });
 
 describe("Orchestration E2E Integration", () => {
@@ -97,6 +90,35 @@ describe("Orchestration E2E Integration", () => {
       maxConcurrentSubagents: 3,
       taskTimeout: 30000,
       onApprovalRequired: async () => true,
+    });
+
+    // Add routing rules for test modes
+    // Note: Since getByLevel() is deprecated (returns empty for non-built-in modes),
+    // we use explicit routing rules to map task patterns to agent slugs
+    orchestrator.router.addRule({
+      pattern: /implement|code|build|feature/i,
+      agentSlug: "coder",
+      priority: 100,
+    });
+    orchestrator.router.addRule({
+      pattern: /test|spec|qa|verify/i,
+      agentSlug: "qa",
+      priority: 100,
+    });
+    orchestrator.router.addRule({
+      pattern: /document|write|docs/i,
+      agentSlug: "writer",
+      priority: 100,
+    });
+    orchestrator.router.addRule({
+      pattern: /workflow|sequence|coordinate/i,
+      agentSlug: "workflow",
+      priority: 100,
+    });
+    orchestrator.router.addRule({
+      pattern: /orchestrat/i,
+      agentSlug: "orchestrator",
+      priority: 100,
     });
 
     // Track events

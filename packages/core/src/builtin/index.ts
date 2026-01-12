@@ -101,20 +101,6 @@ export {
   listDirParamsSchema,
   listDirTool,
 } from "./list-dir.js";
-// LSP integration tools
-export {
-  type DiagnosticSeverity,
-  getCurrentLspConnection,
-  type LspCompletionItem,
-  type LspDiagnostic,
-  type LspHoverInfo,
-  type LspLocation,
-  type LspOutput,
-  type LspParams,
-  lspParamsSchema,
-  lspTool,
-  setLspConnection,
-} from "./lsp.js";
 // File operation tools
 export {
   type ReadFileOutput,
@@ -238,7 +224,6 @@ import type { ToolRegistry } from "../tool/registry.js";
  * - Browser: browser
  * - Network: web_fetch, web_search
  * - Documentation: doc_lookup
- * - LSP: lsp
  * - Productivity: todo_manage, smart_edit
  * - Memory: save_memory, recall_memory
  * - Agent delegation: delegate_agent
@@ -254,7 +239,6 @@ export const ALL_BUILTIN_TOOLS = [
   delegateAgentTool,
   docLookupTool,
   listDirTool,
-  lspTool,
   readFileTool,
   recallMemoryTool,
   saveMemoryTool,
@@ -305,7 +289,6 @@ import { codebaseSearchTool } from "./codebase-search.js";
 import { delegateAgentTool } from "./delegate-agent.js";
 import { docLookupTool } from "./doc-lookup.js";
 import { listDirTool } from "./list-dir.js";
-import { lspTool } from "./lsp.js";
 import { readFileTool } from "./read-file.js";
 import { recallMemoryTool } from "./recall-memory.js";
 import { saveMemoryTool } from "./save-memory.js";

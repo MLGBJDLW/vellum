@@ -354,10 +354,11 @@ describe("SpecModeHandler", () => {
       expect(handler.canSpawnAgents).toBe(true);
     });
 
-    it("should list spawnable agents", () => {
-      expect(handler.spawnableAgents).toContain("spec-research");
-      expect(handler.spawnableAgents).toContain("spec-impl");
-      expect(handler.spawnableAgents).toContain("spec-validate");
+    it("should return empty spawnable agents list", () => {
+      // Note: Spawnable agents are now managed at the orchestrator/registry level,
+      // not in the mode handler. The handler returns empty array and the 
+      // orchestrator determines what agents can be spawned based on AgentConfig.
+      expect(handler.spawnableAgents).toEqual([]);
     });
   });
 

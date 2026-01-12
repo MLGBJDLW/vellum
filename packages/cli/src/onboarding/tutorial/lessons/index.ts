@@ -114,7 +114,7 @@ export function checkPrerequisites(lessonId: string, completedLessons: string[])
   const lesson = LESSONS_BY_ID[lessonId];
   if (!lesson) return false;
 
-  return lesson.prerequisites.every((prereqId) => completedLessons.includes(prereqId));
+  return lesson.prerequisites.every((prereqId: string) => completedLessons.includes(prereqId));
 }
 
 /**

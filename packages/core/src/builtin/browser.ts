@@ -338,8 +338,7 @@ async function handleEvaluate(
     return fail("Script is required for evaluate action");
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: JS evaluation returns any type
-  const result: any = await page.evaluate(script);
+  const result: unknown = await page.evaluate(script);
 
   return ok({
     action: "evaluate",

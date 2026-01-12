@@ -18,7 +18,7 @@
 
 import { render } from "ink-testing-library";
 import type React from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/index.js";
 import { ModelIndicator } from "../ModelIndicator.js";
 import { StatusBar } from "../StatusBar.js";
@@ -612,15 +612,15 @@ describe("StatusBar", () => {
       const frame = lastFrame() ?? "";
       // All modes should be visible
       expect(frame).toContain("vibe");
-      expect(frame).toContain("Think");
-      expect(frame).toContain("Orch");
+      expect(frame).toContain("plan");
+      expect(frame).toContain("spec");
     });
 
     it("should show spec mode correctly", () => {
       const { lastFrame } = renderWithTheme(<StatusBar mode="spec" modelName="claude-3" />);
       const frame = lastFrame() ?? "";
       expect(frame).toContain("◈");
-      expect(frame).toContain("Orch");
+      expect(frame).toContain("spec");
     });
   });
 
@@ -639,6 +639,91 @@ describe("StatusBar", () => {
       );
       const frame = lastFrame() ?? "";
       expect(frame).toContain("$0.0010");
+    });
+  });
+
+  // ===========================================================================
+  // T016, T017, T018: Mode-Agent Decoupling Tests
+  // ===========================================================================
+
+  describe("Mode-Agent Decoupling (T016-T018)", () => {
+    describe("T016: No Level Display", () => {
+      it("should render mode name only, no level indicators", () => {
+        const { lastFrame } = renderWithTheme(<StatusBar mode="spec" modelName="claude-3" />);
+        const frame = lastFrame() ?? "";
+        // Mode name should be visible
+        expect(frame).toContain("spec");
+        // Level indicators should NOT be visible
+        expect(frame).not.toContain("L0");
+        expect(frame).not.toContain("L1");
+        expect(frame).not.toContain("L2");
+        expect(frame).not.toContain("orchestrator");
+        expect(frame).not.toContain("workflow");
+        expect(frame).not.toContain("worker");
+        expect(frame).not.toContain("orch");
+      });
+
+      it("should NOT render level even when agentLevel prop is provided", () => {
+        const { lastFrame } = renderWithTheme(
+          <StatusBar mode="spec" modelName="claude-3" agentLevel={0} />
+        );
+        const frame = lastFrame() ?? "";
+        // Mode name should be visible
+        expect(frame).toContain("spec");
+        // Level indicators should NOT be visible
+        expect(frame).not.toContain("L0");
+        expect(frame).not.toContain("orch");
+      });
+
+      it("should render all modes without level indicators", () => {
+        for (const mode of ["vibe", "plan", "spec"] as const) {
+          const { lastFrame } = renderWithTheme(<StatusBar mode={mode} modelName="claude-3" />);
+          const frame = lastFrame() ?? "";
+          expect(frame).toContain(mode);
+          expect(frame).not.toMatch(/L[0-2]/);
+        }
+      });
+    });
+
+    describe("T017: Deprecation Warning", () => {
+      let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+      const originalNodeEnv = process.env.NODE_ENV;
+
+      beforeEach(() => {
+        consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        // Set to development mode for deprecation warnings
+        process.env.NODE_ENV = "development";
+      });
+
+      afterEach(() => {
+        consoleWarnSpy.mockRestore();
+        process.env.NODE_ENV = originalNodeEnv;
+      });
+
+      it("should log deprecation warning when agentLevel prop is provided", () => {
+        renderWithTheme(<StatusBar mode="spec" modelName="claude-3" agentLevel={1} />);
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("DEPRECATION WARNING"));
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("agentLevel"));
+      });
+
+      it("should NOT log deprecation warning when agentLevel prop is not provided", () => {
+        renderWithTheme(<StatusBar mode="spec" modelName="claude-3" />);
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it("should log deprecation warning for all agentLevel values", () => {
+        for (const level of [0, 1, 2] as const) {
+          consoleWarnSpy.mockClear();
+          renderWithTheme(<StatusBar mode="spec" modelName="claude-3" agentLevel={level} />);
+          expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+        }
+      });
+
+      it("should NOT log deprecation warning in production mode", () => {
+        process.env.NODE_ENV = "production";
+        renderWithTheme(<StatusBar mode="spec" modelName="claude-3" agentLevel={1} />);
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
     });
   });
 });

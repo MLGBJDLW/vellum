@@ -20,12 +20,13 @@ import type {
   RawMessageStreamEvent,
   TextBlock,
   ThinkingBlock,
-  ToolResultBlockParam,
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
 import { ErrorCode } from "@vellum/shared";
 import { createProviderError, ProviderError } from "./errors.js";
 import { ANTHROPIC_MODELS } from "./models/providers/anthropic.js";
+import { anthropicTransform } from "./transforms/anthropic.js";
+import type { TransformConfig } from "./transforms/types.js";
 import type {
   CompletionMessage,
   CompletionParams,
@@ -294,10 +295,14 @@ export class AnthropicProvider implements Provider {
       const messages: CompletionMessage[] =
         typeof input === "string" ? [{ role: "user", content: input }] : input;
 
+      // Transform messages using the transform layer
+      const config = this.createTransformConfig(modelId);
+      const { data: transformedMessages } = anthropicTransform.transformMessages(messages, config);
+
       // Use the Anthropic token counting API
       const result = await this.client?.messages.countTokens({
         model: modelId,
-        messages: this.convertMessages(messages),
+        messages: transformedMessages as Anthropic.MessageParam[],
       });
 
       return result?.input_tokens ?? 0;
@@ -434,10 +439,32 @@ export class AnthropicProvider implements Provider {
   }
 
   /**
+   * Create transform config for Anthropic API calls.
+   * @param model - Optional model ID for model-specific features
+   * @param enableCaching - Whether to enable prompt caching
+   */
+  private createTransformConfig(model?: string, enableCaching = false): TransformConfig {
+    return {
+      provider: "anthropic",
+      modelId: model,
+      enableCaching,
+    };
+  }
+
+  /**
    * Build the Anthropic API request from completion params
    */
   private buildRequest(params: CompletionParams): MessageCreateParams {
-    const messages = this.convertMessages(params.messages);
+    const config = this.createTransformConfig(params.model);
+    const { data: messages, warnings } = anthropicTransform.transformMessages(
+      params.messages,
+      config
+    );
+
+    // Log transform warnings if any
+    if (warnings.length > 0) {
+      console.warn("[Anthropic] Transform warnings:", warnings);
+    }
 
     // Extract system message if present
     const systemMessage = params.messages.find((m) => m.role === "system");
@@ -449,7 +476,7 @@ export class AnthropicProvider implements Provider {
     // Build base request
     const request: MessageCreateParams = {
       model: params.model,
-      messages,
+      messages: messages as Anthropic.MessageParam[],
       max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
       ...(system && { system }),
       ...(params.temperature !== undefined && { temperature: params.temperature }),
@@ -477,69 +504,6 @@ export class AnthropicProvider implements Provider {
     }
 
     return request;
-  }
-
-  /**
-   * Convert our message format to Anthropic format
-   */
-  private convertMessages(messages: CompletionMessage[]): Anthropic.MessageParam[] {
-    return messages
-      .filter((m) => m.role !== "system") // System handled separately
-      .map((m) => this.convertMessage(m));
-  }
-
-  /**
-   * Convert a single message to Anthropic format
-   */
-  private convertMessage(message: CompletionMessage): Anthropic.MessageParam {
-    const role = message.role === "assistant" ? "assistant" : "user";
-
-    if (typeof message.content === "string") {
-      return { role, content: message.content };
-    }
-
-    // Convert content parts
-    const content: Anthropic.ContentBlockParam[] = message.content.map((part) => {
-      switch (part.type) {
-        case "text":
-          return { type: "text", text: part.text };
-
-        case "image":
-          return {
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: part.mimeType,
-              data: part.source,
-            },
-          };
-
-        case "tool_use":
-          return {
-            type: "tool_use",
-            id: part.id,
-            name: part.name,
-            input: part.input,
-          };
-
-        case "tool_result":
-          return {
-            type: "tool_result",
-            tool_use_id: part.toolUseId,
-            content: typeof part.content === "string" ? part.content : JSON.stringify(part.content),
-            ...(part.isError && { is_error: true }),
-          } as ToolResultBlockParam;
-
-        default:
-          throw new ProviderError(`Unknown content part type: ${(part as { type: string }).type}`, {
-            code: ErrorCode.INVALID_ARGUMENT,
-            category: "api_error",
-            retryable: false,
-          });
-      }
-    });
-
-    return { role, content };
   }
 
   /**

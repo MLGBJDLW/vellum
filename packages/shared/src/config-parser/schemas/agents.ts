@@ -185,6 +185,24 @@ export const agentsFrontmatterSchema = baseMetadataSchema.extend({
    * Model configuration preferences
    */
   model: modelSettingsSchema,
+
+  /**
+   * Custom instructions to inject into the system prompt.
+   * These are appended to the agent's prompt regardless of mode.
+   */
+  customInstructions: z
+    .string()
+    .optional()
+    .describe("Custom instructions injected into system prompt"),
+
+  /**
+   * Integration instructions (alias for customInstructions).
+   * Provided for naming flexibility - maps to the same underlying value.
+   */
+  integrationInstructions: z
+    .string()
+    .optional()
+    .describe("Integration instructions (alias for customInstructions)"),
 });
 
 /**

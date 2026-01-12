@@ -291,6 +291,10 @@
     "switchBranch": "switch branch",
     "newBranch": "new branch"
   },
+  "tip": {
+    "dismiss": "dismiss",
+    "relatedLesson": "Related lesson"
+  },
   "code": {
     "copy": "[Copy]"
   }

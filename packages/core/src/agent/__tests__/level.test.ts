@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { AgentLevel, AgentLevelSchema, canSpawn } from "../level.js";
+import { PLAN_AGENT, SPEC_ORCHESTRATOR, VIBE_AGENT, type AgentConfig } from "../agent-config.js";
+import { AgentLevel, AgentLevelSchema, canAgentSpawn, canSpawn } from "../level.js";
 
 describe("AgentLevel", () => {
   describe("enum values", () => {
@@ -207,6 +208,120 @@ describe("canSpawn", () => {
           expect(canSpawn(from, to)).toBe(spawnMatrix[from][to]);
         }
       }
+    });
+  });
+});
+
+// =============================================================================
+// T013: canAgentSpawn Tests
+// =============================================================================
+
+describe("canAgentSpawn (T013)", () => {
+  describe("built-in agents spawn rules", () => {
+    it("spec-orchestrator can spawn plan-agent", () => {
+      expect(canAgentSpawn(SPEC_ORCHESTRATOR, PLAN_AGENT)).toBe(true);
+    });
+
+    it("spec-orchestrator can spawn vibe-agent", () => {
+      expect(canAgentSpawn(SPEC_ORCHESTRATOR, VIBE_AGENT)).toBe(true);
+    });
+
+    it("plan-agent can spawn vibe-agent", () => {
+      expect(canAgentSpawn(PLAN_AGENT, VIBE_AGENT)).toBe(true);
+    });
+
+    it("vibe-agent cannot spawn any agent (canSpawnAgents: false)", () => {
+      expect(canAgentSpawn(VIBE_AGENT, VIBE_AGENT)).toBe(false);
+      expect(canAgentSpawn(VIBE_AGENT, PLAN_AGENT)).toBe(false);
+      expect(canAgentSpawn(VIBE_AGENT, SPEC_ORCHESTRATOR)).toBe(false);
+    });
+
+    it("plan-agent cannot spawn spec-orchestrator (higher level)", () => {
+      expect(canAgentSpawn(PLAN_AGENT, SPEC_ORCHESTRATOR)).toBe(false);
+    });
+
+    it("plan-agent cannot spawn plan-agent (same level)", () => {
+      expect(canAgentSpawn(PLAN_AGENT, PLAN_AGENT)).toBe(false);
+    });
+  });
+
+  describe("canSpawnAgents permission", () => {
+    it("should block spawn when canSpawnAgents is false", () => {
+      const noSpawnAgent: AgentConfig = {
+        name: "no-spawn-agent",
+        level: AgentLevel.orchestrator, // Even at orchestrator level
+        canSpawnAgents: false, // But cannot spawn
+      };
+      expect(canAgentSpawn(noSpawnAgent, VIBE_AGENT)).toBe(false);
+      expect(canAgentSpawn(noSpawnAgent, PLAN_AGENT)).toBe(false);
+    });
+
+    it("should allow spawn when canSpawnAgents is true and level is lower", () => {
+      const canSpawnAgent: AgentConfig = {
+        name: "can-spawn-agent",
+        level: AgentLevel.workflow,
+        canSpawnAgents: true,
+      };
+      expect(canAgentSpawn(canSpawnAgent, VIBE_AGENT)).toBe(true);
+    });
+  });
+
+  describe("level hierarchy enforcement", () => {
+    it("cannot spawn agent at same level even with canSpawnAgents: true", () => {
+      const sameLevel1: AgentConfig = {
+        name: "workflow-1",
+        level: AgentLevel.workflow,
+        canSpawnAgents: true,
+      };
+      const sameLevel2: AgentConfig = {
+        name: "workflow-2",
+        level: AgentLevel.workflow,
+        canSpawnAgents: true,
+      };
+      expect(canAgentSpawn(sameLevel1, sameLevel2)).toBe(false);
+    });
+
+    it("cannot spawn agent at higher (lower-numbered) level", () => {
+      const workflowAgent: AgentConfig = {
+        name: "workflow-agent",
+        level: AgentLevel.workflow,
+        canSpawnAgents: true,
+      };
+      const orchestratorAgent: AgentConfig = {
+        name: "orch-agent",
+        level: AgentLevel.orchestrator,
+        canSpawnAgents: true,
+      };
+      expect(canAgentSpawn(workflowAgent, orchestratorAgent)).toBe(false);
+    });
+
+    it("orchestrator (0) can spawn any lower level with permission", () => {
+      const orchestrator: AgentConfig = {
+        name: "orch",
+        level: AgentLevel.orchestrator,
+        canSpawnAgents: true,
+      };
+      expect(canAgentSpawn(orchestrator, PLAN_AGENT)).toBe(true); // level 1
+      expect(canAgentSpawn(orchestrator, VIBE_AGENT)).toBe(true); // level 2
+    });
+  });
+
+  describe("complete spawn matrix with AgentConfig", () => {
+    it("verifies full spawn matrix for built-in agents", () => {
+      // SPEC_ORCHESTRATOR (level 0, canSpawnAgents: true)
+      expect(canAgentSpawn(SPEC_ORCHESTRATOR, SPEC_ORCHESTRATOR)).toBe(false); // same level
+      expect(canAgentSpawn(SPEC_ORCHESTRATOR, PLAN_AGENT)).toBe(true); // lower level
+      expect(canAgentSpawn(SPEC_ORCHESTRATOR, VIBE_AGENT)).toBe(true); // lower level
+
+      // PLAN_AGENT (level 1, canSpawnAgents: true)
+      expect(canAgentSpawn(PLAN_AGENT, SPEC_ORCHESTRATOR)).toBe(false); // higher level
+      expect(canAgentSpawn(PLAN_AGENT, PLAN_AGENT)).toBe(false); // same level
+      expect(canAgentSpawn(PLAN_AGENT, VIBE_AGENT)).toBe(true); // lower level
+
+      // VIBE_AGENT (level 2, canSpawnAgents: false)
+      expect(canAgentSpawn(VIBE_AGENT, SPEC_ORCHESTRATOR)).toBe(false); // no permission
+      expect(canAgentSpawn(VIBE_AGENT, PLAN_AGENT)).toBe(false); // no permission
+      expect(canAgentSpawn(VIBE_AGENT, VIBE_AGENT)).toBe(false); // no permission
     });
   });
 });

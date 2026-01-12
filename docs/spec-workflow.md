@@ -12,8 +12,8 @@ The spec workflow provides precision coding through structured planning phases. 
 | 2. Requirements | `spec-requirements` | `requirements.md` | EARS-format requirements |
 | 3. Design | `spec-architect` | `design.md`, ADRs | Architecture decisions |
 | 4. Tasks | `spec-tasks` | `tasks.md` | Actionable implementation tasks |
-| 5. Implementation | `coder` | Source code | Execute tasks with full tool access |
-| 6. Validation | `spec-validator` | `validation.md` | Verify deliverables |
+| 5. Validation | `spec-validator` | `validation.md` | Validate plan feasibility |
+| 6. Implementation | `coder` | Source code | Execute validated plan |
 
 ## Quick Start
 
@@ -72,23 +72,23 @@ The `spec-tasks` agent breaks down the design into actionable tasks:
 
 **Output:** `.vellum/specs/{name}/tasks.md`
 
-### Phase 5: Implementation
+### Phase 5: Validation
+
+The `spec-validator` agent validates the plan before implementation:
+- All requirements are feasible
+- Design is sound and complete
+- Tasks are properly scoped
+- Dependencies are resolved
+
+**Output:** `.vellum/specs/{name}/validation.md`
+
+### Phase 6: Implementation
 
 Hands off to the `coder` agent with full tool access:
-- Executes tasks in order
+- Executes validated tasks in order
 - Creates/modifies source files
 - Runs tests as specified
 - Reports progress per task
-
-### Phase 6: Validation
-
-The `spec-validator` agent verifies the implementation:
-- All requirements satisfied
-- Tests pass
-- Code follows project conventions
-- Documentation updated
-
-**Output:** `.vellum/specs/{name}/validation.md`
 
 ## Checkpoint System
 

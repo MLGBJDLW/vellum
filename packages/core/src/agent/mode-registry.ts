@@ -3,6 +3,7 @@
 // ============================================
 
 import type { ResolvedAgent } from "../agents/custom/resolver.js";
+import { BUILT_IN_AGENTS } from "./agent-config.js";
 import { type AgentLevel, canSpawn as canSpawnLevel } from "./level.js";
 import type { ExtendedModeConfig } from "./modes.js";
 
@@ -215,12 +216,20 @@ export interface ModeRegistry {
 
 /**
  * Internal implementation of ModeRegistry.
+ *
+ * Note: Level-based features (byLevel index, getByLevel, level-based canSpawn)
+ * have been deprecated. Agent hierarchy is now managed through AgentConfig
+ * and AgentRegistry. Modes focus on tool permissions and prompts only.
  */
 class ModeRegistryImpl implements ModeRegistry {
   /** Map of slug -> mode for O(1) lookup */
   private readonly modes = new Map<string, ExtendedModeConfig>();
 
-  /** Index by level for efficient getByLevel queries */
+  /** 
+   * Index by level for efficient getByLevel queries.
+   * @deprecated Level is now in AgentConfig, not ExtendedModeConfig.
+   * This index will remain empty in the new architecture.
+   */
   private readonly byLevel = new Map<AgentLevel, ExtendedModeConfig[]>();
 
   /** Map of slug -> custom agent for O(1) lookup (T028) */
@@ -236,16 +245,18 @@ class ModeRegistryImpl implements ModeRegistry {
     // Store in main map
     this.modes.set(slug, mode);
 
-    // Update level index
-    const levelModes = this.byLevel.get(mode.level) ?? [];
-    levelModes.push(mode);
-    this.byLevel.set(mode.level, levelModes);
+    // Note: byLevel index is no longer updated since level is not in ExtendedModeConfig
+    // Level-based organization is now handled by AgentRegistry
   }
 
   get(slug: string): ExtendedModeConfig | undefined {
     return this.modes.get(slug);
   }
 
+  /**
+   * @deprecated Level is now in AgentConfig, not ExtendedModeConfig.
+   * Use AgentRegistry.getByLevel() instead.
+   */
   getByLevel(level: AgentLevel): ExtendedModeConfig[] {
     return this.byLevel.get(level) ?? [];
   }
@@ -255,7 +266,7 @@ class ModeRegistryImpl implements ModeRegistry {
     const isFromCustom = fromSlug.startsWith(CUSTOM_AGENT_PREFIX);
     const isToCustom = toSlug.startsWith(CUSTOM_AGENT_PREFIX);
 
-    // Get source mode/agent
+    // Get source agent level
     let fromLevel: AgentLevel;
     let canSpawnList: string[];
 
@@ -265,13 +276,22 @@ class ModeRegistryImpl implements ModeRegistry {
       fromLevel = fromAgent.level ?? (2 as AgentLevel); // Default to worker
       canSpawnList = fromAgent.coordination?.canSpawnAgents ?? [];
     } else {
+      // Look up level from BUILT_IN_AGENTS via mode name mapping
+      // For built-in modes, we have a naming convention:
+      // - "code" mode -> "vibe-agent"
+      // - "plan" mode -> "plan-agent" 
+      // For now, default to worker level if not found
       const fromMode = this.modes.get(fromSlug);
       if (!fromMode) return false;
-      fromLevel = fromMode.level;
-      canSpawnList = fromMode.canSpawnAgents ?? [];
+      
+      // Try to find matching agent by name
+      const agentName = this.modeToAgentName(fromSlug);
+      const agent = agentName ? BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS] : undefined;
+      fromLevel = agent?.level ?? (2 as AgentLevel); // Default to worker
+      canSpawnList = agent?.canSpawnAgents ? [] : []; // canSpawnAgents is boolean in AgentConfig
     }
 
-    // Get target mode/agent
+    // Get target agent level
     let toLevel: AgentLevel;
 
     if (isToCustom) {
@@ -281,7 +301,11 @@ class ModeRegistryImpl implements ModeRegistry {
     } else {
       const toMode = this.modes.get(toSlug);
       if (!toMode) return false;
-      toLevel = toMode.level;
+      
+      // Try to find matching agent by name
+      const agentName = this.modeToAgentName(toSlug);
+      const agent = agentName ? BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS] : undefined;
+      toLevel = agent?.level ?? (2 as AgentLevel); // Default to worker
     }
 
     // Check hierarchy level rules (orchestrator->workflow, workflow->worker)
@@ -289,12 +313,44 @@ class ModeRegistryImpl implements ModeRegistry {
       return false;
     }
 
-    // Check if target is in the allowed spawn list
+    // For built-in agents, canSpawn is based on hierarchy rules only
+    // Custom agents use their canSpawnAgents list
+    if (!isFromCustom) {
+      const agentName = this.modeToAgentName(fromSlug);
+      const agent = agentName ? BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS] : undefined;
+      return agent?.canSpawnAgents ?? false;
+    }
+
+    // Check if target is in the allowed spawn list (for custom agents)
     return canSpawnList.includes(toSlug);
   }
 
+  /**
+   * Map a mode slug to its corresponding agent name.
+   * @private
+   */
+  private modeToAgentName(modeSlug: string): string | undefined {
+    // Built-in mode to agent mapping
+    const modeToAgent: Record<string, string> = {
+      code: "vibe-agent",
+      plan: "plan-agent",
+      // Note: "spec" mode maps to spec-orchestrator but uses "plan" as its name
+    };
+    return modeToAgent[modeSlug];
+  }
+
   findBestMatch(task: string, level: AgentLevel): ExtendedModeConfig | undefined {
-    const candidates = this.getByLevel(level);
+    // Since level is no longer in ExtendedModeConfig, we search all modes
+    // and filter by level using agent lookup
+    const allModes = this.list();
+    const candidates = allModes.filter((mode) => {
+      const agentName = this.modeToAgentName(mode.name);
+      if (agentName && agentName in BUILT_IN_AGENTS) {
+        return BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS].level === level;
+      }
+      // Default: include if no agent mapping (for custom modes)
+      return level === 2; // Default to worker level
+    });
 
     if (candidates.length === 0) {
       return undefined;

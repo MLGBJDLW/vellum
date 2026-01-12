@@ -2,6 +2,8 @@
 // Worker Executor
 // ============================================
 // Provides AgentLoop execution for worker agents
+// Supports markdown prompts via PromptLoader with TypeScript fallback
+// @see REQ-001, REQ-019
 
 import { randomUUID } from "node:crypto";
 import type { ToolDefinition } from "@vellum/provider";
@@ -9,16 +11,34 @@ import { AgentLevel } from "../../agent/level.js";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
 import { MODE_CONFIGS } from "../../agent/modes.js";
 import { CONFIG_DEFAULTS } from "../../config/defaults.js";
+import { PromptLoader } from "../../prompts/prompt-loader.js";
 import { createUserMessage, SessionParts } from "../../session/message.js";
 import type { WorkerContext, WorkerResult } from "./base.js";
 
 // ============================================
-// Worker System Prompts
+// Prompt Loader Instance
+// ============================================
+
+/**
+ * Shared PromptLoader instance for worker prompts.
+ * Uses LRU caching to avoid repeated file reads.
+ */
+const promptLoader = new PromptLoader({
+  enableFallback: true,
+  maxCacheSize: 20,
+  cacheTtlMs: 5 * 60 * 1000, // 5 minutes
+});
+
+// ============================================
+// Worker System Prompts (TypeScript Fallback)
 // ============================================
 
 /**
  * System prompts tailored for each worker type.
- * These prompts guide the LLM's behavior for specific tasks.
+ * These prompts serve as fallback when markdown files are not found.
+ *
+ * @deprecated Use getWorkerPrompt() or getWorkerPromptAsync() instead.
+ * Direct access to WORKER_PROMPTS may be removed in a future version.
  */
 export const WORKER_PROMPTS = {
   analyst: `You are an expert code analyst. Your role is to:
@@ -223,9 +243,8 @@ export async function executeWorkerTask(
   // Merge config with defaults
   const execConfig = { ...DEFAULT_CONFIG, ...config };
 
-  // Get worker-specific prompt
-  const systemPrompt =
-    WORKER_PROMPTS[workerSlug as keyof typeof WORKER_PROMPTS] ?? WORKER_PROMPTS.coder;
+  // Get worker-specific prompt (async with markdown support and fallback)
+  const systemPrompt = await getWorkerPromptAsync(workerSlug);
 
   // Get allowed tools for this worker
   const allowedToolNames = WORKER_TOOL_SETS[workerSlug] ?? WORKER_TOOL_SETS.coder ?? [];
@@ -353,13 +372,41 @@ export async function executeWorkerTask(
 }
 
 /**
- * Get the system prompt for a worker type.
+ * Get the system prompt for a worker type (synchronous, TypeScript fallback only).
+ *
+ * Returns the hardcoded TypeScript prompt for the specified worker type.
+ * For markdown file support with caching, use `getWorkerPromptAsync()`.
  *
  * @param workerSlug - The worker's slug identifier
- * @returns The system prompt string
+ * @returns The system prompt string from TypeScript definitions
  */
 export function getWorkerPrompt(workerSlug: string): string {
   return WORKER_PROMPTS[workerSlug as keyof typeof WORKER_PROMPTS] ?? WORKER_PROMPTS.coder;
+}
+
+/**
+ * Get the system prompt for a worker type (async, with markdown support).
+ *
+ * Attempts to load the prompt from markdown files via PromptLoader.
+ * Falls back to TypeScript definitions if markdown file is not found.
+ *
+ * @param workerSlug - The worker's slug identifier
+ * @returns Promise resolving to the system prompt string
+ *
+ * @example
+ * ```typescript
+ * // Load worker prompt with markdown support
+ * const prompt = await getWorkerPromptAsync('coder');
+ * ```
+ */
+export async function getWorkerPromptAsync(workerSlug: string): Promise<string> {
+  try {
+    const loaded = await promptLoader.load(workerSlug, "worker");
+    return loaded.content;
+  } catch {
+    // TypeScript fallback - return hardcoded constant
+    return WORKER_PROMPTS[workerSlug as keyof typeof WORKER_PROMPTS] ?? WORKER_PROMPTS.coder;
+  }
 }
 
 /**
@@ -370,4 +417,31 @@ export function getWorkerPrompt(workerSlug: string): string {
  */
 export function getWorkerToolSet(workerSlug: string): readonly string[] {
   return WORKER_TOOL_SETS[workerSlug] ?? WORKER_TOOL_SETS.coder ?? [];
+}
+
+/**
+ * Set the workspace path for worker prompt discovery.
+ *
+ * Configures the PromptLoader to look for prompts in the specified workspace.
+ * This affects `getWorkerPromptAsync()` calls.
+ *
+ * @param path - Absolute path to the workspace root
+ */
+export function setWorkerPromptWorkspace(path: string): void {
+  promptLoader.setWorkspacePath(path);
+}
+
+/**
+ * Invalidate cached worker prompts.
+ *
+ * Forces the next `getWorkerPromptAsync()` call to reload from disk.
+ *
+ * @param workerSlug - Optional worker slug to invalidate. If omitted, invalidates all.
+ */
+export function invalidateWorkerPromptCache(workerSlug?: string): void {
+  if (workerSlug) {
+    promptLoader.invalidate(workerSlug);
+  } else {
+    promptLoader.invalidateAll();
+  }
 }

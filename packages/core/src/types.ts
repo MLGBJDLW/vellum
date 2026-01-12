@@ -1,4 +1,5 @@
-import type { AgentConfig, Message, Tool } from "@vellum/shared";
+import type { AgentConfig, Tool } from "@vellum/shared";
+import type { Message } from "./types/index.js";
 
 export interface AgentOptions extends AgentConfig {
   tools?: Tool[];

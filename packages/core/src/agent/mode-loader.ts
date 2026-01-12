@@ -7,7 +7,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import yaml from "js-yaml";
 import { z } from "zod";
-import { AgentLevel, AgentLevelSchema } from "./level.js";
+import { AgentLevelSchema } from "./level.js";
 import type { ExtendedModeConfig, ToolPermissions } from "./modes.js";
 import { FileRestrictionSchema, ToolGroupEntrySchema } from "./restrictions.js";
 
@@ -27,24 +27,8 @@ const YamlAgentLevelSchema = z.union([
   AgentLevelSchema,
 ]);
 
-/**
- * Transform a YAML-style level to AgentLevel enum value.
- */
-function parseAgentLevel(value: string | number): AgentLevel {
-  if (typeof value === "number") {
-    return value as AgentLevel;
-  }
-  switch (value) {
-    case "orchestrator":
-      return AgentLevel.orchestrator;
-    case "workflow":
-      return AgentLevel.workflow;
-    case "worker":
-      return AgentLevel.worker;
-    default:
-      throw new Error(`Invalid agent level: ${value}`);
-  }
-}
+// Note: parseAgentLevel was removed as level is now in AgentConfig,
+// not ExtendedModeConfig. Agent levels are managed by AgentRegistry.
 
 /**
  * Zod schema for YAML mode configuration files.
@@ -214,6 +198,10 @@ export interface ModeLoader {
 /**
  * Convert a YAML mode configuration to ExtendedModeConfig.
  *
+ * Note: Agent hierarchy fields (level, canSpawnAgents, fileRestrictions,
+ * maxConcurrentSubagents) are now in AgentConfig, not ExtendedModeConfig.
+ * YAML files should reference agents by name instead.
+ *
  * @param yamlConfig - The parsed YAML configuration
  * @returns A valid ExtendedModeConfig
  */
@@ -232,21 +220,19 @@ function yamlToExtendedMode(yamlConfig: YamlModeConfig): ExtendedModeConfig {
   };
 
   // Build the ExtendedModeConfig
+  // Note: Agent fields (level, canSpawnAgents, fileRestrictions, maxConcurrentSubagents)
+  // are no longer part of ExtendedModeConfig - they belong in AgentConfig
   const config: ExtendedModeConfig = {
     // Use slug as the name (mode identifier)
     name: yamlConfig.slug as ExtendedModeConfig["name"],
     description: yamlConfig.description ?? yamlConfig.name,
     tools,
     prompt,
-    level: parseAgentLevel(yamlConfig.level),
     temperature: yamlConfig.temperature,
     maxTokens: yamlConfig.maxTokens,
     extendedThinking: yamlConfig.extendedThinking,
-    canSpawnAgents: yamlConfig.canSpawnAgents,
-    fileRestrictions: yamlConfig.fileRestrictions,
     toolGroups: yamlConfig.toolGroups,
     parentMode: yamlConfig.parentMode,
-    maxConcurrentSubagents: yamlConfig.maxConcurrentSubagents,
   };
 
   return config;

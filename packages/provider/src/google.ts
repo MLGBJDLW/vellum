@@ -12,14 +12,14 @@
 
 import {
   type Content,
-  type FunctionDeclaration,
   type GenerateContentConfig,
   type GenerateContentResponse,
   GoogleGenAI,
-  type Part,
   type Tool,
 } from "@google/genai";
 import { ErrorCode } from "@vellum/shared";
+import { googleTransform } from "./transforms/google.js";
+import type { TransformConfig } from "./transforms/types.js";
 import { createProviderError, ProviderError } from "./errors.js";
 import { GOOGLE_MODELS } from "./models/providers/google.js";
 import type {
@@ -45,7 +45,6 @@ import type {
   StreamUsageEvent,
   TokenUsage,
   ToolCall,
-  ToolDefinition,
 } from "./types.js";
 
 // =============================================================================
@@ -303,7 +302,7 @@ export class GoogleProvider implements Provider {
       const contents: Content[] =
         typeof input === "string"
           ? [{ role: "user", parts: [{ text: input }] }]
-          : this.convertMessages(input);
+          : (googleTransform.transformMessages(input, this.createTransformConfig(modelId)).data as Content[]);
 
       const result = await this.client?.models.countTokens({
         model: modelId,
@@ -444,13 +443,27 @@ export class GoogleProvider implements Provider {
   }
 
   /**
+   * Create transform configuration
+   */
+  private createTransformConfig(model?: string): TransformConfig {
+    return {
+      provider: "google",
+      modelId: model,
+    };
+  }
+
+  /**
    * Build the Google API request from completion params
    */
   private buildRequest(params: CompletionParams): {
     contents: Content[];
     config: GenerateContentConfig;
   } {
-    const contents = this.convertMessages(params.messages);
+    const transformConfig = this.createTransformConfig(params.model);
+    const { data: contents } = googleTransform.transformMessages(
+      params.messages,
+      transformConfig
+    ) as { data: Content[] };
 
     // Extract system instruction if present
     const systemMessage = params.messages.find((m) => m.role === "system");
@@ -472,86 +485,11 @@ export class GoogleProvider implements Provider {
 
     // Add tools if present
     if (params.tools && params.tools.length > 0) {
-      config.tools = this.convertTools(params.tools);
+      const { data: tools } = googleTransform.transformTools(params.tools, transformConfig);
+      config.tools = tools as Tool[];
     }
 
     return { contents, config };
-  }
-
-  /**
-   * Convert our message format to Google format
-   */
-  private convertMessages(messages: CompletionMessage[]): Content[] {
-    return messages
-      .filter((m) => m.role !== "system") // System handled separately
-      .map((m) => this.convertMessage(m));
-  }
-
-  /**
-   * Convert a single message to Google format
-   */
-  private convertMessage(message: CompletionMessage): Content {
-    const role = message.role === "assistant" ? "model" : "user";
-
-    if (typeof message.content === "string") {
-      return { role, parts: [{ text: message.content }] };
-    }
-
-    // Convert content parts to Google format
-    const parts: Part[] = message.content.map((part) => {
-      switch (part.type) {
-        case "text":
-          return { text: part.text };
-
-        case "image":
-          return {
-            inlineData: {
-              mimeType: part.mimeType,
-              data: part.source,
-            },
-          };
-
-        case "tool_use":
-          return {
-            functionCall: {
-              name: part.name,
-              args: part.input,
-            },
-          };
-
-        case "tool_result":
-          return {
-            functionResponse: {
-              name: part.toolUseId, // Google uses name, we map from toolUseId
-              response: {
-                result: typeof part.content === "string" ? part.content : part.content,
-              },
-            },
-          };
-
-        default:
-          throw new ProviderError(`Unknown content part type: ${(part as { type: string }).type}`, {
-            code: ErrorCode.INVALID_ARGUMENT,
-            category: "api_error",
-            retryable: false,
-          });
-      }
-    });
-
-    return { role, parts };
-  }
-
-  /**
-   * Convert tool definitions to Google format
-   */
-  private convertTools(tools: ToolDefinition[]): Tool[] {
-    const functionDeclarations: FunctionDeclaration[] = tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.inputSchema as FunctionDeclaration["parameters"],
-    }));
-
-    return [{ functionDeclarations }];
   }
 
   /**

@@ -5,6 +5,7 @@
 // Implements REQ-012: Task Execution Pipeline
 // T031: Handle spec workflow handoff callbacks
 
+import { BUILT_IN_AGENTS } from "../../agent/agent-config.js";
 import type { AgentLevel } from "../../agent/level.js";
 import { canSpawn } from "../../agent/level.js";
 import type { ModeRegistry } from "../../agent/mode-registry.js";
@@ -23,6 +24,32 @@ import type { TaskRouter } from "./router.js";
 import { createTaskRouter } from "./router.js";
 import type { TaskChain, TaskChainManager } from "./task-chain.js";
 import { createTaskChainManager, MAX_DELEGATION_DEPTH } from "./task-chain.js";
+
+// ============================================
+// Helper: Get agent level from mode slug
+// ============================================
+
+/**
+ * Get the agent level for a mode slug by looking up the corresponding agent.
+ * 
+ * Maps mode slugs to agent names and retrieves the level from BUILT_IN_AGENTS.
+ * Returns worker level (2) as default if not found.
+ */
+function getAgentLevelForMode(modeSlug: string): AgentLevel {
+  const modeToAgent: Record<string, keyof typeof BUILT_IN_AGENTS> = {
+    code: "vibe-agent",
+    plan: "plan-agent",
+    // spec mode uses "plan" as its name, but references spec-orchestrator
+  };
+  
+  const agentName = modeToAgent[modeSlug];
+  if (agentName && agentName in BUILT_IN_AGENTS) {
+    return BUILT_IN_AGENTS[agentName].level;
+  }
+  
+  // Default to worker level
+  return 2 as AgentLevel;
+}
 
 // ============================================
 // Types and Interfaces
@@ -416,11 +443,14 @@ class OrchestratorCoreImpl implements OrchestratorCore {
         throw new Error(`Parent task node not found in chain`);
       }
 
-      const parentMode = this.config.modeRegistry.get(parentNode.agentSlug);
-      if (parentMode && !canSpawn(parentMode.level, targetMode.level)) {
+      // Get levels from agent config lookup
+      const parentLevel = getAgentLevelForMode(parentNode.agentSlug);
+      const targetLevel = getAgentLevelForMode(agentSlug);
+      
+      if (!canSpawn(parentLevel, targetLevel)) {
         throw new Error(
-          `Level hierarchy violation: ${parentNode.agentSlug} (level ${parentMode.level}) ` +
-            `cannot spawn ${agentSlug} (level ${targetMode.level})`
+          `Level hierarchy violation: ${parentNode.agentSlug} (level ${parentLevel}) ` +
+            `cannot spawn ${agentSlug} (level ${targetLevel})`
         );
       }
 
@@ -459,7 +489,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
       const subsession = this.subsessionManager.create({
         parentId: options.parentTaskId,
         agentSlug,
-        level: targetMode.level,
+        level: getAgentLevelForMode(agentSlug),
       });
       subsessionId = subsession.id;
     }

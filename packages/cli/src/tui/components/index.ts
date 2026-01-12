@@ -48,6 +48,8 @@ export {
 export * from "./StatusBar/index.js";
 export * from "./session/index.js";
 export { ThinkingBlock, type ThinkingBlockProps } from "./ThinkingBlock.js";
+// Tip Banner
+export { TipBanner, type TipBannerProps } from "./TipBanner.js";
 // Todo Panel (Phase 26)
 export { TodoItem, type TodoItemData, type TodoItemProps, type TodoStatus } from "./TodoItem.js";
 export { type TodoFilterStatus, TodoPanel, type TodoPanelProps } from "./TodoPanel.js";

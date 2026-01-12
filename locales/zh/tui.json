@@ -291,6 +291,10 @@
     "switchBranch": "切换分支",
     "newBranch": "新建分支"
   },
+  "tip": {
+    "dismiss": "关闭",
+    "relatedLesson": "相关教程"
+  },
   "code": {
     "copy": "[复制]"
   }

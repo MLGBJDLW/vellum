@@ -1,5 +1,6 @@
 export { createIncomingCallsTool, createOutgoingCallsTool } from "./call-hierarchy.js";
 export { createCodeActionsTool } from "./code-actions.js";
+export { createCompletionTool } from "./completion.js";
 export { createDefinitionTool } from "./definition.js";
 export { createDiagnosticsTool } from "./diagnostics.js";
 export { createLspTools } from "./factory.js";

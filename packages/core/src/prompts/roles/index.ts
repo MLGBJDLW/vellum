@@ -6,9 +6,11 @@
  * Barrel exports and role prompt loader for the agent prompt system.
  *
  * Provides individual role prompt exports and a unified loader function
- * for retrieving prompts by role name.
+ * for retrieving prompts by role name. Supports loading from markdown files
+ * via PromptLoader with TypeScript fallback for backward compatibility.
  *
  * @module @vellum/core/prompts/roles
+ * @see REQ-001, REQ-019
  */
 
 import type { AgentRole } from "../types.js";
@@ -37,12 +39,18 @@ import { QA_PROMPT } from "./qa.js";
 import { WRITER_PROMPT } from "./writer.js";
 
 // =============================================================================
-// Role Prompt Loader
+// Role Prompt Mapping (TypeScript Fallback)
 // =============================================================================
 
 /**
  * Mapping of agent roles to their corresponding prompt strings.
- * Used internally by loadRolePrompt for efficient lookup.
+ *
+ * This is used as a fallback when markdown prompt files are not found
+ * or fail to load. Provides backward compatibility with the original
+ * hardcoded prompt system.
+ *
+ * @deprecated Direct access is deprecated. Use loadRolePrompt() or
+ * loadRolePromptAsync() instead. Will be removed in a future version.
  */
 const ROLE_PROMPTS: Record<AgentRole, string> = {
   orchestrator: ORCHESTRATOR_PROMPT,
@@ -53,12 +61,18 @@ const ROLE_PROMPTS: Record<AgentRole, string> = {
   architect: ARCHITECT_PROMPT,
 };
 
+// =============================================================================
+// Synchronous Role Prompt Loader (Fallback Only)
+// =============================================================================
+
 /**
- * Load a role prompt by role name.
+ * Load a role prompt by role name (synchronous, TypeScript only).
  *
- * Retrieves the system prompt for a specific agent role. Returns an empty
- * string if the role is not found, providing defensive behavior for
- * runtime safety.
+ * Retrieves the system prompt for a specific agent role from the hardcoded
+ * TypeScript definitions. Returns an empty string if the role is not found.
+ *
+ * **Note:** This function only returns TypeScript fallback prompts.
+ * For markdown file support with caching, use `loadRolePromptAsync()`.
  *
  * @param role - The agent role to load
  * @returns The role prompt string, or empty string if not found
@@ -67,7 +81,7 @@ const ROLE_PROMPTS: Record<AgentRole, string> = {
  * ```typescript
  * import { loadRolePrompt } from '@vellum/core/prompts/roles';
  *
- * // Load the coder role prompt
+ * // Load the coder role prompt (TypeScript fallback)
  * const coderPrompt = loadRolePrompt('coder');
  *
  * // Safe handling of unknown roles

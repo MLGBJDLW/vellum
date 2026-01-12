@@ -8,6 +8,10 @@
  * This module provides a comprehensive prompt building system with:
  * - **PromptBuilder**: Fluent API for composing layered prompts
  * - **ContextBuilder**: Formatter for session context (active file, git status, tasks)
+ * - **PromptDiscovery**: Multi-source prompt discovery with priority
+ * - **PromptLoader**: Progressive loading with LRU caching
+ * - **PromptParser**: Frontmatter parsing and variable interpolation
+ * - **PromptWatcher**: Hot-reload via file system watching
  * - **Role Prompts**: Pre-built prompts for different agent specializations
  * - **Sanitization**: Security utilities to prevent prompt injection
  *
@@ -25,18 +29,86 @@
  * @module @vellum/core/prompts
  */
 
+// =============================================================================
+// Externalized Prompt System (REQ-001)
+// =============================================================================
+
+// =============================================================================
 // Builder
+// =============================================================================
 /**
  * Builder for formatting session context into prompt-friendly strings.
  * @see {@link ContextBuilder}
  */
 export { ContextBuilder } from "./context-builder.js";
-
+/**
+ * Error codes and classes for the prompt system.
+ * @see {@link PromptError}
+ */
+export {
+  PromptError,
+  PromptErrorCode,
+  type PromptErrorCodeType,
+  promptLoadError,
+  promptNotFoundError,
+  promptParseError,
+  promptSchemaError,
+  promptVariableError,
+  promptYamlError,
+} from "./errors.js";
+/**
+ * Hot-reload integration for automatic cache invalidation.
+ * @see {@link HotReloadIntegration}
+ */
+export {
+  createHotReload,
+  HotReloadIntegration,
+  type HotReloadOptions,
+  type HotReloadStats,
+  type ReloadCallback,
+} from "./hot-reload.js";
 /**
  * Fluent builder for constructing agent prompts with layered content.
  * @see {@link PromptBuilder}
  */
 export { PromptBuilder } from "./prompt-builder.js";
+/**
+ * Multi-source prompt discovery with priority-based deduplication.
+ * @see {@link PromptDiscovery}
+ */
+export {
+  PROMPT_SOURCE_PRIORITY,
+  PromptDiscovery,
+  type PromptDiscoveryOptions,
+} from "./prompt-discovery.js";
+/**
+ * Progressive prompt loader with LRU caching and TypeScript fallback.
+ * @see {@link PromptLoader}
+ */
+export {
+  type LoadResult,
+  PromptLoader,
+  type PromptLoaderOptions,
+} from "./prompt-loader.js";
+/**
+ * Parser for markdown files with YAML frontmatter and variable interpolation.
+ * @see {@link PromptParser}
+ */
+export {
+  type PromptParseResult,
+  PromptParser,
+  type PromptParserOptions,
+} from "./prompt-parser.js";
+/**
+ * File system watcher for prompt hot-reload with debouncing.
+ * @see {@link PromptWatcher}
+ */
+export {
+  type PromptChangeEvent,
+  type PromptWatchEventType,
+  PromptWatcher,
+  type PromptWatcherOptions,
+} from "./prompt-watcher.js";
 
 // Role Prompts
 /**
@@ -133,13 +205,18 @@ export {
   GitStatusSchema,
   MAX_PROMPT_SIZE,
   PROMPT_LAYER_SOURCES,
+  type PromptCategory,
   type PromptLayer,
   PromptLayerSchema,
   type PromptLayerSource,
   PromptLayerSourceSchema,
+  type PromptLoaded,
+  type PromptLocation,
   type PromptPriority,
   PromptPrioritySchema,
   PromptSizeError,
+  type PromptSource,
+  type PromptVariables,
   type SessionContext,
   SessionContextSchema,
   type Task,

@@ -33,7 +33,19 @@ export {
   semverPattern,
   updatedSchema,
 } from "./base.js";
-
+// Command schemas
+export {
+  type CommandArgument,
+  type CommandArgumentInput,
+  type CommandFrontmatter,
+  type CommandFrontmatterInput,
+  type CommandTrigger,
+  type CommandTriggerInput,
+  commandArgumentSchema,
+  commandFrontmatterSchema,
+  commandTriggerSchema,
+  DEFAULT_COMMAND_FRONTMATTER,
+} from "./command.js";
 // Mode rules schemas
 export {
   DEFAULT_MODE_RULES,
@@ -46,6 +58,19 @@ export {
   triggerPatternSchema,
 } from "./mode-rules.js";
 
+// Prompt schemas
+export {
+  DEFAULT_PROMPT_FRONTMATTER,
+  type PromptCategory,
+  type PromptFrontmatter,
+  type PromptFrontmatterInput,
+  type PromptVariable,
+  type PromptVariableInput,
+  promptCategories,
+  promptCategorySchema,
+  promptFrontmatterSchema,
+  promptVariableSchema,
+} from "./prompt.js";
 // Skill schemas
 export {
   DEFAULT_SKILL_FRONTMATTER,
@@ -65,3 +90,19 @@ export {
   skillTriggerTypeSchema,
   skillTriggerTypes,
 } from "./skill.js";
+
+// Workflow schemas
+export {
+  DEFAULT_WORKFLOW_FRONTMATTER,
+  type StepValidation,
+  stepValidationSchema,
+  type WorkflowFrontmatter,
+  type WorkflowFrontmatterInput,
+  type WorkflowStep,
+  type WorkflowStepInput,
+  type WorkflowVariable,
+  type WorkflowVariableInput,
+  workflowFrontmatterSchema,
+  workflowStepSchema,
+  workflowVariableSchema,
+} from "./workflow.js";

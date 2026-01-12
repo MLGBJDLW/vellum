@@ -16,6 +16,8 @@ export { defineTool, fail, ok, ToolKindSchema } from "../types/tool.js";
 export {
   DEFAULT_TIMEOUT_MS,
   defaultExecutionLogger,
+  type EnterpriseHooks,
+  type EnterpriseToolCallInfo,
   type ExecuteOptions,
   type ExecutionLogger,
   type ExecutionResult,
@@ -67,6 +69,13 @@ export {
   type SmartEditResult,
   type StrategyName,
 } from "./smart-edit.js";
+
+// =============================================================================
+// Tool Groups System (T030)
+// =============================================================================
+
+export * from "./groups.js";
+export * from "./mode-filter.js";
 
 // =============================================================================
 // Git Tools (T022)

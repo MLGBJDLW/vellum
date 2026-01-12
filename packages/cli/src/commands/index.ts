@@ -471,3 +471,76 @@ export {
   metricsCommands,
   metricsResetCommand,
 } from "./metrics.js";
+
+// =============================================================================
+// Workflow Commands (T035)
+// =============================================================================
+
+export {
+  clearWorkflowLoaderCache,
+  workflowCommand,
+  workflowCommands,
+} from "./workflow.js";
+
+// =============================================================================
+// Markdown Commands (T033)
+// =============================================================================
+
+export {
+  clearMarkdownCommandCache,
+  getMarkdownCommandNames,
+  isMarkdownCommand,
+  loadMarkdownCommands,
+  type MarkdownCommandLoaderOptions,
+  type MarkdownCommandLoadResult,
+  registerMarkdownCommands,
+} from "./markdown-commands.js";
+
+// =============================================================================
+// Init Prompts Command (T042-T044)
+// =============================================================================
+
+export {
+  executeInitPrompts,
+  type InitPromptsOptions,
+  type InitPromptsResult,
+  initPromptsCommand,
+  runInitPromptsCli,
+} from "./init/index.js";
+
+// =============================================================================
+// Prompt Validate Command (T045-T046)
+// =============================================================================
+
+export {
+  executePromptValidate,
+  type PromptValidateOptions,
+  type PromptValidateResult,
+  promptValidateCommand,
+  runPromptValidateCli,
+  type ValidationIssue,
+  type ValidationSeverity,
+} from "./prompt/index.js";
+
+// =============================================================================
+// Migrate Prompts Command (T047-T048)
+// =============================================================================
+
+export {
+  executeMigratePrompts,
+  type MigratePromptsOptions,
+  type MigratePromptsResult,
+  migratePromptsCommand,
+  type MigrationAction,
+  runMigratePromptsCli,
+} from "./migrate/index.js";
+
+// =============================================================================
+// Tutorial Commands (Phase 38)
+// =============================================================================
+
+export {
+  getTutorialSystem,
+  setTutorialSystem,
+  tutorialCommand,
+} from "./tutorial.js";

@@ -292,6 +292,14 @@ export function getCheckpointsWithSnapshots(
 // =============================================================================
 
 /**
+ * Internal interface for accessing PersistenceManager's private session state.
+ * Used for atomic checkpoint+snapshot coordination.
+ */
+interface PersistenceManagerInternal {
+  _currentSession: Session | null;
+}
+
+/**
  * Updates the persistence manager's internal session and saves.
  * This is a workaround since PersistenceManager doesn't expose direct session update.
  */
@@ -301,8 +309,7 @@ async function updateSessionAndSave(
 ): Promise<void> {
   // Access internal state - this is a bit of a hack but necessary
   // to coordinate checkpoint and snapshot atomically
-  // biome-ignore lint/suspicious/noExplicitAny: Accessing internal state for atomic checkpoint+snapshot
-  const pm = persistence as any;
+  const pm = persistence as unknown as PersistenceManagerInternal;
 
   if (pm._currentSession) {
     pm._currentSession = updatedSession;

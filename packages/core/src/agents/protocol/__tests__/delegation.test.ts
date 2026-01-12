@@ -121,12 +121,13 @@ describe("Delegation Protocol", () => {
   // CustomModeTargetSchema Tests
   // ============================================
   describe("CustomModeTargetSchema", () => {
+    // Note: level, canSpawnAgents, fileRestrictions, maxConcurrentSubagents
+    // are now in AgentConfig, not ExtendedModeConfig
     const validModeConfig = {
       name: "code",
       description: "Custom analyzer mode",
       tools: { edit: false, bash: "readonly" as const },
       prompt: "You are a custom analyzer...",
-      level: AgentLevel.worker,
     };
 
     it("validates correct custom mode target with ExtendedModeConfig", () => {
@@ -143,17 +144,14 @@ describe("Delegation Protocol", () => {
         expect(result.data.kind).toBe("custom-mode");
         expect(result.data.slug).toBe("custom-analyzer");
         expect(result.data.modeConfig.name).toBe("code");
-        expect(result.data.modeConfig.level).toBe(AgentLevel.worker);
       }
     });
 
     it("validates custom mode target with full modeConfig options", () => {
       const fullModeConfig = {
         ...validModeConfig,
-        canSpawnAgents: ["sub-worker-1", "sub-worker-2"],
-        fileRestrictions: [{ pattern: "src/**", access: "write" as const }],
         parentMode: "orchestrator",
-        maxConcurrentSubagents: 5,
+        toolGroups: [{ group: "filesystem", enabled: true }],
       };
 
       const target = {
@@ -166,8 +164,7 @@ describe("Delegation Protocol", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.modeConfig.canSpawnAgents).toEqual(["sub-worker-1", "sub-worker-2"]);
-        expect(result.data.modeConfig.maxConcurrentSubagents).toBe(5);
+        expect(result.data.modeConfig.parentMode).toBe("orchestrator");
       }
     });
 
@@ -487,7 +484,6 @@ describe("Delegation Protocol", () => {
             description: "Test",
             tools: { edit: true, bash: true },
             prompt: "Test",
-            level: AgentLevel.worker,
           },
         };
 
@@ -540,7 +536,6 @@ describe("Delegation Protocol", () => {
             description: "Test",
             tools: { edit: true, bash: true },
             prompt: "Test",
-            level: AgentLevel.worker,
           },
         };
 
@@ -579,7 +574,6 @@ describe("Delegation Protocol", () => {
             description: "Test",
             tools: { edit: true, bash: true },
             prompt: "Test",
-            level: AgentLevel.worker,
           },
         };
 
@@ -620,7 +614,6 @@ describe("Delegation Protocol", () => {
             description: "Test",
             tools: { edit: true, bash: true },
             prompt: "Test prompt",
-            level: AgentLevel.worker,
           },
         };
 
@@ -665,7 +658,6 @@ describe("Delegation Protocol", () => {
             description: "Test",
             tools: { edit: true, bash: true },
             prompt: "Test",
-            level: AgentLevel.worker,
           },
         };
 

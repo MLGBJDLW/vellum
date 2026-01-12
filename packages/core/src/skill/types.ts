@@ -173,6 +173,7 @@ export interface SkillMatch {
 export const TRIGGER_TYPE_MULTIPLIERS: Record<SkillTriggerType, number> = {
   command: 100, // Explicit slash command - highest priority
   keyword: 10, // Regex pattern match on request text
+  mode: 8, // Exact match on current coding mode
   file_pattern: 5, // Glob match on context files
   context: 3, // Key:value match on project context
   always: 1, // Always active - lowest priority

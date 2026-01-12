@@ -1,5 +1,5 @@
-import type { Message } from "@vellum/shared";
 import { AgentLoop, type AgentLoopConfig, type AgentLoopEvents } from "./agent/index.js";
+import { createMessage, Parts, type Message } from "./types/index.js";
 import { type AgentMode, MODE_CONFIGS } from "./agent/modes.js";
 import type { SessionMessage } from "./session/index.js";
 import type { AgentOptions } from "./types.js";
@@ -39,7 +39,6 @@ export class Agent {
   private messages: Message[] = [];
   private loop: AgentLoop | null = null;
   private sessionId: string;
-  private messageCounter = 0;
 
   constructor(options: ExtendedAgentOptions) {
     this._options = options;
@@ -79,12 +78,7 @@ export class Agent {
     // Wire loop events to legacy callbacks
     if (this._options.onMessage) {
       loop.on("message", (content) => {
-        const message: Message = {
-          id: `msg-${++this.messageCounter}`,
-          role: "assistant",
-          content,
-          timestamp: Date.now(),
-        };
+        const message = createMessage("assistant", [Parts.text(content)]);
         this._options.onMessage?.(message);
       });
     }
@@ -112,12 +106,7 @@ export class Agent {
    */
   async chat(input: string): Promise<string> {
     // Store user message
-    const userMessage: Message = {
-      id: `msg-${++this.messageCounter}`,
-      role: "user",
-      content: input,
-      timestamp: Date.now(),
-    };
+    const userMessage = createMessage("user", [Parts.text(input)]);
     this.messages.push(userMessage);
 
     // Get or create loop
@@ -129,7 +118,7 @@ export class Agent {
       role: "user",
       parts: [{ type: "text", text: input }],
       metadata: {
-        createdAt: Date.now(),
+        createdAt: Date.parse(userMessage.createdAt),
       },
     };
     loop.addMessage(sessionMessage);
@@ -147,12 +136,7 @@ export class Agent {
 
       // Store assistant message
       if (responseText) {
-        const assistantMessage: Message = {
-          id: `msg-${++this.messageCounter}`,
-          role: "assistant",
-          content: responseText,
-          timestamp: Date.now(),
-        };
+        const assistantMessage = createMessage("assistant", [Parts.text(responseText)]);
         this.messages.push(assistantMessage);
       }
 

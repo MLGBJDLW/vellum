@@ -1,4 +1,4 @@
-import type { Message } from "@vellum/shared";
+import type { Message } from "./types/index.js";
 
 export class ContextManager {
   private messages: Message[] = [];

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentLevel } from "../level.js";
 import {
-  DEFAULT_MAX_CONCURRENT_SUBAGENTS,
   type ExtendedModeConfig,
   ExtendedModeConfigSchema,
   type ModeConfig,
@@ -38,77 +36,55 @@ describe("ModeConfigSchema", () => {
   });
 });
 
+/**
+ * ExtendedModeConfig tests.
+ *
+ * Note: Agent hierarchy fields (level, canSpawnAgents, fileRestrictions,
+ * maxConcurrentSubagents) are now in AgentConfig, not ExtendedModeConfig.
+ * ExtendedModeConfig only adds toolGroups and parentMode to ModeConfig.
+ */
 describe("ExtendedModeConfigSchema", () => {
-  it("validates orchestrator config with spawn permissions", () => {
+  it("validates basic extended mode config", () => {
     const config = {
       name: "code",
-      description: "Main orchestrator",
+      description: "Main mode",
       tools: { edit: true, bash: true },
-      prompt: "You are an orchestrator...",
-      level: AgentLevel.orchestrator,
-      canSpawnAgents: ["spec-worker", "impl-worker"],
+      prompt: "You are an assistant...",
     };
 
     const result = ExtendedModeConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.level).toBe(AgentLevel.orchestrator);
-      expect(result.data.canSpawnAgents).toEqual(["spec-worker", "impl-worker"]);
-    }
   });
 
-  it("validates worker config with restrictions", () => {
+  it("validates extended mode config with toolGroups", () => {
     const config = {
       name: "code",
-      description: "Implementation worker",
+      description: "Implementation mode",
       tools: { edit: true, bash: false },
       prompt: "You are a worker...",
-      level: AgentLevel.worker,
-      parentMode: "orchestrator",
-      fileRestrictions: [{ pattern: "src/**", access: "write" }],
       toolGroups: [{ group: "filesystem", enabled: true }],
     };
 
     const result = ExtendedModeConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.level).toBe(AgentLevel.worker);
-      expect(result.data.parentMode).toBe("orchestrator");
-      expect(result.data.fileRestrictions).toHaveLength(1);
       expect(result.data.toolGroups).toHaveLength(1);
     }
   });
 
-  it("applies default maxConcurrentSubagents", () => {
+  it("validates extended mode config with parentMode", () => {
     const config = {
       name: "code",
-      description: "Orchestrator",
+      description: "Child mode",
       tools: { edit: true, bash: true },
       prompt: "Orchestrate...",
-      level: AgentLevel.orchestrator,
+      parentMode: "base-mode",
     };
 
     const result = ExtendedModeConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.maxConcurrentSubagents).toBe(DEFAULT_MAX_CONCURRENT_SUBAGENTS);
-    }
-  });
-
-  it("allows custom maxConcurrentSubagents", () => {
-    const config = {
-      name: "code",
-      description: "Orchestrator",
-      tools: { edit: true, bash: true },
-      prompt: "Orchestrate...",
-      level: AgentLevel.orchestrator,
-      maxConcurrentSubagents: 5,
-    };
-
-    const result = ExtendedModeConfigSchema.safeParse(config);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.maxConcurrentSubagents).toBe(5);
+      expect(result.data.parentMode).toBe("base-mode");
     }
   });
 
@@ -118,7 +94,6 @@ describe("ExtendedModeConfigSchema", () => {
       description: "Planning mode",
       tools: { edit: false, bash: "readonly" as const },
       prompt: "Plan carefully...",
-      level: AgentLevel.workflow,
       temperature: 0.3,
       maxTokens: 4096,
       extendedThinking: true,
@@ -133,27 +108,13 @@ describe("ExtendedModeConfigSchema", () => {
     }
   });
 
-  it("rejects invalid level values", () => {
+  it("rejects invalid tool group", () => {
     const config = {
       name: "code",
       description: "Invalid",
       tools: { edit: true, bash: true },
       prompt: "...",
-      level: 99, // Invalid level
-    };
-
-    const result = ExtendedModeConfigSchema.safeParse(config);
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects invalid file access values", () => {
-    const config = {
-      name: "code",
-      description: "Invalid",
-      tools: { edit: true, bash: true },
-      prompt: "...",
-      level: AgentLevel.worker,
-      fileRestrictions: [{ pattern: "src/**", access: "invalid" }],
+      toolGroups: [{ group: "filesystem" }], // Missing 'enabled' field
     };
 
     const result = ExtendedModeConfigSchema.safeParse(config);
@@ -167,16 +128,13 @@ describe("ExtendedModeConfigSchema", () => {
       description: "Type test",
       tools: { edit: true, bash: true },
       prompt: "...",
-      level: AgentLevel.orchestrator,
-      canSpawnAgents: ["worker-1"],
-      fileRestrictions: [{ pattern: "**/*", access: "write" }],
       toolGroups: [{ group: "filesystem", enabled: true, tools: ["read"] }],
       parentMode: "parent",
-      maxConcurrentSubagents: 3,
     };
 
     // If this compiles, type inference is working
-    expect(config.level).toBe(AgentLevel.orchestrator);
+    expect(config.parentMode).toBe("parent");
+    expect(config.toolGroups).toHaveLength(1);
   });
 });
 
@@ -192,12 +150,8 @@ describe("toExtendedMode", () => {
     const extended = toExtendedMode(baseConfig);
 
     // Verify defaults are applied
-    expect(extended.level).toBe(AgentLevel.worker);
-    expect(extended.canSpawnAgents).toEqual([]);
-    expect(extended.fileRestrictions).toEqual([]);
     expect(extended.toolGroups).toEqual([]);
     expect(extended.parentMode).toBeUndefined();
-    expect(extended.maxConcurrentSubagents).toBe(DEFAULT_MAX_CONCURRENT_SUBAGENTS);
   });
 
   it("preserves all original ModeConfig fields", () => {
@@ -254,10 +208,8 @@ describe("toExtendedMode", () => {
     for (const mode of modes) {
       const extended = toExtendedMode(mode);
 
-      // All should have worker level by default (most restrictive)
-      expect(extended.level).toBe(AgentLevel.worker);
-      // All should have empty spawn list (cannot spawn)
-      expect(extended.canSpawnAgents).toEqual([]);
+      // All should have empty toolGroups by default
+      expect(extended.toolGroups).toEqual([]);
       // All should validate against schema
       expect(ExtendedModeConfigSchema.safeParse(extended).success).toBe(true);
     }

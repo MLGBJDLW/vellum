@@ -3,6 +3,7 @@
 // ============================================
 
 import { z } from "zod";
+import type { AgentConfig } from "./agent-config.js";
 
 /**
  * Agent hierarchy levels for multi-agent orchestration.
@@ -74,4 +75,46 @@ export function canSpawn(fromLevel: AgentLevel, toLevel: AgentLevel): boolean {
   // orchestrator (0) -> workflow (1)
   // workflow (1) -> worker (2)
   return toLevel === fromLevel + 1;
+}
+
+/**
+ * Determines if an agent can spawn another agent using AgentConfig.
+ *
+ * This function checks spawn permissions based on AgentConfig properties:
+ * 1. The current agent must have `canSpawnAgents === true`
+ * 2. The current agent's level must be lower (numerically) than the target's level
+ *
+ * Unlike `canSpawn` which only checks level hierarchy, this function also
+ * respects the `canSpawnAgents` permission flag in AgentConfig.
+ *
+ * @param currentAgent - The AgentConfig of the agent attempting to spawn
+ * @param targetAgent - The AgentConfig of the agent to be spawned
+ * @returns `true` if spawning is allowed, `false` otherwise
+ *
+ * @example
+ * ```typescript
+ * import { canAgentSpawn } from './level.js';
+ * import { PLAN_AGENT, VIBE_AGENT, SPEC_ORCHESTRATOR } from './agent-config.js';
+ *
+ * // Plan agent (level 1, canSpawnAgents: true) can spawn vibe agent (level 2)
+ * canAgentSpawn(PLAN_AGENT, VIBE_AGENT); // true
+ *
+ * // Vibe agent (level 2, canSpawnAgents: false) cannot spawn any agent
+ * canAgentSpawn(VIBE_AGENT, VIBE_AGENT); // false
+ *
+ * // Spec orchestrator (level 0) can spawn plan agent (level 1)
+ * canAgentSpawn(SPEC_ORCHESTRATOR, PLAN_AGENT); // true
+ * ```
+ */
+export function canAgentSpawn(currentAgent: AgentConfig, targetAgent: AgentConfig): boolean {
+  // Agent must have spawn permission enabled
+  if (!currentAgent.canSpawnAgents) {
+    return false;
+  }
+
+  // Current agent's level must be lower (numerically) than target's level
+  // orchestrator (0) can spawn workflow (1) or worker (2)
+  // workflow (1) can spawn worker (2)
+  // worker (2) cannot spawn anything (already blocked by canSpawnAgents check)
+  return currentAgent.level < targetAgent.level;
 }

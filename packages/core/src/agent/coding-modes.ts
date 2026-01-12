@@ -3,8 +3,8 @@
 // ============================================
 
 import { z } from "zod";
-import { AgentLevel } from "./level.js";
-import { type ExtendedModeConfig, ExtendedModeConfigSchema, type ModeConfig } from "./modes.js";
+import { MODE_TOOL_GROUPS, type ToolGroupEntry } from "../tool/mode-filter.js";
+import { type ModeConfig, ModeConfigSchema } from "./modes.js";
 import {
   type ApprovalPolicy,
   ApprovalPolicySchema,
@@ -88,29 +88,51 @@ export type CodingMode = z.infer<typeof CodingModeSchema>;
 /**
  * Extended configuration interface for coding modes.
  *
- * Combines ExtendedModeConfig with mode-specific settings for approval,
+ * Combines ModeConfig with mode-specific settings for approval,
  * sandbox, and checkpoint policies. This interface supports all three
  * coding modes (vibe, plan, spec) with their distinct configurations.
  *
+ * ## Agent Hierarchy via `agentName`
+ *
+ * Agent hierarchy fields (level, canSpawnAgents, fileRestrictions) are
+ * stored in AgentConfig, not in the mode. Use the `agentName` field to
+ * reference an agent and retrieve its configuration from the AgentRegistry.
+ *
  * @example
  * ```typescript
+ * // Basic usage
  * const config: CodingModeConfig = {
  *   name: "code",
  *   codingMode: "vibe",
  *   description: "Fast autonomous coding",
  *   tools: { edit: true, bash: true },
  *   prompt: "Execute tasks quickly",
- *   level: AgentLevel.worker,
+ *   agentName: "vibe-agent",
  *   approvalPolicy: "full-auto",
  *   sandboxPolicy: "workspace-write",
  *   checkpointsRequired: false,
  *   checkpointCount: 0,
  * };
  * ```
+ *
+ * @example
+ * ```typescript
+ * // Getting agent config from agentName
+ * import { AgentRegistry } from './agent-registry.js';
+ *
+ * const registry = AgentRegistry.getInstance();
+ * const agent = registry.get(config.agentName);
+ * if (agent) {
+ *   console.log(agent.level);           // 2 for vibe-agent
+ *   console.log(agent.canSpawnAgents);  // false for vibe-agent
+ * }
+ * ```
  */
-export interface CodingModeConfig extends ExtendedModeConfig {
+export interface CodingModeConfig extends ModeConfig {
   /** The coding mode type (vibe, plan, spec) */
   codingMode: CodingMode;
+  /** Reference to an AgentConfig by name (e.g., "vibe-agent", "plan-agent") */
+  agentName?: string;
   /** Approval policy for user confirmations */
   approvalPolicy: ApprovalPolicy;
   /** Sandbox policy for file system access */
@@ -121,6 +143,10 @@ export interface CodingModeConfig extends ExtendedModeConfig {
   checkpointCount: number;
   /** System prompt extension for mode-specific behavior */
   systemPromptExtension?: string;
+  /** Tool groups allowed for this mode (defaults to MODE_TOOL_GROUPS[codingMode]) */
+  allowedGroups?: ToolGroupEntry[];
+  /** Custom tools explicitly enabled beyond group defaults */
+  enabledCustomTools?: string[];
 }
 
 // ============================================
@@ -130,8 +156,9 @@ export interface CodingModeConfig extends ExtendedModeConfig {
 /**
  * Zod schema for validating CodingModeConfig objects.
  *
- * Extends ExtendedModeConfigSchema with coding-mode-specific fields:
+ * Extends ModeConfigSchema with coding-mode-specific fields:
  * - codingMode: The mode type (vibe, plan, spec)
+ * - agentName: Reference to an AgentConfig by name
  * - approvalPolicy: User confirmation requirements
  * - sandboxPolicy: File system access boundaries
  * - checkpointsRequired: Whether checkpoints are mandatory
@@ -146,7 +173,7 @@ export interface CodingModeConfig extends ExtendedModeConfig {
  *   description: "Fast mode",
  *   tools: { edit: true, bash: true },
  *   prompt: "Execute quickly",
- *   level: AgentLevel.worker,
+ *   agentName: "vibe-agent",
  *   approvalPolicy: "full-auto",
  *   sandboxPolicy: "workspace-write",
  *   checkpointsRequired: false,
@@ -158,9 +185,11 @@ export interface CodingModeConfig extends ExtendedModeConfig {
  * }
  * ```
  */
-export const CodingModeConfigSchema = ExtendedModeConfigSchema.extend({
+export const CodingModeConfigSchema = ModeConfigSchema.extend({
   /** The coding mode type */
   codingMode: CodingModeSchema,
+  /** Reference to an AgentConfig by name */
+  agentName: z.string().optional(),
   /** Approval policy for user confirmations */
   approvalPolicy: ApprovalPolicySchema,
   /** Sandbox policy for file system access */
@@ -171,6 +200,10 @@ export const CodingModeConfigSchema = ExtendedModeConfigSchema.extend({
   checkpointCount: z.number().int().min(0).max(6),
   /** System prompt extension for mode-specific behavior */
   systemPromptExtension: z.string().optional(),
+  /** Tool groups allowed for this mode */
+  allowedGroups: z.array(z.unknown()).optional(),
+  /** Custom tools explicitly enabled beyond group defaults */
+  enabledCustomTools: z.array(z.string()).optional(),
 });
 
 // ============================================
@@ -238,11 +271,12 @@ export const VIBE_MODE: CodingModeConfig = {
   description: "Fast autonomous coding with full tool access",
   tools: { edit: true, bash: true, web: true, mcp: true },
   prompt: "Execute tasks quickly and autonomously. You have full access to all tools.",
-  level: AgentLevel.worker,
+  agentName: "vibe-agent",
   approvalPolicy: "full-auto",
   sandboxPolicy: "full-access",
   checkpointsRequired: false,
   checkpointCount: 0,
+  allowedGroups: [...MODE_TOOL_GROUPS.vibe],
 } as const;
 
 /**
@@ -271,11 +305,12 @@ export const PLAN_MODE: CodingModeConfig = {
   description: "Plan-then-execute with one checkpoint",
   tools: { edit: true, bash: "readonly", web: true, mcp: true },
   prompt: "First analyze and plan your approach, then execute after user approval.",
-  level: AgentLevel.workflow,
+  agentName: "plan-agent",
   approvalPolicy: "auto-edit",
   sandboxPolicy: "workspace-write",
   checkpointsRequired: true,
   checkpointCount: 1,
+  allowedGroups: [...MODE_TOOL_GROUPS.plan],
 } as const;
 
 /**
@@ -314,12 +349,12 @@ export const SPEC_MODE: CodingModeConfig = {
   tools: { edit: false, bash: "readonly", web: true, mcp: true },
   prompt:
     "Follow the structured 6-phase specification workflow. Each phase requires checkpoint approval.",
-  level: AgentLevel.orchestrator,
+  agentName: "spec-orchestrator",
   approvalPolicy: "suggest",
   sandboxPolicy: "workspace-read",
   checkpointsRequired: true,
   checkpointCount: 6,
-  canSpawnAgents: ["spec-research", "spec-impl", "spec-validate"],
+  allowedGroups: [...MODE_TOOL_GROUPS.spec],
 } as const;
 
 // ============================================

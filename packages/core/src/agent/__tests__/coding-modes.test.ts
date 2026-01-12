@@ -297,7 +297,8 @@ describe("codingModeToCore", () => {
 
     expect(core.name).toBe("plan");
     expect(core.tools).toEqual(PLAN_MODE.tools);
-    expect((core as CodingModeConfig).level).toBeUndefined();
+    // CodingModeConfig-specific fields should not exist
+    expect((core as CodingModeConfig).codingMode).toBeUndefined();
   });
 
   it("should convert SPEC_MODE correctly", () => {
@@ -305,7 +306,8 @@ describe("codingModeToCore", () => {
 
     expect(core.name).toBe("plan");
     expect(core.prompt).toContain("6-phase");
-    expect((core as CodingModeConfig).canSpawnAgents).toBeUndefined();
+    // CodingModeConfig-specific fields should not exist
+    expect((core as CodingModeConfig).codingMode).toBeUndefined();
   });
 });
 
@@ -318,8 +320,8 @@ describe("VIBE_MODE", () => {
     expect(VIBE_MODE.codingMode).toBe("vibe");
   });
 
-  it("should have level set to worker", () => {
-    expect(VIBE_MODE.level).toBe(AgentLevel.worker);
+  it("should have agentName referencing the vibe agent", () => {
+    expect(VIBE_MODE.agentName).toBe("vibe-agent");
   });
 
   it("should have approvalPolicy set to 'full-auto'", () => {
@@ -353,8 +355,8 @@ describe("PLAN_MODE", () => {
     expect(PLAN_MODE.codingMode).toBe("plan");
   });
 
-  it("should have level set to workflow", () => {
-    expect(PLAN_MODE.level).toBe(AgentLevel.workflow);
+  it("should have agentName referencing the plan agent", () => {
+    expect(PLAN_MODE.agentName).toBe("plan-agent");
   });
 
   it("should have approvalPolicy set to 'auto-edit'", () => {
@@ -387,8 +389,8 @@ describe("SPEC_MODE", () => {
     expect(SPEC_MODE.codingMode).toBe("spec");
   });
 
-  it("should have level set to orchestrator", () => {
-    expect(SPEC_MODE.level).toBe(AgentLevel.orchestrator);
+  it("should have agentName referencing the spec orchestrator", () => {
+    expect(SPEC_MODE.agentName).toBe("spec-orchestrator");
   });
 
   it("should have approvalPolicy set to 'suggest'", () => {
@@ -407,12 +409,8 @@ describe("SPEC_MODE", () => {
     expect(SPEC_MODE.checkpointCount).toBe(6);
   });
 
-  it("should be able to spawn spec-related agents", () => {
-    expect(SPEC_MODE.canSpawnAgents).toBeDefined();
-    expect(SPEC_MODE.canSpawnAgents).toContain("spec-research");
-    expect(SPEC_MODE.canSpawnAgents).toContain("spec-impl");
-    expect(SPEC_MODE.canSpawnAgents).toContain("spec-validate");
-  });
+  // Note: canSpawnAgents is now in AgentConfig (via spec-orchestrator agent)
+  // The mode references the agent via agentName
 
   it("should have edit disabled initially", () => {
     expect(SPEC_MODE.tools.edit).toBe(false);

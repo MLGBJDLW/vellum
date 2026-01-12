@@ -24,14 +24,14 @@ import { useTheme } from "../theme/index.js";
 /** Compact mode threshold in columns (lowered from 80 for better sidebar visibility) */
 const COMPACT_THRESHOLD = 60;
 
-/** Default sidebar width percentage */
-const SIDEBAR_WIDTH_PERCENT = 25;
+/** Default sidebar width percentage - reduced from 25% to give more space to messages */
+const SIDEBAR_WIDTH_PERCENT = 20;
 
-/** Minimum sidebar width in columns */
-const SIDEBAR_MIN_WIDTH = 20;
+/** Minimum sidebar width in columns - allow narrower for compact mode */
+const SIDEBAR_MIN_WIDTH = 16;
 
-/** Maximum sidebar width in columns */
-const SIDEBAR_MAX_WIDTH = 40;
+/** Maximum sidebar width in columns - allow wider on large terminals */
+const SIDEBAR_MAX_WIDTH = 60;
 
 // =============================================================================
 // Types
@@ -99,13 +99,12 @@ interface SeparatorProps {
 }
 
 function Separator({ color, style = "single" }: SeparatorProps): React.JSX.Element {
-  // Use box-drawing characters for separators
+  const { columns } = useTerminalSize();
   const char = style === "double" ? "═" : "─";
-  // Repeat enough to fill typical terminal widths
-  const line = char.repeat(200);
+  const line = char.repeat(columns);
   return (
     <Box width="100%">
-      <Text color={color}>{line}</Text>
+      <Text color={color} wrap="truncate-end">{line}</Text>
     </Box>
   );
 }
@@ -159,6 +158,9 @@ function SidebarRegion({ children, width, borderColor }: SidebarRegionProps): Re
   return (
     <Box
       flexDirection="column"
+      flexBasis={width}
+      flexShrink={1}
+      flexGrow={0}
       width={width}
       borderStyle="single"
       borderColor={borderColor}
@@ -182,7 +184,7 @@ interface ContentRegionProps {
 
 function ContentRegion({ children }: ContentRegionProps): React.JSX.Element {
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1}>
+    <Box flexDirection="column" flexGrow={1} flexShrink={0} paddingX={1}>
       {children}
     </Box>
   );
@@ -268,13 +270,26 @@ export function Layout({
     return !!sidebar && !isCompact;
   }, [showSidebar, sidebar, isCompact]);
 
-  // Calculate sidebar width based on terminal width
+  // Calculate sidebar width based on terminal width - adaptive tiered approach
   const sidebarWidth = useMemo(() => {
     if (!sidebarVisible) {
       return 0;
     }
-    const calculatedWidth = Math.floor(columns * (SIDEBAR_WIDTH_PERCENT / 100));
-    return Math.min(Math.max(calculatedWidth, SIDEBAR_MIN_WIDTH), SIDEBAR_MAX_WIDTH);
+    
+    // Adaptive calculation based on terminal size
+    const baseWidth = Math.floor(columns * (SIDEBAR_WIDTH_PERCENT / 100));
+    
+    // Tiered approach: small terminals get smaller sidebar, large terminals get proportional
+    if (columns < 80) {
+      // Compact: minimum viable sidebar
+      return Math.max(baseWidth, SIDEBAR_MIN_WIDTH);
+    } else if (columns < 120) {
+      // Normal: standard percentage, cap at 35
+      return Math.min(baseWidth, 35);
+    } else {
+      // Wide: allow up to max, but keep percentage-based
+      return Math.min(baseWidth, SIDEBAR_MAX_WIDTH);
+    }
   }, [sidebarVisible, columns]);
 
   // Get border colors from theme - use focus color for header/footer, default for sidebar

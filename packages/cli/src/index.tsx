@@ -4,6 +4,7 @@ import {
   type ApprovalPolicy,
   CODING_MODES,
   type CodingMode,
+  normalizeMode,
   SANDBOX_POLICIES,
   type SandboxPolicy,
 } from "@vellum/core";
@@ -120,15 +121,13 @@ export interface ChatOptions {
 
 /**
  * Parse mode flag with validation.
+ * Supports both new modes (vibe, plan, spec) and legacy modes (code, draft, debug, ask).
  * @param value - User input value
  * @returns Validated CodingMode
  */
 function parseMode(value: string): CodingMode {
-  const valid = CODING_MODES as readonly string[];
-  if (!valid.includes(value)) {
-    throw new Error(`Invalid mode: ${value}. Valid options: ${valid.join(", ")}`);
-  }
-  return value as CodingMode;
+  const result = normalizeMode(value);
+  return result.mode;
 }
 
 /**

@@ -22,6 +22,7 @@ export function unregisterLspTools(registry: ToolRegistryLike): void {
     "lsp_outgoing_calls",
     "lsp_code_actions",
     "lsp_format",
+    "lsp_completion",
   ];
 
   for (const name of lspToolNames) {

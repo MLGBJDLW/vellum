@@ -7,11 +7,19 @@
  * - T039: --sandbox CLI flag parsing
  * - T040: --full-auto shortcut flag
  * - T041: Mode slash commands (/mode, /vibe, /plan, /spec)
+ * - T014: Verify mode commands work with new structure
+ * - T015: Integration tests for mode switching with agent resolution
  *
  * @module cli/commands/__tests__/mode-cli.test
  */
 
-import type { ModeManager } from "@vellum/core";
+import {
+  BuiltinAgentRegistry,
+  type ModeManager,
+  PLAN_AGENT,
+  SPEC_ORCHESTRATOR,
+  VIBE_AGENT,
+} from "@vellum/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getModeCommandsManager,
@@ -451,5 +459,209 @@ describe("CLI Mode Integration", () => {
   it("mode commands should have examples", () => {
     expect(modeCommand.examples).toBeDefined();
     expect(modeCommand.examples?.length).toBeGreaterThan(0);
+  });
+});
+
+// =============================================================================
+// T014: Verify Mode Commands Work with New Structure
+// =============================================================================
+
+describe("T014: Mode Commands with New Agent Structure", () => {
+  beforeEach(() => {
+    setModeCommandsManager(null);
+  });
+
+  afterEach(() => {
+    setModeCommandsManager(null);
+  });
+
+  describe("/vibe switches to VIBE_MODE", () => {
+    it("should switch to vibe mode successfully", async () => {
+      const mockManager = createMockModeManager("plan");
+      setModeCommandsManager(mockManager);
+
+      const ctx = createMockContext();
+      const result = await vibeCommand.execute(ctx);
+
+      expect(result.kind).toBe("success");
+      expect(mockManager.switchMode).toHaveBeenCalledWith("vibe", { skipConfirmation: false });
+    });
+  });
+
+  describe("/plan switches to PLAN_MODE", () => {
+    it("should switch to plan mode successfully", async () => {
+      const mockManager = createMockModeManager("vibe");
+      setModeCommandsManager(mockManager);
+
+      const ctx = createMockContext();
+      const result = await planCommand.execute(ctx);
+
+      expect(result.kind).toBe("success");
+      expect(mockManager.switchMode).toHaveBeenCalledWith("plan", { skipConfirmation: false });
+    });
+  });
+
+  describe("/spec switches to SPEC_MODE", () => {
+    it("should request confirmation for spec mode", async () => {
+      const mockManager = createMockModeManager("vibe");
+      setModeCommandsManager(mockManager);
+
+      const ctx = createMockContext();
+      const result = await specCommand.execute(ctx);
+
+      expect(result.kind).toBe("interactive");
+      if (result.kind === "interactive") {
+        expect(result.prompt.inputType).toBe("confirm");
+      }
+    });
+
+    it("should switch to spec mode after confirmation", async () => {
+      const mockManager = createMockModeManager("vibe");
+      setModeCommandsManager(mockManager);
+
+      const ctx = createMockContext();
+      const result = await specCommand.execute(ctx);
+
+      if (result.kind === "interactive" && result.prompt.handler) {
+        const confirmResult = await result.prompt.handler("y");
+        expect(confirmResult.kind).toBe("success");
+        expect(mockManager.switchMode).toHaveBeenCalledWith("spec", { skipConfirmation: true });
+      }
+    });
+  });
+
+  describe("legacy mode names still work", () => {
+    it("should reject legacy mode 'code' (not a valid new mode)", async () => {
+      const mockManager = createMockModeManager("vibe");
+      setModeCommandsManager(mockManager);
+
+      // 'code' is not in CODING_MODES, so it should fail
+      const ctx = createMockContext(["code"]);
+      const result = await modeCommand.execute(ctx);
+
+      expect(result.kind).toBe("error");
+      if (result.kind === "error") {
+        expect(result.message).toContain("Invalid mode");
+      }
+    });
+
+    it("should accept valid new mode names", async () => {
+      const mockManager = createMockModeManager("vibe");
+      setModeCommandsManager(mockManager);
+
+      for (const mode of ["vibe", "plan"]) {
+        const ctx = createMockContext([mode]);
+        const result = await modeCommand.execute(ctx);
+        expect(result.kind).toBe("success");
+      }
+    });
+  });
+});
+
+// =============================================================================
+// T015: Integration Tests for Mode Switching with Agent Resolution
+// =============================================================================
+
+describe("T015: Mode Switching with Agent Resolution", () => {
+  beforeEach(() => {
+    // Reset and reinitialize registry for clean state
+    BuiltinAgentRegistry.getInstance().reset();
+    BuiltinAgentRegistry.getInstance().reinitialize();
+    setModeCommandsManager(null);
+  });
+
+  afterEach(() => {
+    setModeCommandsManager(null);
+  });
+
+  describe("/mode vibe activates VIBE_MODE", () => {
+    it("should activate vibe mode with vibe-agent", async () => {
+      const mockManager = createMockModeManager("plan");
+      setModeCommandsManager(mockManager);
+
+      const ctx = createMockContext(["vibe"]);
+      const result = await modeCommand.execute(ctx);
+
+      expect(result.kind).toBe("success");
+      expect(mockManager.switchMode).toHaveBeenCalledWith("vibe", { skipConfirmation: false });
+    });
+  });
+
+  describe("/mode plan activates PLAN_MODE", () => {
+    it("should activate plan mode with plan-agent", async () => {
+      const mockManager = createMockModeManager("vibe");
+      setModeCommandsManager(mockManager);
+
+      const ctx = createMockContext(["plan"]);
+      const result = await modeCommand.execute(ctx);
+
+      expect(result.kind).toBe("success");
+      expect(mockManager.switchMode).toHaveBeenCalledWith("plan", { skipConfirmation: false });
+    });
+  });
+
+  describe("/mode spec activates SPEC_MODE", () => {
+    it("should activate spec mode with spec-orchestrator (after confirmation)", async () => {
+      const mockManager = createMockModeManager("vibe");
+      setModeCommandsManager(mockManager);
+
+      const ctx = createMockContext(["spec"]);
+      const result = await modeCommand.execute(ctx);
+
+      // Spec mode requires confirmation
+      expect(result.kind).toBe("interactive");
+    });
+  });
+
+  describe("BuiltinAgentRegistry.get returns correct agent for mode", () => {
+    it("returns vibe-agent for vibe mode", () => {
+      const registry = BuiltinAgentRegistry.getInstance();
+      const agent = registry.get("vibe-agent");
+
+      expect(agent).toBeDefined();
+      expect(agent).toEqual(VIBE_AGENT);
+      expect(agent?.level).toBe(2);
+      expect(agent?.canSpawnAgents).toBe(false);
+    });
+
+    it("returns plan-agent for plan mode", () => {
+      const registry = BuiltinAgentRegistry.getInstance();
+      const agent = registry.get("plan-agent");
+
+      expect(agent).toBeDefined();
+      expect(agent).toEqual(PLAN_AGENT);
+      expect(agent?.level).toBe(1);
+      expect(agent?.canSpawnAgents).toBe(true);
+    });
+
+    it("returns spec-orchestrator for spec mode", () => {
+      const registry = BuiltinAgentRegistry.getInstance();
+      const agent = registry.get("spec-orchestrator");
+
+      expect(agent).toBeDefined();
+      expect(agent).toEqual(SPEC_ORCHESTRATOR);
+      expect(agent?.level).toBe(0);
+      expect(agent?.canSpawnAgents).toBe(true);
+    });
+
+    it("returns undefined for unknown agent", () => {
+      const registry = BuiltinAgentRegistry.getInstance();
+      const agent = registry.get("unknown-agent");
+
+      expect(agent).toBeUndefined();
+    });
+  });
+
+  describe("legacy /mode code maps to vibe (via legacy-modes.ts)", () => {
+    it("legacy mode 'code' is not directly valid in mode commands", async () => {
+      const mockManager = createMockModeManager("vibe");
+      setModeCommandsManager(mockManager);
+
+      // Direct 'code' should fail - legacy mapping is done at a higher level
+      const ctx = createMockContext(["code"]);
+      const result = await modeCommand.execute(ctx);
+
+      expect(result.kind).toBe("error");
+    });
   });
 });

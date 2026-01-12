@@ -68,6 +68,9 @@ export {
   // Agent Level Hierarchy (T001)
   AgentLevel,
   AgentLevelSchema,
+  // Agent Registry (T003) - Built-in agent registry for mode-agent resolution
+  AgentRegistry as BuiltinAgentRegistry,
+  DuplicateAgentError,
   // Core Loop
   AgentLoop,
   type AgentLoopConfig,
@@ -104,6 +107,7 @@ export {
   type ComplexityLevel,
   type ComplexityResult,
   ComplexityResultSchema,
+  canAgentSpawn,
   canEdit,
   canSpawn,
   codingModeToCore,
@@ -140,6 +144,8 @@ export {
   FileAccessSchema,
   type FileRestriction,
   FileRestrictionSchema,
+  type FileRestrictions,
+  FileRestrictionsSchema,
   // State Persistence
   FileStatePersister,
   type FileStatePersisterOptions,
@@ -240,8 +246,13 @@ export {
   toExtendedMode,
   type UserMessage,
   VALID_TRANSITIONS,
+  // Built-in Agents (T002)
+  VIBE_AGENT,
   VIBE_MODE,
   VibeModeHandler,
+  PLAN_AGENT,
+  SPEC_ORCHESTRATOR,
+  BUILT_IN_AGENTS,
   type YamlModeConfig,
   YamlModeConfigSchema,
 } from "./agent/index.js";
@@ -642,6 +653,10 @@ export {
   WebBrowsingConfigSchema,
 } from "./config/web-browsing.js";
 // ============================================
+// Commands (T032)
+// ============================================
+export * from "./commands/index.js";
+// ============================================
 // Context Management (T401-T402)
 // ============================================
 export * from "./context/index.js";
@@ -886,3 +901,16 @@ export * from "./vision/index.js";
 // Watch (Phase 36)
 // ============================================
 export * from "./watch/index.js";
+// ============================================
+// Workflows (T034-T035)
+// ============================================
+export {
+  createWorkflowLoader,
+  type StepResult as WorkflowStepResult,
+  type StepValidation,
+  type Workflow,
+  WorkflowLoader,
+  type WorkflowLoaderOptions,
+  type WorkflowSource,
+  type WorkflowStep,
+} from "./workflows/index.js";
