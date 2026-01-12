@@ -339,8 +339,8 @@ export function Autocomplete({
     // We need to map selectedIndex to display item position
     let selectedDisplayIndex = 0;
     for (let i = 0; i < displayItems.length; i++) {
-      // biome-ignore lint/style/noNonNullAssertion: Index guaranteed valid in for-loop
-      const item = displayItems[i]!;
+      const item = displayItems[i];
+      if (!item) continue;
       if (item.type === "option" && item.selectableIndex === selectedIndex) {
         selectedDisplayIndex = i;
         break;
@@ -457,8 +457,8 @@ export function Autocomplete({
         }
 
         // Render option
-        // biome-ignore lint/style/noNonNullAssertion: Option guaranteed when item.type is 'option'
-        const opt = item.option!;
+        const opt = item.option;
+        if (!opt) return null;
         const isSelected = item.selectableIndex === selectedIndex;
         const matchLength = input.length;
 

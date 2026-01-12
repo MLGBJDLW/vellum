@@ -318,8 +318,8 @@ describe("WorkflowLoader", () => {
       });
 
       const workflows = await loader.loadAll();
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = workflows[0]!;
+      expect(workflows[0]).toBeDefined();
+      const workflow = workflows[0] as NonNullable<(typeof workflows)[0]>;
 
       expect(workflow.steps).toHaveLength(3);
       expect(workflow.steps[0]).toMatchObject({
@@ -340,8 +340,8 @@ describe("WorkflowLoader", () => {
       createWorkflowWithValidation(tempWorkspace, "validated");
 
       const workflows = await loader.loadAll();
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = workflows[0]!;
+      expect(workflows[0]).toBeDefined();
+      const workflow = workflows[0] as NonNullable<(typeof workflows)[0]>;
 
       expect(workflow.steps[0]?.validation).toEqual({
         type: "exit_code",
@@ -354,8 +354,8 @@ describe("WorkflowLoader", () => {
       createWorkflowWithValidation(tempWorkspace, "with-timeout");
 
       const workflows = await loader.loadAll();
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = workflows[0]!;
+      expect(workflows[0]).toBeDefined();
+      const workflow = workflows[0] as NonNullable<(typeof workflows)[0]>;
 
       expect(workflow.steps[1]?.timeout).toBe(300);
     });
@@ -364,8 +364,8 @@ describe("WorkflowLoader", () => {
       createWorkflowWithValidation(tempWorkspace, "continue-on-error");
 
       const workflows = await loader.loadAll();
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = workflows[0]!;
+      expect(workflows[0]).toBeDefined();
+      const workflow = workflows[0] as NonNullable<(typeof workflows)[0]>;
 
       expect(workflow.steps[0]?.continueOnError).toBe(false);
       expect(workflow.steps[1]?.continueOnError).toBe(true);
@@ -375,8 +375,8 @@ describe("WorkflowLoader", () => {
       createValidWorkflowFile(tempWorkspace, "with-preamble");
 
       const workflows = await loader.loadAll();
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = workflows[0]!;
+      expect(workflows[0]).toBeDefined();
+      const workflow = workflows[0] as NonNullable<(typeof workflows)[0]>;
 
       expect(workflow.preamble).toContain("This is the preamble");
       expect(workflow.preamble).toContain("Instructions before steps begin");
@@ -424,8 +424,8 @@ describe("WorkflowLoader", () => {
       });
 
       const workflows = await loader.loadAll();
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = workflows[0]!;
+      expect(workflows[0]).toBeDefined();
+      const workflow = workflows[0] as NonNullable<(typeof workflows)[0]>;
 
       expect(workflow.variables).toEqual({
         target: "production",
@@ -446,8 +446,9 @@ describe("WorkflowLoader", () => {
         ],
       });
 
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = (await loader.load("exec-test"))!;
+      const loadedWorkflow = await loader.load("exec-test");
+      expect(loadedWorkflow).not.toBeNull();
+      const workflow = loadedWorkflow as NonNullable<typeof loadedWorkflow>;
       const result = loader.executeStep(workflow, 0);
 
       expect(result.success).toBe(true);
@@ -458,8 +459,9 @@ describe("WorkflowLoader", () => {
     it("returns error for invalid step index", async () => {
       createValidWorkflowFile(tempWorkspace, "exec-test");
 
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = (await loader.load("exec-test"))!;
+      const loadedWorkflow = await loader.load("exec-test");
+      expect(loadedWorkflow).not.toBeNull();
+      const workflow = loadedWorkflow as NonNullable<typeof loadedWorkflow>;
       const result = loader.executeStep(workflow, 99);
 
       expect(result.success).toBe(false);
@@ -487,8 +489,9 @@ variables:
 Preamble.`
       );
 
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = (await loader.load("interpolate"))!;
+      const loadedWorkflow = await loader.load("interpolate");
+      expect(loadedWorkflow).not.toBeNull();
+      const workflow = loadedWorkflow as NonNullable<typeof loadedWorkflow>;
 
       // Use defaults
       let result = loader.executeStep(workflow, 0);
@@ -505,8 +508,9 @@ Preamble.`
     it("returns error for negative step index", async () => {
       createValidWorkflowFile(tempWorkspace, "negative-test");
 
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = (await loader.load("negative-test"))!;
+      const loadedWorkflow = await loader.load("negative-test");
+      expect(loadedWorkflow).not.toBeNull();
+      const workflow = loadedWorkflow as NonNullable<typeof loadedWorkflow>;
       const result = loader.executeStep(workflow, -1);
 
       expect(result.success).toBe(false);
@@ -526,8 +530,9 @@ Preamble.`
         ],
       });
 
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = (await loader.load("instructions-test"))!;
+      const loadedWorkflow = await loader.load("instructions-test");
+      expect(loadedWorkflow).not.toBeNull();
+      const workflow = loadedWorkflow as NonNullable<typeof loadedWorkflow>;
       const instructions = loader.getWorkflowInstructions(workflow);
 
       expect(instructions).toContain("This is the preamble");
@@ -557,8 +562,9 @@ variables:
 Deploy to {{target}} environment.`
       );
 
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = (await loader.load("var-instructions"))!;
+      const loadedWorkflow = await loader.load("var-instructions");
+      expect(loadedWorkflow).not.toBeNull();
+      const workflow = loadedWorkflow as NonNullable<typeof loadedWorkflow>;
       const instructions = loader.getWorkflowInstructions(workflow, {
         target: "prod",
       });
@@ -689,8 +695,9 @@ variables:
 Preamble.`
       );
 
-      // biome-ignore lint/style/noNonNullAssertion: Test assertion - workflow guaranteed by test setup
-      const workflow = (await loader.load("partial-vars"))!;
+      const loadedWorkflow = await loader.load("partial-vars");
+      expect(loadedWorkflow).not.toBeNull();
+      const workflow = loadedWorkflow as NonNullable<typeof loadedWorkflow>;
       const result = loader.executeStep(workflow, 0);
 
       // defined should be interpolated, undefined should remain as placeholder

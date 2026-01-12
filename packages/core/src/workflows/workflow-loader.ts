@@ -206,9 +206,9 @@ export class WorkflowLoader {
    */
   async load(name: string): Promise<Workflow | null> {
     // Check cache first
-    if (this.loaded.has(name)) {
-      // biome-ignore lint/style/noNonNullAssertion: Value guaranteed by has() check above
-      return this.loaded.get(name)!;
+    const cached = this.loaded.get(name);
+    if (cached) {
+      return cached;
     }
 
     // Try project directory first

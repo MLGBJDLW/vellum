@@ -23,6 +23,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PromptError } from "../errors.js";
 import { PromptLoader } from "../prompt-loader.js";
+import type { PromptParser } from "../prompt-parser.js";
 
 // =============================================================================
 // Test Fixtures
@@ -477,11 +478,10 @@ describe("PromptLoader", () => {
         frontmatter: {},
       });
 
-      // biome-ignore lint/suspicious/noExplicitAny: Test mock with partial interface
-      const customParser = { parse: mockParse } as any;
+      const customParser = { parse: mockParse } as Pick<PromptParser, "parse">;
       const loaderWithParser = new PromptLoader({
         discovery: { workspacePath: tempWorkspace },
-        parser: customParser,
+        parser: customParser as PromptParser,
       });
 
       expect(loaderWithParser.getParser()).toBe(customParser);

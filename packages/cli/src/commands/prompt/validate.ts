@@ -116,8 +116,8 @@ function checkTrailingWhitespace(content: string, file: string): ValidationIssue
   const lines = content.split("\n");
 
   for (let i = 0; i < lines.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: Index guaranteed valid in for-loop
-    const line = lines[i]!;
+    const line = lines[i];
+    if (!line) continue;
     if (line !== line.trimEnd()) {
       issues.push({
         severity: "warning",
@@ -184,16 +184,15 @@ function checkFrontmatter(content: string, file: string): ValidationIssue[] {
   }
 
   // Parse frontmatter for basic validation
-  // biome-ignore lint/style/noNonNullAssertion: Capture group guaranteed by regex match
-  const frontmatterContent = match[1]!;
+  const frontmatterContent = match[1];
+  if (!frontmatterContent) return issues;
   const frontmatterLines = frontmatterContent.split("\n");
 
   // Check for inconsistent indentation
   let expectedIndent: string | null = null;
   for (let i = 0; i < frontmatterLines.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: Index guaranteed valid in for-loop
-    const line = frontmatterLines[i]!;
-    if (line.trim() === "") continue;
+    const line = frontmatterLines[i];
+    if (!line || line.trim() === "") continue;
 
     // Check for tabs vs spaces
     const leadingWhitespace = line.match(/^(\s*)/)?.[1] ?? "";
@@ -245,8 +244,8 @@ function checkDuplicateKeys(content: string, file: string): ValidationIssue[] {
   const seenKeys = new Map<string, number>();
 
   for (let i = 0; i < lines.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: Index guaranteed valid in for-loop
-    const line = lines[i]!;
+    const line = lines[i];
+    if (!line) continue;
     const keyMatch = line.match(/^(\w+):/);
     if (keyMatch?.[1]) {
       const key = keyMatch[1];
