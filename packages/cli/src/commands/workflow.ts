@@ -242,6 +242,11 @@ export const workflowCommand: SlashCommand = {
       required: false,
     },
   ],
+  subcommands: [
+    { name: "list", description: "List available workflows", aliases: ["ls"] },
+    { name: "run", description: "Run a workflow by name" },
+    { name: "validate", description: "Validate workflow file syntax" },
+  ],
   execute: executeWorkflow,
 };
 

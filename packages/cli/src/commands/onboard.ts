@@ -74,6 +74,12 @@ export const onboardCommand: SlashCommand = {
       required: false,
     },
   ],
+  subcommands: [
+    { name: "welcome", description: "Show welcome screen" },
+    { name: "provider", description: "Configure LLM provider", aliases: ["provider-select"] },
+    { name: "credential", description: "Setup API credentials", aliases: ["credential-setup"] },
+    { name: "mode", description: "Choose default mode", aliases: ["mode-select"] },
+  ],
   examples: [
     "/onboard - Run onboarding wizard",
     "/onboard --force - Restart onboarding from beginning",

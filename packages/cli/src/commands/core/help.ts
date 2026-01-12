@@ -231,6 +231,39 @@ export function getHelpRegistry(): CommandRegistry | null {
 }
 
 /**
+ * Get dynamic subcommands for help based on registered commands.
+ * Returns subcommands for all registered commands plus category names.
+ */
+export function getHelpSubcommands(): import("../types.js").SubcommandDef[] {
+  const subcommands: import("../types.js").SubcommandDef[] = [];
+
+  // Add category names as subcommands
+  for (const category of CATEGORY_ORDER) {
+    subcommands.push({
+      name: category,
+      description: `Show ${CATEGORY_NAMES[category]} commands`,
+    });
+  }
+
+  // Add registered commands as subcommands (if registry is available)
+  if (registryRef) {
+    const allCommands = registryRef.list();
+    for (const cmd of allCommands) {
+      // Skip if already added (category name conflict)
+      if (!subcommands.some((s) => s.name === cmd.name)) {
+        subcommands.push({
+          name: cmd.name,
+          description: cmd.description,
+          aliases: cmd.aliases ? [...cmd.aliases] : undefined,
+        });
+      }
+    }
+  }
+
+  return subcommands;
+}
+
+/**
  * Help command - displays help information
  *
  * Usage:
@@ -257,6 +290,12 @@ export const helpCommand: SlashCommand = {
     "/help login        - Help for login command",
     "/help auth         - Show auth category commands",
   ],
+  // Subcommands are generated dynamically via getHelpSubcommands()
+  // The autocomplete system should call getHelpSubcommands() for fresh data
+  subcommands: CATEGORY_ORDER.map((category) => ({
+    name: category,
+    description: `Show ${CATEGORY_NAMES[category]} commands`,
+  })),
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
     const topic = ctx.parsedArgs.positional[0] as string | undefined;

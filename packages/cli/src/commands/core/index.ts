@@ -12,4 +12,4 @@
 
 export { clearCommand } from "./clear.js";
 export { exitCommand } from "./exit.js";
-export { getHelpRegistry, helpCommand, setHelpRegistry } from "./help.js";
+export { getHelpRegistry, getHelpSubcommands, helpCommand, setHelpRegistry } from "./help.js";

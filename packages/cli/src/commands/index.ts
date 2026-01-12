@@ -70,6 +70,7 @@ export {
   clearCommand,
   exitCommand,
   getHelpRegistry,
+  getHelpSubcommands,
   helpCommand,
   setHelpRegistry,
 } from "./core/index.js";

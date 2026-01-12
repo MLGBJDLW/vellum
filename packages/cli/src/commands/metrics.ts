@@ -28,6 +28,11 @@ export const metricsCommand: SlashCommandDef = {
       default: "text",
     },
   ],
+  subcommands: [
+    { name: "show", description: "Display current metrics" },
+    { name: "reset", description: "Reset all metrics counters" },
+    { name: "export", description: "Export metrics to file" },
+  ],
   aliases: ["stats"],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
