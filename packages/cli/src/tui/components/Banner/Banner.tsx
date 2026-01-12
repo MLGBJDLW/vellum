@@ -10,11 +10,13 @@
 import { Box, Text, useStdout } from "ink";
 import Gradient from "ink-gradient";
 import type React from "react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { selectAsciiArt } from "./AsciiArt.js";
 import { interpolateColor } from "./ShimmerText.js";
 import { TypeWriterGradient } from "./TypeWriterGradient.js";
 import { useShimmer } from "./useShimmer.js";
+
+// Note: useShimmer & interpolateColor still used by HeaderBanner
 
 // =============================================================================
 // Types
@@ -98,39 +100,6 @@ function buildGradientSteps(colors: readonly string[], stepsPerSegment: number):
 // =============================================================================
 
 /**
- * Animated gradient text with shimmer sweep effect.
- */
-interface AnimatedGradientProps {
-  readonly children: string;
-  readonly position: number;
-}
-
-/**
- * Animated gradient text with shimmer sweep effect.
- * Memoized to prevent unnecessary re-renders.
- */
-const AnimatedGradient = memo(function AnimatedGradient({
-  children,
-  position,
-}: AnimatedGradientProps): React.JSX.Element {
-  // Calculate discrete color shift to reduce re-computation
-  // Only recalculates when shift index actually changes
-  const colorShift =
-    Math.floor(position * PARCHMENT_GRADIENT_STEPS.length) % PARCHMENT_GRADIENT_STEPS.length;
-
-  // Shift gradient colors based on discrete colorShift value
-  const shiftedColors = useMemo(() => {
-    if (colorShift === 0) return PARCHMENT_GRADIENT_STEPS;
-    return [
-      ...PARCHMENT_GRADIENT_STEPS.slice(colorShift),
-      ...PARCHMENT_GRADIENT_STEPS.slice(0, colorShift),
-    ];
-  }, [colorShift]); // Depend on discrete value, not continuous position
-
-  return <Gradient colors={shiftedColors}>{children}</Gradient>;
-});
-
-/**
  * Static version display.
  */
 interface VersionDisplayProps {
@@ -182,13 +151,11 @@ export function Banner({
   customArt,
   showVersion = false,
   version = "0.1.0",
-  animated = true,
-  cycleDuration,
-  updateInterval,
+  // Note: animated, cycleDuration, updateInterval, cycles kept for API compat
+  // but shimmer effect is removed - typing goes directly to static gradient
   onComplete,
   displayDuration = 2000,
   autoHide = false,
-  cycles,
   typewriter = true,
   typewriterSpeed,
   typewriterMode = "char",
@@ -196,7 +163,6 @@ export function Banner({
   const { stdout } = useStdout();
   const [visible, setVisible] = useState(true);
   const [opacity, setOpacity] = useState(1);
-  const [animationComplete, setAnimationComplete] = useState(false);
   const [typingComplete, setTypingComplete] = useState(!typewriter);
 
   // Refs for nested timer cleanup
@@ -211,16 +177,16 @@ export function Banner({
     return customArt ?? selectAsciiArt(terminalWidth);
   }, [customArt, terminalWidth]);
 
-  // Shimmer animation tuned for smoother motion without excessive redraws
-  // Stop animation when cycles complete
-  // Only start shimmer after typing completes
-  const { position } = useShimmer({
-    cycleDuration: cycleDuration ?? 3000,
-    updateInterval,
-    enabled: animated && visible && !animationComplete && typingComplete,
-    maxCycles: cycles,
-    onComplete: () => setAnimationComplete(true),
-  });
+  // Auto-calculate typewriter speed if not provided
+  // Target: typing completes at 80% of displayDuration for comfortable viewing
+  const autoTypewriterSpeed = useMemo(() => {
+    if (typewriterSpeed !== undefined) return typewriterSpeed;
+    const charCount = asciiArt.length;
+    const typingTimeMs = displayDuration * 0.8; // 80% of display time
+    const typingTimeSec = typingTimeMs / 1000;
+    // Calculate chars/sec, minimum 500 to avoid being too slow
+    return Math.max(500, Math.ceil(charCount / typingTimeSec));
+  }, [typewriterSpeed, asciiArt.length, displayDuration]);
 
   // Auto-hide timer with smooth transition
   useEffect(() => {
@@ -251,12 +217,8 @@ export function Banner({
 
   if (!visible) return null;
 
-  // Determine if animation should show (not complete or no cycles limit)
-  const showAnimation = animated && !animationComplete;
-
-  // Determine which phase we're in
+  // Determine which phase we're in: typing or static gradient (no shimmer)
   const isTypingPhase = typewriter && !typingComplete;
-  const isShimmerPhase = typingComplete && showAnimation;
 
   return (
     <Box
@@ -269,26 +231,22 @@ export function Banner({
       {isTypingPhase ? (
         <TypeWriterGradient
           text={asciiArt}
-          speed={typewriterSpeed}
+          speed={autoTypewriterSpeed}
           colors={PARCHMENT_GRADIENT}
           showCursor
           mode={typewriterMode}
           onComplete={() => setTypingComplete(true)}
         />
-      ) : isShimmerPhase ? (
-        <AnimatedGradient position={position}>{asciiArt}</AnimatedGradient>
       ) : (
         <Gradient colors={PARCHMENT_GRADIENT}>{asciiArt}</Gradient>
       )}
 
       {showVersion && version ? <VersionDisplay version={version} /> : null}
 
-      {/* Loading indicator - hide after animation complete */}
-      {!animationComplete && (
+      {/* Loading indicator - hide when fading out */}
+      {opacity >= 0.5 && (
         <Box marginTop={1}>
-          <Text color={opacity < 1 ? "#666" : "#8B4513"} dimColor={opacity < 0.5}>
-            {opacity < 0.5 ? "Starting..." : "Initializing..."}
-          </Text>
+          <Text color="#8B4513">Initializing...</Text>
         </Box>
       )}
     </Box>
