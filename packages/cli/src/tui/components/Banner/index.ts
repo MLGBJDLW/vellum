@@ -45,6 +45,9 @@ export {
   type MultiLineShimmerProps,
 } from "./ShimmerText.js";
 
+// TypeWriter gradient component
+export { TypeWriterGradient, type TypeWriterGradientProps } from "./TypeWriterGradient.js";
+
 // Shimmer animation hook
 export {
   calculateShimmerIntensity,

@@ -13,6 +13,7 @@ import type React from "react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { selectAsciiArt } from "./AsciiArt.js";
 import { interpolateColor } from "./ShimmerText.js";
+import { TypeWriterGradient } from "./TypeWriterGradient.js";
 import { useShimmer } from "./useShimmer.js";
 
 // =============================================================================
@@ -43,6 +44,10 @@ export interface BannerProps {
   readonly autoHide?: boolean;
   /** Number of animation cycles before stopping (default: infinite) */
   readonly cycles?: number;
+  /** Whether to show typewriter effect on startup (default: true) */
+  readonly typewriter?: boolean;
+  /** Typewriter typing speed in chars per second (default: 200) */
+  readonly typewriterSpeed?: number;
 }
 
 // =============================================================================
@@ -182,11 +187,14 @@ export function Banner({
   displayDuration = 2000,
   autoHide = false,
   cycles,
+  typewriter = true,
+  typewriterSpeed = 200,
 }: BannerProps): React.JSX.Element | null {
   const { stdout } = useStdout();
   const [visible, setVisible] = useState(true);
   const [opacity, setOpacity] = useState(1);
   const [animationComplete, setAnimationComplete] = useState(false);
+  const [typingComplete, setTypingComplete] = useState(!typewriter);
 
   // Refs for nested timer cleanup
   const step1Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -202,10 +210,11 @@ export function Banner({
 
   // Shimmer animation tuned for smoother motion without excessive redraws
   // Stop animation when cycles complete
+  // Only start shimmer after typing completes
   const { position } = useShimmer({
     cycleDuration: cycleDuration ?? 3000,
     updateInterval,
-    enabled: animated && visible && !animationComplete,
+    enabled: animated && visible && !animationComplete && typingComplete,
     maxCycles: cycles,
     onComplete: () => setAnimationComplete(true),
   });
@@ -242,6 +251,10 @@ export function Banner({
   // Determine if animation should show (not complete or no cycles limit)
   const showAnimation = animated && !animationComplete;
 
+  // Determine which phase we're in
+  const isTypingPhase = typewriter && !typingComplete;
+  const isShimmerPhase = typingComplete && showAnimation;
+
   return (
     <Box
       flexDirection="column"
@@ -250,7 +263,15 @@ export function Banner({
       paddingX={1}
       paddingY={1}
     >
-      {showAnimation ? (
+      {isTypingPhase ? (
+        <TypeWriterGradient
+          text={asciiArt}
+          speed={typewriterSpeed}
+          colors={PARCHMENT_GRADIENT}
+          showCursor
+          onComplete={() => setTypingComplete(true)}
+        />
+      ) : isShimmerPhase ? (
         <AnimatedGradient position={position}>{asciiArt}</AnimatedGradient>
       ) : (
         <Gradient colors={PARCHMENT_GRADIENT}>{asciiArt}</Gradient>
