@@ -2355,6 +2355,7 @@ function AppContent({
           name: cmd.name,
           description: cmd.description,
           category: cmd.category,
+          aliases: cmd.aliases,
         });
       }
     }

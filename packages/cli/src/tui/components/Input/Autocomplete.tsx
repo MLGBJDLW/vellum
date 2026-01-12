@@ -25,6 +25,8 @@ export interface AutocompleteOption {
   readonly description?: string;
   /** Optional category for grouping */
   readonly category?: string;
+  /** Optional aliases for matching (e.g., quit -> exit) */
+  readonly aliases?: readonly string[];
 }
 
 /**
@@ -93,7 +95,11 @@ function filterStructuredOptions(
   if (!input) return [...options];
 
   const lowerInput = input.toLowerCase();
-  return options.filter((opt) => opt.name.toLowerCase().startsWith(lowerInput));
+  return options.filter(
+    (opt) =>
+      opt.name.toLowerCase().startsWith(lowerInput) ||
+      opt.aliases?.some((alias) => alias.toLowerCase().startsWith(lowerInput))
+  );
 }
 
 /**
