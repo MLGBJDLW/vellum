@@ -39,9 +39,11 @@ function createTempDir(prefix: string): string {
 
 /**
  * Create a provider header file in the test directory.
+ * Files are created in `.vellum/prompts/providers/` which matches the
+ * PromptDiscovery search paths.
  */
 function createProviderFile(dir: string, provider: string, content: string): string {
-  const providersDir = join(dir, "prompts", "markdown", "providers");
+  const providersDir = join(dir, ".vellum", "prompts", "providers");
   mkdirSync(providersDir, { recursive: true });
 
   const filePath = join(providersDir, `${provider}.md`);
