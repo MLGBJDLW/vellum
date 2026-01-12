@@ -46,7 +46,7 @@ export interface BannerProps {
   readonly cycles?: number;
   /** Whether to show typewriter effect on startup (default: true) */
   readonly typewriter?: boolean;
-  /** Typewriter typing speed in chars per second (default: 200) */
+  /** Typewriter typing speed in chars per second (default: 1500) */
   readonly typewriterSpeed?: number;
 }
 

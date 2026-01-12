@@ -40,10 +40,13 @@ export interface TypeWriterGradientProps {
 // =============================================================================
 
 /** Default typing speed (chars per second) */
-const DEFAULT_SPEED = 200;
+const DEFAULT_SPEED = 1500;
 
 /** Cursor blink interval in ms */
 const CURSOR_BLINK_INTERVAL = 500;
+
+/** Frame interval for chunk-based typing (targeting ~60fps) */
+const FRAME_INTERVAL_MS = 16;
 
 /** Cursor character */
 const CURSOR_CHAR = "█";
@@ -173,7 +176,7 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
   // Pre-compute gradient steps for performance
   const gradientSteps = useMemo(() => buildGradientSteps(colors, 8), [colors]);
 
-  // Typing effect
+  // Typing effect with chunk-based rendering for high speeds
   useEffect(() => {
     // Clear any existing intervals
     if (typingIntervalRef.current) {
@@ -185,11 +188,13 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
 
     // Start after initial delay
     initialDelayRef.current = setTimeout(() => {
-      const intervalMs = 1000 / speed;
+      // Calculate chars per frame for chunk-based typing
+      // At 60fps (16ms intervals), speed=1500 means ~24 chars per frame
+      const charsPerFrame = Math.max(1, Math.ceil(speed / (1000 / FRAME_INTERVAL_MS)));
 
       typingIntervalRef.current = setInterval(() => {
         setVisibleChars((prev) => {
-          const next = prev + 1;
+          const next = prev + charsPerFrame;
 
           // Check completion
           if (next >= totalChars) {
@@ -208,7 +213,7 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
 
           return next;
         });
-      }, intervalMs);
+      }, FRAME_INTERVAL_MS);
     }, initialDelay);
 
     return () => {
