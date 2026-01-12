@@ -43,6 +43,12 @@ export interface CommandInputProps {
   readonly commands?: readonly string[] | readonly AutocompleteOption[];
   /** Get subcommands for a command (for two-level autocomplete) */
   readonly getSubcommands?: (commandName: string) => readonly AutocompleteOption[] | undefined;
+  /** Get level 3 items for a command and subcommand (for three-level autocomplete) */
+  readonly getLevel3Items?: (
+    commandName: string,
+    arg1: string,
+    partial: string
+  ) => readonly AutocompleteOption[] | undefined;
   /** Enable grouped display with categories (default: false) */
   readonly groupedCommands?: boolean;
   /** Category display order for grouped mode */
@@ -207,6 +213,7 @@ export function CommandInput({
   onCommand,
   commands,
   getSubcommands,
+  getLevel3Items,
   groupedCommands = false,
   categoryOrder,
   categoryLabels,
@@ -248,21 +255,41 @@ export function CommandInput({
       };
     }
 
-    // Level 2: subcommand completion
+    // Level 2 or 3: subcommand/arg completion
     const commandName = withoutSlash.slice(0, spaceIndex);
     const afterSpace = withoutSlash.slice(spaceIndex + 1);
-    // Check if there's a second space (args after subcommand)
+    // Check if there's a second space (potential level 3)
     const secondSpaceIndex = afterSpace.indexOf(" ");
-    const subQuery = secondSpaceIndex === -1 ? afterSpace : afterSpace.slice(0, secondSpaceIndex);
-    // Only active if we're still typing the subcommand (no second space yet)
-    const isActive = secondSpaceIndex === -1;
+
+    if (secondSpaceIndex === -1) {
+      // Level 2: subcommand completion (only one space so far)
+      return {
+        visible: true,
+        active: true,
+        query: afterSpace,
+        level: 2 as const,
+        commandName,
+        arg1: "",
+      };
+    }
+
+    // Level 3: third-level completion (two spaces)
+    const arg1 = afterSpace.slice(0, secondSpaceIndex);
+    const afterSecondSpace = afterSpace.slice(secondSpaceIndex + 1);
+    // Check if there's a third space (args after level 3)
+    const thirdSpaceIndex = afterSecondSpace.indexOf(" ");
+    const level3Query =
+      thirdSpaceIndex === -1 ? afterSecondSpace : afterSecondSpace.slice(0, thirdSpaceIndex);
+    // Only active if we're still typing the level 3 item (no third space yet)
+    const isActive = thirdSpaceIndex === -1;
 
     return {
       visible: true,
       active: isActive,
-      query: subQuery,
-      level: 2 as const,
+      query: level3Query,
+      level: 3 as const,
       commandName,
+      arg1,
     };
   }, [value]);
 
@@ -368,11 +395,35 @@ export function CommandInput({
       return commands ?? [];
     }
     // Level 2: get subcommands for the command
-    if (getSubcommands && slashAutocomplete.commandName) {
-      return getSubcommands(slashAutocomplete.commandName) ?? [];
+    if (slashAutocomplete.level === 2) {
+      if (getSubcommands && slashAutocomplete.commandName) {
+        return getSubcommands(slashAutocomplete.commandName) ?? [];
+      }
+      return [];
+    }
+    // Level 3: get third-level items (e.g., models for a provider)
+    if (slashAutocomplete.level === 3) {
+      if (getLevel3Items && slashAutocomplete.commandName && slashAutocomplete.arg1) {
+        return (
+          getLevel3Items(
+            slashAutocomplete.commandName,
+            slashAutocomplete.arg1,
+            slashAutocomplete.query
+          ) ?? []
+        );
+      }
+      return [];
     }
     return [];
-  }, [slashAutocomplete.level, slashAutocomplete.commandName, commands, getSubcommands]);
+  }, [
+    slashAutocomplete.level,
+    slashAutocomplete.commandName,
+    slashAutocomplete.arg1,
+    slashAutocomplete.query,
+    commands,
+    getSubcommands,
+    getLevel3Items,
+  ]);
 
   // Handle autocomplete selection
   const handleAutocompleteSelect = useCallback(
@@ -380,9 +431,12 @@ export function CommandInput({
       if (slashAutocomplete.level === 1) {
         // Level 1: selected is command name
         setValue(`/${selected} `);
-      } else {
+      } else if (slashAutocomplete.level === 2) {
         // Level 2: selected is subcommand name, preserve command
         setValue(`/${slashAutocomplete.commandName} ${selected} `);
+      } else {
+        // Level 3: selected is third-level item (e.g., model), preserve command and arg1
+        setValue(`/${slashAutocomplete.commandName} ${slashAutocomplete.arg1} ${selected} `);
       }
       // Signal that autocomplete just completed - this will:
       // 1. Suppress the next Enter from submitting
@@ -390,7 +444,7 @@ export function CommandInput({
       setAutocompleteJustCompleted(true);
       inputRef.current?.focus();
     },
-    [slashAutocomplete.level, slashAutocomplete.commandName]
+    [slashAutocomplete.level, slashAutocomplete.commandName, slashAutocomplete.arg1]
   );
 
   // Handle autocomplete cancel

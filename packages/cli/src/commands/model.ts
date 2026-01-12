@@ -147,6 +147,11 @@ export const modelCommand: SlashCommand = {
     "/model anthropic/claude-sonnet-4-20250514  - Switch to Claude Sonnet 4",
     "/model openai/gpt-4o           - Switch to GPT-4o",
   ],
+  // Dynamic subcommands: list all providers for autocomplete
+  subcommands: getSupportedProviders().map((provider) => ({
+    name: provider,
+    description: `${getProviderEmoji(provider)} ${provider} models`,
+  })),
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
     const requestedModel = ctx.parsedArgs.positional[0] as string | undefined;

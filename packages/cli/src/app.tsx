@@ -133,6 +133,7 @@ import {
 // Feature Integrations (T063-T070)
 // =============================================================================
 
+import { getProviderModels } from "@vellum/provider";
 // Enterprise integration (T068)
 import {
   createEnterpriseHooks,
@@ -2379,6 +2380,39 @@ function AppContent({
     [commandRegistry]
   );
 
+  // Get level 3 items for three-level autocomplete (e.g., /model anthropic claude-)
+  const getLevel3Items = useCallback(
+    (commandName: string, arg1: string, partial: string): AutocompleteOption[] | undefined => {
+      // Currently only /model supports level 3 autocomplete
+      if (commandName !== "model") {
+        return undefined;
+      }
+
+      // arg1 is the provider name
+      const models = getProviderModels(arg1);
+      if (models.length === 0) {
+        return undefined;
+      }
+
+      // Filter models by partial match
+      const lowerPartial = partial.toLowerCase();
+      const filtered = lowerPartial
+        ? models.filter(
+            (m) =>
+              m.id.toLowerCase().includes(lowerPartial) ||
+              m.name.toLowerCase().includes(lowerPartial)
+          )
+        : models;
+
+      return filtered.map((m) => ({
+        name: m.id,
+        description: m.name,
+        category: arg1,
+      }));
+    },
+    []
+  );
+
   // Handle permission dialog responses
   const handleApprove = useCallback(() => {
     if (!activeApproval) {
@@ -2687,6 +2721,7 @@ function AppContent({
       closeSessionManager={closeSessionManager}
       commandOptions={commandOptions}
       getSubcommands={getSubcommands}
+      getLevel3Items={getLevel3Items}
       categoryOrder={categoryOrder}
       categoryLabels={categoryLabels}
       contextWindow={contextWindow}
@@ -2768,6 +2803,11 @@ interface AppContentViewProps {
   readonly closeSessionManager: () => void;
   readonly commandOptions: readonly AutocompleteOption[];
   readonly getSubcommands: (commandName: string) => AutocompleteOption[] | undefined;
+  readonly getLevel3Items: (
+    commandName: string,
+    arg1: string,
+    partial: string
+  ) => AutocompleteOption[] | undefined;
   readonly categoryOrder: readonly string[];
   readonly categoryLabels: Record<string, string>;
   readonly contextWindow: number;
@@ -3159,6 +3199,7 @@ function AppContentView({
   closeSessionManager,
   commandOptions,
   getSubcommands,
+  getLevel3Items,
   categoryOrder,
   categoryLabels,
   contextWindow,
@@ -3348,6 +3389,7 @@ function AppContentView({
           onCommand={handleCommand}
           commands={commandOptions}
           getSubcommands={getSubcommands}
+          getLevel3Items={getLevel3Items}
           groupedCommands={true}
           categoryOrder={categoryOrder}
           categoryLabels={categoryLabels}
