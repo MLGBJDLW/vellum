@@ -556,3 +556,14 @@ export {
   setTutorialSystem,
   tutorialCommand,
 } from "./tutorial.js";
+
+// =============================================================================
+// MCP Commands (Phase 40)
+// =============================================================================
+
+export {
+  getMcpCommandsHub,
+  mcpCommand,
+  mcpSlashCommands,
+  setMcpCommandsHub,
+} from "./mcp.js";
