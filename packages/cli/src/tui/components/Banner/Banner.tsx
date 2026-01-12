@@ -191,7 +191,7 @@ export function Banner({
   cycles,
   typewriter = true,
   typewriterSpeed,
-  typewriterMode = "line",
+  typewriterMode = "char",
 }: BannerProps): React.JSX.Element | null {
   const { stdout } = useStdout();
   const [visible, setVisible] = useState(true);

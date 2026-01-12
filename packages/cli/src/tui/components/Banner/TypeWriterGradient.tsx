@@ -49,7 +49,7 @@ export interface TypeWriterGradientProps {
 // =============================================================================
 
 /** Default typing speed for char mode (chars per second) - very fast for ASCII art */
-const DEFAULT_CHAR_SPEED = 3000;
+const DEFAULT_CHAR_SPEED = 5000;
 
 /** Default typing speed for line mode (lines per second) */
 const DEFAULT_LINE_SPEED = 50;
