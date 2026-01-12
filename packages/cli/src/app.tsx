@@ -87,6 +87,7 @@ import { ModelSelector } from "./tui/components/ModelSelector.js";
 import { ModeSelector } from "./tui/components/ModeSelector.js";
 import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
+import { SystemStatusPanel } from "./tui/components/Sidebar/SystemStatusPanel.js";
 import { StatusBar } from "./tui/components/StatusBar/StatusBar.js";
 import type { TrustMode } from "./tui/components/StatusBar/TrustModeIndicator.js";
 import { SessionPicker } from "./tui/components/session/SessionPicker.js";
@@ -2862,8 +2863,10 @@ function renderSidebarContent({
 }): React.ReactNode | undefined {
   if (!showSidebar) return undefined;
 
+  let panelContent: React.ReactNode;
+
   if (sidebarContent === "todo") {
-    return (
+    panelContent = (
       <TodoPanel
         items={todoItems}
         isFocused={showSidebar}
@@ -2874,17 +2877,20 @@ function renderSidebarContent({
         }}
       />
     );
+  } else if (sidebarContent === "tools") {
+    panelContent = <ToolsPanel isFocused={showSidebar} maxItems={20} />;
+  } else if (sidebarContent === "mcp") {
+    panelContent = <McpPanel isFocused={showSidebar} toolRegistry={toolRegistry} />;
+  } else {
+    panelContent = <MemoryPanel entries={memoryEntries} isFocused={showSidebar} maxHeight={20} />;
   }
 
-  if (sidebarContent === "tools") {
-    return <ToolsPanel isFocused={showSidebar} maxItems={20} />;
-  }
-
-  if (sidebarContent === "mcp") {
-    return <McpPanel isFocused={showSidebar} toolRegistry={toolRegistry} />;
-  }
-
-  return <MemoryPanel entries={memoryEntries} isFocused={showSidebar} maxHeight={20} />;
+  return (
+    <Box flexDirection="column" height="100%">
+      <Box flexGrow={1}>{panelContent}</Box>
+      <SystemStatusPanel compact={false} />
+    </Box>
+  );
 }
 
 interface AppOverlaysProps {

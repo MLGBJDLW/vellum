@@ -54,35 +54,35 @@ interface SandboxDisplayConfig {
 
 const SANDBOX_DISPLAY: Record<SandboxPolicy, SandboxDisplayConfig> = {
   "workspace-read": {
-    icon: "📖",
+    icon: "[r]",
     label: "workspace (read)",
-    compactLabel: "ws·r",
+    compactLabel: "ws",
     description: "Read-only access within workspace",
     severity: "safe",
   },
   "workspace-write": {
-    icon: "📁",
+    icon: "[w]",
     label: "workspace",
     compactLabel: "ws",
     description: "Read/write access within workspace",
     severity: "caution",
   },
   "cwd-read": {
-    icon: "📂",
+    icon: "[r]",
     label: "cwd (read)",
-    compactLabel: "cwd·r",
+    compactLabel: "cwd",
     description: "Read-only access in current directory",
     severity: "safe",
   },
   "cwd-write": {
-    icon: "📂",
+    icon: "[w]",
     label: "cwd",
     compactLabel: "cwd",
     description: "Read/write access in current directory",
     severity: "caution",
   },
   "full-access": {
-    icon: "🌐",
+    icon: "[*]",
     label: "system",
     compactLabel: "sys",
     description: "Full system-wide access",
@@ -129,21 +129,21 @@ function getSandboxColor(
  * - Compact or full label display
  *
  * Sandbox Policies:
- * - workspace-read: 📖 Read-only within workspace (safe)
- * - workspace-write: 📁 Read/write within workspace (caution)
- * - cwd-read: 📂 Read-only in current directory (safe)
- * - cwd-write: 📂 Read/write in current directory (caution)
- * - full-access: 🌐 Full system access (danger)
+ * - workspace-read: [r] Read-only within workspace (safe)
+ * - workspace-write: [w] Read/write within workspace (caution)
+ * - cwd-read: [r] Read-only in current directory (safe)
+ * - cwd-write: [w] Read/write in current directory (caution)
+ * - full-access: [*] Full system access (danger)
  *
  * @example
  * ```tsx
  * // Compact mode (default)
  * <SandboxIndicator policy="workspace-write" />
- * // Output: 📁 ws
+ * // Output: [w] ws
  *
  * // Full mode
  * <SandboxIndicator policy="workspace-write" compact={false} />
- * // Output: 📁 workspace
+ * // Output: [w] workspace
  * ```
  */
 export function SandboxIndicator({

@@ -45,6 +45,8 @@ export {
   ScreenReaderLayout,
   type ScreenReaderLayoutProps,
 } from "./ScreenReaderLayout.js";
+// Sidebar components
+export * from "./Sidebar/index.js";
 export * from "./StatusBar/index.js";
 export * from "./session/index.js";
 export { ThinkingBlock, type ThinkingBlockProps } from "./ThinkingBlock.js";
