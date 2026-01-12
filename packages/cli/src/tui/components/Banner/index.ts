@@ -46,7 +46,11 @@ export {
 } from "./ShimmerText.js";
 
 // TypeWriter gradient component
-export { TypeWriterGradient, type TypeWriterGradientProps } from "./TypeWriterGradient.js";
+export {
+  TypeWriterGradient,
+  type TypeWriterGradientProps,
+  type TypeWriterMode,
+} from "./TypeWriterGradient.js";
 
 // Shimmer animation hook
 export {

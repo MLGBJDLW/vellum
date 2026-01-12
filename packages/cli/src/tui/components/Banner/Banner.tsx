@@ -46,8 +46,10 @@ export interface BannerProps {
   readonly cycles?: number;
   /** Whether to show typewriter effect on startup (default: true) */
   readonly typewriter?: boolean;
-  /** Typewriter typing speed in chars per second (default: 1500) */
+  /** Typewriter speed: lines/sec for line mode, chars/sec for char mode (default: 50 lines/sec) */
   readonly typewriterSpeed?: number;
+  /** Typewriter mode: 'line' reveals whole lines, 'char' reveals characters (default: 'line') */
+  readonly typewriterMode?: "line" | "char";
 }
 
 // =============================================================================
@@ -188,7 +190,8 @@ export function Banner({
   autoHide = false,
   cycles,
   typewriter = true,
-  typewriterSpeed = 200,
+  typewriterSpeed,
+  typewriterMode = "line",
 }: BannerProps): React.JSX.Element | null {
   const { stdout } = useStdout();
   const [visible, setVisible] = useState(true);
@@ -269,6 +272,7 @@ export function Banner({
           speed={typewriterSpeed}
           colors={PARCHMENT_GRADIENT}
           showCursor
+          mode={typewriterMode}
           onComplete={() => setTypingComplete(true)}
         />
       ) : isShimmerPhase ? (

@@ -18,12 +18,19 @@ import { interpolateColor } from "./ShimmerText.js";
 // =============================================================================
 
 /**
+ * Typing mode for the typewriter effect.
+ * - 'line': Reveal one line at a time (faster for multi-line ASCII art)
+ * - 'char': Reveal one character at a time (classic typewriter feel)
+ */
+export type TypeWriterMode = "line" | "char";
+
+/**
  * Props for the TypeWriterGradient component.
  */
 export interface TypeWriterGradientProps {
   /** Text content to display with typewriter effect */
   readonly text: string;
-  /** Characters per second (default: 200) */
+  /** Speed: chars/sec for 'char' mode, lines/sec for 'line' mode (default: 3000 chars/sec or 50 lines/sec) */
   readonly speed?: number;
   /** Gradient colors array (start to end) */
   readonly colors: readonly string[];
@@ -33,14 +40,19 @@ export interface TypeWriterGradientProps {
   readonly showCursor?: boolean;
   /** Initial delay before typing starts in ms (default: 100) */
   readonly initialDelay?: number;
+  /** Typing mode: 'line' for fast multi-line reveal, 'char' for classic typewriter (default: 'line') */
+  readonly mode?: TypeWriterMode;
 }
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-/** Default typing speed (chars per second) */
-const DEFAULT_SPEED = 1500;
+/** Default typing speed for char mode (chars per second) - very fast for ASCII art */
+const DEFAULT_CHAR_SPEED = 3000;
+
+/** Default typing speed for line mode (lines per second) */
+const DEFAULT_LINE_SPEED = 50;
 
 /** Cursor blink interval in ms */
 const CURSOR_BLINK_INTERVAL = 500;
@@ -153,14 +165,23 @@ const Cursor = memo(function Cursor({ visible, color }: CursorProps): React.JSX.
  */
 export const TypeWriterGradient = memo(function TypeWriterGradient({
   text,
-  speed = DEFAULT_SPEED,
+  speed,
   colors,
   onComplete,
   showCursor = true,
   initialDelay = 100,
+  mode = "line",
 }: TypeWriterGradientProps): React.JSX.Element {
-  // State for visible character count
-  const [visibleChars, setVisibleChars] = useState(0);
+  // Split text into lines upfront for line mode
+  const allLines = useMemo(() => text.split("\n"), [text]);
+  const totalLines = allLines.length;
+  const totalChars = text.length;
+
+  // Resolve speed based on mode
+  const effectiveSpeed = speed ?? (mode === "line" ? DEFAULT_LINE_SPEED : DEFAULT_CHAR_SPEED);
+
+  // State for visible content (lines for line mode, chars for char mode)
+  const [visibleCount, setVisibleCount] = useState(0);
   const [cursorVisible, setCursorVisible] = useState(true);
   const [isComplete, setIsComplete] = useState(false);
 
@@ -170,13 +191,13 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
   const initialDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completeCalledRef = useRef(false);
 
-  // Calculate total printable characters (excluding ANSI but including all visible chars)
-  const totalChars = text.length;
-
   // Pre-compute gradient steps for performance
   const gradientSteps = useMemo(() => buildGradientSteps(colors, 8), [colors]);
 
-  // Typing effect with chunk-based rendering for high speeds
+  // Total items to reveal (lines or chars depending on mode)
+  const totalItems = mode === "line" ? totalLines : totalChars;
+
+  // Typing effect with chunk-based rendering
   useEffect(() => {
     // Clear any existing intervals
     if (typingIntervalRef.current) {
@@ -188,16 +209,17 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
 
     // Start after initial delay
     initialDelayRef.current = setTimeout(() => {
-      // Calculate chars per frame for chunk-based typing
-      // At 60fps (16ms intervals), speed=1500 means ~24 chars per frame
-      const charsPerFrame = Math.max(1, Math.ceil(speed / (1000 / FRAME_INTERVAL_MS)));
+      // Calculate items per frame for chunk-based typing
+      // For line mode: speed=50 lines/sec at 60fps = ~0.8 lines/frame (at least 1)
+      // For char mode: speed=3000 chars/sec at 60fps = ~48 chars/frame
+      const itemsPerFrame = Math.max(1, Math.ceil(effectiveSpeed / (1000 / FRAME_INTERVAL_MS)));
 
       typingIntervalRef.current = setInterval(() => {
-        setVisibleChars((prev) => {
-          const next = prev + charsPerFrame;
+        setVisibleCount((prev) => {
+          const next = prev + itemsPerFrame;
 
           // Check completion
-          if (next >= totalChars) {
+          if (next >= totalItems) {
             if (typingIntervalRef.current) {
               clearInterval(typingIntervalRef.current);
               typingIntervalRef.current = null;
@@ -208,7 +230,7 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
               // Small delay before calling onComplete to let final render happen
               setTimeout(() => onComplete?.(), 50);
             }
-            return totalChars;
+            return totalItems;
           }
 
           return next;
@@ -224,7 +246,7 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
         clearTimeout(initialDelayRef.current);
       }
     };
-  }, [speed, totalChars, initialDelay, onComplete]);
+  }, [effectiveSpeed, totalItems, initialDelay, onComplete]);
 
   // Cursor blink effect (only while typing)
   useEffect(() => {
@@ -248,25 +270,40 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
     };
   }, [showCursor, isComplete]);
 
-  // Build visible text with colors
-  const visibleText = text.slice(0, visibleChars);
+  // Build visible lines based on mode
+  const visibleLines = useMemo(() => {
+    if (mode === "line") {
+      // Line mode: show complete lines up to visibleCount
+      return allLines.slice(0, visibleCount);
+    }
+    // Char mode: slice text and split into lines
+    const visibleText = text.slice(0, visibleCount);
+    return visibleText.split("\n");
+  }, [mode, allLines, text, visibleCount]);
 
-  // Split into lines for proper rendering
-  const lines = visibleText.split("\n");
+  // Calculate visible char count for gradient positioning
+  const visibleCharCount = useMemo(() => {
+    if (mode === "line") {
+      // Sum chars in visible lines + newlines
+      return visibleLines.reduce((acc, line, idx) => acc + line.length + (idx > 0 ? 1 : 0), 0);
+    }
+    return visibleCount;
+  }, [mode, visibleLines, visibleCount]);
 
   // Get cursor color (color at current position)
   const cursorColor = useMemo(() => {
-    if (visibleChars === 0) return gradientSteps[0] ?? "#FFD700";
-    return getCharColor(visibleChars - 1, totalChars, gradientSteps);
-  }, [visibleChars, totalChars, gradientSteps]);
+    if (visibleCharCount === 0) return gradientSteps[0] ?? "#FFD700";
+    return getCharColor(visibleCharCount - 1, totalChars, gradientSteps);
+  }, [visibleCharCount, totalChars, gradientSteps]);
 
   return (
     <Box flexDirection="column">
-      {lines.map((line, lineIndex) => {
-        // Calculate character offset for this line
-        const lineStartIndex = lines.slice(0, lineIndex).reduce((acc, l) => acc + l.length + 1, 0);
-        const isLastLine = lineIndex === lines.length - 1;
-        // Use lineIndex as key since lines don't reorder in static ASCII art
+      {visibleLines.map((line, lineIndex) => {
+        // Calculate character offset for this line (for gradient coloring)
+        const lineStartIndex = visibleLines
+          .slice(0, lineIndex)
+          .reduce((acc, l) => acc + l.length + 1, 0);
+        const isLastLine = lineIndex === visibleLines.length - 1;
         const lineKey = `line-${lineIndex}`;
 
         return (
@@ -274,7 +311,6 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
             {line.split("").map((char, charIndex) => {
               const globalIndex = lineStartIndex + charIndex;
               const color = getCharColor(globalIndex, totalChars, gradientSteps);
-              // Use globalIndex as unique key since characters don't reorder
               const charKey = `char-${globalIndex}`;
 
               return <ColoredChar key={charKey} char={char} color={color} />;
