@@ -69,7 +69,7 @@ describe("MessageBubble", () => {
       const { lastFrame } = renderWithTheme(<MessageBubble message={message} />);
 
       expect(lastFrame()).toContain("Hello from assistant");
-      expect(lastFrame()).toContain("Assistant");
+      expect(lastFrame()).toContain("Vellum");
     });
 
     it("renders system message content", () => {
@@ -280,7 +280,7 @@ describe("MessageBubble", () => {
 
       expect(lastFrame()).toContain("Full featured message");
       expect(lastFrame()).toContain(icons.assistant); // Avatar
-      expect(lastFrame()).toContain("Assistant");
+      expect(lastFrame()).toContain("Vellum");
       expect(lastFrame()).toContain("•"); // Timestamp separator
       expect(lastFrame()).toContain("test_tool");
     });
