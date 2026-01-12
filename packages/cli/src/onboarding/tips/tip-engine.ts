@@ -378,7 +378,10 @@ export class TipEngine {
 
     // Command trigger
     if (trigger.commands && trigger.commands.length > 0) {
-      if (!context.command || !trigger.commands.some((cmd: string) => context.command?.includes(cmd))) {
+      if (
+        !context.command ||
+        !trigger.commands.some((cmd: string) => context.command?.includes(cmd))
+      ) {
         return false;
       }
     }

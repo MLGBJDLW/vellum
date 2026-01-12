@@ -4,8 +4,8 @@ import type {
   AgentLoop,
   ApprovalPolicy,
   CodingMode,
-  CredentialManager,
   EnterpriseHooks as CoreEnterpriseHooks,
+  CredentialManager,
   EnterpriseToolCallInfo,
   SandboxPolicy,
   Session,
@@ -115,7 +115,12 @@ import { useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
 import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
 import { useVim } from "./tui/hooks/useVim.js";
 import { getBannerSeen, setBannerSeen as saveBannerSeen } from "./tui/i18n/settings-integration.js";
-import { disposeLsp, initializeLsp, type LspIntegrationOptions, type LspIntegrationResult } from "./tui/lsp-integration.js";
+import {
+  disposeLsp,
+  initializeLsp,
+  type LspIntegrationOptions,
+  type LspIntegrationResult,
+} from "./tui/lsp-integration.js";
 import {
   disposePlugins,
   getPluginCommands,
@@ -568,7 +573,11 @@ function AppContent({
           arguments: tool.arguments,
         });
       },
-      onAfterToolCall: async (tool: EnterpriseToolCallInfo, result: unknown, durationMs: number) => {
+      onAfterToolCall: async (
+        tool: EnterpriseToolCallInfo,
+        result: unknown,
+        durationMs: number
+      ) => {
         return enterpriseHooks.onAfterToolCall(
           {
             serverName: tool.serverName ?? "vellum",
@@ -591,12 +600,7 @@ function AppContent({
   }, [enterpriseHooks, agentLoopProp]);
 
   // T069: Tip engine integration
-  const {
-    currentTip,
-    showTip,
-    dismissTip,
-    tipsEnabled,
-  } = useTipEngine({
+  const { currentTip, showTip, dismissTip, tipsEnabled } = useTipEngine({
     enabled: true,
     maxTipsPerSession: 5,
     tipIntervalMs: 60000,
@@ -1060,6 +1064,7 @@ function AppContent({
     }
   }, []);
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex memory loading from multiple sources
   const loadMemories = useCallback(async (): Promise<MemoryPanelProps["entries"]> => {
     const projectEntries: Array<MemoryPanelProps["entries"][number]> = [];
 
@@ -1789,7 +1794,7 @@ function AppContent({
       cancelled = true;
       void disposeLsp();
     };
-  }, []);
+  }, [toolRegistry]);
 
   const handleCommandEvent = useCallback(
     (event: string, data?: unknown) => {
@@ -2122,6 +2127,7 @@ function AppContent({
 
   // Handle message submission (for CommandInput onMessage)
   const handleMessage = useCallback(
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex message handling with multiple code paths
     async (text: string) => {
       if (!text.trim()) return;
 

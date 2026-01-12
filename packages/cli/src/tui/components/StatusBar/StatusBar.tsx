@@ -142,6 +142,7 @@ function formatCost(cost: number): string {
  * />
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: StatusBar displays many dynamic UI elements
 export function StatusBar({
   mode = "vibe",
   agentName,

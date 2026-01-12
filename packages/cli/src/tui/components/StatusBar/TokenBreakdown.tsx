@@ -172,6 +172,7 @@ export function TokenBreakdown({
     return (
       <Box>
         {parts.map((part, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Parts array is built locally with stable order, not reordered or filtered
           <Text key={`wrapper-${index}`}>
             {index > 0 && <Text color={theme.semantic.border.muted}> │ </Text>}
             {part}

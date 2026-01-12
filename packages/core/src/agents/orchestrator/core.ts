@@ -31,7 +31,7 @@ import { createTaskChainManager, MAX_DELEGATION_DEPTH } from "./task-chain.js";
 
 /**
  * Get the agent level for a mode slug by looking up the corresponding agent.
- * 
+ *
  * Maps mode slugs to agent names and retrieves the level from BUILT_IN_AGENTS.
  * Returns worker level (2) as default if not found.
  */
@@ -41,12 +41,12 @@ function getAgentLevelForMode(modeSlug: string): AgentLevel {
     plan: "plan-agent",
     // spec mode uses "plan" as its name, but references spec-orchestrator
   };
-  
+
   const agentName = modeToAgent[modeSlug];
   if (agentName && agentName in BUILT_IN_AGENTS) {
     return BUILT_IN_AGENTS[agentName].level;
   }
-  
+
   // Default to worker level
   return 2 as AgentLevel;
 }
@@ -446,7 +446,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
       // Get levels from agent config lookup
       const parentLevel = getAgentLevelForMode(parentNode.agentSlug);
       const targetLevel = getAgentLevelForMode(agentSlug);
-      
+
       if (!canSpawn(parentLevel, targetLevel)) {
         throw new Error(
           `Level hierarchy violation: ${parentNode.agentSlug} (level ${parentLevel}) ` +

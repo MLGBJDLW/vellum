@@ -356,7 +356,7 @@ describe("SpecModeHandler", () => {
 
     it("should return empty spawnable agents list", () => {
       // Note: Spawnable agents are now managed at the orchestrator/registry level,
-      // not in the mode handler. The handler returns empty array and the 
+      // not in the mode handler. The handler returns empty array and the
       // orchestrator determines what agents can be spawned based on AgentConfig.
       expect(handler.spawnableAgents).toEqual([]);
     });

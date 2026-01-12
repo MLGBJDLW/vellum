@@ -18,10 +18,10 @@ import {
   type Tool,
 } from "@google/genai";
 import { ErrorCode } from "@vellum/shared";
-import { googleTransform } from "./transforms/google.js";
-import type { TransformConfig } from "./transforms/types.js";
 import { createProviderError, ProviderError } from "./errors.js";
 import { GOOGLE_MODELS } from "./models/providers/google.js";
+import { googleTransform } from "./transforms/google.js";
+import type { TransformConfig } from "./transforms/types.js";
 import type {
   CompletionMessage,
   CompletionParams,
@@ -302,7 +302,8 @@ export class GoogleProvider implements Provider {
       const contents: Content[] =
         typeof input === "string"
           ? [{ role: "user", parts: [{ text: input }] }]
-          : (googleTransform.transformMessages(input, this.createTransformConfig(modelId)).data as Content[]);
+          : (googleTransform.transformMessages(input, this.createTransformConfig(modelId))
+              .data as Content[]);
 
       const result = await this.client?.models.countTokens({
         model: modelId,

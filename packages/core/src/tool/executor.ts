@@ -44,7 +44,9 @@ export interface EnterpriseHooks {
    * @param tool - Tool call information
    * @returns Validation result with allowed flag and optional reason
    */
-  onBeforeToolCall: (tool: EnterpriseToolCallInfo) => Promise<{ allowed: boolean; reason?: string }>;
+  onBeforeToolCall: (
+    tool: EnterpriseToolCallInfo
+  ) => Promise<{ allowed: boolean; reason?: string }>;
 
   /**
    * Hook called after tool execution for audit logging.
@@ -53,7 +55,11 @@ export interface EnterpriseHooks {
    * @param result - Tool execution result
    * @param durationMs - Execution duration in milliseconds
    */
-  onAfterToolCall: (tool: EnterpriseToolCallInfo, result: unknown, durationMs: number) => Promise<void>;
+  onAfterToolCall: (
+    tool: EnterpriseToolCallInfo,
+    result: unknown,
+    durationMs: number
+  ) => Promise<void>;
 }
 
 // =============================================================================
@@ -693,9 +699,10 @@ export class ToolExecutor {
       try {
         const enterpriseToolInfo: EnterpriseToolCallInfo = {
           toolName: name,
-          arguments: typeof params === "object" && params !== null
-            ? (params as Record<string, unknown>)
-            : undefined,
+          arguments:
+            typeof params === "object" && params !== null
+              ? (params as Record<string, unknown>)
+              : undefined,
         };
         const validation = await this.enterpriseHooks.onBeforeToolCall(enterpriseToolInfo);
         if (!validation.allowed) {
@@ -813,9 +820,10 @@ export class ToolExecutor {
       try {
         const enterpriseToolInfo: EnterpriseToolCallInfo = {
           toolName: name,
-          arguments: typeof params === "object" && params !== null
-            ? (params as Record<string, unknown>)
-            : undefined,
+          arguments:
+            typeof params === "object" && params !== null
+              ? (params as Record<string, unknown>)
+              : undefined,
         };
         await this.enterpriseHooks.onAfterToolCall(
           enterpriseToolInfo,

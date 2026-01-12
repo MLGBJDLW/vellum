@@ -984,6 +984,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    *
    * @param toolCalls - Array of tool calls from LLM
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Tool execution requires multiple permission checks, error handling branches, and state transitions
   private async executeToolCalls(
     toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
   ): Promise<void> {

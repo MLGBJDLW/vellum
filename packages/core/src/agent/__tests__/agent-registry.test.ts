@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { type AgentConfig, PLAN_AGENT, SPEC_ORCHESTRATOR, VIBE_AGENT } from "../agent-config.js";
 import { AgentRegistry, DuplicateAgentError } from "../agent-registry.js";
-import { type AgentConfig, VIBE_AGENT, PLAN_AGENT, SPEC_ORCHESTRATOR } from "../agent-config.js";
 
 describe("AgentRegistry", () => {
   let registry: AgentRegistry;

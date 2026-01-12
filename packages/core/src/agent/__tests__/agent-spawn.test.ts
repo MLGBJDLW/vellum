@@ -41,6 +41,7 @@ describe("Agent Spawn Integration", () => {
       expect(workflow).toBeDefined();
       expect(orchestrator?.level).toBe(AgentLevel.orchestrator);
       expect(workflow?.level).toBe(AgentLevel.workflow);
+      // biome-ignore lint/style/noNonNullAssertion: Already asserted with expect().toBeDefined()
       expect(canAgentSpawn(orchestrator!, workflow!)).toBe(true);
     });
   });
@@ -63,6 +64,7 @@ describe("Agent Spawn Integration", () => {
       expect(worker).toBeDefined();
       expect(orchestrator?.level).toBe(AgentLevel.orchestrator);
       expect(worker?.level).toBe(AgentLevel.worker);
+      // biome-ignore lint/style/noNonNullAssertion: Already asserted with expect().toBeDefined()
       expect(canAgentSpawn(orchestrator!, worker!)).toBe(true);
     });
   });
@@ -87,6 +89,7 @@ describe("Agent Spawn Integration", () => {
       expect(worker).toBeDefined();
       expect(workflow?.level).toBe(AgentLevel.workflow);
       expect(worker?.level).toBe(AgentLevel.worker);
+      // biome-ignore lint/style/noNonNullAssertion: Already asserted with expect().toBeDefined()
       expect(canAgentSpawn(workflow!, worker!)).toBe(true);
     });
   });
@@ -109,6 +112,7 @@ describe("Agent Spawn Integration", () => {
 
       expect(workflow).toBeDefined();
       expect(orchestrator).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: Already asserted with expect().toBeDefined()
       expect(canAgentSpawn(workflow!, orchestrator!)).toBe(false);
     });
   });
@@ -141,6 +145,7 @@ describe("Agent Spawn Integration", () => {
 
       expect(worker).toBeDefined();
       expect(worker?.canSpawnAgents).toBe(false);
+      // biome-ignore lint/style/noNonNullAssertion: Already asserted with expect().toBeDefined()
       expect(canAgentSpawn(worker!, worker!)).toBe(false);
     });
   });
@@ -202,8 +207,11 @@ describe("Agent Spawn Integration", () => {
   // ==========================================================================
   describe("Full Spawn Chain", () => {
     it("complete chain: orchestrator → workflow → worker is valid", () => {
+      // biome-ignore lint/style/noNonNullAssertion: Registry contains built-in agents
       const orchestrator = registry.get("spec-orchestrator")!;
+      // biome-ignore lint/style/noNonNullAssertion: Registry contains built-in agents
       const workflow = registry.get("plan-agent")!;
+      // biome-ignore lint/style/noNonNullAssertion: Registry contains built-in agents
       const worker = registry.get("vibe-agent")!;
 
       // Orchestrator can spawn workflow
@@ -219,8 +227,11 @@ describe("Agent Spawn Integration", () => {
     });
 
     it("reverse chain is blocked at every step", () => {
+      // biome-ignore lint/style/noNonNullAssertion: Registry contains built-in agents
       const orchestrator = registry.get("spec-orchestrator")!;
+      // biome-ignore lint/style/noNonNullAssertion: Registry contains built-in agents
       const workflow = registry.get("plan-agent")!;
+      // biome-ignore lint/style/noNonNullAssertion: Registry contains built-in agents
       const worker = registry.get("vibe-agent")!;
 
       // Worker cannot spawn workflow

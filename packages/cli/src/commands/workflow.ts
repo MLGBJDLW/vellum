@@ -11,11 +11,7 @@
  * @see REQ-011
  */
 
-import {
-  createWorkflowLoader,
-  type Workflow,
-  type WorkflowLoader,
-} from "@vellum/core";
+import { createWorkflowLoader, type Workflow, type WorkflowLoader } from "@vellum/core";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, pending, success } from "./types.js";
 
@@ -112,10 +108,7 @@ Then run: /workflow deploy`;
  * @param variables - Variable values for interpolation
  * @returns Formatted workflow instructions
  */
-function formatWorkflowInstructions(
-  workflow: Workflow,
-  variables: Record<string, string>
-): string {
+function formatWorkflowInstructions(workflow: Workflow, variables: Record<string, string>): string {
   const loader = getLoader(lastWorkspacePath ?? process.cwd());
   return loader.getWorkflowInstructions(workflow, variables);
 }
@@ -134,7 +127,7 @@ function parseVariables(args: string): { name: string; variables: Record<string,
 
   for (let i = 1; i < parts.length; i++) {
     const part = parts[i];
-    if (part && part.startsWith("--")) {
+    if (part?.startsWith("--")) {
       const eqIndex = part.indexOf("=");
       if (eqIndex > 2) {
         // --key=value format
@@ -194,7 +187,10 @@ async function executeWorkflow(ctx: CommandContext): Promise<CommandResult> {
   const { name, variables } = parseVariables(args);
 
   if (!name) {
-    return error("INVALID_ARGUMENT", "Please specify a workflow name. Use /workflow to list available workflows.");
+    return error(
+      "INVALID_ARGUMENT",
+      "Please specify a workflow name. Use /workflow to list available workflows."
+    );
   }
 
   try {
@@ -205,9 +201,10 @@ async function executeWorkflow(ctx: CommandContext): Promise<CommandResult> {
       // Workflow not found - show helpful message
       const workflows = await loader.loadAll();
       const names = workflows.map((w: Workflow) => w.id);
-      const suggestion = names.length > 0
-        ? `\n\nAvailable workflows: ${names.join(", ")}`
-        : "\n\nNo workflows found. Create one in .vellum/workflows/";
+      const suggestion =
+        names.length > 0
+          ? `\n\nAvailable workflows: ${names.join(", ")}`
+          : "\n\nNo workflows found. Create one in .vellum/workflows/";
 
       return error("RESOURCE_NOT_FOUND", `Workflow "${name}" not found.${suggestion}`);
     }

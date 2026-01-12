@@ -282,6 +282,7 @@ export class HotReloadIntegration {
   /**
    * Handles batch invalidation events.
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Categorizes paths and handles multiple invalidation types
   private handleInvalidation(paths: string[]): void {
     this.stats.invalidations++;
     this.stats.filesInvalidated += paths.length;

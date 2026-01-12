@@ -68,9 +68,6 @@ export {
   // Agent Level Hierarchy (T001)
   AgentLevel,
   AgentLevelSchema,
-  // Agent Registry (T003) - Built-in agent registry for mode-agent resolution
-  AgentRegistry as BuiltinAgentRegistry,
-  DuplicateAgentError,
   // Core Loop
   AgentLoop,
   type AgentLoopConfig,
@@ -78,6 +75,8 @@ export {
   type AgentMode,
   // Modes
   AgentModeSchema,
+  // Agent Registry (T003) - Built-in agent registry for mode-agent resolution
+  AgentRegistry as BuiltinAgentRegistry,
   type AgentState,
   // State Machine
   AgentStateSchema,
@@ -87,6 +86,7 @@ export {
   ApprovalPolicySchema,
   // Mode Handlers (T018-T027)
   BaseModeHandler,
+  BUILT_IN_AGENTS,
   BUILTIN_CODING_MODES,
   buildEnvironmentSection,
   buildModePrompt,
@@ -132,6 +132,7 @@ export {
   DEFAULT_TERMINATION_LIMITS,
   type DetectionResult,
   DetectionResultSchema,
+  DuplicateAgentError,
   // Loop Detection
   detectLoop,
   detectLoopAsync,
@@ -195,6 +196,7 @@ export {
   normalizeMode,
   type PendingTool,
   type PhaseValidationResult,
+  PLAN_AGENT,
   PLAN_MODE,
   PlanModeHandler,
   type PlanPhase,
@@ -210,6 +212,7 @@ export {
   SNAPSHOT_VERSION,
   type SnapshotContext,
   SPEC_MODE,
+  SPEC_ORCHESTRATOR,
   SPEC_PHASE_CONFIG,
   SPEC_PHASES,
   type SpecConfirmationRequiredEvent,
@@ -250,9 +253,6 @@ export {
   VIBE_AGENT,
   VIBE_MODE,
   VibeModeHandler,
-  PLAN_AGENT,
-  SPEC_ORCHESTRATOR,
-  BUILT_IN_AGENTS,
   type YamlModeConfig,
   YamlModeConfigSchema,
 } from "./agent/index.js";
@@ -544,6 +544,10 @@ export {
 // ============================================
 export * from "./builtin/index.js";
 // ============================================
+// Commands (T032)
+// ============================================
+export * from "./commands/index.js";
+// ============================================
 // Config (T027-T043)
 // ============================================
 export {
@@ -652,10 +656,6 @@ export {
   type WebBrowsingConfig,
   WebBrowsingConfigSchema,
 } from "./config/web-browsing.js";
-// ============================================
-// Commands (T032)
-// ============================================
-export * from "./commands/index.js";
 // ============================================
 // Context Management (T401-T402)
 // ============================================

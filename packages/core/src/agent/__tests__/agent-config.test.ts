@@ -1,14 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   type AgentConfig,
   AgentConfigSchema,
   AgentLevel,
   AgentLevelSchema,
+  BUILT_IN_AGENTS,
   FileRestrictionsSchema,
-  VIBE_AGENT,
   PLAN_AGENT,
   SPEC_ORCHESTRATOR,
-  BUILT_IN_AGENTS,
+  VIBE_AGENT,
 } from "../agent-config.js";
 
 describe("AgentConfig", () => {
@@ -19,7 +19,7 @@ describe("AgentConfig", () => {
         level: 2,
         canSpawnAgents: false,
       };
-      
+
       const result = AgentConfigSchema.safeParse(config);
       expect(result.success).toBe(true);
     });
@@ -37,7 +37,7 @@ describe("AgentConfig", () => {
         maxConcurrentSubagents: 5,
         description: "A test agent",
       };
-      
+
       const result = AgentConfigSchema.safeParse(config);
       expect(result.success).toBe(true);
     });
@@ -48,7 +48,7 @@ describe("AgentConfig", () => {
         level: 2,
         canSpawnAgents: false,
       };
-      
+
       const result = AgentConfigSchema.safeParse(config);
       expect(result.success).toBe(false);
     });
@@ -59,7 +59,7 @@ describe("AgentConfig", () => {
         level: 3,
         canSpawnAgents: false,
       };
-      
+
       const result = AgentConfigSchema.safeParse(config);
       expect(result.success).toBe(false);
     });
@@ -70,7 +70,7 @@ describe("AgentConfig", () => {
         level: 5,
         canSpawnAgents: false,
       };
-      
+
       const result = AgentConfigSchema.safeParse(config);
       expect(result.success).toBe(false);
     });
@@ -105,7 +105,7 @@ describe("AgentConfig", () => {
         canSpawnAgents: true,
         maxConcurrentSubagents: -1,
       };
-      
+
       const result = AgentConfigSchema.safeParse(config);
       expect(result.success).toBe(false);
     });

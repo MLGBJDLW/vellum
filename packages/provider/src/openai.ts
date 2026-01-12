@@ -485,17 +485,19 @@ export class OpenAIProvider {
       config
     );
     // Cast to SDK type and handle O-series system message conversion
-    const messages = (isOSeries
-      ? transformedMessages.map((m) => {
-          if (m.role === "system") {
-            return {
-              role: "user" as const,
-              content: `[System Instructions]\n${m.content}`,
-            };
-          }
-          return m;
-        })
-      : transformedMessages) as ChatCompletionMessageParam[];
+    const messages = (
+      isOSeries
+        ? transformedMessages.map((m) => {
+            if (m.role === "system") {
+              return {
+                role: "user" as const,
+                content: `[System Instructions]\n${m.content}`,
+              };
+            }
+            return m;
+          })
+        : transformedMessages
+    ) as ChatCompletionMessageParam[];
 
     // Build base request
     const request: ChatCompletionCreateParamsNonStreaming = {

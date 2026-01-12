@@ -126,8 +126,8 @@ describe("PromptDiscovery", () => {
       const result = await discovery.discoverByName("coder");
 
       expect(result).not.toBeNull();
-      expect(result!.path).toContain(".vellum");
-      expect(result!.path).toContain("coder.md");
+      expect(result?.path).toContain(".vellum");
+      expect(result?.path).toContain("coder.md");
     });
 
     it("returns null for non-existent prompt", async () => {
@@ -148,8 +148,8 @@ describe("PromptDiscovery", () => {
       const result = await discovery.discoverByName("shared-prompt");
 
       expect(result).not.toBeNull();
-      expect(result!.priority).toBe(1);
-      expect(result!.path).toContain(".vellum");
+      expect(result?.priority).toBe(1);
+      expect(result?.path).toContain(".vellum");
     });
 
     it("finds prompts in different category subdirectories", async () => {
@@ -159,7 +159,7 @@ describe("PromptDiscovery", () => {
       const result = await discovery.discoverByName("qa-worker");
 
       expect(result).not.toBeNull();
-      expect(result!.path).toContain("workers");
+      expect(result?.path).toContain("workers");
     });
   });
 
@@ -205,7 +205,7 @@ describe("PromptDiscovery", () => {
       // Should only have one coder prompt (deduplicated)
       const coderPrompts = rolePrompts.filter((p) => p.path.includes("coder"));
       expect(coderPrompts.length).toBe(1);
-      expect(coderPrompts[0]!.path).toContain(".vellum");
+      expect(coderPrompts[0]?.path).toContain(".vellum");
     });
   });
 
@@ -236,7 +236,7 @@ describe("PromptDiscovery", () => {
 
       const duplicates = allPrompts.filter((p) => p.path.includes("duplicate"));
       expect(duplicates.length).toBe(1);
-      expect(duplicates[0]!.priority).toBe(1); // .vellum has priority 1
+      expect(duplicates[0]?.priority).toBe(1); // .vellum has priority 1
     });
 
     it("returns empty array when no prompts exist", async () => {
@@ -352,8 +352,8 @@ describe("PromptDiscovery", () => {
       const result = await discovery.discoverByName("priority-test");
 
       expect(result).not.toBeNull();
-      expect(result!.path).toContain(".vellum");
-      expect(result!.priority).toBe(1);
+      expect(result?.path).toContain(".vellum");
+      expect(result?.priority).toBe(1);
     });
 
     it("sources are searched in correct priority order", async () => {
@@ -364,7 +364,7 @@ describe("PromptDiscovery", () => {
       const result = await discovery.discoverByName("github-only");
 
       expect(result).not.toBeNull();
-      expect(result!.priority).toBe(3);
+      expect(result?.priority).toBe(3);
     });
   });
 
@@ -417,7 +417,7 @@ describe("PromptDiscovery", () => {
       // Filter to project prompts only (exclude builtins)
       const projectPrompts = result.filter((p) => p.source === "project");
       expect(projectPrompts.length).toBe(1);
-      expect(projectPrompts[0]!.path).toContain("valid.md");
+      expect(projectPrompts[0]?.path).toContain("valid.md");
 
       // All results should be .md files
       expect(result.every((p) => p.path.endsWith(".md"))).toBe(true);
@@ -434,7 +434,7 @@ describe("PromptDiscovery", () => {
       // Filter to project prompts only (exclude builtins)
       const projectPrompts = result.filter((p) => p.source === "project");
       expect(projectPrompts.length).toBe(1);
-      expect(projectPrompts[0]!.path).toContain("visible.md");
+      expect(projectPrompts[0]?.path).toContain("visible.md");
 
       // No hidden files in any results
       const filenames = result.map((p) => p.path.split(/[\\/]/).pop());
@@ -454,7 +454,7 @@ describe("PromptDiscovery", () => {
       const result = await discovery.discoverByName("test-source");
 
       expect(result).not.toBeNull();
-      expect(result!.source).toBe("project");
+      expect(result?.source).toBe("project");
     });
 
     it("returns absolute path in location", async () => {
@@ -464,7 +464,7 @@ describe("PromptDiscovery", () => {
       const result = await discovery.discoverByName("test-path");
 
       expect(result).not.toBeNull();
-      expect(result!.path).toMatch(/^[A-Za-z]:|^\//); // Windows or Unix absolute path
+      expect(result?.path).toMatch(/^[A-Za-z]:|^\//); // Windows or Unix absolute path
     });
   });
 });

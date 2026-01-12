@@ -223,6 +223,7 @@ export class CommandLoader {
   async load(name: string): Promise<CustomCommand | null> {
     // Check cache first
     if (this.loaded.has(name)) {
+      // biome-ignore lint/style/noNonNullAssertion: Value guaranteed by has() check above
       return this.loaded.get(name)!;
     }
 

@@ -104,7 +104,9 @@ function Separator({ color, style = "single" }: SeparatorProps): React.JSX.Eleme
   const line = char.repeat(columns);
   return (
     <Box width="100%">
-      <Text color={color} wrap="truncate-end">{line}</Text>
+      <Text color={color} wrap="truncate-end">
+        {line}
+      </Text>
     </Box>
   );
 }
@@ -275,10 +277,10 @@ export function Layout({
     if (!sidebarVisible) {
       return 0;
     }
-    
+
     // Adaptive calculation based on terminal size
     const baseWidth = Math.floor(columns * (SIDEBAR_WIDTH_PERCENT / 100));
-    
+
     // Tiered approach: small terminals get smaller sidebar, large terminals get proportional
     if (columns < 80) {
       // Compact: minimum viable sidebar

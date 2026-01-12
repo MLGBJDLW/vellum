@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PLAN_AGENT, SPEC_ORCHESTRATOR, VIBE_AGENT, type AgentConfig } from "../agent-config.js";
+import { type AgentConfig, PLAN_AGENT, SPEC_ORCHESTRATOR, VIBE_AGENT } from "../agent-config.js";
 import { AgentLevel, AgentLevelSchema, canAgentSpawn, canSpawn } from "../level.js";
 
 describe("AgentLevel", () => {

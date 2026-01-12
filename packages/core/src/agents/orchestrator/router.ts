@@ -20,12 +20,12 @@ function getAgentLevelForMode(modeSlug: string): AgentLevel {
     code: "vibe-agent",
     plan: "plan-agent",
   };
-  
+
   const agentName = modeToAgent[modeSlug];
   if (agentName && agentName in BUILT_IN_AGENTS) {
     return BUILT_IN_AGENTS[agentName].level;
   }
-  
+
   return 2 as AgentLevel;
 }
 

@@ -9,18 +9,9 @@
  * @see REQ-013
  */
 
-import {
-  CommandLoader,
-  createCommandLoader,
-  type CustomCommand,
-} from "@vellum/core";
+import { type CommandLoader, type CustomCommand, createCommandLoader } from "@vellum/core";
 import type { CommandRegistry } from "./registry.js";
-import type {
-  CommandCategory,
-  CommandContext,
-  CommandResult,
-  SlashCommand,
-} from "./types.js";
+import type { CommandCategory, CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { pending, success } from "./types.js";
 
 // =============================================================================

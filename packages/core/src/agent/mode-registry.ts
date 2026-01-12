@@ -225,7 +225,7 @@ class ModeRegistryImpl implements ModeRegistry {
   /** Map of slug -> mode for O(1) lookup */
   private readonly modes = new Map<string, ExtendedModeConfig>();
 
-  /** 
+  /**
    * Index by level for efficient getByLevel queries.
    * @deprecated Level is now in AgentConfig, not ExtendedModeConfig.
    * This index will remain empty in the new architecture.
@@ -261,6 +261,7 @@ class ModeRegistryImpl implements ModeRegistry {
     return this.byLevel.get(level) ?? [];
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex spawn rules for multi-agent orchestration
   canSpawn(fromSlug: string, toSlug: string): boolean {
     // Handle custom agent spawning
     const isFromCustom = fromSlug.startsWith(CUSTOM_AGENT_PREFIX);
@@ -279,14 +280,16 @@ class ModeRegistryImpl implements ModeRegistry {
       // Look up level from BUILT_IN_AGENTS via mode name mapping
       // For built-in modes, we have a naming convention:
       // - "code" mode -> "vibe-agent"
-      // - "plan" mode -> "plan-agent" 
+      // - "plan" mode -> "plan-agent"
       // For now, default to worker level if not found
       const fromMode = this.modes.get(fromSlug);
       if (!fromMode) return false;
-      
+
       // Try to find matching agent by name
       const agentName = this.modeToAgentName(fromSlug);
-      const agent = agentName ? BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS] : undefined;
+      const agent = agentName
+        ? BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS]
+        : undefined;
       fromLevel = agent?.level ?? (2 as AgentLevel); // Default to worker
       canSpawnList = agent?.canSpawnAgents ? [] : []; // canSpawnAgents is boolean in AgentConfig
     }
@@ -301,10 +304,12 @@ class ModeRegistryImpl implements ModeRegistry {
     } else {
       const toMode = this.modes.get(toSlug);
       if (!toMode) return false;
-      
+
       // Try to find matching agent by name
       const agentName = this.modeToAgentName(toSlug);
-      const agent = agentName ? BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS] : undefined;
+      const agent = agentName
+        ? BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS]
+        : undefined;
       toLevel = agent?.level ?? (2 as AgentLevel); // Default to worker
     }
 
@@ -317,7 +322,9 @@ class ModeRegistryImpl implements ModeRegistry {
     // Custom agents use their canSpawnAgents list
     if (!isFromCustom) {
       const agentName = this.modeToAgentName(fromSlug);
-      const agent = agentName ? BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS] : undefined;
+      const agent = agentName
+        ? BUILT_IN_AGENTS[agentName as keyof typeof BUILT_IN_AGENTS]
+        : undefined;
       return agent?.canSpawnAgents ?? false;
     }
 

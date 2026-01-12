@@ -22,7 +22,11 @@ import { createOrchestrator, type OrchestratorConfig, type OrchestratorCore } fr
  * Note: Agent hierarchy fields (level, canSpawnAgents, fileRestrictions,
  * maxConcurrentSubagents) are now in AgentConfig, not ExtendedModeConfig.
  */
-function createTestMode(name: string, _level: AgentLevel, description?: string): ExtendedModeConfig {
+function createTestMode(
+  name: string,
+  _level: AgentLevel,
+  description?: string
+): ExtendedModeConfig {
   return {
     name: name as ExtendedModeConfig["name"],
     description: description ?? `${name} mode`,
@@ -781,7 +785,7 @@ describe("OrchestratorCore", () => {
     });
 
     it("should track parent-child relationships in task chain", async () => {
-      // Note: Test uses same-level agents since hierarchy checking 
+      // Note: Test uses same-level agents since hierarchy checking
       // now uses AgentConfig lookup which defaults to worker level
       // for test modes not in BUILT_IN_AGENTS.
       // This test verifies parent-child tracking works when spawning
@@ -791,7 +795,7 @@ describe("OrchestratorCore", () => {
 
       // Both should have unique task IDs
       expect(handle1.taskId).not.toBe(handle2.taskId);
-      
+
       // Task chain manager should track both
       const manager = orchestrator.taskChainManager;
       expect(manager).toBeDefined();

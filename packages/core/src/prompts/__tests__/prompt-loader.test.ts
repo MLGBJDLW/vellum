@@ -477,6 +477,7 @@ describe("PromptLoader", () => {
         frontmatter: {},
       });
 
+      // biome-ignore lint/suspicious/noExplicitAny: Test mock with partial interface
       const customParser = { parse: mockParse } as any;
       const loaderWithParser = new PromptLoader({
         discovery: { workspacePath: tempWorkspace },

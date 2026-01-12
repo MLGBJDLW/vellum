@@ -530,8 +530,8 @@ export {
   executeMigratePrompts,
   type MigratePromptsOptions,
   type MigratePromptsResult,
-  migratePromptsCommand,
   type MigrationAction,
+  migratePromptsCommand,
   runMigratePromptsCli,
 } from "./migrate/index.js";
 

@@ -2,6 +2,8 @@
 // Agent Module - Barrel Export
 // ============================================
 
+// Prompt System (T027)
+export * from "../prompts/index.js";
 // Agent Config (T001, T002)
 export {
   type AgentConfig,
@@ -25,8 +27,6 @@ export {
 } from "./agent-factory.js";
 // Agent Registry (T003)
 export { AgentRegistry, DuplicateAgentError } from "./agent-registry.js";
-// Prompt System (T027)
-export * from "../prompts/index.js";
 export {
   type CancelCallback,
   CancellationToken,
@@ -159,7 +159,7 @@ export {
   TypedEventEmitter,
 } from "./mode-manager.js";
 // Mode Registry (T005)
-export { createModeRegistry, CUSTOM_AGENT_PREFIX, type ModeRegistry } from "./mode-registry.js";
+export { CUSTOM_AGENT_PREFIX, createModeRegistry, type ModeRegistry } from "./mode-registry.js";
 // Mode Switching (T031, T032, T033, T034)
 export {
   type ActivityTracker,

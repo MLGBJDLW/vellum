@@ -197,10 +197,7 @@ export function MessageBubble({
 
   // Show token usage for assistant messages when enabled and available
   const shouldShowTokens =
-    showTokenUsage &&
-    message.role === "assistant" &&
-    message.tokenUsage &&
-    !message.isStreaming;
+    showTokenUsage && message.role === "assistant" && message.tokenUsage && !message.isStreaming;
 
   return (
     <Box

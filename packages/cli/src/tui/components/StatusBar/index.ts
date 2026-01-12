@@ -12,7 +12,7 @@ export {
 } from "./AgentModeIndicator.js";
 export { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 export { ModelIndicator, type ModelIndicatorProps } from "./ModelIndicator.js";
-export { StatusBar, type ExtendedTokenProps, type StatusBarProps } from "./StatusBar.js";
+export { type ExtendedTokenProps, StatusBar, type StatusBarProps } from "./StatusBar.js";
 export {
   ThinkingModeIndicator,
   type ThinkingModeIndicatorProps,
