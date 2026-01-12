@@ -500,14 +500,27 @@ export const specSlashCommand: SlashCommand = {
     "/spec --from=design              - Start from design phase",
     '/spec "Feature" --skip=research  - Skip research phase',
   ],
+  subcommands: [
+    { name: "research", description: "Phase 1: Project research and analysis" },
+    { name: "requirements", description: "Phase 2: Requirements definition (EARS)" },
+    { name: "design", description: "Phase 3: Architecture and design" },
+    { name: "tasks", description: "Phase 4: Task breakdown and planning" },
+    { name: "implementation", description: "Phase 5: Implementation execution" },
+    { name: "validation", description: "Phase 6: Validation and verification" },
+  ],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
-    const description = ctx.parsedArgs.positional[0] as string | undefined;
+    const firstArg = ctx.parsedArgs.positional[0] as string | undefined;
     const continueOpt = ctx.parsedArgs.named.continue as boolean | undefined;
     const statusOpt = ctx.parsedArgs.named.status as boolean | undefined;
     const fromOpt = ctx.parsedArgs.named.from as string | undefined;
     const skipOpt = ctx.parsedArgs.named.skip as string | undefined;
     const dirOpt = ctx.parsedArgs.named.dir as string | undefined;
+
+    // Check if first arg is a phase name (subcommand for direct phase jump)
+    const isPhaseArg = firstArg && isValidPhase(firstArg);
+    const description = isPhaseArg ? undefined : firstArg;
+    const effectiveFrom = isPhaseArg ? (firstArg as SpecPhase) : (fromOpt as SpecPhase | undefined);
 
     // Parse skip phases
     const skipPhases = skipOpt ? (skipOpt.split(",") as SpecPhase[]) : undefined;
@@ -518,9 +531,9 @@ export const specSlashCommand: SlashCommand = {
       promise: (async (): Promise<CommandResult> => {
         const result = await executeSpec({
           description,
-          continue: continueOpt,
+          continue: continueOpt || (isPhaseArg ? true : undefined), // Resume if jumping to phase
           status: statusOpt,
-          from: fromOpt as SpecPhase | undefined,
+          from: effectiveFrom,
           skip: skipPhases,
           specDir: dirOpt,
         });
