@@ -113,6 +113,19 @@ const sharedIcons = {
   copy: "▤",
 } as const;
 
+/**
+ * Brand colors for Vellum identity - ancient parchment/scroll styling
+ * Used for banners, gradients, and highlight effects.
+ */
+const sharedBrand = {
+  primary: "#DAA520", // Goldenrod
+  secondary: "#CD853F", // Peru
+  accent: "#8B4513", // Saddle Brown
+  highlight: "#FFD700", // Gold
+  light: "#FFFACD", // Lemon Chiffon
+  mid: "#A0522D", // Sienna
+} as const;
+
 // =============================================================================
 // Dark Theme (Default)
 // =============================================================================
@@ -136,6 +149,7 @@ export const darkTheme: VellumTheme = {
     muted: "#6b7280",
     accent: "#8b5cf6",
   },
+  brand: sharedBrand,
   semantic: {
     text: {
       primary: "#f9fafb",
@@ -215,6 +229,7 @@ export const lightTheme: VellumTheme = {
     muted: "#9ca3af",
     accent: "#8b5cf6",
   },
+  brand: sharedBrand,
   semantic: {
     text: {
       primary: "#111827",
@@ -296,6 +311,7 @@ export const draculaTheme: VellumTheme = {
     muted: "#6272a4",
     accent: "#bd93f9",
   },
+  brand: sharedBrand,
   semantic: {
     text: {
       primary: "#f8f8f2",
@@ -375,6 +391,7 @@ export const githubTheme: VellumTheme = {
     muted: "#8b949e",
     accent: "#58a6ff",
   },
+  brand: sharedBrand,
   semantic: {
     text: {
       primary: "#c9d1d9",
@@ -455,6 +472,7 @@ export const ansiTheme: VellumTheme = {
     muted: "gray",
     accent: "cyan",
   },
+  brand: sharedBrand,
   semantic: {
     text: {
       primary: "white",
@@ -561,6 +579,7 @@ export const parchmentTheme: VellumTheme = {
     muted: "#9E9689", // Muted taupe
     accent: "#C4956A", // Golden accent
   },
+  brand: sharedBrand,
   semantic: {
     text: {
       primary: "#4A3F2F", // Dark brown
@@ -642,6 +661,7 @@ export const tokyoNightTheme: VellumTheme = {
     muted: "#565f89", // Gray
     accent: "#bb9af7", // Purple
   },
+  brand: sharedBrand,
   semantic: {
     text: {
       primary: "#c0caf5", // Foreground
@@ -723,6 +743,7 @@ export const nordTheme: VellumTheme = {
     muted: "#4c566a", // Polar night 4
     accent: "#b48ead", // Aurora purple
   },
+  brand: sharedBrand,
   semantic: {
     text: {
       primary: "#eceff4", // Snow storm 3
@@ -804,6 +825,7 @@ export const catppuccinMochaTheme: VellumTheme = {
     muted: "#6c7086", // Overlay0
     accent: "#f5c2e7", // Pink
   },
+  brand: sharedBrand,
   semantic: {
     text: {
       primary: "#cdd6f4", // Text

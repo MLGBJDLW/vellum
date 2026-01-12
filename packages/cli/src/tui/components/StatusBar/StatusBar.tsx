@@ -7,13 +7,14 @@
  * @module tui/components/StatusBar/StatusBar
  */
 
-import type { CodingMode } from "@vellum/core";
+import type { CodingMode, SandboxPolicy } from "@vellum/core";
 import { Box, Text } from "ink";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import type { AgentLevel } from "./AgentModeIndicator.js";
 import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 import { ModelIndicator } from "./ModelIndicator.js";
+import { SandboxIndicator } from "./SandboxIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
 import { TokenBreakdown, type TokenStats } from "./TokenBreakdown.js";
 import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeIndicator.js";
@@ -51,6 +52,8 @@ export interface StatusBarProps {
   readonly tokens?: ExtendedTokenProps;
   /** Trust mode setting */
   readonly trustMode?: TrustModeIndicatorProps["mode"];
+  /** Sandbox policy for file system access boundaries */
+  readonly sandboxPolicy?: SandboxPolicy;
   /** Thinking mode status */
   readonly thinking?: ThinkingModeIndicatorProps;
   /** Current cost in dollars */
@@ -65,9 +68,6 @@ export interface StatusBarProps {
 
 /** Separator between status items */
 const SEPARATOR = " │ ";
-
-/** Goldenrod brand color */
-const BRAND_COLOR = "#DAA520";
 
 /** Mode display configuration */
 const MODES_CONFIG: Array<{ mode: CodingMode; icon: string; label: string }> = [
@@ -150,6 +150,7 @@ export function StatusBar({
   modelName,
   tokens,
   trustMode,
+  sandboxPolicy,
   thinking,
   cost,
   showBorder = false,
@@ -182,7 +183,7 @@ export function StatusBar({
           <Text key={modeConfig.mode}>
             {index > 0 && "  "}
             <Text
-              color={isActive ? BRAND_COLOR : theme.semantic.text.muted}
+              color={isActive ? theme.brand.primary : theme.semantic.text.muted}
               bold={isActive}
               dimColor={!isActive}
             >
@@ -195,7 +196,7 @@ export function StatusBar({
       {agentAbbrev !== undefined && agentLevel !== undefined && (
         <Text>
           <Text color={theme.semantic.border.muted}> │ </Text>
-          <Text color={BRAND_COLOR} bold>
+          <Text color={theme.brand.primary} bold>
             {agentAbbrev}·L{agentLevel}
           </Text>
         </Text>
@@ -209,6 +210,11 @@ export function StatusBar({
   // Model indicator (compact, name only)
   if (modelName) {
     rightIndicators.push(<ModelIndicator key="model" model={modelName} compact />);
+  }
+
+  // Sandbox policy indicator (shows file access boundaries)
+  if (sandboxPolicy) {
+    rightIndicators.push(<SandboxIndicator key="sandbox" policy={sandboxPolicy} />);
   }
 
   // Context progress and/or token breakdown

@@ -69,6 +69,8 @@ export type {
   TextRoleColors,
   ThemeAnimation,
   ThemeBorders,
+  // Brand colors
+  ThemeBrand,
   ThemeColors,
   ThemeContextValue,
   // Icon types

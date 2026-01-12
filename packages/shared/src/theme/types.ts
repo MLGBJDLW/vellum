@@ -55,6 +55,32 @@ export interface ThemeColors {
   readonly accent: Color;
 }
 
+/**
+ * Brand color palette for Vellum identity
+ *
+ * These colors are used for the Vellum brand elements like banners,
+ * gradients, and highlight effects. Based on ancient parchment/scroll styling.
+ */
+export interface ThemeBrand {
+  /** Primary brand color - Goldenrod (#DAA520) */
+  readonly primary: Color;
+
+  /** Secondary brand color - Peru (#CD853F) */
+  readonly secondary: Color;
+
+  /** Accent brand color - Saddle Brown (#8B4513) */
+  readonly accent: Color;
+
+  /** Highlight brand color - Gold (#FFD700) */
+  readonly highlight: Color;
+
+  /** Light highlight - Lemon Chiffon (#FFFACD) */
+  readonly light: Color;
+
+  /** Mid-tone - Sienna (#A0522D) */
+  readonly mid: Color;
+}
+
 // =============================================================================
 // Semantic Color Types
 // =============================================================================
@@ -467,6 +493,9 @@ export interface VellumTheme {
 
   /** Core color palette */
   readonly colors: ThemeColors;
+
+  /** Brand color palette for Vellum identity */
+  readonly brand: ThemeBrand;
 
   /** Semantic color mappings */
   readonly semantic: SemanticColors;

@@ -90,7 +90,7 @@ function getProgressColor(percentage: number, theme: ReturnType<typeof useTheme>
     return theme.colors.warning; // Orange/yellow for 75-90%
   }
   if (percentage >= THRESHOLDS.LOW) {
-    return "#DAA520"; // Goldenrod for 50-75% (brand color)
+    return theme.brand.primary; // Goldenrod for 50-75% (brand color)
   }
   return theme.colors.success; // Green for 0-50%
 }

@@ -11,6 +11,7 @@ import { Box, Text, useStdout } from "ink";
 import Gradient from "ink-gradient";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTheme } from "../../theme/index.js";
 import { selectAsciiArt } from "./AsciiArt.js";
 import { interpolateColor } from "./ShimmerText.js";
 import { TypeWriterGradient } from "./TypeWriterGradient.js";
@@ -58,24 +59,13 @@ export interface BannerProps {
 // Constants
 // =============================================================================
 
-/**
- * Gradient colors for ancient parchment effect.
- * Brown to gold progression.
- */
-const PARCHMENT_GRADIENT = [
-  "#8B4513", // Saddle Brown
-  "#A0522D", // Sienna
-  "#CD853F", // Peru
-  "#DAA520", // Goldenrod
-  "#FFD700", // Gold
-  "#FFFACD", // Lemon Chiffon
-];
-
 /** Interpolated steps per gradient segment for smoother shimmer shifts. */
 const GRADIENT_STEPS_PER_SEGMENT = 12;
 
-const PARCHMENT_GRADIENT_STEPS = buildGradientSteps(PARCHMENT_GRADIENT, GRADIENT_STEPS_PER_SEGMENT);
-
+/**
+ * Build gradient steps from theme brand colors.
+ * Used for shimmer animation in HeaderBanner.
+ */
 function buildGradientSteps(colors: readonly string[], stepsPerSegment: number): string[] {
   if (colors.length === 0) return [];
   if (colors.length === 1) return [colors[0] ?? "#000000"];
@@ -95,6 +85,28 @@ function buildGradientSteps(colors: readonly string[], stepsPerSegment: number):
   return steps;
 }
 
+/**
+ * Get parchment gradient colors from theme brand.
+ * Returns a mutable array for compatibility with ink-gradient.
+ */
+function getParchmentGradient(brand: {
+  accent: string;
+  mid: string;
+  secondary: string;
+  primary: string;
+  highlight: string;
+  light: string;
+}): string[] {
+  return [
+    brand.accent, // Saddle Brown
+    brand.mid, // Sienna
+    brand.secondary, // Peru
+    brand.primary, // Goldenrod
+    brand.highlight, // Gold
+    brand.light, // Lemon Chiffon
+  ];
+}
+
 // =============================================================================
 // Sub-Components
 // =============================================================================
@@ -104,14 +116,19 @@ function buildGradientSteps(colors: readonly string[], stepsPerSegment: number):
  */
 interface VersionDisplayProps {
   readonly version: string;
+  readonly brand: {
+    accent: string;
+    secondary: string;
+    primary: string;
+  };
 }
 
-function VersionDisplay({ version }: VersionDisplayProps): React.JSX.Element {
+function VersionDisplay({ version, brand }: VersionDisplayProps): React.JSX.Element {
   return (
     <Box marginTop={1} justifyContent="center">
-      <Text color="#8B4513">v{version}</Text>
-      <Text color="#CD853F"> | </Text>
-      <Text color="#DAA520" italic>
+      <Text color={brand.accent}>v{version}</Text>
+      <Text color={brand.secondary}> | </Text>
+      <Text color={brand.primary} italic>
         AI-Powered Coding Assistant
       </Text>
     </Box>
@@ -161,6 +178,7 @@ export function Banner({
   typewriterMode = "char",
 }: BannerProps): React.JSX.Element | null {
   const { stdout } = useStdout();
+  const { theme } = useTheme();
   const [visible, setVisible] = useState(true);
   const [opacity, setOpacity] = useState(1);
   const [typingComplete, setTypingComplete] = useState(!typewriter);
@@ -168,6 +186,9 @@ export function Banner({
   // Refs for nested timer cleanup
   const step1Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const step2Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Get gradient colors from theme
+  const parchmentGradient = useMemo(() => getParchmentGradient(theme.brand), [theme.brand]);
 
   // Get terminal dimensions for responsive art selection
   const terminalWidth = stdout?.columns ?? 80;
@@ -232,21 +253,21 @@ export function Banner({
         <TypeWriterGradient
           text={asciiArt}
           speed={autoTypewriterSpeed}
-          colors={PARCHMENT_GRADIENT}
+          colors={parchmentGradient}
           showCursor
           mode={typewriterMode}
           onComplete={() => setTypingComplete(true)}
         />
       ) : (
-        <Gradient colors={PARCHMENT_GRADIENT}>{asciiArt}</Gradient>
+        <Gradient colors={parchmentGradient}>{asciiArt}</Gradient>
       )}
 
-      {showVersion && version ? <VersionDisplay version={version} /> : null}
+      {showVersion && version ? <VersionDisplay version={version} brand={theme.brand} /> : null}
 
       {/* Loading indicator - hide when fading out */}
       {opacity >= 0.5 && (
         <Box marginTop={1}>
-          <Text color="#8B4513">Initializing...</Text>
+          <Text color={theme.brand.accent}>Initializing...</Text>
         </Box>
       )}
     </Box>
@@ -257,9 +278,11 @@ export function Banner({
  * Compact banner for narrow terminals or inline use.
  */
 export function CompactBanner(): React.JSX.Element {
+  const { theme } = useTheme();
+  const parchmentGradient = useMemo(() => getParchmentGradient(theme.brand), [theme.brand]);
   return (
     <Box>
-      <Gradient colors={PARCHMENT_GRADIENT}>{"◇ VELLUM ◇"}</Gradient>
+      <Gradient colors={parchmentGradient}>{"◇ VELLUM ◇"}</Gradient>
     </Box>
   );
 }
@@ -268,8 +291,9 @@ export function CompactBanner(): React.JSX.Element {
  * Minimal text-only banner.
  */
 export function MinimalBanner(): React.JSX.Element {
+  const { theme } = useTheme();
   return (
-    <Text color="#DAA520" bold>
+    <Text color={theme.brand.primary} bold>
       VELLUM
     </Text>
   );
@@ -292,23 +316,29 @@ export interface HeaderBannerProps {
  * Displays a single-line parchment-styled logo with continuous shimmer.
  */
 export function HeaderBanner({ animated = true }: HeaderBannerProps): React.JSX.Element {
+  const { theme } = useTheme();
   const { position } = useShimmer({
     cycleDuration: 3000,
     enabled: animated,
   });
 
+  // Get gradient colors from theme
+  const parchmentGradient = useMemo(() => getParchmentGradient(theme.brand), [theme.brand]);
+
+  // Build gradient steps for shimmer animation
+  const gradientSteps = useMemo(
+    () => buildGradientSteps(parchmentGradient, GRADIENT_STEPS_PER_SEGMENT),
+    [parchmentGradient]
+  );
+
   // Calculate discrete color shift to reduce re-computation
-  const colorShift =
-    Math.floor(position * PARCHMENT_GRADIENT_STEPS.length) % PARCHMENT_GRADIENT_STEPS.length;
+  const colorShift = Math.floor(position * gradientSteps.length) % gradientSteps.length;
 
   // Shift gradient colors based on discrete colorShift value
   const shiftedColors = useMemo(() => {
-    if (colorShift === 0) return PARCHMENT_GRADIENT_STEPS;
-    return [
-      ...PARCHMENT_GRADIENT_STEPS.slice(colorShift),
-      ...PARCHMENT_GRADIENT_STEPS.slice(0, colorShift),
-    ];
-  }, [colorShift]); // Depend on discrete value, not continuous position
+    if (colorShift === 0) return gradientSteps;
+    return [...gradientSteps.slice(colorShift), ...gradientSteps.slice(0, colorShift)];
+  }, [colorShift, gradientSteps]);
 
   // Compact ASCII art for header (single line with decorations)
   const headerArt = "═══╣ ◊ ╠═══  V E L L U M  ═══╣ ◊ ╠═══";
@@ -318,7 +348,7 @@ export function HeaderBanner({ animated = true }: HeaderBannerProps): React.JSX.
       {animated ? (
         <Gradient colors={shiftedColors}>{headerArt}</Gradient>
       ) : (
-        <Gradient colors={PARCHMENT_GRADIENT}>{headerArt}</Gradient>
+        <Gradient colors={parchmentGradient}>{headerArt}</Gradient>
       )}
     </Box>
   );
