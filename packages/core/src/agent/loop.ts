@@ -85,6 +85,19 @@ export interface AgentLoopConfig {
     enabled: boolean;
     budgetTokens?: number;
   };
+  /**
+   * Dynamic thinking config getter for runtime thinking state.
+   * If provided, this is called at each LLM.stream() to get the effective
+   * thinking configuration, enabling runtime toggling via /think command.
+   * Falls back to static `thinking` config if not provided.
+   *
+   * @param modeExtendedThinking - The mode's extendedThinking setting
+   * @returns Effective thinking config for the LLM call
+   */
+  getThinkingConfig?: (modeExtendedThinking?: boolean) => {
+    enabled: boolean;
+    budgetTokens?: number;
+  };
   /** Maximum retry attempts for transient failures */
   maxRetries?: number;
   /** Timeout for individual operations in milliseconds */
@@ -441,6 +454,34 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     }
 
     return filtered;
+  }
+
+  /**
+   * Get the effective thinking configuration for LLM calls.
+   *
+   * Uses the dynamic `getThinkingConfig` callback if provided,
+   * falling back to the static `thinking` config.
+   *
+   * This enables runtime toggling of thinking mode via /think command,
+   * merging global state with mode's extendedThinking setting.
+   *
+   * @returns Effective thinking config for LLM.stream()
+   * @private
+   */
+  private getEffectiveThinkingConfig():
+    | {
+        enabled: boolean;
+        budgetTokens?: number;
+      }
+    | undefined {
+    // Use dynamic getter if provided (enables runtime /think toggling)
+    if (this.config.getThinkingConfig) {
+      const modeExtendedThinking = this.config.mode.extendedThinking;
+      return this.config.getThinkingConfig(modeExtendedThinking);
+    }
+
+    // Fall back to static config
+    return this.config.thinking;
   }
 
   /**
@@ -826,6 +867,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Convert session messages to provider format
       const providerMessages = toModelMessages(this.messages);
 
+      // Get effective thinking config (dynamic if getter provided, static otherwise)
+      const effectiveThinking = this.getEffectiveThinkingConfig();
+
       // Create base stream from LLM
       const baseStream = LLM.stream({
         providerType: this.config.providerType,
@@ -833,7 +877,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         messages: providerMessages,
         system: systemPrompt,
         tools: this.getFilteredTools(),
-        thinking: this.config.thinking,
+        thinking: effectiveThinking,
         abortSignal: this.abortController.signal,
       });
 

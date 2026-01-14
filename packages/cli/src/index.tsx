@@ -35,6 +35,7 @@ import {
   handleSkillShow,
   handleSkillValidate,
 } from "./commands/skill.js";
+import { getEffectiveThinkingConfig } from "./commands/think.js";
 import type { CommandResult } from "./commands/types.js";
 import { getOrCreateOrchestrator } from "./orchestrator-singleton.js";
 import { createCompatStdout } from "./tui/buffered-stdout.js";
@@ -254,6 +255,8 @@ program
         projectRoot: process.cwd(),
         orchestrator,
         promptBuilder, // Use MD-loaded prompts
+        // Dynamic thinking config getter for runtime /think toggling
+        getThinkingConfig: getEffectiveThinkingConfig,
       });
     } catch (error) {
       console.error(

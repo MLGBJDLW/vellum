@@ -97,6 +97,9 @@ export {
   ProviderNameSchema,
   type ServiceAccountCredential,
   ServiceAccountCredentialSchema,
+  // Thinking config
+  type ThinkingConfig,
+  ThinkingConfigSchema,
   // Timeouts config
   type TimeoutsConfig,
   TimeoutsConfigSchema,

@@ -54,11 +54,12 @@ export function findLastSafeSplitPoint(text: string, minLength = 2000): number {
 
   let bestSplit = -1;
   for (const pattern of safeSplitPatterns) {
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
+    let match: RegExpExecArray | null = pattern.exec(text);
+    while (match !== null) {
       if (match.index > minLength && match.index > bestSplit) {
         bestSplit = match.index + 1; // After the newline(s)
       }
+      match = pattern.exec(text);
     }
   }
 

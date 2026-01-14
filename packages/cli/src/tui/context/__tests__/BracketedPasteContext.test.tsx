@@ -164,6 +164,7 @@ describe("BracketedPasteContext", () => {
 
       function ThrowingComponent() {
         try {
+          // biome-ignore lint/correctness/useHookAtTopLevel: Testing that hook throws outside provider
           useBracketedPasteContext();
         } catch (e) {
           thrownError = e as Error;
@@ -174,7 +175,7 @@ describe("BracketedPasteContext", () => {
       render(<ThrowingComponent />);
 
       expect(thrownError).toBeDefined();
-      expect(thrownError!.message).toBe(
+      expect(thrownError?.message).toBe(
         "useBracketedPasteContext must be used within BracketedPasteProvider"
       );
     });
@@ -194,8 +195,8 @@ describe("BracketedPasteContext", () => {
       );
 
       expect(contextValue).toBeDefined();
-      expect(contextValue!.subscribe).toBeInstanceOf(Function);
-      expect(typeof contextValue!.isPasting).toBe("boolean");
+      expect(contextValue?.subscribe).toBeInstanceOf(Function);
+      expect(typeof contextValue?.isPasting).toBe("boolean");
     });
 
     it("subscribe returns unsubscribe function", () => {
@@ -317,7 +318,7 @@ describe("BracketedPasteContext", () => {
 
       // Context should be available
       expect(contextRef).toBeDefined();
-      expect(contextRef!.subscribe).toBeInstanceOf(Function);
+      expect(contextRef?.subscribe).toBeInstanceOf(Function);
     });
 
     it("unsubscribe function is returned", () => {

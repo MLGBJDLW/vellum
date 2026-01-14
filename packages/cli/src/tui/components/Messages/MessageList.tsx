@@ -382,12 +382,15 @@ const MessageList = memo(function MessageList({
   );
 
   // Theme-based styling
-  const roleColors: Record<Message["role"], string> = {
-    user: theme.colors.primary,
-    assistant: theme.colors.success,
-    system: theme.colors.warning,
-    tool: theme.colors.info,
-  };
+  const roleColors: Record<Message["role"], string> = useMemo(
+    () => ({
+      user: theme.colors.primary,
+      assistant: theme.colors.success,
+      system: theme.colors.warning,
+      tool: theme.colors.info,
+    }),
+    [theme.colors.primary, theme.colors.success, theme.colors.warning, theme.colors.info]
+  );
   const textColor = theme.semantic.text.primary;
   const mutedColor = theme.semantic.text.muted;
   const borderColor = theme.semantic.border.default;

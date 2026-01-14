@@ -564,3 +564,22 @@ export {
   mcpSlashCommands,
   setMcpCommandsHub,
 } from "./mcp.js";
+
+// =============================================================================
+// Think Commands (Thinking Mode Toggle)
+// =============================================================================
+
+export {
+  type EffectiveThinkingConfig,
+  getEffectiveThinkingConfig,
+  getThinkingState,
+  resetThinkingState,
+  setThinkingBudget,
+  setThinkingEnabled,
+  setThinkingPriority,
+  subscribeToThinkingState,
+  type ThinkingPriority,
+  thinkCommand,
+  thinkSlashCommands,
+  toggleThinking,
+} from "./think.js";

@@ -438,10 +438,6 @@ export const authCommand: EnhancedSlashCommand = {
       case "delete":
       case "logout":
         return authClear(ctx.credentials, provider ?? ctx.session.provider, force);
-
-      case "status":
-      case "st":
-      case "list":
       default:
         return authStatus(ctx.credentials, provider);
     }
@@ -497,7 +493,7 @@ async function authStatus(
       }
     }
 
-    lines.push("\n" + "━".repeat(40));
+    lines.push(`\n${"━".repeat(40)}`);
     lines.push("💡 Commands: /auth set <provider> | /auth clear <provider>");
 
     return success(lines.join("\n"), {
@@ -874,7 +870,7 @@ export function getSlashCommandHelp(): string {
     lines.push(`   Usage: ${cmd.usage}`);
   }
 
-  lines.push("\n" + "━".repeat(40));
+  lines.push(`\n${"━".repeat(40)}`);
   lines.push("Tip: Use /help <command> for detailed help");
 
   return lines.join("\n");

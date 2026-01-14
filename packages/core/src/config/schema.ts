@@ -317,6 +317,25 @@ export const CircuitBreakerConfigSchema = z.object({
 export type CircuitBreakerConfig = z.infer<typeof CircuitBreakerConfigSchema>;
 
 // ============================================
+// Thinking Configuration Schema
+// ============================================
+
+/**
+ * Extended thinking/reasoning configuration schema.
+ * Controls extended thinking mode for supported models (e.g., Gemini 2.5+).
+ */
+export const ThinkingConfigSchema = z.object({
+  /** Enable extended thinking mode */
+  enabled: z.boolean().default(false),
+  /** Token budget for thinking process (1000-128000) */
+  budgetTokens: z.number().min(1000).max(128000).default(10000),
+  /** Priority for merging thinking config: global, mode, or merge */
+  priority: z.enum(["global", "mode", "merge"]).default("merge"),
+});
+
+export type ThinkingConfig = z.infer<typeof ThinkingConfigSchema>;
+
+// ============================================
 // Complete Configuration Schema
 // ============================================
 
@@ -340,6 +359,8 @@ export const ConfigSchema = z
     logLevel: LogLevelSchema.optional().default("info"),
     /** UI theme name (dark, parchment, dracula, etc.) */
     theme: z.string().optional(),
+    /** Extended thinking configuration */
+    thinking: ThinkingConfigSchema.optional(),
   })
   .transform((data) => ({
     ...data,

@@ -47,6 +47,7 @@ import {
   customAgentsCommand,
   enhancedAuthCommands,
   exitCommand,
+  getThinkingState,
   helpCommand,
   initSlashCommand,
   languageCommand,
@@ -61,7 +62,10 @@ import {
   setModeCommandsManager,
   setModelCommandConfig,
   setThemeContext,
+  subscribeToThinkingState,
   themeSlashCommands,
+  thinkSlashCommands,
+  toggleThinking,
   tutorialCommand,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
@@ -335,6 +339,11 @@ function createCommandRegistry(): CommandRegistry {
 
   // T041: Register mode slash commands
   for (const cmd of modeSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // Register think slash commands
+  for (const cmd of thinkSlashCommands) {
     registry.register(cmd);
   }
 
@@ -684,17 +693,23 @@ function AppContent({
   // Destructure for stable references in useEffect dependency array.
   // Even though agentAdapter is now memoized, this makes the dependency explicit
   // and avoids re-running the effect if agentAdapter reference changes.
-  const { connect: adapterConnect, disconnect: adapterDisconnect } = agentAdapter;
+  const { connect: adapterConnect, disconnect: adapterDisconnect, setOnThinking } = agentAdapter;
 
   // Connect to AgentLoop when provided
   useEffect(() => {
     if (agentLoopProp) {
       adapterConnect(agentLoopProp);
+
+      // Register thinking callback to receive thinking content
+      setOnThinking((text: string) => {
+        setThinkingContent((prev) => prev + text);
+      });
     }
     return () => {
       adapterDisconnect();
+      setOnThinking(null);
     };
-  }, [agentLoopProp, adapterConnect, adapterDisconnect]);
+  }, [agentLoopProp, adapterConnect, adapterDisconnect, setOnThinking]);
 
   // ==========================================================================
   // Core Services - Tools, Credentials, Sessions
@@ -1223,8 +1238,17 @@ function AppContent({
     loadMemories,
   });
 
-  const [isThinking, setIsThinking] = useState(false);
+  const [thinkingModeEnabled, setThinkingModeEnabled] = useState(() => getThinkingState().enabled);
+  const [isCurrentlyThinking, setIsCurrentlyThinking] = useState(false);
   const [thinkingCollapsed, setThinkingCollapsed] = useState(true);
+
+  // Subscribe to global thinking state changes (mode toggle via /think)
+  useEffect(() => {
+    const unsubscribe = subscribeToThinkingState((state) => {
+      setThinkingModeEnabled(state.enabled);
+    });
+    return unsubscribe;
+  }, []);
 
   const effectiveApprovalPolicy = useMemo<ApprovalPolicy>(() => {
     if (_approval) {
@@ -1522,13 +1546,13 @@ function AppContent({
         key: "t",
         ctrl: true,
         handler: () => {
-          setShowSidebar(true);
-          setSidebarContent("todo");
+          const newState = toggleThinking();
+          announce(newState ? "Thinking mode enabled" : "Thinking mode disabled");
         },
-        description: "Show todo panel",
+        description: "Toggle thinking mode",
         scope: "global",
       },
-      // Alt+T alternative for VS Code terminal compatibility
+      // Alt+T alternative for todo panel (thinking uses Ctrl+T)
       {
         key: "t",
         alt: true,
@@ -2287,8 +2311,8 @@ function AppContent({
       announce(`You said: ${processedText}`);
 
       setIsLoading(true);
-      setIsThinking(true);
-      setThinkingContent("Processing your request...");
+      setIsCurrentlyThinking(true);
+      setThinkingContent(""); // Clear previous thinking content, real content flows via thinking event
 
       // Use AgentLoop if available (T038)
       if (agentLoopProp) {
@@ -2314,7 +2338,7 @@ function AppContent({
           notifyError(errorMsg);
           addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
         } finally {
-          setIsThinking(false);
+          setIsCurrentlyThinking(false);
           setThinkingContent("");
           setIsLoading(false);
           cancellationRef.current = null;
@@ -2345,7 +2369,7 @@ function AppContent({
                 notifyTaskComplete("Response received");
                 announce("Response received");
               }
-              setIsThinking(false);
+              setIsCurrentlyThinking(false);
               setThinkingContent("");
               resolve();
             }, 300);
@@ -2359,7 +2383,7 @@ function AppContent({
           if (cancelled) {
             clearTimeout(timeoutId);
             clearInterval(checkInterval);
-            setIsThinking(false);
+            setIsCurrentlyThinking(false);
             setThinkingContent("");
             resolve();
           }
@@ -2859,7 +2883,8 @@ function AppContent({
       interactivePrompt={interactivePrompt}
       loadSessionPreviewMessages={loadSessionPreviewMessages}
       isLoading={isLoading}
-      isThinking={isThinking}
+      thinkingModeEnabled={thinkingModeEnabled}
+      isCurrentlyThinking={isCurrentlyThinking}
       memoryEntries={memoryEntries}
       historyMessages={historyMessages}
       pendingMessage={pendingMessage}
@@ -2883,7 +2908,11 @@ function AppContent({
       onApproveQueueItem={(id) => approveExecution(id)}
       onRejectQueueItem={(id) => rejectExecution(id)}
       onApproveAll={() => approveAll()}
-      onRejectAll={() => pendingApproval.forEach((e) => rejectExecution(e.id))}
+      onRejectAll={() =>
+        pendingApproval.forEach((e) => {
+          rejectExecution(e.id);
+        })
+      }
       showSidebar={showSidebar}
       sidebarContent={sidebarContent}
       specPhase={specPhase}
@@ -2962,7 +2991,8 @@ interface AppContentViewProps {
     sessionId: string
   ) => Promise<readonly SessionPreviewMessage[] | null>;
   readonly isLoading: boolean;
-  readonly isThinking: boolean;
+  readonly thinkingModeEnabled: boolean;
+  readonly isCurrentlyThinking: boolean;
   readonly memoryEntries: MemoryPanelProps["entries"];
   readonly historyMessages: readonly Message[];
   readonly pendingMessage: Message | null;
@@ -3242,11 +3272,20 @@ function AppOverlays({
       )}
 
       {showHelpModal && (
-        <HotkeyHelpModal
-          isVisible={showHelpModal}
-          onClose={closeHelpModal}
-          hotkeys={DEFAULT_HOTKEYS}
-        />
+        <Box
+          position="absolute"
+          marginTop={5}
+          marginLeft={10}
+          borderStyle="round"
+          borderColor={themeContext.theme.colors.info}
+          padding={1}
+        >
+          <HotkeyHelpModal
+            isVisible={showHelpModal}
+            onClose={closeHelpModal}
+            hotkeys={DEFAULT_HOTKEYS}
+          />
+        </Box>
       )}
 
       {showApprovalQueue && pendingApprovals.length > 1 && (
@@ -3361,7 +3400,8 @@ function AppContentView({
   interactivePrompt,
   loadSessionPreviewMessages,
   isLoading,
-  isThinking,
+  thinkingModeEnabled,
+  isCurrentlyThinking,
   memoryEntries,
   historyMessages,
   pendingMessage,
@@ -3439,7 +3479,7 @@ function AppContentView({
       }}
       cost={tokenUsage.totalCost}
       trustMode={trustMode}
-      thinking={{ active: isThinking }}
+      thinking={{ active: thinkingModeEnabled }}
     />
   );
 
@@ -3531,10 +3571,10 @@ function AppContentView({
             sidebar={sidebar}
             showSidebar={showSidebar}
           >
-            {isThinking && (
+            {isCurrentlyThinking && (
               <ThinkingBlock
                 content={thinkingContent}
-                isStreaming={isThinking}
+                isStreaming={isCurrentlyThinking}
                 collapsed={thinkingCollapsed}
                 onToggle={() => setThinkingCollapsed((prev) => !prev)}
               />

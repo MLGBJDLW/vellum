@@ -56,6 +56,12 @@ export interface UseAgentAdapterReturn extends AgentAdapter {
    * Whether currently connected to an AgentLoop
    */
   isConnected: boolean;
+
+  /**
+   * Set callback to receive thinking content from AgentLoop.
+   * @param callback - Function to receive thinking text, or null to unregister
+   */
+  setOnThinking: (callback: ((text: string) => void) | null) => void;
 }
 
 // =============================================================================
@@ -182,6 +188,26 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
   // Map tool call IDs to execution IDs (for context correlation)
   const toolIdMapRef = useRef<Map<string, string>>(new Map());
+
+  // =============================================================================
+  // Thinking Event Callback (for external handling)
+  // =============================================================================
+
+  /**
+   * Ref to store external thinking callback.
+   * This allows app.tsx to receive thinking events without tight coupling.
+   */
+  const onThinkingRef = useRef<((text: string) => void) | null>(null);
+
+  /**
+   * Handle thinking streaming from AgentLoop.
+   * Forwards thinking content to external callback if registered.
+   */
+  const handleThinking = useCallback((text: string) => {
+    if (onThinkingRef.current) {
+      onThinkingRef.current(text);
+    }
+  }, []);
 
   /**
    * Handle text streaming from AgentLoop
@@ -379,6 +405,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       if (connectedLoopRef.current) {
         // Remove existing event listeners
         connectedLoopRef.current.off("text", handleText);
+        connectedLoopRef.current.off("thinking", handleThinking);
         connectedLoopRef.current.off("complete", handleComplete);
         connectedLoopRef.current.off("toolStart", handleToolStart);
         connectedLoopRef.current.off("toolEnd", handleToolEnd);
@@ -393,6 +420,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
       // Subscribe to AgentLoop events
       agentLoop.on("text", handleText);
+      agentLoop.on("thinking", handleThinking);
       agentLoop.on("complete", handleComplete);
       agentLoop.on("toolStart", handleToolStart);
       agentLoop.on("toolEnd", handleToolEnd);
@@ -406,6 +434,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     },
     [
       handleText,
+      handleThinking,
       handleComplete,
       handleToolStart,
       handleToolEnd,
@@ -424,6 +453,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     if (connectedLoopRef.current) {
       // Remove all event listeners
       connectedLoopRef.current.off("text", handleText);
+      connectedLoopRef.current.off("thinking", handleThinking);
       connectedLoopRef.current.off("complete", handleComplete);
       connectedLoopRef.current.off("toolStart", handleToolStart);
       connectedLoopRef.current.off("toolEnd", handleToolEnd);
@@ -447,6 +477,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     }
   }, [
     handleText,
+    handleThinking,
     handleComplete,
     handleToolStart,
     handleToolEnd,
@@ -465,6 +496,14 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     };
   }, [disconnect]);
 
+  /**
+   * Set the callback for thinking events.
+   * Call this to receive thinking content from AgentLoop.
+   */
+  const setOnThinking = useCallback((callback: ((text: string) => void) | null) => {
+    onThinkingRef.current = callback;
+  }, []);
+
   // Memoize return value to ensure stable object reference across renders.
   // This prevents useEffect re-runs in consumers that depend on the adapter object,
   // which was causing disconnect/reconnect cycles during streaming.
@@ -473,8 +512,9 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       connect,
       disconnect,
       isConnected: isConnectedRef.current,
+      setOnThinking,
     }),
-    [connect, disconnect]
+    [connect, disconnect, setOnThinking]
   );
 }
 

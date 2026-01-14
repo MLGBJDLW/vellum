@@ -122,7 +122,7 @@ export function HotkeyHelpModal({
   // Handle keyboard input for closing
   useInput(
     (input, key) => {
-      if (key.escape || input === "?" || input === "q") {
+      if (key.escape || input === "q") {
         onClose();
       }
     },
@@ -179,7 +179,7 @@ export function HotkeyHelpModal({
 
       {/* Close hint */}
       <Box marginTop={1}>
-        <Text dimColor>Press Esc, ? or q to close</Text>
+        <Text dimColor>Press Esc or q to close</Text>
       </Box>
     </Box>
   );

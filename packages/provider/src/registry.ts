@@ -228,6 +228,7 @@ export class ProviderRegistry {
    * @returns Configured provider instance
    * @throws Error if provider type is unknown or validation fails
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Provider resolution with credential fallback chain
   async get(config: ProviderRegistryConfig): Promise<Provider> {
     const { type, model, apiKey, credential: directCredential } = config;
     const cacheKey = getCacheKey(type, model);

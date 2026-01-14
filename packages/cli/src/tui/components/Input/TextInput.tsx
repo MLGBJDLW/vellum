@@ -75,7 +75,9 @@ function deleteAt(str: string, index: number): string {
  * Strip common ANSI control sequences (e.g., bracketed paste wrappers).
  */
 function stripAnsiSequences(input: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional - matching ANSI escape sequences
   const withoutCsi = input.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional - matching OSC sequences with BEL/ST terminators
   return withoutCsi.replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, "");
 }
 
@@ -89,8 +91,10 @@ function normalizeInputValue(input: string, multiline: boolean): string {
     .replace(/\u2028|\u2029/g, "\n");
 
   const withoutControls = multiline
-    ? sanitized.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f]/g, "")
-    : sanitized.replace(/[\x00-\x1f\x7f\x80-\x9f]/g, "");
+    ? // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional - stripping control chars except tab/newline/CR
+      sanitized.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f]/g, "")
+    : // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional - stripping all control chars for single-line
+      sanitized.replace(/[\x00-\x1f\x7f\x80-\x9f]/g, "");
 
   return multiline ? withoutControls : withoutControls.replace(/\n/g, "");
 }
@@ -509,6 +513,7 @@ function TextInputComponent({
 
   // Handle keyboard input with immediate display for single chars, buffering for paste
   useInput(
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Keyboard input handler with many key combinations
     (input, key) => {
       if (disabled) return;
 

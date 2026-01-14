@@ -202,16 +202,56 @@ export function EnhancedCommandInput({
   // @ Mention autocomplete state
   const mentionAutocomplete = useMentionAutocomplete(value, { cwd });
 
+  // Slash autocomplete options (computed early for activeAutocomplete check)
+  const slashOptions = useMemo(() => {
+    if (slashAutocomplete.level === 1) {
+      return commands ?? [];
+    }
+    // Level 2: get subcommands for the command
+    if (slashAutocomplete.level === 2) {
+      if (getSubcommands && slashAutocomplete.commandName) {
+        return getSubcommands(slashAutocomplete.commandName) ?? [];
+      }
+      return [];
+    }
+    // Level 3: get third-level items (e.g., providers for auth set, models for model command)
+    if (slashAutocomplete.level === 3) {
+      if (getLevel3Items && slashAutocomplete.commandName && slashAutocomplete.arg1) {
+        return (
+          getLevel3Items(
+            slashAutocomplete.commandName,
+            slashAutocomplete.arg1,
+            slashAutocomplete.query
+          ) ?? []
+        );
+      }
+      return [];
+    }
+    return [];
+  }, [
+    slashAutocomplete.level,
+    slashAutocomplete.commandName,
+    slashAutocomplete.arg1,
+    slashAutocomplete.query,
+    commands,
+    getSubcommands,
+    getLevel3Items,
+  ]);
+
   // Determine which autocomplete is active (priority: slash > mention)
   const activeAutocomplete = useMemo(() => {
+    // Only consider slash active if there are actually options to show
     if (slashAutocomplete.visible && slashAutocomplete.active) {
-      return "slash" as const;
+      // Level 1 always shows command list, level 2/3 need actual subcommands
+      if (slashAutocomplete.level === 1 || slashOptions.length > 0) {
+        return "slash" as const;
+      }
     }
     if (enableMentions && mentionAutocomplete.state.visible && mentionAutocomplete.state.active) {
       return "mention" as const;
     }
     return null;
-  }, [slashAutocomplete, mentionAutocomplete.state, enableMentions]);
+  }, [slashAutocomplete, slashOptions.length, mentionAutocomplete.state, enableMentions]);
 
   // History navigation
   const originalInputRef = useRef<string | null>(null);
@@ -280,41 +320,6 @@ export function EnhancedCommandInput({
     { isActive: focused && !disabled && !multiline && activeAutocomplete === null }
   );
 
-  // Slash autocomplete options
-  const slashOptions = useMemo(() => {
-    if (slashAutocomplete.level === 1) {
-      return commands ?? [];
-    }
-    // Level 2: get subcommands for the command
-    if (slashAutocomplete.level === 2) {
-      if (getSubcommands && slashAutocomplete.commandName) {
-        return getSubcommands(slashAutocomplete.commandName) ?? [];
-      }
-      return [];
-    }
-    // Level 3: get third-level items (e.g., providers for auth set, models for model command)
-    if (slashAutocomplete.level === 3) {
-      if (getLevel3Items && slashAutocomplete.commandName && slashAutocomplete.arg1) {
-        return (
-          getLevel3Items(
-            slashAutocomplete.commandName,
-            slashAutocomplete.arg1,
-            slashAutocomplete.query
-          ) ?? []
-        );
-      }
-      return [];
-    }
-    return [];
-  }, [
-    slashAutocomplete.level,
-    slashAutocomplete.commandName,
-    slashAutocomplete.arg1,
-    slashAutocomplete.query,
-    commands,
-    getSubcommands,
-    getLevel3Items,
-  ]);
   // Compute filtered/sorted slash options for Enter/Tab selection
   const sortedSlashOptions = useMemo(() => {
     if (!slashAutocomplete.active || slashOptions.length === 0) return [];

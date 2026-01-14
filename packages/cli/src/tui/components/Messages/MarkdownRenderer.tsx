@@ -369,6 +369,7 @@ export function MarkdownRenderer({
 
   return (
     <Box flexDirection="column">
+      {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Markdown node renderer with many node types */}
       {nodes.map((node, index) => {
         const key = `${node.type}-${index}`;
 

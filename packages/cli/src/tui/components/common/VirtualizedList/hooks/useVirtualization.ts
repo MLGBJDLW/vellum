@@ -152,6 +152,7 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
   };
 
   // Measure container and visible items on every render
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Item measurement logic with height tracking
   useLayoutEffect(() => {
     // Measure container
     if (containerRef.current) {

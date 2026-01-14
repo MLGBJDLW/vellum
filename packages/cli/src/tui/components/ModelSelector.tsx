@@ -11,7 +11,12 @@ import { getProviderModels, getSupportedProviders, type ModelInfo } from "@vellu
 import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  getThinkingState,
+  subscribeToThinkingState,
+  toggleThinking,
+} from "../../commands/think.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 
@@ -35,6 +40,8 @@ export interface ModelSelectorProps {
   readonly showDetails?: boolean;
   /** Filter to specific providers (optional) */
   readonly providers?: readonly string[];
+  /** Callback when thinking mode is toggled (optional) */
+  readonly onThinkingToggle?: (enabled: boolean) => void;
 }
 
 /**
@@ -145,10 +152,28 @@ export function ModelSelector({
   isActive = true,
   showDetails = true,
   providers,
+  onThinkingToggle,
 }: ModelSelectorProps): React.ReactElement {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
   const icons = getIcons();
+
+  // Thinking state management
+  const [thinkingEnabled, setThinkingEnabled] = useState(() => getThinkingState().enabled);
+
+  // Subscribe to thinking state changes
+  useEffect(() => {
+    const unsubscribe = subscribeToThinkingState((state) => {
+      setThinkingEnabled(state.enabled);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Handle thinking toggle
+  const handleThinkingToggle = useCallback(() => {
+    const newState = toggleThinking();
+    onThinkingToggle?.(newState);
+  }, [onThinkingToggle]);
 
   // Build flattened list of model options
   const modelOptions = useMemo<ModelOption[]>(() => {
@@ -181,6 +206,12 @@ export function ModelSelector({
       (input: string, key) => {
         if (!isActive || modelOptions.length === 0) return;
 
+        // Toggle thinking with 't' or 'T'
+        if (input === "t" || input === "T") {
+          handleThinkingToggle();
+          return;
+        }
+
         // Arrow navigation
         if (key.upArrow || input === "k") {
           setFocusedIndex((prev) => (prev > 0 ? prev - 1 : modelOptions.length - 1));
@@ -200,7 +231,7 @@ export function ModelSelector({
           }
         }
       },
-      [isActive, focusedIndex, modelOptions, onSelect]
+      [isActive, focusedIndex, modelOptions, onSelect, handleThinkingToggle]
     ),
     { isActive }
   );
@@ -230,6 +261,13 @@ export function ModelSelector({
     <Box flexDirection="column" paddingX={1}>
       <Box marginBottom={1}>
         <Text bold>{t("modelSelector.title")}</Text>
+      </Box>
+
+      {/* Thinking Mode Toggle */}
+      <Box marginBottom={1}>
+        <Text>Thinking: </Text>
+        <Text color={thinkingEnabled ? "green" : "gray"}>{thinkingEnabled ? "◆ On" : "◇ Off"}</Text>
+        <Text dimColor> (press T to toggle)</Text>
       </Box>
 
       {Array.from(groupedByProvider.entries()).map(([provider, { options, startIndex }]) => {

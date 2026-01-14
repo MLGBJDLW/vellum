@@ -212,7 +212,7 @@ describe("useBracketedPaste", () => {
 
       // Simulate SIGINT
       writtenData = [];
-      const handler = Array.from(sigintHandlers!)[0];
+      const handler = sigintHandlers ? Array.from(sigintHandlers)[0] : undefined;
       handler?.();
 
       // Should have written disable sequence
