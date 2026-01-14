@@ -53,6 +53,8 @@ export interface MentionAutocompleteProps {
   readonly onSelect: (value: string, mode: MentionAutocompleteMode) => void;
   /** Callback when autocomplete is cancelled */
   readonly onCancel: () => void;
+  /** Callback when selection index changes (for parent to track selection state) */
+  readonly onSelectionChange?: (index: number, hasOptions: boolean) => void;
   /** Whether the autocomplete is visible */
   readonly visible?: boolean;
   /** Whether autocomplete captures keyboard input */
@@ -169,6 +171,7 @@ export function MentionAutocomplete({
   fileSuggestions = [],
   onSelect,
   onCancel,
+  onSelectionChange,
   visible = true,
   active,
   maxVisible = 8,
@@ -196,6 +199,11 @@ export function MentionAutocomplete({
   useEffect(() => {
     setSelectedIndex(0);
   }, [items.length, input]);
+
+  // Notify parent of selection changes
+  useEffect(() => {
+    onSelectionChange?.(selectedIndex, total > 0);
+  }, [selectedIndex, total, onSelectionChange]);
 
   // Calculate visible window
   const windowStart = useMemo(() => {

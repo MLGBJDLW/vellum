@@ -2,6 +2,8 @@
 // Skill Module Barrel Export
 // ============================================
 
+// Builtin Skills
+export { BUILTIN_SKILL_NAMES, type BuiltinSkillName } from "./builtin/index.js";
 // Discovery
 export type {
   ModeSkillDiscoveryOptions,

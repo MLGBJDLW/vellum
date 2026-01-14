@@ -2,8 +2,7 @@
  * Authentication Slash Commands
  *
  * Provides slash commands for credential management in TUI:
- * - /login - Add credential interactively
- * - /logout - Remove credential for current/specified provider
+ * - /auth - Unified authentication command (set, delete, list)
  * - /credentials - Show credential status
  *
  * Supports both legacy interface (SlashCommandResult) and
@@ -112,150 +111,6 @@ export async function createCredentialManager(): Promise<CredentialManager> {
 // =============================================================================
 
 /**
- * /login command handler
- *
- * Adds a credential interactively for a provider.
- * Usage: /login [provider]
- */
-async function handleLogin(
-  args: string[],
-  context: SlashCommandContext
-): Promise<SlashCommandResult> {
-  const provider = args[0] ?? context.currentProvider;
-
-  if (!provider) {
-    return {
-      success: false,
-      message: "❌ Provider required. Usage: /login <provider>\n" + "   Example: /login anthropic",
-    };
-  }
-
-  const normalizedProvider = provider.toLowerCase();
-
-  // Check if credential already exists
-  const existsResult = await context.credentialManager.exists(normalizedProvider);
-  const alreadyExists = existsResult.ok && existsResult.value;
-
-  return {
-    success: true,
-    message: alreadyExists
-      ? `🔐 Updating credential for ${normalizedProvider}. Enter your API key:`
-      : `🔐 Adding credential for ${normalizedProvider}. Enter your API key:`,
-    promptForInput: {
-      type: "api_key",
-      provider: normalizedProvider,
-      placeholder: "sk-...",
-      onSubmit: async (value: string): Promise<SlashCommandResult> => {
-        if (!value.trim()) {
-          return {
-            success: false,
-            message: "❌ API key cannot be empty",
-          };
-        }
-
-        try {
-          const result = await context.credentialManager.store({
-            provider: normalizedProvider,
-            type: "api_key",
-            value: value.trim(),
-            metadata: {
-              label: `${normalizedProvider} API Key`,
-            },
-          });
-
-          if (!result.ok) {
-            return {
-              success: false,
-              message: `❌ Failed to save credential: ${result.error.message}`,
-            };
-          }
-
-          return {
-            success: true,
-            message: `✅ Credential for ${normalizedProvider} saved to ${result.value.source}`,
-            data: {
-              provider: normalizedProvider,
-              source: result.value.source,
-            },
-          };
-        } catch (err) {
-          return {
-            success: false,
-            message: `❌ Error: ${err instanceof Error ? err.message : String(err)}`,
-          };
-        }
-      },
-    },
-  };
-}
-
-/**
- * /logout command handler
- *
- * Removes credential for a provider.
- * Usage: /logout [provider]
- */
-async function handleLogout(
-  args: string[],
-  context: SlashCommandContext
-): Promise<SlashCommandResult> {
-  const provider = args[0] ?? context.currentProvider;
-
-  if (!provider) {
-    return {
-      success: false,
-      message:
-        "❌ Provider required. Usage: /logout <provider>\n" + "   Example: /logout anthropic",
-    };
-  }
-
-  const normalizedProvider = provider.toLowerCase();
-
-  try {
-    // Check if credential exists first
-    const existsResult = await context.credentialManager.exists(normalizedProvider);
-
-    if (!existsResult.ok || !existsResult.value) {
-      return {
-        success: false,
-        message: `⚠️ No credential found for ${normalizedProvider}`,
-      };
-    }
-
-    // Delete the credential
-    const result = await context.credentialManager.delete(normalizedProvider);
-
-    if (!result.ok) {
-      return {
-        success: false,
-        message: `❌ Failed to remove credential: ${result.error.message}`,
-      };
-    }
-
-    if (result.value === 0) {
-      return {
-        success: false,
-        message: `⚠️ No credential found for ${normalizedProvider}`,
-      };
-    }
-
-    return {
-      success: true,
-      message: `✅ Credential for ${normalizedProvider} removed from ${result.value} store(s)`,
-      data: {
-        provider: normalizedProvider,
-        deletedCount: result.value,
-      },
-    };
-  } catch (err) {
-    return {
-      success: false,
-      message: `❌ Error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
-}
-
-/**
  * /credentials command handler
  *
  * Shows credential status for all or a specific provider.
@@ -301,7 +156,7 @@ async function handleCredentials(
         lines.push(`   No credential found for ${filterProvider}`);
       } else {
         lines.push("   No credentials stored");
-        lines.push("   Use /login <provider> to add one");
+        lines.push("   Use /auth set <provider> to add one");
       }
     } else {
       for (const cred of credentials) {
@@ -343,20 +198,6 @@ async function handleCredentials(
  */
 export const authSlashCommands: SlashCommand[] = [
   {
-    name: "login",
-    aliases: ["signin", "auth"],
-    description: "Add or update API credential for a provider",
-    usage: "/login [provider]",
-    handler: handleLogin,
-  },
-  {
-    name: "logout",
-    aliases: ["signout", "deauth"],
-    description: "Remove API credential for a provider",
-    usage: "/logout [provider]",
-    handler: handleLogout,
-  },
-  {
     name: "credentials",
     aliases: ["creds", "keys"],
     description: "Show credential status",
@@ -368,218 +209,6 @@ export const authSlashCommands: SlashCommand[] = [
 // =============================================================================
 // T034: Enhanced Auth Commands (New Interface)
 // =============================================================================
-
-/**
- * Login command with enhanced interface
- *
- * Provides interactive API key input for credential storage.
- *
- * @example
- * ```
- * /login                    # Uses current provider
- * /login anthropic          # Specify provider
- * /login openai --store keychain  # Specify store
- * ```
- */
-export const loginCommand: EnhancedSlashCommand = {
-  name: "login",
-  description: "Add or update API credential for a provider",
-  kind: "builtin",
-  category: "auth",
-  aliases: ["signin", "auth"],
-  positionalArgs: [
-    {
-      name: "provider",
-      type: "string",
-      description: "Provider name (e.g., anthropic, openai)",
-      required: false,
-    },
-  ],
-  namedArgs: [
-    {
-      name: "store",
-      shorthand: "s",
-      type: "string",
-      description: "Credential store to use (keychain, encrypted-file, env)",
-      required: false,
-      default: "keychain",
-    },
-  ],
-  examples: ["/login anthropic", "/login openai --store keychain", "/login"],
-  execute: async (ctx: CommandContext): Promise<CommandResult> => {
-    const provider = (ctx.parsedArgs.positional[0] as string | undefined) ?? ctx.session.provider;
-    const store = ctx.parsedArgs.named.store as string | undefined;
-
-    if (!provider) {
-      return error(
-        "MISSING_ARGUMENT",
-        "❌ Provider required. Usage: /login <provider>\n   Example: /login anthropic"
-      );
-    }
-
-    const normalizedProvider = provider.toLowerCase();
-
-    // Check if credential already exists
-    const existsResult = await ctx.credentials.exists(normalizedProvider);
-    const alreadyExists = existsResult.ok && existsResult.value;
-
-    const promptMessage = alreadyExists
-      ? `🔐 Updating credential for ${normalizedProvider}. Enter your API key:`
-      : `🔐 Adding credential for ${normalizedProvider}. Enter your API key:`;
-
-    return interactive({
-      inputType: "password",
-      message: promptMessage,
-      placeholder: "sk-...",
-      provider: normalizedProvider,
-      handler: async (value: string): Promise<CommandResult> => {
-        if (!value.trim()) {
-          return error("INVALID_ARGUMENT", "❌ API key cannot be empty");
-        }
-
-        try {
-          const result = await ctx.credentials.store(
-            {
-              provider: normalizedProvider,
-              type: "api_key",
-              value: value.trim(),
-              metadata: {
-                label: `${normalizedProvider} API Key`,
-              },
-            },
-            store as "keychain" | "file" | undefined
-          );
-
-          if (!result.ok) {
-            return error("INTERNAL_ERROR", `❌ Failed to save credential: ${result.error.message}`);
-          }
-
-          return success(
-            `✅ Credential for ${normalizedProvider} saved to ${result.value.source}`,
-            { provider: normalizedProvider, source: result.value.source }
-          );
-        } catch (err) {
-          return error(
-            "INTERNAL_ERROR",
-            `❌ Error: ${err instanceof Error ? err.message : String(err)}`
-          );
-        }
-      },
-      onCancel: () => ({
-        kind: "error" as const,
-        code: "COMMAND_ABORTED" as const,
-        message: "Login cancelled",
-      }),
-    });
-  },
-};
-
-/**
- * Logout command with enhanced interface
- *
- * Removes credential for a provider with optional force flag.
- *
- * @example
- * ```
- * /logout anthropic         # Prompts for confirmation
- * /logout anthropic --force # Skips confirmation
- * ```
- */
-export const logoutCommand: EnhancedSlashCommand = {
-  name: "logout",
-  description: "Remove API credential for a provider",
-  kind: "builtin",
-  category: "auth",
-  aliases: ["signout", "deauth"],
-  positionalArgs: [
-    {
-      name: "provider",
-      type: "string",
-      description: "Provider name to remove credential for",
-      required: false,
-    },
-  ],
-  namedArgs: [
-    {
-      name: "force",
-      shorthand: "f",
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      required: false,
-      default: false,
-    },
-  ],
-  examples: ["/logout anthropic", "/logout openai --force", "/logout -f"],
-  execute: async (ctx: CommandContext): Promise<CommandResult> => {
-    const provider = (ctx.parsedArgs.positional[0] as string | undefined) ?? ctx.session.provider;
-    const force = ctx.parsedArgs.named.force === true;
-
-    if (!provider) {
-      return error(
-        "MISSING_ARGUMENT",
-        "❌ Provider required. Usage: /logout <provider>\n   Example: /logout anthropic"
-      );
-    }
-
-    const normalizedProvider = provider.toLowerCase();
-
-    // Check if credential exists
-    const existsResult = await ctx.credentials.exists(normalizedProvider);
-    if (!existsResult.ok || !existsResult.value) {
-      return error("CREDENTIAL_NOT_FOUND", `⚠️ No credential found for ${normalizedProvider}`);
-    }
-
-    // If not forced, return confirmation prompt
-    if (!force) {
-      return interactive({
-        inputType: "confirm",
-        message: `Are you sure you want to remove credential for ${normalizedProvider}?`,
-        handler: async (value: string): Promise<CommandResult> => {
-          if (value.toLowerCase() !== "yes" && value.toLowerCase() !== "y") {
-            return error("COMMAND_ABORTED", "Logout cancelled");
-          }
-
-          return performLogout(ctx.credentials, normalizedProvider);
-        },
-        onCancel: () => ({
-          kind: "error" as const,
-          code: "COMMAND_ABORTED" as const,
-          message: "Logout cancelled",
-        }),
-      });
-    }
-
-    // Forced logout - delete immediately
-    return performLogout(ctx.credentials, normalizedProvider);
-  },
-};
-
-/**
- * Perform the actual logout operation
- */
-async function performLogout(
-  credentials: CommandContext["credentials"],
-  provider: string
-): Promise<CommandResult> {
-  try {
-    const result = await credentials.delete(provider);
-
-    if (!result.ok) {
-      return error("INTERNAL_ERROR", `❌ Failed to remove credential: ${result.error.message}`);
-    }
-
-    if (result.value === 0) {
-      return error("CREDENTIAL_NOT_FOUND", `⚠️ No credential found for ${provider}`);
-    }
-
-    return success(`✅ Credential for ${provider} removed from ${result.value} store(s)`, {
-      provider,
-      deletedCount: result.value,
-    });
-  } catch (err) {
-    return error("INTERNAL_ERROR", `❌ Error: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
 
 /**
  * Credentials command with enhanced interface
@@ -646,7 +275,7 @@ export const credentialsCommand: EnhancedSlashCommand = {
           lines.push(`   No credential found for ${normalizedFilter}`);
         } else {
           lines.push("   No credentials stored");
-          lines.push("   Use /login <provider> to add one");
+          lines.push("   Use /auth set <provider> to add one");
         }
       } else {
         for (const cred of credentials) {
@@ -675,14 +304,471 @@ export const credentialsCommand: EnhancedSlashCommand = {
   },
 };
 
+// =============================================================================
+// T035: Unified Auth Command
+// =============================================================================
+
+/**
+ * Unified auth command with subcommands
+ *
+ * Provides a single entry point for all authentication operations:
+ * - /auth (or /auth status) - Show authentication status
+ * - /auth set [provider] - Add or update API credential
+ * - /auth clear [provider] - Remove credential
+ *
+ * @example
+ * ```
+ * /auth                     # Show current auth status
+ * /auth status              # Same as /auth
+ * /auth set anthropic       # Add/update credential for anthropic
+ * /auth clear openai        # Remove credential for openai
+ * ```
+ */
+export const authCommand: EnhancedSlashCommand = {
+  name: "auth",
+  description: "Manage API credentials (status, set, clear)",
+  kind: "builtin",
+  category: "auth",
+  aliases: [],
+  subcommands: [
+    {
+      name: "status",
+      description: "Show current authentication status (default)",
+      aliases: ["st", "list"],
+    },
+    {
+      name: "set",
+      description: "Add or update API credential for a provider",
+      aliases: ["add", "login"],
+    },
+    {
+      name: "clear",
+      description: "Remove credential for a provider",
+      aliases: ["remove", "delete", "logout"],
+    },
+  ],
+  positionalArgs: [
+    {
+      name: "subcommand",
+      type: "string",
+      description: "Subcommand: status, set, clear (default: status)",
+      required: false,
+    },
+    {
+      name: "provider",
+      type: "string",
+      description: "Provider name (e.g., anthropic, openai)",
+      required: false,
+    },
+  ],
+  namedArgs: [
+    {
+      name: "store",
+      shorthand: "s",
+      type: "string",
+      description: "Credential store to use (keychain, encrypted-file, env)",
+      required: false,
+      default: "keychain",
+    },
+    {
+      name: "force",
+      shorthand: "f",
+      type: "boolean",
+      description: "Skip confirmation prompt for clear",
+      required: false,
+      default: false,
+    },
+  ],
+  examples: [
+    "/auth",
+    "/auth status",
+    "/auth set anthropic",
+    "/auth set openai --store keychain",
+    "/auth clear anthropic",
+    "/auth clear openai --force",
+  ],
+  execute: async (ctx: CommandContext): Promise<CommandResult> => {
+    const args = ctx.parsedArgs.positional;
+    const subcommand = (args[0] as string | undefined)?.toLowerCase() ?? "status";
+    const provider =
+      (args[1] as string | undefined) ??
+      // If subcommand is a provider name (not a known subcommand), treat it as provider
+      (![
+        "status",
+        "st",
+        "list",
+        "set",
+        "add",
+        "login",
+        "clear",
+        "remove",
+        "delete",
+        "logout",
+      ].includes(subcommand)
+        ? subcommand
+        : undefined);
+    const store = ctx.parsedArgs.named.store as string | undefined;
+    const force = ctx.parsedArgs.named.force === true;
+
+    // Determine actual subcommand (handle case where provider was passed as first arg)
+    const actualSubcommand = [
+      "status",
+      "st",
+      "list",
+      "set",
+      "add",
+      "login",
+      "clear",
+      "remove",
+      "delete",
+      "logout",
+    ].includes(subcommand)
+      ? subcommand
+      : "status";
+
+    // Route to appropriate handler
+    switch (actualSubcommand) {
+      case "set":
+      case "add":
+      case "login":
+        return authSet(ctx.credentials, provider ?? ctx.session.provider, store);
+
+      case "clear":
+      case "remove":
+      case "delete":
+      case "logout":
+        return authClear(ctx.credentials, provider ?? ctx.session.provider, force);
+
+      case "status":
+      case "st":
+      case "list":
+      default:
+        return authStatus(ctx.credentials, provider);
+    }
+  },
+};
+
+/**
+ * /auth status - Show authentication status
+ */
+async function authStatus(
+  credentials: CredentialManager,
+  filterProvider?: string
+): Promise<CommandResult> {
+  const normalizedFilter = filterProvider?.toLowerCase();
+
+  try {
+    // Get store availability
+    const availability = await credentials.getStoreAvailability();
+
+    // List credentials
+    const listResult = await credentials.list(normalizedFilter);
+
+    if (!listResult.ok) {
+      return error("INTERNAL_ERROR", `❌ Failed to list credentials: ${listResult.error.message}`);
+    }
+
+    const credentialsList = listResult.value;
+
+    // Build message
+    const lines: string[] = [];
+    lines.push("🔐 Authentication Status");
+    lines.push("━".repeat(40));
+
+    // Store availability
+    lines.push("\n📦 Storage Backends:");
+    for (const [store, available] of Object.entries(availability)) {
+      lines.push(`   ${available ? "✓" : "✗"} ${store}`);
+    }
+
+    // Credentials
+    lines.push("\n🔑 Configured Providers:");
+    if (credentialsList.length === 0) {
+      if (normalizedFilter) {
+        lines.push(`   No credential found for ${normalizedFilter}`);
+      } else {
+        lines.push("   No credentials stored");
+        lines.push("   Use /auth set <provider> to add one");
+      }
+    } else {
+      for (const cred of credentialsList) {
+        const maskedValue = cred.maskedHint ?? "***";
+        lines.push(`   • ${cred.provider} (${cred.source}): ${maskedValue} [${cred.type}]`);
+      }
+    }
+
+    lines.push("\n" + "━".repeat(40));
+    lines.push("💡 Commands: /auth set <provider> | /auth clear <provider>");
+
+    return success(lines.join("\n"), {
+      availability,
+      credentials: credentialsList.map((c: CredentialRef) => ({
+        provider: c.provider,
+        source: c.source,
+        type: c.type,
+        maskedHint: c.maskedHint,
+      })),
+    });
+  } catch (err) {
+    return error("INTERNAL_ERROR", `❌ Error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Provider-specific API key format hints
+ */
+const PROVIDER_KEY_HINTS: Record<
+  string,
+  { formatHint: string; helpText: string; documentationUrl?: string }
+> = {
+  anthropic: {
+    formatHint: "sk-ant-api03-...",
+    helpText: "Your Anthropic key starts with sk-ant-",
+    documentationUrl: "https://console.anthropic.com/settings/keys",
+  },
+  openai: {
+    formatHint: "sk-proj-...",
+    helpText: "Your OpenAI key starts with sk-proj- or sk-",
+    documentationUrl: "https://platform.openai.com/api-keys",
+  },
+  google: {
+    formatHint: "AIza...",
+    helpText: "Your Google AI key starts with AIza",
+    documentationUrl: "https://aistudio.google.com/apikey",
+  },
+  gemini: {
+    formatHint: "AIza...",
+    helpText: "Your Gemini key starts with AIza",
+    documentationUrl: "https://aistudio.google.com/apikey",
+  },
+  bedrock: {
+    formatHint: "AKIA...",
+    helpText: "Enter your AWS access key ID",
+    documentationUrl: "https://docs.aws.amazon.com/bedrock/latest/userguide/setting-up.html",
+  },
+  cohere: {
+    formatHint: "...",
+    helpText: "Your Cohere API key",
+    documentationUrl: "https://dashboard.cohere.com/api-keys",
+  },
+  mistral: {
+    formatHint: "...",
+    helpText: "Your Mistral API key",
+    documentationUrl: "https://console.mistral.ai/api-keys",
+  },
+  groq: {
+    formatHint: "gsk_...",
+    helpText: "Your Groq key starts with gsk_",
+    documentationUrl: "https://console.groq.com/keys",
+  },
+  fireworks: {
+    formatHint: "fw_...",
+    helpText: "Your Fireworks key starts with fw_",
+    documentationUrl: "https://fireworks.ai/account/api-keys",
+  },
+  together: {
+    formatHint: "...",
+    helpText: "Your Together AI API key",
+    documentationUrl: "https://api.together.xyz/settings/api-keys",
+  },
+  perplexity: {
+    formatHint: "pplx-...",
+    helpText: "Your Perplexity key starts with pplx-",
+    documentationUrl: "https://www.perplexity.ai/settings/api",
+  },
+  deepseek: {
+    formatHint: "sk-...",
+    helpText: "Your DeepSeek API key",
+    documentationUrl: "https://platform.deepseek.com/api_keys",
+  },
+  openrouter: {
+    formatHint: "sk-or-...",
+    helpText: "Your OpenRouter key starts with sk-or-",
+    documentationUrl: "https://openrouter.ai/keys",
+  },
+  ollama: {
+    formatHint: "(optional)",
+    helpText: "Ollama typically runs locally without an API key",
+  },
+};
+
+/**
+ * Get provider-specific hints, with fallback for unknown providers
+ */
+function getProviderHints(provider: string): {
+  formatHint: string;
+  helpText: string;
+  documentationUrl?: string;
+} {
+  return (
+    PROVIDER_KEY_HINTS[provider] ?? {
+      formatHint: "...",
+      helpText: `Enter your ${provider} API key`,
+    }
+  );
+}
+
+/**
+ * /auth set - Add or update API credential
+ */
+async function authSet(
+  credentials: CredentialManager,
+  provider: string | undefined,
+  store?: string
+): Promise<CommandResult> {
+  if (!provider) {
+    return error(
+      "MISSING_ARGUMENT",
+      "❌ Provider required. Usage: /auth set <provider>\n   Example: /auth set anthropic"
+    );
+  }
+
+  const normalizedProvider = provider.toLowerCase();
+
+  // Check if credential already exists
+  const existsResult = await credentials.exists(normalizedProvider);
+  const alreadyExists = existsResult.ok && existsResult.value;
+
+  // Get provider-specific hints
+  const hints = getProviderHints(normalizedProvider);
+
+  // Capitalize provider name for display
+  const displayName = normalizedProvider.charAt(0).toUpperCase() + normalizedProvider.slice(1);
+
+  const title = alreadyExists
+    ? `🔐 Update API Key for ${displayName}`
+    : `🔐 Set API Key for ${displayName}`;
+
+  const promptMessage = `${displayName} API Key:`;
+
+  return interactive({
+    inputType: "password",
+    message: promptMessage,
+    placeholder: hints.formatHint,
+    provider: normalizedProvider,
+    title,
+    helpText: hints.helpText,
+    formatHint: hints.formatHint,
+    documentationUrl: hints.documentationUrl,
+    handler: async (value: string): Promise<CommandResult> => {
+      if (!value.trim()) {
+        return error("INVALID_ARGUMENT", "❌ API key cannot be empty");
+      }
+
+      try {
+        const result = await credentials.store(
+          {
+            provider: normalizedProvider,
+            type: "api_key",
+            value: value.trim(),
+            metadata: {
+              label: `${normalizedProvider} API Key`,
+            },
+          },
+          store as "keychain" | "file" | undefined
+        );
+
+        if (!result.ok) {
+          return error("INTERNAL_ERROR", `❌ Failed to save credential: ${result.error.message}`);
+        }
+
+        return success(`✅ Credential for ${normalizedProvider} saved to ${result.value.source}`, {
+          provider: normalizedProvider,
+          source: result.value.source,
+        });
+      } catch (err) {
+        return error(
+          "INTERNAL_ERROR",
+          `❌ Error: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    },
+    onCancel: () => ({
+      kind: "error" as const,
+      code: "COMMAND_ABORTED" as const,
+      message: "Credential setup cancelled",
+    }),
+  });
+}
+
+/**
+ * /auth clear - Remove credential
+ */
+async function authClear(
+  credentials: CredentialManager,
+  provider: string | undefined,
+  force: boolean
+): Promise<CommandResult> {
+  if (!provider) {
+    return error(
+      "MISSING_ARGUMENT",
+      "❌ Provider required. Usage: /auth clear <provider>\n   Example: /auth clear anthropic"
+    );
+  }
+
+  const normalizedProvider = provider.toLowerCase();
+
+  // Check if credential exists
+  const existsResult = await credentials.exists(normalizedProvider);
+  if (!existsResult.ok || !existsResult.value) {
+    return error("CREDENTIAL_NOT_FOUND", `⚠️ No credential found for ${normalizedProvider}`);
+  }
+
+  // If not forced, return confirmation prompt
+  if (!force) {
+    return interactive({
+      inputType: "confirm",
+      message: `Are you sure you want to remove credential for ${normalizedProvider}?`,
+      handler: async (value: string): Promise<CommandResult> => {
+        if (value.toLowerCase() !== "yes" && value.toLowerCase() !== "y") {
+          return error("COMMAND_ABORTED", "Credential removal cancelled");
+        }
+
+        return performAuthClear(credentials, normalizedProvider);
+      },
+      onCancel: () => ({
+        kind: "error" as const,
+        code: "COMMAND_ABORTED" as const,
+        message: "Credential removal cancelled",
+      }),
+    });
+  }
+
+  // Forced clear - delete immediately
+  return performAuthClear(credentials, normalizedProvider);
+}
+
+/**
+ * Perform the actual credential clear operation
+ */
+async function performAuthClear(
+  credentials: CredentialManager,
+  provider: string
+): Promise<CommandResult> {
+  try {
+    const result = await credentials.delete(provider);
+
+    if (!result.ok) {
+      return error("INTERNAL_ERROR", `❌ Failed to remove credential: ${result.error.message}`);
+    }
+
+    if (result.value === 0) {
+      return error("CREDENTIAL_NOT_FOUND", `⚠️ No credential found for ${provider}`);
+    }
+
+    return success(`✅ Credential for ${provider} removed from ${result.value} store(s)`, {
+      provider,
+      deletedCount: result.value,
+    });
+  } catch (err) {
+    return error("INTERNAL_ERROR", `❌ Error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 /**
  * All enhanced auth commands using the new SlashCommand interface
  */
-export const enhancedAuthCommands: EnhancedSlashCommand[] = [
-  loginCommand,
-  logoutCommand,
-  credentialsCommand,
-];
+export const enhancedAuthCommands: EnhancedSlashCommand[] = [authCommand, credentialsCommand];
 
 // =============================================================================
 // Command Dispatcher
@@ -788,7 +874,7 @@ export function getSlashCommandHelp(): string {
     lines.push(`   Usage: ${cmd.usage}`);
   }
 
-  lines.push("\n━".repeat(40));
+  lines.push("\n" + "━".repeat(40));
   lines.push("Tip: Use /help <command> for detailed help");
 
   return lines.join("\n");
@@ -798,4 +884,4 @@ export function getSlashCommandHelp(): string {
 // Exports
 // =============================================================================
 
-export { handleLogin, handleLogout, handleCredentials };
+export { handleCredentials };

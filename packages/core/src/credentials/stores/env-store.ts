@@ -27,7 +27,7 @@ import {
 const PROVIDER_ENV_VARS: Record<string, readonly string[]> = {
   anthropic: ["ANTHROPIC_API_KEY"],
   openai: ["OPENAI_API_KEY"],
-  google: ["GOOGLE_API_KEY", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY"],
+  google: ["GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY"],
   azure: ["AZURE_OPENAI_API_KEY", "AZURE_API_KEY"],
   mistral: ["MISTRAL_API_KEY"],
   cohere: ["COHERE_API_KEY"],

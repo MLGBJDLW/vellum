@@ -72,6 +72,18 @@ const CLEAR_SCREEN = "\x1b[2J";
  */
 const CURSOR_HOME = "\x1b[H";
 
+/**
+ * ANSI escape sequence to disable line wrapping.
+ * Prevents cursor flickering in VS Code terminal.
+ */
+const DISABLE_LINE_WRAPPING = "\x1b[?7l";
+
+/**
+ * ANSI escape sequence to enable line wrapping.
+ * Restores normal terminal behavior on exit.
+ */
+const ENABLE_LINE_WRAPPING = "\x1b[?7h";
+
 // =============================================================================
 // Helper Functions
 // =============================================================================
@@ -109,6 +121,7 @@ function writeToStdout(data: string): void {
  */
 function enterAlternateBuffer(): void {
   writeToStdout(ENTER_ALTERNATE_BUFFER);
+  writeToStdout(DISABLE_LINE_WRAPPING);
   writeToStdout(CLEAR_SCREEN);
   writeToStdout(CURSOR_HOME);
 }
@@ -117,6 +130,7 @@ function enterAlternateBuffer(): void {
  * Exit the alternate screen buffer.
  */
 function exitAlternateBuffer(): void {
+  writeToStdout(ENABLE_LINE_WRAPPING);
   writeToStdout(EXIT_ALTERNATE_BUFFER);
 }
 

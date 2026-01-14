@@ -501,11 +501,11 @@ Vellum includes a powerful prompt builder for composing agent system prompts.
 ### Quick Start
 
 ```typescript
-import { PromptBuilder, loadRolePrompt, BASE_PROMPT } from '@vellum/core';
+import { PromptBuilder, BASE_PROMPT, CODER_PROMPT } from '@vellum/core';
 
 const prompt = new PromptBuilder()
   .withBase(BASE_PROMPT)
-  .withRole('coder', loadRolePrompt('coder'))
+  .withRole('coder', CODER_PROMPT)
   .withModeOverrides('Focus on TypeScript')
   .setVariable('PROJECT_NAME', 'my-app')
   .build();
@@ -546,7 +546,7 @@ const prompt = new PromptBuilder()
 ### PromptBuilder API
 
 ```typescript
-import { PromptBuilder, ContextBuilder, loadRolePrompt, BASE_PROMPT } from '@vellum/core';
+import { PromptBuilder, ContextBuilder, BASE_PROMPT, CODER_PROMPT } from '@vellum/core';
 
 // Full example with all layers
 const builder = new PromptBuilder()
@@ -554,7 +554,7 @@ const builder = new PromptBuilder()
   .withBase(BASE_PROMPT)
   
   // Priority 2: Role-specific behavior
-  .withRole('coder', loadRolePrompt('coder'))
+  .withRole('coder', CODER_PROMPT)
   
   // Priority 3: Mode overrides
   .withModeOverrides('Focus on implementation, not planning.')
@@ -618,13 +618,12 @@ import {
   QA_PROMPT,
   WRITER_PROMPT,
   ANALYST_PROMPT,
-  ARCHITECT_PROMPT,
-  loadRolePrompt
+  ARCHITECT_PROMPT
 } from '@vellum/core';
 
-// Load by name (type-safe)
-const prompt = loadRolePrompt('coder');  // Returns CODER_PROMPT
-const qaPrompt = loadRolePrompt('qa');   // Returns QA_PROMPT
+// Use role prompt constants directly
+const coderPrompt = CODER_PROMPT;
+const qaPrompt = QA_PROMPT;
 
 // Available roles: orchestrator, coder, qa, writer, analyst, architect
 ```

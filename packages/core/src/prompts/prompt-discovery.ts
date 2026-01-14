@@ -70,6 +70,7 @@ const DEPRECATED_SOURCES = new Set(["claude", "roo", "kilocode"]);
  */
 const CATEGORY_SUBDIRS: Record<PromptCategory, string> = {
   role: "roles",
+  mode: "modes",
   worker: "workers",
   spec: "spec",
   provider: "providers",

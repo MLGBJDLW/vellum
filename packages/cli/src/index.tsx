@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 import {
+  AgentLoop,
   APPROVAL_POLICIES,
   type ApprovalPolicy,
+  BUILTIN_CODING_MODES,
   CODING_MODES,
   type CodingMode,
+  OnboardingWizard as CoreOnboardingWizard,
+  createAgentFactory,
+  LLM,
   normalizeMode,
   SANDBOX_POLICIES,
   type SandboxPolicy,
 } from "@vellum/core";
+import { ProviderRegistry } from "@vellum/provider";
+import { createId } from "@vellum/shared";
 import { Command } from "commander";
 import { render } from "ink";
 import { registerDelegateCommand } from "./agents/commands/index.js";
@@ -29,6 +36,8 @@ import {
   handleSkillValidate,
 } from "./commands/skill.js";
 import type { CommandResult } from "./commands/types.js";
+import { getOrCreateOrchestrator } from "./orchestrator-singleton.js";
+import { createCompatStdout } from "./tui/buffered-stdout.js";
 import { initI18n } from "./tui/i18n/index.js";
 import { version } from "./version.js";
 
@@ -52,15 +61,11 @@ function getResultMessage(result: CommandResult): string {
   }
 }
 
+import { executeShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
+
 // ============================================
 // Graceful Shutdown Setup (T030)
 // ============================================
-
-/**
- * Global shutdown handler reference for cleanup.
- * Set by the chat command when an agent loop is active.
- */
-let shutdownCleanup: (() => void) | null = null;
 
 /**
  * Handle process signals for graceful shutdown.
@@ -71,9 +76,7 @@ function setupGlobalShutdownHandlers(): void {
   for (const signal of signals) {
     process.on(signal, () => {
       console.log(`\n[CLI] Received ${signal}, shutting down gracefully...`);
-      if (shutdownCleanup) {
-        shutdownCleanup();
-      }
+      executeShutdownCleanup();
       // Give time for cleanup, then exit
       setTimeout(() => process.exit(0), 100);
     });
@@ -82,14 +85,6 @@ function setupGlobalShutdownHandlers(): void {
 
 // Setup handlers early
 setupGlobalShutdownHandlers();
-
-/**
- * Sets the shutdown cleanup function.
- * Called by App component when agent loop is created.
- */
-export function setShutdownCleanup(cleanup: (() => void) | null): void {
-  shutdownCleanup = cleanup;
-}
 
 // =============================================================================
 // T037-T040: Mode CLI Flag Interfaces
@@ -185,7 +180,7 @@ program
   // Theme selection
   .option("--theme <theme>", "UI theme (dark|parchment|dracula|etc.)", "parchment")
   .option("--banner", "Show banner on startup", false)
-  .action((options: ChatOptions) => {
+  .action(async (options: ChatOptions) => {
     // T040: Apply --full-auto shortcut
     let effectiveMode = options.mode;
     let effectiveApproval = options.approval;
@@ -197,16 +192,101 @@ program
 
     // Initialize i18n before rendering (T019)
     initI18n({ cliLanguage: options.language });
+
+    // Load user's saved configuration from onboarding
+    // CLI flags override user config if explicitly provided
+    let effectiveProvider = options.provider;
+    let effectiveModel = options.model;
+
+    try {
+      const wizard = new CoreOnboardingWizard();
+      const loadResult = await wizard.loadState();
+      if (loadResult.ok) {
+        const userConfig = wizard.generateConfig();
+        if (userConfig.provider) {
+          effectiveProvider = userConfig.provider;
+        }
+        if (userConfig.model) {
+          effectiveModel = userConfig.model;
+        }
+      }
+    } catch {
+      // Use CLI defaults if config loading fails
+    }
+
+    // Create AgentLoop with real LLM provider
+    let agentLoop: AgentLoop | undefined;
+    try {
+      // Initialize credential manager for secure credential resolution
+      const { createCredentialManager } = await import("./commands/auth.js");
+      const credentialManager = await createCredentialManager();
+
+      // Initialize provider registry with credential manager
+      const providerRegistry = new ProviderRegistry({
+        credentialManager: credentialManager,
+      });
+      LLM.initialize(providerRegistry);
+
+      // Get mode config for the selected coding mode
+      const modeConfig = BUILTIN_CODING_MODES[effectiveMode];
+
+      // Initialize orchestrator singleton for task delegation
+      const orchestrator = getOrCreateOrchestrator();
+
+      // Create PromptBuilder with MD prompts (REQ-001: Use MD prompts)
+      const { promptBuilder, cleanup } = await createAgentFactory({
+        cwd: process.cwd(),
+        projectRoot: process.cwd(),
+        role: "base", // Load base.md for identity
+        mode: effectiveMode, // Load vibe.md/plan.md/spec.md
+      });
+
+      // Register cleanup for graceful shutdown
+      setShutdownCleanup(cleanup);
+
+      // Create AgentLoop with PromptBuilder
+      agentLoop = new AgentLoop({
+        sessionId: createId(),
+        mode: modeConfig,
+        providerType: effectiveProvider,
+        model: effectiveModel,
+        cwd: process.cwd(),
+        projectRoot: process.cwd(),
+        orchestrator,
+        promptBuilder, // Use MD-loaded prompts
+      });
+    } catch (error) {
+      console.error(
+        "[CLI] Failed to initialize agent:",
+        error instanceof Error ? error.message : String(error)
+      );
+      // Continue without agentLoop - App will fall back to echo mode
+    }
+
+    const isVSCodeTerminal =
+      process.env.TERM_PROGRAM === "vscode" ||
+      process.env.VSCODE_INJECTION === "1" ||
+      Boolean(process.env.VSCODE_GIT_IPC_HANDLE);
+    const inkRenderOptions = isVSCodeTerminal
+      ? {
+          stdout: createCompatStdout(),
+          incrementalRendering: true,
+          maxFps: 20,
+        }
+      : undefined;
+
     render(
       <App
-        model={options.model}
-        provider={options.provider}
+        model={effectiveModel}
+        provider={effectiveProvider}
         mode={effectiveMode}
         approval={effectiveApproval}
         sandbox={options.sandbox}
         theme={options.theme as import("./tui/theme/index.js").ThemeName}
         banner={options.banner}
-      />
+        agentLoop={agentLoop}
+      />,
+      inkRenderOptions
     );
   });
 

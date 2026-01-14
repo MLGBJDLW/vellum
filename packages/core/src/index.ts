@@ -65,6 +65,8 @@ export {
   type ActivityTracker,
   AGENT_MODES,
   AGENT_STATES,
+  type AgentFactoryOptions,
+  type AgentFactoryResult,
   // Agent Level Hierarchy (T001)
   AgentLevel,
   AgentLevelSchema,
@@ -89,8 +91,6 @@ export {
   BUILT_IN_AGENTS,
   BUILTIN_CODING_MODES,
   buildEnvironmentSection,
-  buildModePrompt,
-  buildSystemPrompt,
   type CancelCallback,
   CancellationToken,
   // Cancellation
@@ -112,6 +112,8 @@ export {
   canSpawn,
   codingModeToCore,
   createActivityTracker,
+  // Agent Factory (T050, T056)
+  createAgentFactory,
   createComplexityAnalyzer,
   createLoopDetectionContext,
   createModeDetector,
@@ -901,6 +903,19 @@ export * from "./vision/index.js";
 // Watch (Phase 36)
 // ============================================
 export * from "./watch/index.js";
+// ============================================
+// Coder Worker Utilities
+// ============================================
+export {
+  CoderTaskTracker,
+  type ExecutionResult as CoderExecutionResult,
+  type ParsedTask as CoderParsedTask,
+  type ProgressEvent,
+  ProgressReporter,
+  TaskExecutor as CoderTaskExecutor,
+  type TaskResult as CoderTaskResult,
+  type TaskStatus as CoderTaskStatus,
+} from "./workers/index.js";
 // ============================================
 // Workflows (T034-T035)
 // ============================================

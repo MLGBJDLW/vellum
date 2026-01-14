@@ -154,7 +154,12 @@ export class CredentialManager {
     provider: string,
     key?: string
   ): Promise<Result<Credential | null, CredentialStoreError>> {
+    console.log(`[CredentialManager] resolve() called for ${provider}`);
     const result = await this.resolver.resolve(provider, key);
+    console.log(
+      `[CredentialManager] resolve() result:`,
+      result.ok ? (result.value ? "found" : "not found") : "error"
+    );
 
     if (!result.ok) {
       this.emit({ type: "error", operation: "resolve", error: result.error });

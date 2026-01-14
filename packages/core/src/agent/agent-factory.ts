@@ -60,6 +60,19 @@ export interface AgentFactoryOptions {
    * Integration instructions (alias for customInstructions).
    */
   integrationInstructions?: string;
+
+  /**
+   * Agent role to load from MD files (e.g., 'coder', 'base').
+   * If provided, loads role prompt from markdown.
+   * @default 'base'
+   */
+  role?: string;
+
+  /**
+   * Coding mode to load from MD files (e.g., 'vibe', 'plan', 'spec').
+   * If provided, loads mode prompt from markdown.
+   */
+  mode?: string;
 }
 
 /**
@@ -134,6 +147,8 @@ export class AgentFactory {
       enableHotReload = process.env.NODE_ENV !== "production",
       customInstructions,
       integrationInstructions,
+      role = "base",
+      mode,
     } = options;
 
     // Create shared PromptLoader instance (T050)
@@ -147,6 +162,14 @@ export class AgentFactory {
 
     // Create PromptBuilder with loader (T051)
     const promptBuilder = new PromptBuilder().withLoader(promptLoader);
+
+    // Load base role prompt from MD files (REQ-001: MD prompts priority)
+    await promptBuilder.withExternalRole(role);
+
+    // Load mode prompt from MD files if specified (REQ-002: Mode prompts)
+    if (mode) {
+      await promptBuilder.withExternalMode(mode);
+    }
 
     // Apply custom/integration instructions if provided (T053)
     const instructions = integrationInstructions ?? customInstructions;

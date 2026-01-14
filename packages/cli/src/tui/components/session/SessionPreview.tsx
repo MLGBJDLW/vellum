@@ -64,7 +64,7 @@ function getRoleLabel(role: SessionPreviewMessage["role"]): string {
     case "user":
       return "You";
     case "assistant":
-      return "Assistant";
+      return "Vellum";
     case "system":
       return "System";
     case "tool":

@@ -18,9 +18,31 @@
 import { describe, expect, it } from "vitest";
 import { ContextBuilder } from "../context-builder.js";
 import { PromptBuilder } from "../prompt-builder.js";
-import { BASE_PROMPT, CODER_PROMPT, loadRolePrompt } from "../roles/index.js";
+import {
+  ANALYST_PROMPT,
+  ARCHITECT_PROMPT,
+  BASE_PROMPT,
+  CODER_PROMPT,
+  ORCHESTRATOR_PROMPT,
+  QA_PROMPT,
+  WRITER_PROMPT,
+} from "../roles/index.js";
 import { containsDangerousContent, sanitizeVariable } from "../sanitizer.js";
 import type { AgentRole, SessionContext } from "../types.js";
+
+// Role prompt mapping for tests
+const ROLE_PROMPTS: Record<AgentRole, string> = {
+  orchestrator: ORCHESTRATOR_PROMPT,
+  coder: CODER_PROMPT,
+  qa: QA_PROMPT,
+  writer: WRITER_PROMPT,
+  analyst: ANALYST_PROMPT,
+  architect: ARCHITECT_PROMPT,
+};
+
+function getRolePrompt(role: AgentRole): string {
+  return ROLE_PROMPTS[role] ?? "";
+}
 
 // =============================================================================
 // 4-Layer Composition Tests
@@ -238,7 +260,7 @@ describe("Integration - Complete PromptBuilder Workflow", () => {
   it("builds a complete agent prompt end-to-end", () => {
     // Simulate real-world usage
     const role: AgentRole = "coder";
-    const rolePrompt = loadRolePrompt(role);
+    const rolePrompt = getRolePrompt(role);
 
     const sessionContext: SessionContext = {
       activeFile: {
@@ -326,7 +348,7 @@ describe("Integration - Complete PromptBuilder Workflow", () => {
     const roles: AgentRole[] = ["orchestrator", "coder", "qa", "writer", "analyst", "architect"];
 
     for (const role of roles) {
-      const rolePrompt = loadRolePrompt(role);
+      const rolePrompt = getRolePrompt(role);
       const prompt = new PromptBuilder().withBase(BASE_PROMPT).withRole(role, rolePrompt).build();
 
       // Each role should produce a non-empty prompt
@@ -490,9 +512,9 @@ describe("Integration - Cross-Module Verification", () => {
   });
 
   it("role prompts load and compose correctly", () => {
-    // Verify loadRolePrompt works
-    const coderPrompt = loadRolePrompt("coder");
-    const qaPrompt = loadRolePrompt("qa");
+    // Verify role prompts exist
+    const coderPrompt = CODER_PROMPT;
+    const qaPrompt = QA_PROMPT;
 
     expect(coderPrompt.length).toBeGreaterThan(0);
     expect(qaPrompt.length).toBeGreaterThan(0);

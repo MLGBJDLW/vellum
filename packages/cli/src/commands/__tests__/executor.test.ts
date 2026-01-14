@@ -99,9 +99,10 @@ describe("CommandExecutor", () => {
     it("should pass parsed args to command", async () => {
       let capturedArgs: ParsedArgs | undefined;
 
-      const loginCommand = createMockCommand({
-        name: "login",
+      const authCommand = createMockCommand({
+        name: "auth",
         positionalArgs: [
+          { name: "subcommand", type: "string", description: "Subcommand", required: false },
           { name: "provider", type: "string", description: "Provider", required: false },
         ],
         namedArgs: [
@@ -112,13 +113,14 @@ describe("CommandExecutor", () => {
           return { kind: "success" };
         },
       });
-      registry.register(loginCommand);
+      registry.register(authCommand);
 
-      await executor.execute("/login anthropic --store keychain");
+      await executor.execute("/auth set anthropic --store keychain");
 
       expect(capturedArgs).toBeDefined();
-      expect(capturedArgs?.command).toBe("login");
-      expect(capturedArgs?.positional[0]).toBe("anthropic");
+      expect(capturedArgs?.command).toBe("auth");
+      expect(capturedArgs?.positional[0]).toBe("set");
+      expect(capturedArgs?.positional[1]).toBe("anthropic");
       expect(capturedArgs?.named.store).toBe("keychain");
     });
 

@@ -6,6 +6,8 @@ Configuration guide for Vellum's core features and subsystems.
 
 ## Table of Contents
 
+- [UI Configuration](#ui-configuration)
+  - [Alternate Screen Buffer](#alternate-screen-buffer)
 - [Session System Configuration](#session-system-configuration)
   - [Storage Configuration](#storage-configuration)
   - [Auto-Save Configuration](#auto-save-configuration)
@@ -14,6 +16,61 @@ Configuration guide for Vellum's core features and subsystems.
   - [Summary Configuration](#summary-configuration)
 - [Environment Variables](#environment-variables)
 - [Complete Examples](#complete-examples)
+
+---
+
+## UI Configuration
+
+UI settings are stored in `~/.vellum/settings.json` and control the terminal interface behavior.
+
+### Alternate Screen Buffer
+
+Controls whether Vellum uses the terminal's alternate screen buffer (like vim, less, etc.).
+
+#### Benefits
+
+| Feature | Description |
+|---------|-------------|
+| **Clean Exit** | Restores original terminal content when Vellum exits |
+| **No Scrollback Pollution** | Vellum output doesn't appear in terminal scrollback history |
+| **Better Rendering** | Full-screen mode without interfering with existing content |
+
+#### Configuration
+
+**Settings File** (`~/.vellum/settings.json`):
+
+```json
+{
+  "ui": {
+    "alternateBuffer": true
+  }
+}
+```
+
+#### Default Behavior
+
+| Condition | Alternate Buffer |
+|-----------|------------------|
+| Normal terminal (TTY) | ✅ Enabled (default) |
+| Screen reader detected | ❌ Disabled automatically |
+| CI environment | ❌ Disabled automatically |
+| Non-TTY (piped output) | ❌ Disabled automatically |
+
+#### Disabling Alternate Buffer
+
+If you prefer to keep Vellum output in your terminal scrollback:
+
+```json
+{
+  "ui": {
+    "alternateBuffer": false
+  }
+}
+```
+
+#### Screen Reader Compatibility
+
+When a screen reader is detected (via environment variables like `SCREEN_READER`, `NVDA`, `JAWS`, `VOICEOVER`, etc.), the alternate buffer is automatically disabled to ensure accessibility. This allows screen readers to capture all output properly.
 
 ---
 

@@ -26,6 +26,11 @@ export {
   type UseBacktrackReturn,
   useBacktrack,
 } from "./useBacktrack.js";
+// Bracketed paste hook
+export {
+  type UseBracketedPasteOptions,
+  useBracketedPaste,
+} from "./useBracketedPaste.js";
 export {
   type CopyModeState,
   type UseCopyModeReturn,
@@ -86,6 +91,8 @@ export {
   type UseScreenReaderReturn,
   useScreenReader,
 } from "./useScreenReader.js";
+// State and ref hook for stable callbacks (Gemini CLI pattern)
+export { useStateAndRef } from "./useStateAndRef.js";
 export {
   type ToolApprovalViewModel,
   type UseToolApprovalControllerOptions,

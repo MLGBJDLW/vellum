@@ -45,7 +45,7 @@ import { CancellationToken } from "./cancellation.js";
 import type { AgentLevel } from "./level.js";
 import { type CombinedLoopResult, detectLoop } from "./loop-detection.js";
 import type { ModeConfig } from "./modes.js";
-import { buildSystemPrompt, fromPromptBuilder, type SystemPromptConfig } from "./prompt.js";
+import { fromPromptBuilder } from "./prompt.js";
 import type { AgentState, StateContext } from "./state.js";
 import { createStateContext, isValidTransition } from "./state.js";
 import {
@@ -623,16 +623,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         promptSize: systemPrompt.length,
       });
     } else {
-      const systemPromptConfig: SystemPromptConfig = {
-        cwd: this.config.cwd,
-        projectRoot: this.config.projectRoot,
-        mode: this.config.mode.name,
-        modePrompt: this.config.mode.prompt,
-        providerType: this.config.providerType,
-        includeEnvironment: true,
-        includeRuleFiles: true,
-      };
-      systemPrompt = (await buildSystemPrompt(systemPromptConfig)).prompt;
+      // No promptBuilder provided - use mode prompt as base
+      systemPrompt = this.config.mode.prompt ?? "";
+      this.logger?.debug("Using mode prompt as system prompt (no PromptBuilder)", {
+        promptSize: systemPrompt.length,
+      });
     }
 
     // Append AGENTS.md prompt sections

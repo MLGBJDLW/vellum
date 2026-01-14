@@ -11,6 +11,7 @@ import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
 import { useTheme } from "../../theme/index.js";
+import { DiffView } from "./DiffView.js";
 
 // =============================================================================
 // Types
@@ -309,6 +310,22 @@ function CodeBlockRenderer({
   );
 }
 
+/**
+ * Detect if content looks like a unified diff.
+ * Checks for diff language marker, hunk headers (@@), or file headers (--- / +++).
+ */
+function isDiffContent(content: string, language?: string): boolean {
+  if (language === "diff") {
+    return true;
+  }
+  // Check for unified diff patterns: @@ hunk headers or file headers
+  const lines = content.split("\n");
+  const hasHunkHeader = lines.some((line) => /^@@\s+-\d+/.test(line));
+  const hasFileHeaders =
+    lines.some((line) => line.startsWith("---")) && lines.some((line) => line.startsWith("+++"));
+  return hasHunkHeader || hasFileHeaders;
+}
+
 // =============================================================================
 // Main Component
 // =============================================================================
@@ -369,6 +386,14 @@ export function MarkdownRenderer({
           }
 
           case "code-block": {
+            // Check if this is a diff and render with DiffView
+            if (isDiffContent(node.content, node.language)) {
+              return (
+                <Box key={key} marginTop={compact ? 0 : 1} marginBottom={compact ? 0 : 1}>
+                  <DiffView diff={node.content} compact={compact} />
+                </Box>
+              );
+            }
             return (
               <CodeBlockRenderer
                 key={key}

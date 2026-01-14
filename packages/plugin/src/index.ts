@@ -152,3 +152,33 @@ export {
   adaptToSkillSource,
   createSkillRegistry,
 } from "./skills/adapter.js";
+
+// ============================================
+// Trust System
+// ============================================
+
+export {
+  // Types
+  ContentHashSchema,
+  IsoDateStringSchema,
+  // Permission Bridge
+  type OperationResult,
+  PermissionBridge as TrustPermissionBridge,
+  type PermissionChecker as TrustPermissionChecker,
+  PLUGIN_CAPABILITIES,
+  type PluginCapability,
+  PluginCapabilitySchema,
+  type PluginOperation,
+  type PluginOperationType,
+  type TrustedPlugin,
+  TrustedPluginSchema,
+  type TrustLevel,
+  TrustLevelSchema,
+  // Store
+  TrustStore,
+  type TrustStore as TrustStoreRecord,
+  TrustStoreError,
+  type TrustStoreFile,
+  TrustStoreFileSchema,
+  TrustStoreSchema,
+} from "./trust/index.js";

@@ -287,8 +287,8 @@ export const helpCommand: SlashCommand = {
   ],
   examples: [
     "/help              - Show all commands",
-    "/help login        - Help for login command",
-    "/help auth         - Show auth category commands",
+    "/help auth         - Help for auth command",
+    "/help system       - Show system category commands",
   ],
   // Subcommands are generated dynamically via getHelpSubcommands()
   // The autocomplete system should call getHelpSubcommands() for fresh data

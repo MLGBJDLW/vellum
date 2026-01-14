@@ -358,25 +358,24 @@ describe("ProviderRegistry", () => {
 
     // Note: DeepSeek, Groq, xAI extend OpenAICompatibleProvider which has name="openai"
     // This is intentional as they use OpenAI-compatible APIs
+    // These providers need apiKey passed directly since OpenAIProvider.initialize()
+    // only checks OPENAI_API_KEY env var as fallback
     it("should support deepseek (openai-compatible)", async () => {
-      process.env.DEEPSEEK_API_KEY = "sk-deepseek-test";
       const registry = new ProviderRegistry();
-      const provider = await registry.get({ type: "deepseek" });
+      const provider = await registry.get({ type: "deepseek", apiKey: "sk-deepseek-test" });
       // DeepSeek extends OpenAICompatibleProvider, inherits name="openai"
       expect(provider.name).toBe("openai");
     });
 
     it("should support groq (openai-compatible)", async () => {
-      process.env.GROQ_API_KEY = "gsk_test123";
       const registry = new ProviderRegistry();
-      const provider = await registry.get({ type: "groq" });
+      const provider = await registry.get({ type: "groq", apiKey: "gsk_test123" });
       expect(provider.name).toBe("openai");
     });
 
     it("should support xai (openai-compatible)", async () => {
-      process.env.XAI_API_KEY = "xai-test123";
       const registry = new ProviderRegistry();
-      const provider = await registry.get({ type: "xai" });
+      const provider = await registry.get({ type: "xai", apiKey: "xai-test123" });
       expect(provider.name).toBe("openai");
     });
 

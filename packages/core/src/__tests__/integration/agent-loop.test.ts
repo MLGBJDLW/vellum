@@ -39,11 +39,6 @@ vi.mock("../../session/index.js", async (importOriginal) => {
   };
 });
 
-// Mock buildSystemPrompt
-vi.mock("../../agent/prompt.js", () => ({
-  buildSystemPrompt: vi.fn().mockResolvedValue({ prompt: "System prompt" }),
-}));
-
 // Re-import after mocking
 import { LLM } from "../../session/index.js";
 

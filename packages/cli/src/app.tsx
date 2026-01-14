@@ -15,21 +15,22 @@ import type {
 } from "@vellum/core";
 import {
   BUILTIN_CODING_MODES,
-  BuiltinAgentRegistry,
   OnboardingWizard as CoreOnboardingWizard,
   createCostService,
   createModeManager,
   createSession,
   createToolRegistry,
+  createUserMessage,
   getTextContent,
   ProjectMemoryService,
   registerAllBuiltinTools,
   SessionListService,
+  SessionParts,
   StorageManager,
   updateSessionMetadata,
 } from "@vellum/core";
 import { createId } from "@vellum/shared";
-import { Box, Text, useApp as useInkApp, useInput } from "ink";
+import { Box, Text, useApp as useInkApp, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DefaultContextProvider } from "./commands/index.js";
 import {
@@ -65,7 +66,7 @@ import {
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
-import { setShutdownCleanup } from "./index.js";
+import { setShutdownCleanup } from "./shutdown.js";
 import { useAgentAdapter } from "./tui/adapters/agent-adapter.js";
 import { toUIMessages } from "./tui/adapters/message-adapter.js";
 import {
@@ -75,9 +76,12 @@ import {
 } from "./tui/adapters/session-adapter.js";
 import { Banner } from "./tui/components/Banner/index.js";
 import { BacktrackControls } from "./tui/components/backtrack/BacktrackControls.js";
+import { ErrorBoundary } from "./tui/components/common/ErrorBoundary.js";
+import { DEFAULT_HOTKEYS, HotkeyHelpModal } from "./tui/components/common/HotkeyHelpModal.js";
 import { LoadingIndicator } from "./tui/components/common/Spinner.js";
 import type { AutocompleteOption } from "./tui/components/Input/Autocomplete.js";
-import { CommandInput, type SlashCommand } from "./tui/components/Input/CommandInput.js";
+import { EnhancedCommandInput } from "./tui/components/Input/EnhancedCommandInput.js";
+import type { SlashCommand } from "./tui/components/Input/slash-command-utils.js";
 import { TextInput } from "./tui/components/Input/TextInput.js";
 import { McpPanel } from "./tui/components/index.js";
 import { Layout } from "./tui/components/Layout.js";
@@ -96,14 +100,14 @@ import { ThinkingBlock } from "./tui/components/ThinkingBlock.js";
 import { TipBanner } from "./tui/components/TipBanner.js";
 import type { TodoItemData } from "./tui/components/TodoItem.js";
 import { TodoPanel } from "./tui/components/TodoPanel.js";
+import { ApprovalQueue } from "./tui/components/Tools/ApprovalQueue.js";
 import { PermissionDialog } from "./tui/components/Tools/PermissionDialog.js";
 import { ToolsPanel } from "./tui/components/Tools/ToolsPanel.js";
 import { UpdateBanner } from "./tui/components/UpdateBanner.js";
 import type { Message } from "./tui/context/MessagesContext.js";
 import { useMessages } from "./tui/context/MessagesContext.js";
 import { RootProvider } from "./tui/context/RootProvider.js";
-import { useTools } from "./tui/context/ToolsContext.js";
-import { useAgentLoop } from "./tui/hooks/useAgentLoop.js";
+import { type ToolExecution, useTools } from "./tui/context/ToolsContext.js";
 import { useAlternateBuffer } from "./tui/hooks/useAlternateBuffer.js";
 import { useBacktrack } from "./tui/hooks/useBacktrack.js";
 import { useCopyMode } from "./tui/hooks/useCopyMode.js";
@@ -111,11 +115,15 @@ import { useDesktopNotification } from "./tui/hooks/useDesktopNotification.js";
 import { type HotkeyDefinition, useHotkeys } from "./tui/hooks/useHotkeys.js";
 import { useInputHistory } from "./tui/hooks/useInputHistory.js";
 import { useModeShortcuts } from "./tui/hooks/useModeShortcuts.js";
-import { useScreenReader } from "./tui/hooks/useScreenReader.js";
+import { isScreenReaderEnabled, useScreenReader } from "./tui/hooks/useScreenReader.js";
 import { useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
 import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
 import { useVim } from "./tui/hooks/useVim.js";
-import { getBannerSeen, setBannerSeen as saveBannerSeen } from "./tui/i18n/settings-integration.js";
+import {
+  getAlternateBufferEnabled,
+  getBannerSeen,
+  setBannerSeen as saveBannerSeen,
+} from "./tui/i18n/settings-integration.js";
 import {
   disposeLsp,
   initializeLsp,
@@ -150,6 +158,8 @@ import { cleanupSandbox, initializeSandbox } from "./tui/sandbox-integration.js"
 import { type ThemeName, useTheme } from "./tui/theme/index.js";
 // Tip integration (T069)
 import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
+// Cursor management utilities
+import { CursorManager } from "./tui/utils/cursor-manager.js";
 import { calculateCost, getContextWindow } from "./utils/index.js";
 
 /**
@@ -240,18 +250,6 @@ type AppContentProps = AppProps & {
 interface CancellationController {
   cancel: (reason?: string) => void;
   isCancelled: boolean;
-}
-
-/**
- * Helper to create a Message object for the MessageList
- */
-function createMessage(role: Message["role"], content: string): Message {
-  return {
-    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    role,
-    content,
-    timestamp: new Date(),
-  };
 }
 
 /**
@@ -412,16 +410,23 @@ export function App({
 
   return (
     <RootProvider theme={theme} toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
-      <AppContent
-        model={model}
-        provider={provider}
-        mode={_mode}
-        approval={_approval}
-        sandbox={_sandbox}
-        agentLoop={agentLoopProp}
-        toolRegistry={toolRegistry}
-        banner={banner}
-      />
+      <ErrorBoundary
+        onError={(error, errorInfo) => {
+          console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+        }}
+        showDetails
+      >
+        <AppContent
+          model={model}
+          provider={provider}
+          mode={_mode}
+          approval={_approval}
+          sandbox={_sandbox}
+          agentLoop={agentLoopProp}
+          toolRegistry={toolRegistry}
+          banner={banner}
+        />
+      </ErrorBoundary>
     </RootProvider>
   );
 }
@@ -442,11 +447,22 @@ function AppContent({
 }: AppContentProps) {
   const { exit } = useInkApp();
   const themeContext = useTheme();
-  const { messages, addMessage, clearMessages, setMessages } = useMessages();
+  const { messages, addMessage, clearMessages, setMessages, historyMessages, pendingMessage } =
+    useMessages();
   const [isLoading, setIsLoading] = useState(false);
   const [interactivePrompt, setInteractivePrompt] = useState<InteractivePrompt | null>(null);
   const [promptValue, setPromptValue] = useState("");
   const [pendingOperation, setPendingOperation] = useState<AsyncOperation | null>(null);
+
+  // Suppress initial Enter key event when interactive prompt is mounted (fixes race condition)
+  const [suppressPromptEnter, setSuppressPromptEnter] = useState(false);
+  useEffect(() => {
+    if (interactivePrompt) {
+      setSuppressPromptEnter(true);
+      const timer = setTimeout(() => setSuppressPromptEnter(false), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [interactivePrompt]);
 
   // ==========================================================================
   // New TUI Hooks Integration (T038-T059)
@@ -466,14 +482,59 @@ function AppContent({
     notifyError,
   } = useDesktopNotification({ enabled: true });
 
-  // Alternate buffer for full-screen modals (T043)
-  const alternateBuffer = useAlternateBuffer({ enabled: false });
+  // Alternate buffer configuration (T043)
+  // Enabled by default (config defaults to true)
+  // Automatically disabled when screen reader is detected for accessibility
+  const { stdout } = useStdout();
+  const alternateBufferConfig = getAlternateBufferEnabled();
+  const screenReaderDetected = isScreenReaderEnabled();
+  // Enable alternate buffer in VS Code terminal to fix cursor flickering
+  const alternateBufferEnabled = alternateBufferConfig && !screenReaderDetected;
 
-  // AgentLoop integration (T038) - use prop if provided
-  // Note: The hook is conditionally used based on prop presence
-  // This is acceptable because the prop doesn't change during component lifetime
-  // biome-ignore lint/correctness/useHookAtTopLevel: agentLoopProp is a stable prop that doesn't change during component lifetime
-  const agentLoopHook = agentLoopProp ? useAgentLoop(agentLoopProp) : null;
+  // Alternate buffer for full-screen rendering (T043)
+  // Benefits: Clean exit (restores original terminal), no scrollback pollution
+  const alternateBuffer = useAlternateBuffer({
+    enabled: alternateBufferEnabled,
+  });
+
+  // Hide the terminal cursor to avoid VS Code's blinking block over the message area.
+  // We draw our own cursor in inputs and streaming text.
+  // Uses centralized CursorManager to prevent race conditions.
+  useEffect(() => {
+    if (screenReaderDetected || !stdout.isTTY) {
+      return;
+    }
+    if (process.env.VELLUM_SHOW_CURSOR === "1") {
+      return;
+    }
+
+    // Lock cursor in hidden state for entire TUI session
+    CursorManager.lock();
+
+    // Setup exit handlers to restore cursor
+    const handleExit = (): void => {
+      CursorManager.unlock();
+      CursorManager.forceShow();
+    };
+
+    process.on("exit", handleExit);
+    process.on("SIGINT", handleExit);
+    process.on("SIGTERM", handleExit);
+    process.on("SIGHUP", handleExit);
+
+    return () => {
+      process.off("exit", handleExit);
+      process.off("SIGINT", handleExit);
+      process.off("SIGTERM", handleExit);
+      process.off("SIGHUP", handleExit);
+      CursorManager.unlock();
+      CursorManager.forceShow();
+    };
+  }, [screenReaderDetected, stdout]);
+
+  // NOTE: Previous useInput and setInterval for cursor hiding removed.
+  // CursorManager.lock() now handles cursor state centrally, preventing
+  // race conditions and flickering from multiple cursor hide/show operations.
 
   // ==========================================================================
   // Feature Integrations (T063-T070)
@@ -620,15 +681,20 @@ function AppContent({
     clearOnDisconnect: false, // Preserve messages when disconnecting
   });
 
+  // Destructure for stable references in useEffect dependency array.
+  // Even though agentAdapter is now memoized, this makes the dependency explicit
+  // and avoids re-running the effect if agentAdapter reference changes.
+  const { connect: adapterConnect, disconnect: adapterDisconnect } = agentAdapter;
+
   // Connect to AgentLoop when provided
   useEffect(() => {
     if (agentLoopProp) {
-      agentAdapter.connect(agentLoopProp);
+      adapterConnect(agentLoopProp);
     }
     return () => {
-      agentAdapter.disconnect();
+      adapterDisconnect();
     };
-  }, [agentLoopProp, agentAdapter]);
+  }, [agentLoopProp, adapterConnect, adapterDisconnect]);
 
   // ==========================================================================
   // Core Services - Tools, Credentials, Sessions
@@ -711,6 +777,8 @@ function AppContent({
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showSessionManager, setShowSessionManager] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showApprovalQueue, setShowApprovalQueue] = useState(false);
 
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -1011,7 +1079,7 @@ function AppContent({
   // FIX 4: Real Todo and Memory Data
   // ==========================================================================
 
-  const { executions } = useTools();
+  const { executions, pendingApproval, approveExecution, rejectExecution, approveAll } = useTools();
 
   const loadTodos = useCallback(async (): Promise<readonly TodoItemData[]> => {
     const todoFilePath = join(process.cwd(), ".vellum", "todos.json");
@@ -1615,6 +1683,13 @@ function AppContent({
         description: "Toggle fullscreen mode",
         scope: "global",
       },
+      // Hotkey help modal (?)
+      {
+        key: "?",
+        handler: () => setShowHelpModal((prev) => !prev),
+        description: "Show keyboard shortcuts help",
+        scope: "global",
+      },
     ],
     [
       backtrackState.canUndo,
@@ -2216,20 +2291,21 @@ function AppContent({
       setThinkingContent("Processing your request...");
 
       // Use AgentLoop if available (T038)
-      if (agentLoopHook) {
+      if (agentLoopProp) {
         // Wire cancellation to AgentLoop
         cancellationRef.current = {
-          cancel: (reason) => agentLoopHook.cancel(reason),
+          cancel: (reason) => agentLoopProp.cancel(reason),
           get isCancelled() {
-            return agentLoopHook.status === "cancelled";
+            const state = agentLoopProp.getState();
+            return state === "terminated" || state === "shutdown";
           },
         };
 
         try {
-          await agentLoopHook.run(processedText);
-          // Sync messages from AgentLoop to local state
-          const agentMessages = agentLoopHook.messages.map((m) => createMessage(m.role, m.content));
-          setMessages(agentMessages);
+          agentLoopProp.addMessage(createUserMessage([SessionParts.text(processedText)]));
+          await agentLoopProp.run();
+          // Messages are synced via AgentLoop adapter event handlers (handleText)
+          // User message was already added via addMessage() above
           // Notify on completion (T059)
           notifyTaskComplete("Response received");
           announce("Response received");
@@ -2297,12 +2373,11 @@ function AppContent({
       addToHistory,
       addMessage,
       announce,
-      agentLoopHook,
+      agentLoopProp,
       currentMode,
       modeManager,
       notifyTaskComplete,
       notifyError,
-      setMessages,
     ]
   );
 
@@ -2383,32 +2458,71 @@ function AppContent({
   // Get level 3 items for three-level autocomplete (e.g., /model anthropic claude-)
   const getLevel3Items = useCallback(
     (commandName: string, arg1: string, partial: string): AutocompleteOption[] | undefined => {
-      // Currently only /model supports level 3 autocomplete
-      if (commandName !== "model") {
-        return undefined;
+      // /model command: level 3 shows model IDs for the selected provider
+      if (commandName === "model") {
+        // arg1 is the provider name
+        const models = getProviderModels(arg1);
+        if (models.length === 0) {
+          return undefined;
+        }
+
+        // Filter models by partial match
+        const lowerPartial = partial.toLowerCase();
+        const filtered = lowerPartial
+          ? models.filter(
+              (m) =>
+                m.id.toLowerCase().includes(lowerPartial) ||
+                m.name.toLowerCase().includes(lowerPartial)
+            )
+          : models;
+
+        return filtered.map((m) => ({
+          name: m.id,
+          description: m.name,
+          category: arg1,
+        }));
       }
 
-      // arg1 is the provider name
-      const models = getProviderModels(arg1);
-      if (models.length === 0) {
-        return undefined;
+      // /auth command: level 3 shows provider list for set/clear subcommands
+      if (commandName === "auth") {
+        const setAliases = ["set", "add", "login"];
+        const clearAliases = ["clear", "remove", "delete", "logout"];
+
+        // Only show providers for set/clear subcommands (not for status)
+        if (setAliases.includes(arg1) || clearAliases.includes(arg1)) {
+          const providers = [
+            "anthropic",
+            "openai",
+            "google",
+            "azure",
+            "bedrock",
+            "vertex",
+            "ollama",
+            "openrouter",
+            "together",
+            "mistral",
+            "cohere",
+            "groq",
+            "deepseek",
+            "qwen",
+            "xai",
+          ];
+
+          const lowerPartial = partial.toLowerCase();
+          const filtered = lowerPartial
+            ? providers.filter((p) => p.toLowerCase().startsWith(lowerPartial))
+            : providers;
+
+          return filtered.map((p) => ({
+            name: p,
+            description: `Configure ${p} API key`,
+          }));
+        }
+
+        return undefined; // status doesn't need level 3
       }
 
-      // Filter models by partial match
-      const lowerPartial = partial.toLowerCase();
-      const filtered = lowerPartial
-        ? models.filter(
-            (m) =>
-              m.id.toLowerCase().includes(lowerPartial) ||
-              m.name.toLowerCase().includes(lowerPartial)
-          )
-        : models;
-
-      return filtered.map((m) => ({
-        name: m.id,
-        description: m.name,
-        category: arg1,
-      }));
+      return undefined;
     },
     []
   );
@@ -2699,12 +2813,9 @@ function AppContent({
 
   // Get agent level from AgentConfig via registry
   const agentName = BUILTIN_CODING_MODES[currentMode].agentName;
-  const agentConfig = agentName ? BuiltinAgentRegistry.getInstance().get(agentName) : undefined;
-  const agentLevel = (agentConfig?.level ?? 2) as 0 | 1 | 2;
 
   return (
     <AppContentView
-      agentLevel={agentLevel}
       agentName={agentName}
       announce={announce}
       activeApproval={activeApproval}
@@ -2720,6 +2831,7 @@ function AppContent({
       cancelOnboarding={cancelOnboarding}
       closeSessionManager={closeSessionManager}
       commandOptions={commandOptions}
+      credentialManager={credentialManager}
       getSubcommands={getSubcommands}
       getLevel3Items={getLevel3Items}
       categoryOrder={categoryOrder}
@@ -2749,18 +2861,29 @@ function AppContent({
       isLoading={isLoading}
       isThinking={isThinking}
       memoryEntries={memoryEntries}
-      messages={messages}
+      historyMessages={historyMessages}
+      pendingMessage={pendingMessage}
       pendingOperation={pendingOperation}
       promptPlaceholder={promptPlaceholder}
       promptValue={promptValue}
       setPromptValue={setPromptValue}
       setThinkingCollapsed={setThinkingCollapsed}
       sessions={sessions}
+      suppressPromptEnter={suppressPromptEnter}
       shouldShowBanner={shouldShowBanner}
       showModeSelector={showModeSelector}
       showModelSelector={showModelSelector}
       showOnboarding={showOnboarding}
       showSessionManager={showSessionManager}
+      showHelpModal={showHelpModal}
+      closeHelpModal={() => setShowHelpModal(false)}
+      showApprovalQueue={showApprovalQueue}
+      closeApprovalQueue={() => setShowApprovalQueue(false)}
+      pendingApprovals={pendingApproval}
+      onApproveQueueItem={(id) => approveExecution(id)}
+      onRejectQueueItem={(id) => rejectExecution(id)}
+      onApproveAll={() => approveAll()}
+      onRejectAll={() => pendingApproval.forEach((e) => rejectExecution(e.id))}
       showSidebar={showSidebar}
       sidebarContent={sidebarContent}
       specPhase={specPhase}
@@ -2786,7 +2909,6 @@ type TipValue = ReturnType<typeof useTipEngine>["currentTip"];
 type ToolApprovalState = ReturnType<typeof useToolApprovalController>;
 
 interface AppContentViewProps {
-  readonly agentLevel: 0 | 1 | 2;
   readonly agentName?: string;
   readonly announce: (message: string) => void;
   readonly activeApproval: ToolApprovalState["activeApproval"];
@@ -2802,6 +2924,7 @@ interface AppContentViewProps {
   readonly cancelOnboarding: () => void;
   readonly closeSessionManager: () => void;
   readonly commandOptions: readonly AutocompleteOption[];
+  readonly credentialManager: CredentialManager | null;
   readonly getSubcommands: (commandName: string) => AutocompleteOption[] | undefined;
   readonly getLevel3Items: (
     commandName: string,
@@ -2841,18 +2964,29 @@ interface AppContentViewProps {
   readonly isLoading: boolean;
   readonly isThinking: boolean;
   readonly memoryEntries: MemoryPanelProps["entries"];
-  readonly messages: readonly Message[];
+  readonly historyMessages: readonly Message[];
+  readonly pendingMessage: Message | null;
   readonly pendingOperation: AsyncOperation | null;
   readonly promptPlaceholder: string;
   readonly promptValue: string;
   readonly setPromptValue: (value: string) => void;
   readonly setThinkingCollapsed: (value: boolean | ((prev: boolean) => boolean)) => void;
   readonly sessions: SessionMetadata[];
+  readonly suppressPromptEnter: boolean;
   readonly shouldShowBanner: boolean;
   readonly showModeSelector: boolean;
   readonly showModelSelector: boolean;
   readonly showOnboarding: boolean;
   readonly showSessionManager: boolean;
+  readonly showHelpModal: boolean;
+  readonly closeHelpModal: () => void;
+  readonly showApprovalQueue: boolean;
+  readonly closeApprovalQueue: () => void;
+  readonly pendingApprovals: readonly ToolExecution[];
+  readonly onApproveQueueItem: (id: string) => void;
+  readonly onRejectQueueItem: (id: string) => void;
+  readonly onApproveAll: () => void;
+  readonly onRejectAll: () => void;
   readonly showSidebar: boolean;
   readonly sidebarContent: "memory" | "todo" | "tools" | "mcp";
   readonly specPhase: number;
@@ -2946,21 +3080,25 @@ interface AppOverlaysProps {
   readonly handleApproveAlways: () => void;
   readonly handleModeSelect: (mode: CodingMode) => void;
   readonly handleModelSelect: (selectedProvider: string, selectedModel: string) => void;
-  readonly handlePromptSubmit: () => void;
   readonly handleReject: () => void;
   readonly handleSessionSelected: (id: string) => void;
-  readonly interactivePrompt: InteractivePrompt | null;
   readonly loadSessionPreviewMessages: (
     sessionId: string
   ) => Promise<readonly import("./tui/components/session/types.js").SessionPreviewMessage[] | null>;
   readonly pendingOperation: AsyncOperation | null;
-  readonly promptPlaceholder: string;
-  readonly promptValue: string;
-  readonly setPromptValue: (value: string) => void;
   readonly sessions: SessionMetadata[];
   readonly showModeSelector: boolean;
   readonly showModelSelector: boolean;
   readonly showSessionManager: boolean;
+  readonly showHelpModal: boolean;
+  readonly closeHelpModal: () => void;
+  readonly showApprovalQueue: boolean;
+  readonly closeApprovalQueue: () => void;
+  readonly pendingApprovals: readonly ToolExecution[];
+  readonly onApproveQueueItem: (id: string) => void;
+  readonly onRejectQueueItem: (id: string) => void;
+  readonly onApproveAll: () => void;
+  readonly onRejectAll: () => void;
   readonly themeContext: ThemeContextValue;
   readonly updateAvailable: { current: string; latest: string } | null;
 }
@@ -2978,19 +3116,23 @@ function AppOverlays({
   handleApproveAlways,
   handleModeSelect,
   handleModelSelect,
-  handlePromptSubmit,
   handleReject,
   handleSessionSelected,
-  interactivePrompt,
   loadSessionPreviewMessages,
   pendingOperation,
-  promptPlaceholder,
-  promptValue,
-  setPromptValue,
   sessions,
   showModeSelector,
   showModelSelector,
   showSessionManager,
+  showHelpModal,
+  closeHelpModal,
+  showApprovalQueue,
+  closeApprovalQueue: _closeApprovalQueue,
+  pendingApprovals,
+  onApproveQueueItem,
+  onRejectQueueItem,
+  onApproveAll,
+  onRejectAll,
   themeContext,
   updateAvailable,
 }: AppOverlaysProps): React.JSX.Element {
@@ -3083,40 +3225,6 @@ function AppOverlays({
         </Box>
       )}
 
-      {interactivePrompt && (
-        <Box
-          position="absolute"
-          marginTop={4}
-          marginLeft={8}
-          borderStyle="round"
-          borderColor={themeContext.theme.colors.info}
-          padding={1}
-          flexDirection="column"
-          minWidth={50}
-        >
-          <Text>{interactivePrompt.message}</Text>
-          {interactivePrompt.inputType === "select" && interactivePrompt.options && (
-            <Box flexDirection="column" marginTop={1}>
-              {interactivePrompt.options.map((option, index) => (
-                <Text key={option}>{`${index + 1}. ${option}`}</Text>
-              ))}
-            </Box>
-          )}
-          <Box marginTop={1}>
-            <TextInput
-              value={promptValue}
-              onChange={setPromptValue}
-              onSubmit={handlePromptSubmit}
-              placeholder={promptPlaceholder}
-              focused
-              minHeight={1}
-              mask={interactivePrompt.inputType === "password" ? "*" : undefined}
-            />
-          </Box>
-          <Text dimColor>Press Esc to cancel</Text>
-        </Box>
-      )}
-
       {pendingOperation && (
         <Box
           position="absolute"
@@ -3130,6 +3238,34 @@ function AppOverlays({
         >
           <LoadingIndicator message={pendingOperation.message} />
           {pendingOperation.cancel && <Text dimColor>Press Esc to cancel</Text>}
+        </Box>
+      )}
+
+      {showHelpModal && (
+        <HotkeyHelpModal
+          isVisible={showHelpModal}
+          onClose={closeHelpModal}
+          hotkeys={DEFAULT_HOTKEYS}
+        />
+      )}
+
+      {showApprovalQueue && pendingApprovals.length > 1 && (
+        <Box
+          position="absolute"
+          marginTop={3}
+          marginLeft={5}
+          borderStyle="double"
+          borderColor={themeContext.theme.colors.warning}
+          padding={1}
+        >
+          <ApprovalQueue
+            executions={pendingApprovals}
+            onApprove={onApproveQueueItem}
+            onReject={onRejectQueueItem}
+            onApproveAll={onApproveAll}
+            onRejectAll={onRejectAll}
+            isFocused={showApprovalQueue}
+          />
         </Box>
       )}
     </>
@@ -3182,7 +3318,6 @@ function AppHeader({
 }
 
 function AppContentView({
-  agentLevel,
   agentName,
   announce,
   activeApproval,
@@ -3198,6 +3333,7 @@ function AppContentView({
   cancelOnboarding,
   closeSessionManager,
   commandOptions,
+  credentialManager,
   getSubcommands,
   getLevel3Items,
   categoryOrder,
@@ -3227,18 +3363,29 @@ function AppContentView({
   isLoading,
   isThinking,
   memoryEntries,
-  messages,
+  historyMessages,
+  pendingMessage,
   pendingOperation,
   promptPlaceholder,
   promptValue,
   setPromptValue,
   setThinkingCollapsed,
   sessions,
+  suppressPromptEnter,
   shouldShowBanner,
   showModeSelector,
   showModelSelector,
   showOnboarding,
   showSessionManager,
+  showHelpModal,
+  closeHelpModal,
+  showApprovalQueue,
+  closeApprovalQueue,
+  pendingApprovals,
+  onApproveQueueItem,
+  onRejectQueueItem,
+  onApproveAll,
+  onRejectAll,
   showSidebar,
   sidebarContent,
   specPhase,
@@ -3270,7 +3417,6 @@ function AppContentView({
     <StatusBar
       mode={currentMode}
       agentName={agentName}
-      agentLevel={agentLevel}
       modelName={currentModel}
       tokens={{
         current: totalTokens,
@@ -3297,116 +3443,214 @@ function AppContentView({
     />
   );
 
-  if (showOnboarding) {
-    return <OnboardingWizard onComplete={handleOnboardingComplete} onCancel={cancelOnboarding} />;
-  }
-
-  if (shouldShowBanner && !bannerSplashComplete) {
-    return (
-      <Box
-        flexDirection="column"
-        alignItems="center"
-        justifyContent="center"
-        height={process.stdout.rows ?? 24}
-      >
-        <Banner
-          animated
-          autoHide
-          cycles={bannerCycles}
-          displayDuration={bannerDisplayDurationMs}
-          cycleDuration={bannerCycleDurationMs}
-          updateInterval={bannerUpdateIntervalMs}
-          onComplete={handleBannerComplete}
-        />
-      </Box>
-    );
-  }
+  // Conditional rendering to avoid hook count mismatch from early returns
+  const showBannerView = shouldShowBanner && !bannerSplashComplete;
+  const showMainView = !showOnboarding && !showBannerView;
 
   return (
     <>
-      <AppOverlays
-        activeApproval={activeApproval}
-        activeRiskLevel={activeRiskLevel}
-        activeSessionId={activeSessionId}
-        closeSessionManager={closeSessionManager}
-        currentMode={currentMode}
-        currentModel={currentModel}
-        currentProvider={currentProvider}
-        dismissUpdateBanner={dismissUpdateBanner}
-        handleApprove={handleApprove}
-        handleApproveAlways={handleApproveAlways}
-        handleModeSelect={handleModeSelect}
-        handleModelSelect={handleModelSelect}
-        handlePromptSubmit={handlePromptSubmit}
-        handleReject={handleReject}
-        handleSessionSelected={handleSessionSelected}
-        interactivePrompt={interactivePrompt}
-        loadSessionPreviewMessages={loadSessionPreviewMessages}
-        pendingOperation={pendingOperation}
-        promptPlaceholder={promptPlaceholder}
-        promptValue={promptValue}
-        setPromptValue={setPromptValue}
-        sessions={sessions}
-        showModeSelector={showModeSelector}
-        showModelSelector={showModelSelector}
-        showSessionManager={showSessionManager}
-        themeContext={themeContext}
-        updateAvailable={updateAvailable}
-      />
-
-      <Layout
-        header={
-          <AppHeader
-            backtrackState={backtrackState}
-            branches={branches}
-            currentMode={currentMode}
-            currentTip={currentTip}
-            dismissTip={dismissTip}
-            handleCreateBacktrackBranch={handleCreateBacktrackBranch}
-            handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
-            redoBacktrack={redoBacktrack}
-            specPhase={specPhase}
-            undoBacktrack={undoBacktrack}
-          />
-        }
-        footer={footer}
-        sidebar={sidebar}
-        showSidebar={showSidebar}
-      >
-        {isThinking && (
-          <ThinkingBlock
-            content={thinkingContent}
-            isStreaming={isThinking}
-            collapsed={thinkingCollapsed}
-            onToggle={() => setThinkingCollapsed((prev) => !prev)}
-          />
-        )}
-
-        <MessageList messages={messages} />
-
-        <CommandInput
-          onMessage={handleMessage}
-          onCommand={handleCommand}
-          commands={commandOptions}
-          getSubcommands={getSubcommands}
-          getLevel3Items={getLevel3Items}
-          groupedCommands={true}
-          categoryOrder={categoryOrder}
-          categoryLabels={categoryLabels}
-          placeholder={isLoading ? "Thinking..." : "Type a message or /command..."}
-          disabled={isLoading || !!interactivePrompt || !!pendingOperation}
-          focused={
-            !isLoading &&
-            !showModeSelector &&
-            !showModelSelector &&
-            !showSessionManager &&
-            !activeApproval &&
-            !interactivePrompt &&
-            !pendingOperation
-          }
-          historyKey="vellum-command-history"
+      {showOnboarding && (
+        <OnboardingWizard
+          onComplete={handleOnboardingComplete}
+          onCancel={cancelOnboarding}
+          credentialManager={credentialManager ?? undefined}
         />
-      </Layout>
+      )}
+
+      {!showOnboarding && showBannerView && (
+        <Box
+          flexDirection="column"
+          alignItems="center"
+          justifyContent="center"
+          height={process.stdout.rows ?? 24}
+        >
+          <Banner
+            animated
+            autoHide
+            cycles={bannerCycles}
+            displayDuration={bannerDisplayDurationMs}
+            cycleDuration={bannerCycleDurationMs}
+            updateInterval={bannerUpdateIntervalMs}
+            onComplete={handleBannerComplete}
+          />
+        </Box>
+      )}
+
+      {showMainView && (
+        <>
+          <AppOverlays
+            activeApproval={activeApproval}
+            activeRiskLevel={activeRiskLevel}
+            activeSessionId={activeSessionId}
+            closeSessionManager={closeSessionManager}
+            currentMode={currentMode}
+            currentModel={currentModel}
+            currentProvider={currentProvider}
+            dismissUpdateBanner={dismissUpdateBanner}
+            handleApprove={handleApprove}
+            handleApproveAlways={handleApproveAlways}
+            handleModeSelect={handleModeSelect}
+            handleModelSelect={handleModelSelect}
+            handleReject={handleReject}
+            handleSessionSelected={handleSessionSelected}
+            loadSessionPreviewMessages={loadSessionPreviewMessages}
+            pendingOperation={pendingOperation}
+            sessions={sessions}
+            showModeSelector={showModeSelector}
+            showModelSelector={showModelSelector}
+            showSessionManager={showSessionManager}
+            showHelpModal={showHelpModal}
+            closeHelpModal={closeHelpModal}
+            showApprovalQueue={showApprovalQueue}
+            closeApprovalQueue={closeApprovalQueue}
+            pendingApprovals={pendingApprovals}
+            onApproveQueueItem={onApproveQueueItem}
+            onRejectQueueItem={onRejectQueueItem}
+            onApproveAll={onApproveAll}
+            onRejectAll={onRejectAll}
+            themeContext={themeContext}
+            updateAvailable={updateAvailable}
+          />
+
+          <Layout
+            header={
+              <AppHeader
+                backtrackState={backtrackState}
+                branches={branches}
+                currentMode={currentMode}
+                currentTip={currentTip}
+                dismissTip={dismissTip}
+                handleCreateBacktrackBranch={handleCreateBacktrackBranch}
+                handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
+                redoBacktrack={redoBacktrack}
+                specPhase={specPhase}
+                undoBacktrack={undoBacktrack}
+              />
+            }
+            footer={footer}
+            sidebar={sidebar}
+            showSidebar={showSidebar}
+          >
+            {isThinking && (
+              <ThinkingBlock
+                content={thinkingContent}
+                isStreaming={isThinking}
+                collapsed={thinkingCollapsed}
+                onToggle={() => setThinkingCollapsed((prev) => !prev)}
+              />
+            )}
+
+            <MessageList
+              messages={historyMessages}
+              pendingMessage={pendingMessage}
+              useVirtualizedList={true}
+              estimatedItemHeight={4}
+            />
+
+            {interactivePrompt && (
+              <Box
+                borderStyle="round"
+                borderColor={themeContext.theme.colors.warning}
+                paddingX={2}
+                paddingY={1}
+                marginY={1}
+                flexDirection="column"
+              >
+                {/* Title section */}
+                {interactivePrompt.title && (
+                  <Box
+                    borderStyle="single"
+                    borderBottom
+                    borderColor={themeContext.theme.colors.warning}
+                    marginBottom={1}
+                  >
+                    <Text bold color={themeContext.theme.colors.warning}>
+                      🔐 {interactivePrompt.title}
+                    </Text>
+                  </Box>
+                )}
+                {/* Help text section */}
+                {interactivePrompt.helpText && (
+                  <Box marginBottom={1}>
+                    <Text color={themeContext.theme.semantic.text.muted}>
+                      {interactivePrompt.helpText}
+                    </Text>
+                  </Box>
+                )}
+                {/* Format hint */}
+                {interactivePrompt.formatHint && (
+                  <Text color={themeContext.theme.semantic.text.muted}>
+                    📋 Format: {interactivePrompt.formatHint}
+                  </Text>
+                )}
+                {/* Documentation URL hint */}
+                {interactivePrompt.documentationUrl && (
+                  <Text color={themeContext.theme.semantic.text.muted}>
+                    📚 Docs: {interactivePrompt.documentationUrl}
+                  </Text>
+                )}
+                {/* Input area with spacing */}
+                <Box flexDirection="column" marginTop={1}>
+                  {/* Original message (e.g., "API Key:") */}
+                  <Text>{interactivePrompt.message}</Text>
+                  {/* Select options */}
+                  {interactivePrompt.inputType === "select" && interactivePrompt.options && (
+                    <Box flexDirection="column" marginTop={1}>
+                      {interactivePrompt.options.map((option, index) => (
+                        <Text key={option}>{`${index + 1}. ${option}`}</Text>
+                      ))}
+                    </Box>
+                  )}
+                  {/* Input field */}
+                  <Box marginTop={1} flexGrow={1}>
+                    <Text color={themeContext.theme.semantic.text.muted}>{promptPlaceholder} </Text>
+                    <Box flexGrow={1}>
+                      <TextInput
+                        value={promptValue}
+                        onChange={setPromptValue}
+                        onSubmit={handlePromptSubmit}
+                        mask={interactivePrompt.inputType === "password" ? "*" : undefined}
+                        focused={!suppressPromptEnter}
+                        suppressEnter={suppressPromptEnter}
+                        showBorder={false}
+                      />
+                    </Box>
+                  </Box>
+                </Box>
+                {/* Footer hint */}
+                <Box marginTop={1}>
+                  <Text dimColor>Press Enter to submit, Esc to cancel</Text>
+                </Box>
+              </Box>
+            )}
+
+            <EnhancedCommandInput
+              onMessage={handleMessage}
+              onCommand={handleCommand}
+              commands={commandOptions}
+              getSubcommands={getSubcommands}
+              getLevel3Items={getLevel3Items}
+              groupedCommands={true}
+              categoryOrder={categoryOrder}
+              categoryLabels={categoryLabels}
+              placeholder={isLoading ? "Thinking..." : "Type a message or /command..."}
+              disabled={isLoading || !!interactivePrompt || !!pendingOperation}
+              focused={
+                !isLoading &&
+                !showModeSelector &&
+                !showModelSelector &&
+                !showSessionManager &&
+                !showHelpModal &&
+                !activeApproval &&
+                !interactivePrompt &&
+                !pendingOperation
+              }
+              historyKey="vellum-command-history"
+              cwd={process.cwd()}
+            />
+          </Layout>
+        </>
+      )}
     </>
   );
 }

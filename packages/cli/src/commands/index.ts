@@ -121,6 +121,8 @@ export {
 // =============================================================================
 
 export {
+  // Unified auth command (T035)
+  authCommand,
   // Command registry
   authSlashCommands,
   // Enhanced commands (T034)
@@ -130,13 +132,8 @@ export {
   findSlashCommand,
   getSlashCommandHelp,
   handleCredentials,
-  // Handlers
-  handleLogin,
-  handleLogout,
   // Dispatcher
   isSlashCommand,
-  loginCommand,
-  logoutCommand,
   parseSlashCommand,
   type SlashCommand,
   type SlashCommandContext,

@@ -262,12 +262,13 @@ export type PromptSource = "builtin" | "project" | "user" | "legacy";
  * Category of prompt content.
  *
  * - `role`: Agent role definitions (orchestrator, coder, qa, etc.)
+ * - `mode`: Coding mode prompts (vibe, plan, spec)
  * - `worker`: Worker-specific prompt modifications
  * - `spec`: Specification workflow prompts
  * - `provider`: Provider-specific prompt adjustments
  * - `custom`: User-defined custom prompts
  */
-export type PromptCategory = "role" | "worker" | "spec" | "provider" | "custom";
+export type PromptCategory = "role" | "mode" | "worker" | "spec" | "provider" | "custom";
 
 /**
  * Location information for a discovered prompt.

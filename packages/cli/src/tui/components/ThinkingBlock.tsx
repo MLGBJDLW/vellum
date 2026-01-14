@@ -7,8 +7,9 @@
  */
 
 import { Box, Text, useInput } from "ink";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTUITranslation } from "../i18n/index.js";
+import { Spinner } from "./common/Spinner.js";
 import { StreamingText } from "./Messages/StreamingText.js";
 
 // =============================================================================
@@ -43,11 +44,8 @@ export interface ThinkingBlockProps {
 // Constants
 // =============================================================================
 
-/** Spinner animation frames */
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-
-/** Spinner animation interval in milliseconds */
-const SPINNER_INTERVAL_MS = 80;
+// Note: Spinner animation is now handled by the shared Spinner component
+// which uses the global AnimationContext for centralized timing.
 
 // =============================================================================
 // Helper Functions
@@ -80,27 +78,6 @@ function formatTokenCount(count: number): string {
     return `${(count / 1000).toFixed(1)}K`;
   }
   return `${(count / 1000000).toFixed(1)}M`;
-}
-
-// =============================================================================
-// Spinner Component
-// =============================================================================
-
-/**
- * Animated spinner indicator for streaming state.
- */
-function Spinner(): React.JSX.Element {
-  const [frameIndex, setFrameIndex] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setFrameIndex((prev) => (prev + 1) % SPINNER_FRAMES.length);
-    }, SPINNER_INTERVAL_MS);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  return <Text color="cyan">{SPINNER_FRAMES[frameIndex]}</Text>;
 }
 
 // =============================================================================

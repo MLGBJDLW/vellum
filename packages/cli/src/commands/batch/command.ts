@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 import type { CommandContextProvider, CommandExecutor } from "../executor.js";
 import type { CommandContext, CommandResult, SlashCommand } from "../types.js";
 import { error, success } from "../types.js";
-import { BatchExecutor, BatchScriptParser } from "./index.js";
+import { BatchExecutor, BatchScriptParser } from "./executor.js";
 
 // =============================================================================
 // Helper Functions

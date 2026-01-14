@@ -354,7 +354,7 @@ describe("SessionPicker", () => {
     // The preview panel may truncate content depending on available space.
     // Assert stable indicators that the assistant message exists.
     expect(frame).toContain("2 messages");
-    expect(frame).toContain("Assistant");
+    expect(frame).toContain("Vellum");
   });
 
   it("caches preview messages per session id", async () => {

@@ -29,7 +29,21 @@ export {
   Spinner,
   type SpinnerProps,
 } from "./Spinner.js";
-// SplashScreen (startup screen)
-export { SplashScreen } from "./SplashScreen.js";
-// TypeWriter (Chain 14)
-export { TypeWriter, type TypeWriterProps } from "./TypeWriter.js";
+
+// VirtualizedList (Ported from Gemini CLI)
+export {
+  type HeightCache,
+  SCROLL_TO_ITEM_END,
+  type ScrollAnchor,
+  type UseBatchedScrollReturn,
+  type UseScrollAnchorProps,
+  type UseScrollAnchorReturn,
+  type UseVirtualizationProps,
+  type UseVirtualizationReturn,
+  useBatchedScroll,
+  useScrollAnchor,
+  useVirtualization,
+  VirtualizedList,
+  type VirtualizedListProps,
+  type VirtualizedListRef,
+} from "./VirtualizedList/index.js";

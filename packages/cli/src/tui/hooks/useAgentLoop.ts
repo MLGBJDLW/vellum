@@ -415,7 +415,9 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       try {
         await loop.run();
       } catch (err) {
-        setError(err instanceof Error ? err : new Error(String(err)));
+        const error = err instanceof Error ? err : new Error(String(err));
+        setError(error);
+        throw error; // Re-throw for caller to handle
       }
     },
     [loop]

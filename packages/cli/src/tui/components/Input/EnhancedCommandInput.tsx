@@ -14,8 +14,8 @@ import { useInputHistory } from "../../hooks/useInputHistory.js";
 import { useMentionAutocomplete } from "../../hooks/useMentionAutocomplete.js";
 import type { AutocompleteOption } from "./Autocomplete.js";
 import { Autocomplete } from "./Autocomplete.js";
-import { parseSlashCommand, type SlashCommand } from "./CommandInput.js";
 import { MentionAutocomplete } from "./MentionAutocomplete.js";
+import { parseSlashCommand, type SlashCommand } from "./slash-command-utils.js";
 import { TextInput } from "./TextInput.js";
 
 // =============================================================================
@@ -34,6 +34,12 @@ export interface EnhancedCommandInputProps {
   readonly commands?: readonly string[] | readonly AutocompleteOption[];
   /** Get subcommands for a command (for two-level autocomplete) */
   readonly getSubcommands?: (commandName: string) => readonly AutocompleteOption[] | undefined;
+  /** Get level 3 items for a command and subcommand (for three-level autocomplete) */
+  readonly getLevel3Items?: (
+    commandName: string,
+    arg1: string,
+    partial: string
+  ) => readonly AutocompleteOption[] | undefined;
   /** Enable grouped display with categories (default: false) */
   readonly groupedCommands?: boolean;
   /** Category display order for grouped mode */
@@ -97,6 +103,7 @@ export function EnhancedCommandInput({
   onCommand,
   commands,
   getSubcommands,
+  getLevel3Items,
   groupedCommands = false,
   categoryOrder,
   categoryLabels,
@@ -113,40 +120,82 @@ export function EnhancedCommandInput({
   // Track when autocomplete just completed (to suppress Enter and move cursor)
   const [autocompleteJustCompleted, setAutocompleteJustCompleted] = useState(false);
 
+  // Refs to track current autocomplete selection (avoids state delay on Enter/Tab)
+  const slashSelectionRef = useRef<{ index: number; hasOptions: boolean }>({
+    index: 0,
+    hasOptions: false,
+  });
+  const mentionSelectionRef = useRef<{ index: number; hasOptions: boolean }>({
+    index: 0,
+    hasOptions: false,
+  });
+
   // Ref for TextInput to manage focus
   const inputRef = useRef<{ focus: () => void } | null>(null);
 
   // Slash autocomplete state
   const slashAutocomplete = useMemo(() => {
     if (!value.startsWith("/")) {
-      return { visible: false, active: false, query: "", level: 1 as const, commandName: "" };
+      return {
+        visible: false,
+        active: false,
+        query: "",
+        level: 1 as const,
+        commandName: "",
+        arg1: "",
+      };
     }
 
     const withoutSlash = value.slice(1);
     const spaceIndex = withoutSlash.indexOf(" ");
 
     if (spaceIndex === -1) {
+      // Level 1: command name completion
       return {
         visible: true,
         active: true,
         query: withoutSlash,
         level: 1 as const,
         commandName: "",
+        arg1: "",
       };
     }
 
+    // Level 2 or 3: subcommand/arg completion
     const commandName = withoutSlash.slice(0, spaceIndex);
     const afterSpace = withoutSlash.slice(spaceIndex + 1);
+    // Check if there's a second space (potential level 3)
     const secondSpaceIndex = afterSpace.indexOf(" ");
-    const subQuery = secondSpaceIndex === -1 ? afterSpace : afterSpace.slice(0, secondSpaceIndex);
-    const isActive = secondSpaceIndex === -1;
+
+    if (secondSpaceIndex === -1) {
+      // Level 2: subcommand completion (only one space so far)
+      return {
+        visible: true,
+        active: true,
+        query: afterSpace,
+        level: 2 as const,
+        commandName,
+        arg1: "",
+      };
+    }
+
+    // Level 3: third-level completion (two spaces)
+    const arg1 = afterSpace.slice(0, secondSpaceIndex);
+    const afterSecondSpace = afterSpace.slice(secondSpaceIndex + 1);
+    // Check if there's a third space (args after level 3)
+    const thirdSpaceIndex = afterSecondSpace.indexOf(" ");
+    const level3Query =
+      thirdSpaceIndex === -1 ? afterSecondSpace : afterSecondSpace.slice(0, thirdSpaceIndex);
+    // Only active if we're still typing the level 3 item (no third space yet)
+    const isActive = thirdSpaceIndex === -1;
 
     return {
       visible: true,
       active: isActive,
-      query: subQuery,
-      level: 2 as const,
+      query: level3Query,
+      level: 3 as const,
       commandName,
+      arg1,
     };
   }, [value]);
 
@@ -236,24 +285,85 @@ export function EnhancedCommandInput({
     if (slashAutocomplete.level === 1) {
       return commands ?? [];
     }
-    if (getSubcommands && slashAutocomplete.commandName) {
-      return getSubcommands(slashAutocomplete.commandName) ?? [];
+    // Level 2: get subcommands for the command
+    if (slashAutocomplete.level === 2) {
+      if (getSubcommands && slashAutocomplete.commandName) {
+        return getSubcommands(slashAutocomplete.commandName) ?? [];
+      }
+      return [];
+    }
+    // Level 3: get third-level items (e.g., providers for auth set, models for model command)
+    if (slashAutocomplete.level === 3) {
+      if (getLevel3Items && slashAutocomplete.commandName && slashAutocomplete.arg1) {
+        return (
+          getLevel3Items(
+            slashAutocomplete.commandName,
+            slashAutocomplete.arg1,
+            slashAutocomplete.query
+          ) ?? []
+        );
+      }
+      return [];
     }
     return [];
-  }, [slashAutocomplete.level, slashAutocomplete.commandName, commands, getSubcommands]);
+  }, [
+    slashAutocomplete.level,
+    slashAutocomplete.commandName,
+    slashAutocomplete.arg1,
+    slashAutocomplete.query,
+    commands,
+    getSubcommands,
+    getLevel3Items,
+  ]);
+  // Compute filtered/sorted slash options for Enter/Tab selection
+  const sortedSlashOptions = useMemo(() => {
+    if (!slashAutocomplete.active || slashOptions.length === 0) return [];
+    // Normalize to AutocompleteOption format
+    const normalized = slashOptions.map((opt) => (typeof opt === "string" ? { name: opt } : opt));
+    // Filter by prefix
+    const query = slashAutocomplete.query.toLowerCase();
+    const filtered = query
+      ? normalized.filter((opt) => opt.name.toLowerCase().startsWith(query))
+      : normalized;
+    // Sort alphabetically
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+  }, [slashAutocomplete.active, slashAutocomplete.query, slashOptions]);
 
   // Handle slash autocomplete selection
   const handleSlashSelect = useCallback(
     (selected: string) => {
       if (slashAutocomplete.level === 1) {
+        // Level 1: selected is command name
         setValue(`/${selected} `);
-      } else {
+      } else if (slashAutocomplete.level === 2) {
+        // Level 2: selected is subcommand name, preserve command
         setValue(`/${slashAutocomplete.commandName} ${selected} `);
+      } else {
+        // Level 3: selected is third-level item (e.g., provider), preserve command and arg1
+        setValue(`/${slashAutocomplete.commandName} ${slashAutocomplete.arg1} ${selected} `);
       }
       setAutocompleteJustCompleted(true);
       inputRef.current?.focus();
     },
-    [slashAutocomplete.level, slashAutocomplete.commandName]
+    [slashAutocomplete.level, slashAutocomplete.commandName, slashAutocomplete.arg1]
+  );
+
+  // Enter/Tab interception when autocomplete is active
+  useInput(
+    (_input, key) => {
+      if (key.return || key.tab) {
+        if (activeAutocomplete === "slash") {
+          const { index, hasOptions } = slashSelectionRef.current;
+          if (hasOptions && sortedSlashOptions[index]) {
+            handleSlashSelect(sortedSlashOptions[index].name);
+          }
+        } else if (activeAutocomplete === "mention") {
+          // Mention selection is handled internally by MentionAutocomplete
+          // This is a fallback that shouldn't normally trigger
+        }
+      }
+    },
+    { isActive: focused && !disabled && activeAutocomplete !== null }
   );
 
   // Handle @ mention autocomplete selection
@@ -270,6 +380,16 @@ export function EnhancedCommandInput({
   // Handle autocomplete cancel
   const handleAutocompleteCancel = useCallback(() => {
     inputRef.current?.focus();
+  }, []);
+
+  // Track slash autocomplete selection state
+  const handleSlashSelectionChange = useCallback((index: number, hasOptions: boolean) => {
+    slashSelectionRef.current = { index, hasOptions };
+  }, []);
+
+  // Track mention autocomplete selection state
+  const handleMentionSelectionChange = useCallback((index: number, hasOptions: boolean) => {
+    mentionSelectionRef.current = { index, hasOptions };
   }, []);
 
   // Callback when cursor has been moved to end
@@ -294,7 +414,7 @@ export function EnhancedCommandInput({
         disabled={disabled}
         focused={focused}
         multiline={multiline}
-        suppressEnter={autocompleteJustCompleted}
+        suppressEnter={autocompleteJustCompleted || activeAutocomplete !== null}
         cursorToEnd={autocompleteJustCompleted}
         onCursorMoved={handleCursorMoved}
       />
@@ -306,6 +426,7 @@ export function EnhancedCommandInput({
           options={slashOptions}
           onSelect={handleSlashSelect}
           onCancel={handleAutocompleteCancel}
+          onSelectionChange={handleSlashSelectionChange}
           visible={slashAutocomplete.visible}
           active={slashAutocomplete.active}
           grouped={slashAutocomplete.level === 1 && groupedCommands}
@@ -323,6 +444,7 @@ export function EnhancedCommandInput({
           fileSuggestions={mentionAutocomplete.fileSuggestions.suggestions}
           onSelect={handleMentionSelect}
           onCancel={handleAutocompleteCancel}
+          onSelectionChange={handleMentionSelectionChange}
           visible={mentionAutocomplete.state.visible}
           active={mentionAutocomplete.state.active}
         />

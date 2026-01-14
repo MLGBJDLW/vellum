@@ -9,7 +9,9 @@
 
 import type { Key } from "ink";
 import { Box, Text, useInput } from "ink";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAnimation } from "../../context/AnimationContext.js";
+import { usePasteHandler } from "../../context/BracketedPasteContext.js";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -46,6 +48,8 @@ export interface TextInputProps {
   readonly cursorToEnd?: boolean;
   /** Callback when cursorToEnd is consumed */
   readonly onCursorMoved?: () => void;
+  /** Whether to show border in single-line mode (default: true) */
+  readonly showBorder?: boolean;
 }
 
 // =============================================================================
@@ -65,6 +69,30 @@ function insertAt(str: string, index: number, char: string): string {
 function deleteAt(str: string, index: number): string {
   if (index <= 0 || index > str.length) return str;
   return str.slice(0, index - 1) + str.slice(index);
+}
+
+/**
+ * Strip common ANSI control sequences (e.g., bracketed paste wrappers).
+ */
+function stripAnsiSequences(input: string): string {
+  const withoutCsi = input.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
+  return withoutCsi.replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, "");
+}
+
+/**
+ * Normalize and sanitize input chunks for single-line or multiline fields.
+ */
+function normalizeInputValue(input: string, multiline: boolean): string {
+  const sanitized = stripAnsiSequences(input)
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\u2028|\u2029/g, "\n");
+
+  const withoutControls = multiline
+    ? sanitized.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f]/g, "")
+    : sanitized.replace(/[\x00-\x1f\x7f\x80-\x9f]/g, "");
+
+  return multiline ? withoutControls : withoutControls.replace(/\n/g, "");
 }
 
 /**
@@ -109,7 +137,7 @@ function getLineKey(lineStartPos: number): string {
  * />
  * ```
  */
-export function TextInput({
+function TextInputComponent({
   value,
   onChange,
   onSubmit,
@@ -123,17 +151,36 @@ export function TextInput({
   suppressEnter = false,
   cursorToEnd = false,
   onCursorMoved,
+  showBorder = true,
 }: TextInputProps) {
   const { theme } = useTheme();
+  const { pauseAnimations, resumeAnimations, isVSCode } = useAnimation();
+
+  // Pause animations when input is focused in VS Code to reduce flickering
+  useEffect(() => {
+    if (focused && isVSCode) {
+      pauseAnimations();
+      return () => resumeAnimations();
+    }
+  }, [focused, isVSCode, pauseAnimations, resumeAnimations]);
 
   // Calculate effective min height (default 5 for multiline, 1 for single-line)
   const effectiveMinHeight = minHeight ?? (multiline ? 5 : 1);
 
+  // Rapid input buffering for paste fallback (when bracketed paste is not available)
+  const inputBufferRef = useRef<string>("");
+  const inputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Use longer threshold for mask inputs (API keys) to smooth rapid character display
+  // Increased from 50/100ms to 100/150ms to reduce rendering frequency and prevent flickering
+  const RAPID_INPUT_THRESHOLD = mask ? 150 : 100; // ms - mask needs more buffer time
+
+  // Refs to store latest value and cursorPosition for setTimeout callback
+  // This avoids closure trap where setTimeout captures stale values
+  const valueRef = useRef(value);
+  const cursorPositionRef = useRef(0);
+
   // Cursor position within the value
   const [cursorPosition, setCursorPosition] = useState(value.length);
-
-  // Track if Enter was handled externally (e.g., by autocomplete)
-  const [enterHandledExternally, setEnterHandledExternally] = useState(false);
 
   // Sync cursor position when value changes externally
   useEffect(() => {
@@ -141,6 +188,16 @@ export function TextInput({
       setCursorPosition(value.length);
     }
   }, [value, cursorPosition]);
+
+  // Keep valueRef in sync with latest value
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  // Keep cursorPositionRef in sync with latest cursorPosition
+  useEffect(() => {
+    cursorPositionRef.current = cursorPosition;
+  }, [cursorPosition]);
 
   // Handle cursorToEnd prop - move cursor to end when requested
   useEffect(() => {
@@ -150,12 +207,46 @@ export function TextInput({
     }
   }, [cursorToEnd, value.length, onCursorMoved]);
 
-  // Update enterHandledExternally when suppressEnter changes
+  // Cleanup input buffer timer on unmount
   useEffect(() => {
-    if (suppressEnter) {
-      setEnterHandledExternally(true);
-    }
-  }, [suppressEnter]);
+    return () => {
+      if (inputTimerRef.current) {
+        clearTimeout(inputTimerRef.current);
+      }
+    };
+  }, []);
+
+  /**
+   * Handle bracketed paste events.
+   * When a paste is detected via bracketed paste mode, the entire
+   * pasted content arrives as a single event instead of character-by-character.
+   */
+  const handlePaste = useCallback(
+    (pastedText: string) => {
+      if (disabled || !focused) return;
+
+      // Normalize the pasted text
+      const normalizedPaste = normalizeInputValue(pastedText, multiline);
+      if (normalizedPaste.length === 0) return;
+
+      // Insert at cursor position
+      let newValue = insertAt(value, cursorPosition, normalizedPaste);
+      let newCursorPosition = cursorPosition + normalizedPaste.length;
+
+      // Handle max length
+      if (maxLength !== undefined && newValue.length > maxLength) {
+        newValue = newValue.slice(0, maxLength);
+        newCursorPosition = Math.min(newCursorPosition, maxLength);
+      }
+
+      onChange(newValue);
+      setCursorPosition(newCursorPosition);
+    },
+    [disabled, focused, multiline, value, cursorPosition, maxLength, onChange]
+  );
+
+  // Subscribe to paste events from the BracketedPasteProvider
+  usePasteHandler(handlePaste);
 
   /**
    * Handle character input
@@ -164,25 +255,30 @@ export function TextInput({
     (char: string) => {
       if (disabled) return;
 
+      const normalizedInput = normalizeInputValue(char, multiline);
+      if (normalizedInput.length === 0) {
+        return;
+      }
+
       // Check max length before inserting
       if (maxLength !== undefined && value.length >= maxLength) {
         return;
       }
 
-      const newValue = insertAt(value, cursorPosition, char);
+      const newValue = insertAt(value, cursorPosition, normalizedInput);
 
       // Check max length after insertion (handles paste)
       if (maxLength !== undefined && newValue.length > maxLength) {
         const truncated = newValue.slice(0, maxLength);
         onChange(truncated);
-        setCursorPosition(Math.min(cursorPosition + char.length, maxLength));
+        setCursorPosition(Math.min(cursorPosition + normalizedInput.length, maxLength));
         return;
       }
 
       onChange(newValue);
-      setCursorPosition(cursorPosition + char.length);
+      setCursorPosition(cursorPosition + normalizedInput.length);
     },
-    [disabled, value, cursorPosition, maxLength, onChange]
+    [disabled, value, cursorPosition, maxLength, onChange, multiline]
   );
 
   /**
@@ -332,8 +428,9 @@ export function TextInput({
    */
   const handleReturn = useCallback(
     (ctrl: boolean) => {
-      // Skip if Enter was already handled externally (e.g., by autocomplete)
-      if (enterHandledExternally) {
+      // Skip if Enter should be suppressed (e.g., autocomplete is active)
+      // Check prop directly for synchronous behavior - state-based check was racy
+      if (suppressEnter) {
         return;
       }
       if (multiline && !ctrl) {
@@ -342,7 +439,7 @@ export function TextInput({
         handleSubmit();
       }
     },
-    [multiline, handleNewline, handleSubmit, enterHandledExternally]
+    [multiline, handleNewline, handleSubmit, suppressEnter]
   );
 
   /**
@@ -410,7 +507,7 @@ export function TextInput({
     ]
   );
 
-  // Handle keyboard input
+  // Handle keyboard input with immediate display for single chars, buffering for paste
   useInput(
     (input, key) => {
       if (disabled) return;
@@ -420,9 +517,80 @@ export function TextInput({
         return;
       }
 
-      // Handle regular character input (filter control characters)
+      // Handle regular character input
+      // Strategy: Single chars display immediately, multi-char inputs (paste) use buffering
       if (input && !key.ctrl && !key.meta) {
-        handleInput(input);
+        const normalizedInput = normalizeInputValue(input, multiline);
+        if (normalizedInput.length === 0) return;
+
+        // Single character: process immediately for responsive typing
+        const isSingleChar = normalizedInput.length === 1;
+
+        if (isSingleChar && inputBufferRef.current.length === 0) {
+          // Immediate processing - no buffering delay
+          const currentValue = valueRef.current;
+          const currentCursorPosition = cursorPositionRef.current;
+
+          // Check max length before inserting
+          if (maxLength !== undefined && currentValue.length >= maxLength) {
+            return;
+          }
+
+          // Insert character at cursor position
+          let newValue = insertAt(currentValue, currentCursorPosition, normalizedInput);
+
+          // Handle max length after insertion
+          if (maxLength !== undefined && newValue.length > maxLength) {
+            newValue = newValue.slice(0, maxLength);
+          }
+
+          const newPosition = Math.min(currentCursorPosition + 1, newValue.length);
+          // Update value first, then cursor position in low-priority transition
+          // This batches both updates in React 18+ automatic batching
+          onChange(newValue);
+          startTransition(() => {
+            setCursorPosition(newPosition);
+          });
+        } else {
+          // Multi-character input (paste) or continuation of buffered input
+          // Use buffering to batch paste operations
+          inputBufferRef.current += normalizedInput;
+
+          if (inputTimerRef.current) {
+            clearTimeout(inputTimerRef.current);
+          }
+
+          inputTimerRef.current = setTimeout(() => {
+            const buffered = inputBufferRef.current;
+            inputBufferRef.current = "";
+
+            if (buffered.length === 0) return;
+
+            // Use refs to get latest values, avoiding closure trap
+            const currentValue = valueRef.current;
+            const currentCursorPosition = cursorPositionRef.current;
+
+            // Check max length before inserting
+            if (maxLength !== undefined && currentValue.length >= maxLength) {
+              return;
+            }
+
+            // Insert buffered content at cursor position
+            let newValue = insertAt(currentValue, currentCursorPosition, buffered);
+
+            // Handle max length after insertion
+            if (maxLength !== undefined && newValue.length > maxLength) {
+              newValue = newValue.slice(0, maxLength);
+            }
+
+            const newPosition = Math.min(currentCursorPosition + buffered.length, newValue.length);
+            // Use startTransition for cursor update to reduce flickering during paste
+            startTransition(() => {
+              setCursorPosition(newPosition);
+            });
+            onChange(newValue);
+          }, RAPID_INPUT_THRESHOLD);
+        }
       }
     },
     { isActive: focused && !disabled }
@@ -434,7 +602,7 @@ export function TextInput({
 
   const isEmpty = value.length === 0;
   const showPlaceholder = isEmpty && placeholder;
-  const displayValue = mask ? value.replace(/./g, mask) : value;
+  const displayValue = mask ? value.replace(/[\s\S]/g, mask) : value;
 
   // Split value into lines for multiline display
   const lines = multiline ? displayValue.split("\n") : [displayValue];
@@ -467,9 +635,9 @@ export function TextInput({
 
     return (
       <Text>
-        {beforeCursor}
+        {beforeCursor || null}
         <Text inverse>{cursorChar}</Text>
-        {afterCursor}
+        {afterCursor || null}
       </Text>
     );
   };
@@ -514,9 +682,13 @@ export function TextInput({
 
   // Render single-line
   if (!multiline) {
+    const content = renderLineWithCursor(displayValue, 0);
+    if (!showBorder) {
+      return <Box flexDirection="row">{content}</Box>;
+    }
     return (
       <Box borderStyle="round" borderColor={borderColor} paddingX={1}>
-        {renderLineWithCursor(value, 0)}
+        {content}
       </Box>
     );
   }
@@ -541,5 +713,26 @@ export function TextInput({
     </Box>
   );
 }
+
+/**
+ * Memoized TextInput to prevent unnecessary re-renders.
+ * Custom comparison checks key props that affect visual output.
+ */
+export const TextInput = memo(TextInputComponent, (prevProps, nextProps) => {
+  // Return true if props are equal (skip render)
+  return (
+    prevProps.value === nextProps.value &&
+    prevProps.focused === nextProps.focused &&
+    prevProps.disabled === nextProps.disabled &&
+    prevProps.mask === nextProps.mask &&
+    prevProps.placeholder === nextProps.placeholder &&
+    prevProps.suppressEnter === nextProps.suppressEnter &&
+    prevProps.cursorToEnd === nextProps.cursorToEnd &&
+    prevProps.multiline === nextProps.multiline &&
+    prevProps.maxLength === nextProps.maxLength &&
+    prevProps.minHeight === nextProps.minHeight &&
+    prevProps.showBorder === nextProps.showBorder
+  );
+});
 
 export default TextInput;

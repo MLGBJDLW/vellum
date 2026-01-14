@@ -4,6 +4,9 @@
  * Implements support for DeepSeek's OpenAI-compatible API.
  * Provides access to DeepSeek Chat, Coder, and Reasoner models.
  *
+ * The deepseek-reasoner model returns reasoning content in a `reasoning_content`
+ * field, which is extracted and emitted as StreamReasoningEvent during streaming.
+ *
  * @module @vellum/provider/deepseek
  */
 
@@ -21,7 +24,7 @@ import type { ModelInfo } from "./types.js";
  * Supports DeepSeek's suite of models including:
  * - deepseek-chat: General-purpose conversational model
  * - deepseek-coder: Specialized for code generation
- * - deepseek-reasoner: Advanced reasoning capabilities
+ * - deepseek-reasoner: Advanced reasoning capabilities with `reasoning_content`
  *
  * @example
  * ```typescript
@@ -29,9 +32,12 @@ import type { ModelInfo } from "./types.js";
  * await provider.initialize({ apiKey: 'sk-...' });
  *
  * const result = await provider.complete({
- *   model: 'deepseek-chat',
- *   messages: [{ role: 'user', content: 'Hello!' }],
+ *   model: 'deepseek-reasoner',
+ *   messages: [{ role: 'user', content: 'Solve this step by step...' }],
  * });
+ *
+ * // Access reasoning content
+ * console.log(result.thinking); // Contains the reasoning process
  * ```
  */
 export class DeepSeekProvider extends OpenAICompatibleProvider {
@@ -61,5 +67,17 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
    */
   getDefaultModel(): string {
     return "deepseek-chat";
+  }
+
+  /**
+   * Enable reasoning content extraction for DeepSeek Reasoner models
+   *
+   * DeepSeek Reasoner returns reasoning in `reasoning_content` field,
+   * which the base provider will now extract automatically.
+   *
+   * @returns true to enable reasoning_content extraction
+   */
+  protected override supportsReasoningContent(): boolean {
+    return true;
   }
 }

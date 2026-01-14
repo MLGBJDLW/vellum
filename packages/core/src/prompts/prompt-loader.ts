@@ -21,8 +21,32 @@ import { readFile } from "node:fs/promises";
 import { promptLoadError, promptNotFoundError } from "./errors.js";
 import { PromptDiscovery, type PromptDiscoveryOptions } from "./prompt-discovery.js";
 import { PromptParser } from "./prompt-parser.js";
-import { loadRolePrompt } from "./roles/index.js";
+import {
+  ANALYST_PROMPT,
+  ARCHITECT_PROMPT,
+  CODER_PROMPT,
+  ORCHESTRATOR_PROMPT,
+  QA_PROMPT,
+  WRITER_PROMPT,
+} from "./roles/index.js";
 import type { AgentRole, PromptCategory, PromptLoaded, PromptLocation } from "./types.js";
+
+// =============================================================================
+// Role Prompt Mapping (used for fallback)
+// =============================================================================
+
+const ROLE_PROMPTS: Record<AgentRole, string> = {
+  orchestrator: ORCHESTRATOR_PROMPT,
+  coder: CODER_PROMPT,
+  qa: QA_PROMPT,
+  writer: WRITER_PROMPT,
+  analyst: ANALYST_PROMPT,
+  architect: ARCHITECT_PROMPT,
+};
+
+function getRolePrompt(role: AgentRole): string {
+  return ROLE_PROMPTS[role] ?? "";
+}
 
 // =============================================================================
 // Constants
@@ -283,7 +307,34 @@ export class PromptLoader {
       return prompt.content;
     } catch {
       // Fallback to TypeScript role prompt
-      return loadRolePrompt(role);
+      return getRolePrompt(role);
+    }
+  }
+
+  /**
+   * Loads a coding mode prompt (vibe, plan, spec).
+   *
+   * Mode prompts contain mode-specific behavior instructions.
+   * Returns null if the mode prompt does not exist (falls back to hardcoded).
+   *
+   * @param mode - The coding mode name (e.g., 'vibe', 'plan', 'spec')
+   * @returns The mode prompt content string, or null if not found
+   *
+   * @example
+   * ```typescript
+   * const modePrompt = await loader.loadMode('vibe');
+   * if (modePrompt) {
+   *   builder.withModeOverrides(modePrompt);
+   * }
+   * ```
+   */
+  async loadMode(mode: string): Promise<string | null> {
+    try {
+      const loaded = await this.load(mode, "mode");
+      return loaded.content;
+    } catch {
+      // Mode prompt is optional - return null instead of throwing
+      return null;
     }
   }
 
@@ -472,7 +523,7 @@ export class PromptLoader {
     }
 
     // Try to load from TypeScript role prompts
-    const rolePrompt = loadRolePrompt(name as AgentRole);
+    const rolePrompt = getRolePrompt(name as AgentRole);
     if (!rolePrompt) {
       return null;
     }

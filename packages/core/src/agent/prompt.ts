@@ -18,7 +18,6 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { z } from "zod";
-import type { AgentMode } from "./modes.js";
 
 // =============================================================================
 // Constants
@@ -79,41 +78,6 @@ export interface SystemPromptResult {
   prompt: string;
   /** Files that were included */
   includedFiles: string[];
-}
-
-// =============================================================================
-// Provider Headers
-// =============================================================================
-
-/**
- * Provider-specific system prompt headers
- */
-const PROVIDER_HEADERS: Record<string, string> = {
-  anthropic: `You are Claude, an AI assistant created by Anthropic to be helpful, harmless, and honest.`,
-  openai: `You are a helpful AI assistant.`,
-  google: `You are Gemini, a helpful AI assistant.`,
-  deepseek: `You are DeepSeek, a helpful AI assistant.`,
-};
-
-/**
- * Get provider-specific header
- *
- * @param providerType - Provider type
- * @returns Provider header or empty string
- */
-export function getProviderHeader(providerType?: string): string {
-  if (!providerType) {
-    return "";
-  }
-
-  // Check for partial matches (e.g., "anthropic" matches "anthropic-claude")
-  for (const [key, header] of Object.entries(PROVIDER_HEADERS)) {
-    if (providerType.includes(key)) {
-      return header;
-    }
-  }
-
-  return "";
 }
 
 // =============================================================================
@@ -217,129 +181,6 @@ export async function readRuleFile(filepath: string): Promise<string> {
   } catch {
     return "";
   }
-}
-
-// =============================================================================
-// System Prompt Builder
-// =============================================================================
-
-/**
- * Build the complete system prompt.
- *
- * Assembles all sections in order:
- * 1. Provider header
- * 2. Environment info
- * 3. Rule files (AGENTS.md, CLAUDE.md)
- * 4. Mode-specific prompt
- * 5. Custom instructions
- *
- * @param config - System prompt configuration
- * @returns Assembled system prompt result
- *
- * @example
- * ```typescript
- * const result = await buildSystemPrompt({
- *   cwd: '/home/user/project',
- *   mode: 'code',
- *   providerType: 'anthropic',
- * });
- *
- * console.log(result.prompt);
- * ```
- */
-export async function buildSystemPrompt(config: SystemPromptConfig): Promise<SystemPromptResult> {
-  const validated = SystemPromptConfigSchema.parse(config);
-  const sections: string[] = [];
-  const includedFiles: string[] = [];
-
-  // 1. Provider header
-  const providerHeader = getProviderHeader(validated.providerType);
-  if (providerHeader) {
-    sections.push(providerHeader);
-  }
-
-  // 2. Environment info
-  if (validated.includeEnvironment !== false) {
-    sections.push(buildEnvironmentInfo(validated));
-  }
-
-  // 3. Rule files
-  if (validated.includeRuleFiles !== false) {
-    const localFiles = await findLocalRuleFiles(validated.cwd, validated.projectRoot);
-    const globalFiles = await findGlobalRuleFiles();
-    const allFiles = [...localFiles, ...globalFiles];
-
-    for (const filepath of allFiles) {
-      const content = await readRuleFile(filepath);
-      if (content) {
-        sections.push(content);
-        includedFiles.push(filepath);
-      }
-    }
-  }
-
-  // 4. Mode-specific prompt
-  if (validated.modePrompt) {
-    sections.push(validated.modePrompt);
-  }
-
-  // 5. Custom instructions
-  if (validated.customInstructions) {
-    for (const instruction of validated.customInstructions) {
-      if (instruction.trim()) {
-        sections.push(instruction);
-      }
-    }
-  }
-
-  // Filter empty sections and join
-  const filteredSections = sections.filter((s) => s.trim().length > 0);
-  const prompt = filteredSections.join("\n\n");
-
-  return {
-    sections: filteredSections,
-    prompt,
-    includedFiles,
-  };
-}
-
-// =============================================================================
-// Convenience Functions
-// =============================================================================
-
-/**
- * Build a simple system prompt for a mode.
- *
- * @param mode - Agent mode
- * @param cwd - Current working directory
- * @param options - Additional options
- * @returns Assembled system prompt string
- *
- * @example
- * ```typescript
- * const prompt = await buildModePrompt('code', '/home/user/project');
- * ```
- */
-export async function buildModePrompt(
-  mode: AgentMode,
-  cwd: string,
-  options?: {
-    providerType?: string;
-    modePrompt?: string;
-    customInstructions?: string[];
-  }
-): Promise<string> {
-  const result = await buildSystemPrompt({
-    cwd,
-    mode,
-    providerType: options?.providerType,
-    modePrompt: options?.modePrompt,
-    customInstructions: options?.customInstructions,
-    includeEnvironment: true,
-    includeRuleFiles: true,
-  });
-
-  return result.prompt;
 }
 
 /**

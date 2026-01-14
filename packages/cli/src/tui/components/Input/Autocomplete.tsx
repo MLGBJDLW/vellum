@@ -8,7 +8,7 @@
  */
 
 import { Box, Text, useInput } from "ink";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -41,6 +41,8 @@ export interface AutocompleteProps {
   readonly onSelect: (value: string) => void;
   /** Callback when autocomplete is cancelled (Escape) */
   readonly onCancel: () => void;
+  /** Callback when selection index changes (for parent to track selection state) */
+  readonly onSelectionChange?: (index: number, hasOptions: boolean) => void;
   /** Whether the autocomplete dropdown is visible (default: true) */
   readonly visible?: boolean;
   /**
@@ -283,11 +285,12 @@ function HighlightedOption({
  * />
  * ```
  */
-export function Autocomplete({
+function AutocompleteComponent({
   input,
   options,
-  onSelect,
+  onSelect: _onSelect, // kept for API compatibility; selection handled by parent CommandInput
   onCancel,
+  onSelectionChange,
   visible = true,
   active,
   maxVisible = 10,
@@ -371,12 +374,24 @@ export function Autocomplete({
     return { visibleItems: items, overflowCount: overflow };
   }, [displayItems, maxVisible, windowStart, selectedIndex]);
 
-  // Reset selection when input changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Intentionally reset selection when input prop changes
+  // Track previous input to only reset selection when input actually changes
+  const prevInputRef = useRef(input);
+
+  // Reset selection when input value actually changes
   useEffect(() => {
-    setSelectedIndex(0);
-    setWindowStart(0);
+    if (prevInputRef.current !== input) {
+      startTransition(() => {
+        setSelectedIndex(0);
+        setWindowStart(0);
+      });
+      prevInputRef.current = input;
+    }
   }, [input]);
+
+  // Notify parent of selection changes
+  useEffect(() => {
+    onSelectionChange?.(selectedIndex, selectableOptions.length > 0);
+  }, [selectedIndex, selectableOptions.length, onSelectionChange]);
 
   // Keep selection in bounds when filtered list changes
   useEffect(() => {
@@ -392,7 +407,8 @@ export function Autocomplete({
     }
   }, [selectableOptions.length, selectedIndex]);
 
-  // Handle keyboard input
+  // Handle keyboard input for arrow navigation and escape only
+  // Note: Enter/Tab selection is handled by parent CommandInput to avoid race condition
   useInput(
     useCallback(
       (_char, key) => {
@@ -410,22 +426,13 @@ export function Autocomplete({
           return;
         }
 
-        // Tab or Enter - select current option
-        if (key.tab || key.return) {
-          const selected = selectableOptions[selectedIndex];
-          if (selected) {
-            onSelect(selected.name);
-          }
-          return;
-        }
-
         // Escape - cancel autocomplete
         if (key.escape) {
           onCancel();
           return;
         }
       },
-      [visible, selectableOptions, selectedIndex, onSelect, onCancel]
+      [visible, selectableOptions, onCancel]
     ),
     { isActive: isActive && selectableOptions.length > 0 }
   );
@@ -515,3 +522,8 @@ export function Autocomplete({
     </Box>
   );
 }
+
+/**
+ * Memoized Autocomplete to prevent unnecessary re-renders.
+ */
+export const Autocomplete = memo(AutocompleteComponent);

@@ -462,6 +462,18 @@ export class OpenAIProvider {
   }
 
   /**
+   * Check if the provider supports reasoning_content extraction
+   *
+   * Override in subclasses to enable reasoning content extraction for
+   * models that return reasoning in a `reasoning_content` field.
+   *
+   * @returns true if the provider's models return reasoning_content
+   */
+  protected supportsReasoningContent(): boolean {
+    return false;
+  }
+
+  /**
    * Create transform config for OpenAI API calls.
    * @param model - Optional model ID for model-specific features
    */
@@ -612,7 +624,7 @@ export class OpenAIProvider {
    * Normalize OpenAI response to our CompletionResult format
    */
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Response normalization requires handling O-series reasoning and tool calls
-  private normalizeResponse(response: ChatCompletion, isOSeries: boolean): CompletionResult {
+  protected normalizeResponse(response: ChatCompletion, isOSeries: boolean): CompletionResult {
     const choice = response.choices[0];
     if (!choice) {
       throw new ProviderError("No completion choice returned", {
@@ -627,9 +639,10 @@ export class OpenAIProvider {
     let thinking: string | undefined;
     const toolCalls: ToolCall[] = [];
 
-    // Extract reasoning content for O-series models
-    if (isOSeries) {
-      // O-series models may return reasoning in a separate field
+    // Extract reasoning content for models that support it
+    // This includes O-series (o1, o3) and DeepSeek Reasoner models
+    if (isOSeries || this.supportsReasoningContent()) {
+      // Models may return reasoning in a separate field
       const messageWithReasoning = message as typeof message & {
         reasoning_content?: string;
       };
@@ -689,7 +702,7 @@ export class OpenAIProvider {
    * Process streaming response and yield normalized events
    */
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Stream processing requires handling multiple delta types and tool call accumulation
-  private async *processStream(
+  protected async *processStream(
     stream: AsyncIterable<ChatCompletionChunk>
   ): AsyncIterable<StreamEvent> {
     // Track state for tool calls
@@ -707,6 +720,17 @@ export class OpenAIProvider {
 
       if (choice) {
         const delta = choice.delta;
+
+        // Handle reasoning content (for O-series and compatible models like DeepSeek Reasoner)
+        // DeepSeek streams reasoning in delta.reasoning_content
+        const deltaWithReasoning = delta as typeof delta & { reasoning_content?: string };
+        if (deltaWithReasoning.reasoning_content) {
+          const reasoningEvent: StreamReasoningEvent = {
+            type: "reasoning",
+            content: deltaWithReasoning.reasoning_content,
+          };
+          yield reasoningEvent;
+        }
 
         // Handle text content
         if (delta.content) {

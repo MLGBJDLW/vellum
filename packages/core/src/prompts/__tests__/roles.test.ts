@@ -7,7 +7,6 @@
  *
  * Tests cover:
  * - BASE_PROMPT: Safety guardrails and content stability
- * - loadRolePrompt(): Correct prompt loading for each role
  * - Individual role prompts: Required keywords and content
  * - Safety verification: Content integrity checks
  *
@@ -20,7 +19,6 @@ import {
   ARCHITECT_PROMPT,
   BASE_PROMPT,
   CODER_PROMPT,
-  loadRolePrompt,
   ORCHESTRATOR_PROMPT,
   QA_PROMPT,
   WRITER_PROMPT,
@@ -82,64 +80,6 @@ describe("BASE_PROMPT", () => {
 
     it("contains error handling section", () => {
       expect(BASE_PROMPT).toContain("Error Handling");
-    });
-  });
-});
-
-// =============================================================================
-// loadRolePrompt Tests
-// =============================================================================
-
-describe("loadRolePrompt", () => {
-  describe("valid roles", () => {
-    it("returns correct prompt for orchestrator role", () => {
-      const result = loadRolePrompt("orchestrator");
-      expect(result).toBe(ORCHESTRATOR_PROMPT);
-    });
-
-    it("returns correct prompt for coder role", () => {
-      const result = loadRolePrompt("coder");
-      expect(result).toBe(CODER_PROMPT);
-    });
-
-    it("returns correct prompt for qa role", () => {
-      const result = loadRolePrompt("qa");
-      expect(result).toBe(QA_PROMPT);
-    });
-
-    it("returns correct prompt for writer role", () => {
-      const result = loadRolePrompt("writer");
-      expect(result).toBe(WRITER_PROMPT);
-    });
-
-    it("returns correct prompt for analyst role", () => {
-      const result = loadRolePrompt("analyst");
-      expect(result).toBe(ANALYST_PROMPT);
-    });
-
-    it("returns correct prompt for architect role", () => {
-      const result = loadRolePrompt("architect");
-      expect(result).toBe(ARCHITECT_PROMPT);
-    });
-  });
-
-  describe("invalid roles", () => {
-    it("returns empty string for invalid role", () => {
-      // @ts-expect-error - Testing invalid input
-      const result = loadRolePrompt("invalid");
-      expect(result).toBe("");
-    });
-
-    it("returns empty string for undefined role", () => {
-      // @ts-expect-error - Testing invalid input
-      const result = loadRolePrompt(undefined);
-      expect(result).toBe("");
-    });
-
-    it("returns empty string for empty string role", () => {
-      // @ts-expect-error - Testing invalid input
-      const result = loadRolePrompt("");
-      expect(result).toBe("");
     });
   });
 });

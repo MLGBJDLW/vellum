@@ -7,6 +7,18 @@
  */
 
 export {
+  disableBracketedPaste,
+  enableBracketedPaste,
+  extractPasteContent,
+  hasPasteEnd,
+  hasPasteStart,
+  PASTE_END,
+  PASTE_START,
+} from "./bracketedPaste.js";
+
+export { CursorManager, type CursorManagerImpl } from "./cursor-manager.js";
+
+export {
   clearTerminalCapabilitiesCache,
   createHyperlink,
   type DetectTerminalOptions,
@@ -18,3 +30,7 @@ export {
   type TerminalCapabilities,
   type TerminalType,
 } from "./detectTerminal.js";
+
+export { findLastSafeSplitPoint } from "./findLastSafeSplitPoint.js";
+
+export { isSyncUpdateSupported, syncUpdate } from "./synchronized-update.js";

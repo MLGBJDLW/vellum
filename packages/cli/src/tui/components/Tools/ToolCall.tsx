@@ -10,7 +10,7 @@
 import { getIcons } from "@vellum/shared";
 import { Box, Text } from "ink";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useAnimation } from "../../context/AnimationContext.js";
 import type { ToolExecution, ToolExecutionStatus } from "../../context/ToolsContext.js";
 import { useTheme } from "../../theme/index.js";
 
@@ -36,9 +36,6 @@ export interface ToolCallProps {
 
 /** Spinner animation frames for running status */
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-
-/** Spinner animation interval in milliseconds */
-const SPINNER_INTERVAL_MS = 80;
 
 /**
  * Get status icons using the icon system for proper Unicode/ASCII support.
@@ -123,18 +120,13 @@ function formatDuration(ms: number): string {
 
 /**
  * Animated spinner indicator for running status.
+ * Uses global AnimationContext to prevent flickering from competing timers.
  */
 function Spinner(): React.JSX.Element {
-  const [frameIndex, setFrameIndex] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setFrameIndex((prev) => (prev + 1) % SPINNER_FRAMES.length);
-    }, SPINNER_INTERVAL_MS);
-
-    return () => clearInterval(timer);
-  }, []);
-
+  const { frame, isPaused } = useAnimation();
+  // Map global frame to spinner frame (slower than global tick)
+  // Divide by 2 to slow down spinner relative to global tick rate
+  const frameIndex = isPaused ? 0 : Math.floor(frame / 2) % SPINNER_FRAMES.length;
   return <Text color="cyan">{SPINNER_FRAMES[frameIndex]}</Text>;
 }
 

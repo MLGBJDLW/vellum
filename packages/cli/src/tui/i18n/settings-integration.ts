@@ -14,11 +14,20 @@ import * as path from "node:path";
 import { isLocaleSupported, type LocaleCode } from "./language-config.js";
 
 /**
+ * UI configuration options.
+ */
+export interface UISettings {
+  /** Enable alternate screen buffer (default: true) */
+  alternateBuffer?: boolean;
+}
+
+/**
  * Settings file structure.
  */
 interface VellumSettings {
   language?: LocaleCode;
   bannerSeen?: boolean;
+  ui?: UISettings;
   [key: string]: unknown;
 }
 
@@ -188,4 +197,62 @@ export function setBannerSeen(seen: boolean): void {
     bannerSeen: seen,
   };
   writeSettings(newSettings);
+}
+
+// =============================================================================
+// UI Settings
+// =============================================================================
+
+/**
+ * Get the alternate buffer preference from settings.
+ *
+ * @returns True if alternate buffer is enabled (default: true), false if disabled
+ *
+ * @example
+ * ```typescript
+ * const altBufferEnabled = getAlternateBufferEnabled();
+ * ```
+ */
+export function getAlternateBufferEnabled(): boolean {
+  const settings = readSettings();
+  // Default to true if not set
+  return settings?.ui?.alternateBuffer ?? true;
+}
+
+/**
+ * Save alternate buffer preference to settings.
+ *
+ * Creates the settings file and directory if they don't exist.
+ * Preserves other settings in the file.
+ *
+ * @param enabled - Whether to enable alternate buffer
+ *
+ * @example
+ * ```typescript
+ * setAlternateBufferEnabled(false);
+ * // Now getAlternateBufferEnabled() returns false
+ * ```
+ */
+export function setAlternateBufferEnabled(enabled: boolean): void {
+  const existingSettings = readSettings() ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    ui: {
+      ...existingSettings.ui,
+      alternateBuffer: enabled,
+    },
+  };
+  writeSettings(newSettings);
+}
+
+/**
+ * Get all UI settings.
+ *
+ * @returns UI settings object with defaults applied
+ */
+export function getUISettings(): UISettings {
+  const settings = readSettings();
+  return {
+    alternateBuffer: settings?.ui?.alternateBuffer ?? true,
+  };
 }

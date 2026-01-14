@@ -8,6 +8,7 @@
  */
 
 import {
+  type CredentialManager,
   createCompleteStep,
   createModeSelectStep,
   createProviderSelectStep,
@@ -24,11 +25,11 @@ import {
   OnboardingWizard as WizardCore,
 } from "@vellum/core";
 import { Box, Text, useApp, useInput } from "ink";
-import TextInput from "ink-text-input";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { TextInput } from "./Input/TextInput.js";
 
 // =============================================================================
 // Types
@@ -49,6 +50,8 @@ export interface OnboardingWizardProps {
   onComplete?: (result: { provider: string; mode: string; credentialsConfigured: boolean }) => void;
   /** Callback when user cancels */
   onCancel?: () => void;
+  /** Credential manager for secure API key storage */
+  credentialManager?: CredentialManager;
 }
 
 /**
@@ -373,12 +376,20 @@ export function OnboardingWizard({
   initialStep = "welcome",
   onComplete,
   onCancel,
+  credentialManager,
 }: OnboardingWizardProps): React.ReactElement {
   const { exit } = useApp();
   const { theme } = useTheme();
 
   // Initialize wizard
   const [wizard] = useState(() => providedWizard || new WizardCore());
+
+  // Connect credential manager to wizard when provided
+  useEffect(() => {
+    if (credentialManager) {
+      wizard.setCredentialManager(credentialManager);
+    }
+  }, [wizard, credentialManager]);
 
   // Component state
   const [state, setState] = useState<WizardState>({

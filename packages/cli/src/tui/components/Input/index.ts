@@ -10,12 +10,6 @@ export {
   type AutocompleteProps,
 } from "./Autocomplete.js";
 export {
-  CommandInput,
-  type CommandInputProps,
-  parseSlashCommand,
-  type SlashCommand,
-} from "./CommandInput.js";
-export {
   EnhancedCommandInput,
   type EnhancedCommandInputProps,
 } from "./EnhancedCommandInput.js";
@@ -25,4 +19,5 @@ export {
   type MentionAutocompleteMode,
   type MentionAutocompleteProps,
 } from "./MentionAutocomplete.js";
+export { parseSlashCommand, type SlashCommand } from "./slash-command-utils.js";
 export { TextInput, type TextInputProps } from "./TextInput.js";

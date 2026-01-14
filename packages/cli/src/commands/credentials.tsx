@@ -20,8 +20,9 @@ import {
   KeychainStore,
 } from "@vellum/core";
 import { Box, render, Text, useApp, useInput } from "ink";
-import TextInput from "ink-text-input";
 import { useCallback, useEffect, useState } from "react";
+import { TextInput } from "../tui/components/Input/TextInput.js";
+import { BracketedPasteProvider } from "../tui/context/BracketedPasteContext.js";
 
 // =============================================================================
 // Types
@@ -575,15 +576,27 @@ function CredentialsApp({ action, provider }: CredentialsAppProps) {
 // =============================================================================
 
 export function renderCredentialsList(): void {
-  render(<CredentialsApp action="list" />);
+  render(
+    <BracketedPasteProvider>
+      <CredentialsApp action="list" />
+    </BracketedPasteProvider>
+  );
 }
 
 export function renderCredentialsAdd(provider: string): void {
-  render(<CredentialsApp action="add" provider={provider} />);
+  render(
+    <BracketedPasteProvider>
+      <CredentialsApp action="add" provider={provider} />
+    </BracketedPasteProvider>
+  );
 }
 
 export function renderCredentialsRemove(provider: string): void {
-  render(<CredentialsApp action="remove" provider={provider} />);
+  render(
+    <BracketedPasteProvider>
+      <CredentialsApp action="remove" provider={provider} />
+    </BracketedPasteProvider>
+  );
 }
 
 // =============================================================================

@@ -305,7 +305,8 @@ describe("codingModeToCore", () => {
     const core = codingModeToCore(SPEC_MODE);
 
     expect(core.name).toBe("plan");
-    expect(core.prompt).toContain("6-phase");
+    // Prompt is now empty - MD files are loaded via createAgentFactory()
+    expect(core.prompt).toBe("");
     // CodingModeConfig-specific fields should not exist
     expect((core as CodingModeConfig).codingMode).toBeUndefined();
   });

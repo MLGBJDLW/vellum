@@ -19,6 +19,19 @@ import type React from "react";
 import { act, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Mock StreamingText to disable typewriter effect in integration tests
+// This ensures content appears immediately for reliable assertions
+vi.mock("../tui/components/Messages/StreamingText.js", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("../tui/components/Messages/StreamingText.js")>();
+  return {
+    ...original,
+    StreamingText: (props: React.ComponentProps<typeof original.StreamingText>) => (
+      <original.StreamingText {...props} typewriterEffect={false} />
+    ),
+  };
+});
+
 // Icons are fetched in beforeEach to ensure setup has run first
 let icons: IconSet;
 
@@ -136,7 +149,7 @@ describe("Integration: Send Message → MessageList", () => {
     expect(frame).toContain("First answer");
     expect(frame).toContain("Second question");
     expect(frame).toContain("You"); // User messages
-    expect(frame).toContain("Assistant"); // Assistant message
+    expect(frame).toContain("Vellum"); // Assistant message
   });
 
   it("displays messages with correct role icons", async () => {
@@ -261,7 +274,7 @@ describe("Integration: Receive Response → Streaming Updates", () => {
       </IntegrationWrapper>
     );
 
-    // Initially shows streaming
+    // Wait for render
     await act(async () => {
       vi.advanceTimersByTime(10);
     });
@@ -272,7 +285,7 @@ describe("Integration: Receive Response → Streaming Updates", () => {
 
     // After completion
     await act(async () => {
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(600);
     });
 
     frame = lastFrame() ?? "";
@@ -304,7 +317,7 @@ describe("Integration: Receive Response → Streaming Updates", () => {
       </IntegrationWrapper>
     );
 
-    // Initial content
+    // Wait for initial render
     await act(async () => {
       vi.advanceTimersByTime(10);
     });
@@ -324,9 +337,10 @@ describe("Integration: Receive Response → Streaming Updates", () => {
   });
 
   it("renders StreamingText component with cursor during streaming", async () => {
+    // Disable typewriter for immediate content display test
     const { lastFrame } = render(
       <IntegrationWrapper>
-        <StreamingText content="Typing in progress" isStreaming={true} />
+        <StreamingText content="Typing in progress" isStreaming={true} typewriterEffect={false} />
       </IntegrationWrapper>
     );
 
@@ -1207,7 +1221,7 @@ describe("Integration: Edge Cases", () => {
       </IntegrationWrapper>
     );
 
-    // Wait for all updates
+    // Wait for all updates with real timers
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });

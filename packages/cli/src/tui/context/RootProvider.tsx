@@ -13,7 +13,9 @@ import type React from "react";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "../theme/provider.js";
+import { AnimationProvider } from "./AnimationContext.js";
 import { AppProvider, type AppState } from "./AppContext.js";
+import { BracketedPasteProvider } from "./BracketedPasteContext.js";
 import { McpProvider } from "./McpContext.js";
 import { type Message, MessagesProvider } from "./MessagesContext.js";
 import { ToolsProvider } from "./ToolsContext.js";
@@ -106,13 +108,17 @@ export function RootProvider({
 }: RootProviderProps): React.JSX.Element {
   return (
     <ThemeProvider theme={theme}>
-      <AppProvider initialState={initialAppState}>
-        <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
-          <MessagesProvider initialMessages={initialMessages}>
-            <ToolsProvider>{children}</ToolsProvider>
-          </MessagesProvider>
-        </McpProvider>
-      </AppProvider>
+      <AnimationProvider>
+        <BracketedPasteProvider>
+          <AppProvider initialState={initialAppState}>
+            <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
+              <MessagesProvider initialMessages={initialMessages}>
+                <ToolsProvider>{children}</ToolsProvider>
+              </MessagesProvider>
+            </McpProvider>
+          </AppProvider>
+        </BracketedPasteProvider>
+      </AnimationProvider>
     </ThemeProvider>
   );
 }

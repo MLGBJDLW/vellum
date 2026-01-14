@@ -248,6 +248,10 @@ export function codingModeToCore(config: CodingModeConfig): ModeConfig {
 /**
  * Vibe mode configuration - fast autonomous coding.
  *
+ * Note: The `prompt` field contains a hardcoded fallback.
+ * MD prompts from `markdown/modes/vibe.md` take priority when
+ * using `createAgentFactory()` with `mode: 'vibe'`.
+ *
  * Characteristics:
  * - Level: worker (leaf-level executor)
  * - Approval: full-auto (no user confirmation)
@@ -270,7 +274,8 @@ export const VIBE_MODE: CodingModeConfig = {
   codingMode: "vibe",
   description: "Fast autonomous coding with full tool access",
   tools: { edit: true, bash: true, web: true, mcp: true },
-  prompt: "Execute tasks quickly and autonomously. You have full access to all tools.",
+  // Prompt loaded from markdown/modes/vibe.md via createAgentFactory()
+  prompt: "",
   agentName: "vibe-agent",
   approvalPolicy: "full-auto",
   sandboxPolicy: "full-access",
@@ -281,6 +286,10 @@ export const VIBE_MODE: CodingModeConfig = {
 
 /**
  * Plan mode configuration - plan-then-execute workflow.
+ *
+ * Note: The `prompt` field contains a hardcoded fallback.
+ * MD prompts from `markdown/modes/plan.md` take priority when
+ * using `createAgentFactory()` with `mode: 'plan'`.
  *
  * Characteristics:
  * - Level: workflow (mid-level manager)
@@ -304,7 +313,8 @@ export const PLAN_MODE: CodingModeConfig = {
   codingMode: "plan",
   description: "Plan-then-execute with one checkpoint",
   tools: { edit: true, bash: "readonly", web: true, mcp: true },
-  prompt: "First analyze and plan your approach, then execute after user approval.",
+  // Prompt loaded from markdown/modes/plan.md via createAgentFactory()
+  prompt: "",
   agentName: "plan-agent",
   approvalPolicy: "auto-edit",
   sandboxPolicy: "workspace-write",
@@ -315,6 +325,10 @@ export const PLAN_MODE: CodingModeConfig = {
 
 /**
  * Spec mode configuration - 6-phase structured workflow.
+ *
+ * Note: The `prompt` field contains a hardcoded fallback.
+ * MD prompts from `markdown/modes/spec.md` take priority when
+ * using `createAgentFactory()` with `mode: 'spec'`.
  *
  * Characteristics:
  * - Level: orchestrator (top-level coordinator)
@@ -347,8 +361,8 @@ export const SPEC_MODE: CodingModeConfig = {
   codingMode: "spec",
   description: "6-phase workflow with checkpoints at each phase",
   tools: { edit: false, bash: "readonly", web: true, mcp: true },
-  prompt:
-    "Follow the structured 6-phase specification workflow. Each phase requires checkpoint approval.",
+  // Prompt loaded from markdown/modes/spec.md via createAgentFactory()
+  prompt: "",
   agentName: "spec-orchestrator",
   approvalPolicy: "suggest",
   sandboxPolicy: "workspace-read",

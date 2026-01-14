@@ -99,7 +99,7 @@ describe("MessageList", () => {
 
       const frame = lastFrame() ?? "";
       expect(frame).toContain("You");
-      expect(frame).toContain("Assistant");
+      expect(frame).toContain("Vellum");
       expect(frame).toContain("System");
       expect(frame).toContain("Tool");
     });

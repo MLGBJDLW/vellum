@@ -19,7 +19,7 @@ import {
   toSlashCommandResult,
   wrapLegacyHandler,
 } from "../adapters.js";
-import { credentialsCommand, loginCommand, logoutCommand } from "../auth.js";
+import { authCommand, credentialsCommand } from "../auth.js";
 import type {
   CommandContext,
   CommandError,
@@ -345,145 +345,6 @@ describe("maskValue", () => {
 });
 
 // =============================================================================
-// T034: Enhanced Login Command Tests
-// =============================================================================
-
-describe("loginCommand", () => {
-  it("should have correct metadata", () => {
-    expect(loginCommand.name).toBe("login");
-    expect(loginCommand.kind).toBe("builtin");
-    expect(loginCommand.category).toBe("auth");
-    expect(loginCommand.aliases).toContain("signin");
-  });
-
-  it("should return interactive prompt for API key", async () => {
-    const ctx = createMockContext({
-      parsedArgs: { positional: ["anthropic"], named: {} },
-    });
-
-    const result = await loginCommand.execute(ctx);
-
-    expect(result.kind).toBe("interactive");
-    const interactive = result as CommandInteractive;
-    expect(interactive.prompt.inputType).toBe("password");
-    expect(interactive.prompt.message).toContain("anthropic");
-    expect(interactive.prompt.provider).toBe("anthropic");
-  });
-
-  it("should return error when no provider specified and none in session", async () => {
-    const ctx = createMockContext({
-      parsedArgs: { positional: [], named: {} },
-      session: { id: "test", provider: "", cwd: "/" },
-    });
-
-    const result = await loginCommand.execute(ctx);
-
-    expect(result.kind).toBe("error");
-    expect((result as CommandError).code).toBe("MISSING_ARGUMENT");
-  });
-
-  it("should accept --store option", async () => {
-    const ctx = createMockContext({
-      parsedArgs: { positional: ["openai"], named: { store: "keychain" } },
-    });
-
-    const result = await loginCommand.execute(ctx);
-
-    expect(result.kind).toBe("interactive");
-    // Store is used when handler is called, tested via integration
-  });
-
-  it("should indicate updating when credential exists", async () => {
-    const ctx = createMockContext({
-      parsedArgs: { positional: ["anthropic"], named: {} },
-    });
-    (ctx.credentials.exists as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      value: true,
-    });
-
-    const result = await loginCommand.execute(ctx);
-
-    expect(result.kind).toBe("interactive");
-    const interactive = result as CommandInteractive;
-    expect(interactive.prompt.message).toContain("Updating");
-  });
-});
-
-// =============================================================================
-// T034: Enhanced Logout Command Tests
-// =============================================================================
-
-describe("logoutCommand", () => {
-  it("should have correct metadata", () => {
-    expect(logoutCommand.name).toBe("logout");
-    expect(logoutCommand.kind).toBe("builtin");
-    expect(logoutCommand.category).toBe("auth");
-    expect(logoutCommand.aliases).toContain("signout");
-  });
-
-  it("should return confirmation prompt without --force", async () => {
-    const ctx = createMockContext({
-      parsedArgs: { positional: ["anthropic"], named: { force: false } },
-    });
-    (ctx.credentials.exists as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      value: true,
-    });
-
-    const result = await logoutCommand.execute(ctx);
-
-    expect(result.kind).toBe("interactive");
-    const interactive = result as CommandInteractive;
-    expect(interactive.prompt.inputType).toBe("confirm");
-    expect(interactive.prompt.message).toContain("Are you sure");
-  });
-
-  it("should delete immediately with --force", async () => {
-    const ctx = createMockContext({
-      parsedArgs: { positional: ["anthropic"], named: { force: true } },
-    });
-    (ctx.credentials.exists as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      value: true,
-    });
-
-    const result = await logoutCommand.execute(ctx);
-
-    expect(result.kind).toBe("success");
-    expect(ctx.credentials.delete).toHaveBeenCalledWith("anthropic");
-    expect((result as CommandSuccess).message).toContain("removed");
-  });
-
-  it("should return error when no credential found", async () => {
-    const ctx = createMockContext({
-      parsedArgs: { positional: ["unknown"], named: { force: true } },
-    });
-    (ctx.credentials.exists as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      value: false,
-    });
-
-    const result = await logoutCommand.execute(ctx);
-
-    expect(result.kind).toBe("error");
-    expect((result as CommandError).code).toBe("CREDENTIAL_NOT_FOUND");
-  });
-
-  it("should return error when no provider specified", async () => {
-    const ctx = createMockContext({
-      parsedArgs: { positional: [], named: {} },
-      session: { id: "test", provider: "", cwd: "/" },
-    });
-
-    const result = await logoutCommand.execute(ctx);
-
-    expect(result.kind).toBe("error");
-    expect((result as CommandError).code).toBe("MISSING_ARGUMENT");
-  });
-});
-
-// =============================================================================
 // T034: Enhanced Credentials Command Tests
 // =============================================================================
 
@@ -546,6 +407,187 @@ describe("credentialsCommand", () => {
     expect(result.kind).toBe("success");
     const success = result as CommandSuccess;
     expect(success.message).toContain("No credentials stored");
+  });
+});
+
+// =============================================================================
+// T035: Unified Auth Command Tests
+// =============================================================================
+
+describe("authCommand", () => {
+  it("should have correct metadata", () => {
+    expect(authCommand.name).toBe("auth");
+    expect(authCommand.kind).toBe("builtin");
+    expect(authCommand.category).toBe("auth");
+    expect(authCommand.subcommands).toHaveLength(3);
+    expect(authCommand.subcommands?.map((s) => s.name)).toEqual(["status", "set", "clear"]);
+  });
+
+  describe("/auth status", () => {
+    it("should show authentication status with /auth", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: [], named: {} },
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("success");
+      const success = result as CommandSuccess;
+      expect(success.message).toContain("Authentication Status");
+      expect(success.message).toContain("Storage Backends");
+      expect(success.message).toContain("Configured Providers");
+    });
+
+    it("should show authentication status with /auth status", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["status"], named: {} },
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("success");
+      const success = result as CommandSuccess;
+      expect(success.message).toContain("Authentication Status");
+    });
+
+    it("should filter by provider with /auth status <provider>", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["status", "anthropic"], named: {} },
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("success");
+      expect(ctx.credentials.list).toHaveBeenCalledWith("anthropic");
+    });
+  });
+
+  describe("/auth set", () => {
+    it("should return interactive prompt for API key", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["set", "anthropic"], named: {} },
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("interactive");
+      const interactive = result as CommandInteractive;
+      expect(interactive.prompt.inputType).toBe("password");
+      expect(interactive.prompt.message.toLowerCase()).toContain("anthropic");
+      expect(interactive.prompt.provider).toBe("anthropic");
+    });
+
+    it("should return error when no provider specified", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["set"], named: {} },
+        session: { id: "test", provider: "", cwd: "/" },
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("error");
+      expect((result as CommandError).code).toBe("MISSING_ARGUMENT");
+    });
+
+    it("should use session provider when not specified", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["set"], named: {} },
+        session: { provider: "openai" },
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("interactive");
+      const interactive = result as CommandInteractive;
+      expect(interactive.prompt.provider).toBe("openai");
+    });
+  });
+
+  describe("/auth clear", () => {
+    it("should return confirmation prompt without --force", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["clear", "anthropic"], named: { force: false } },
+      });
+      (ctx.credentials.exists as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        value: true,
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("interactive");
+      const interactive = result as CommandInteractive;
+      expect(interactive.prompt.inputType).toBe("confirm");
+      expect(interactive.prompt.message).toContain("Are you sure");
+    });
+
+    it("should delete immediately with --force", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["clear", "anthropic"], named: { force: true } },
+      });
+      (ctx.credentials.exists as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        value: true,
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("success");
+      expect(ctx.credentials.delete).toHaveBeenCalledWith("anthropic");
+    });
+
+    it("should return error when no provider specified", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["clear"], named: {} },
+        session: { id: "test", provider: "", cwd: "/" },
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("error");
+      expect((result as CommandError).code).toBe("MISSING_ARGUMENT");
+    });
+
+    it("should return error when credential not found", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["clear", "unknown"], named: { force: true } },
+      });
+      (ctx.credentials.exists as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        value: false,
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("error");
+      expect((result as CommandError).code).toBe("CREDENTIAL_NOT_FOUND");
+    });
+  });
+
+  describe("subcommand aliases", () => {
+    it("should handle 'add' as alias for 'set'", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["add", "anthropic"], named: {} },
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("interactive");
+    });
+
+    it("should handle 'remove' as alias for 'clear'", async () => {
+      const ctx = createMockContext({
+        parsedArgs: { positional: ["remove", "anthropic"], named: { force: true } },
+      });
+      (ctx.credentials.exists as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        value: true,
+      });
+
+      const result = await authCommand.execute(ctx);
+
+      expect(result.kind).toBe("success");
+    });
   });
 });
 

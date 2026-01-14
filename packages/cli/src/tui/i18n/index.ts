@@ -25,8 +25,14 @@ export { detectSystemLocale, parseLocaleString } from "./locale-detection.js";
 // Settings integration
 export {
   clearSavedLanguage,
+  getAlternateBufferEnabled,
+  getBannerSeen,
   getSavedLanguage,
+  getUISettings,
   saveLanguage,
+  setAlternateBufferEnabled,
+  setBannerSeen,
+  type UISettings,
 } from "./settings-integration.js";
 
 // Hook and utilities

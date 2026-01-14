@@ -6,6 +6,17 @@
  * @module tui/context
  */
 
+// Animation context (global animation loop for spinners, etc.)
+export {
+  AnimationContext,
+  type AnimationContextValue,
+  AnimationProvider,
+  type AnimationProviderProps,
+  type AnimationState,
+  useAnimation,
+  useAnimationFrame,
+} from "./AnimationContext.js";
+
 // Application state context
 export {
   type AppAction,
@@ -26,6 +37,16 @@ export {
   type ToggleVimModeAction,
   useApp,
 } from "./AppContext.js";
+
+// Bracketed paste context
+export {
+  BracketedPasteProvider,
+  type PasteHandler,
+  useBracketedPasteContext,
+  useIsPasting,
+  usePasteHandler,
+} from "./BracketedPasteContext.js";
+
 // T047: MCP Context
 export {
   type McpContextState,
@@ -34,6 +55,7 @@ export {
   useMcp,
   useMcpHub,
 } from "./McpContext.js";
+
 // Messages state context
 export {
   type AddMessageAction,
@@ -56,6 +78,7 @@ export {
 
 // Root provider composition
 export { RootProvider, type RootProviderProps } from "./RootProvider.js";
+
 // Tools state context
 export {
   type AddExecutionAction,

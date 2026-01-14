@@ -25,7 +25,7 @@ import { useTheme } from "../../theme/index.js";
  */
 export interface ApprovalQueueProps {
   /** List of tool executions pending approval */
-  readonly executions: ToolExecution[];
+  readonly executions: readonly ToolExecution[];
   /** Callback when a single execution is approved */
   readonly onApprove: (id: string) => void;
   /** Callback when a single execution is rejected */

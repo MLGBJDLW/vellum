@@ -125,12 +125,9 @@ export {
  *
  * @example
  * ```typescript
- * import { loadRolePrompt, BASE_PROMPT, CODER_PROMPT } from '@vellum/core';
+ * import { BASE_PROMPT, CODER_PROMPT } from '@vellum/core';
  *
- * // Load by role name
- * const prompt = loadRolePrompt('coder');
- *
- * // Or use constants directly
+ * // Use constants directly
  * const base = BASE_PROMPT;
  * const coder = CODER_PROMPT;
  * ```
@@ -140,7 +137,6 @@ export {
   ARCHITECT_PROMPT,
   BASE_PROMPT,
   CODER_PROMPT,
-  loadRolePrompt,
   ORCHESTRATOR_PROMPT,
   QA_PROMPT,
   WRITER_PROMPT,

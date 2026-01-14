@@ -201,15 +201,13 @@ export {
   SandboxPolicySchema,
   sandboxToRestrictions,
 } from "./policies.js";
+// Prompt utilities
 export {
   buildEnvironmentInfo,
   buildEnvironmentSection,
-  buildModePrompt,
-  buildSystemPrompt,
   findGlobalRuleFiles,
   findLocalRuleFiles,
   fromPromptBuilder,
-  getProviderHeader,
   readRuleFile,
   type SystemPromptConfig,
   SystemPromptConfigSchema,

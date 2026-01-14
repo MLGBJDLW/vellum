@@ -12,8 +12,8 @@
       "!**/node_modules",
       "!**/dist",
       "!**/*.d.ts",
-      "!**/__tests__/fixtures/**",
-      "!**/__fixtures__/**"
+      "!**/__tests__/fixtures",
+      "!**/__fixtures__"
     ]
   },
   "formatter": {

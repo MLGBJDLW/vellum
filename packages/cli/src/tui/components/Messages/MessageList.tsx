@@ -1,18 +1,32 @@
 /**
  * MessageList Component (T017)
  *
- * Displays a list of messages with auto-scroll support.
- * Automatically scrolls to the bottom when new messages arrive,
- * with the ability to pause auto-scroll when the user scrolls up.
+ * Displays a list of messages with auto-scroll support and optimized rendering.
+ * Uses Ink's <Static> component for completed messages (never re-render)
+ * and only re-renders the pending streaming message.
+ *
+ * Key optimization: Static rendering pattern from Gemini CLI
+ * - historyMessages: Rendered in <Static>, never re-render
+ * - pendingMessage: Only this causes re-renders during streaming
+ *
+ * Virtualized mode (useVirtualizedList=true):
+ * - Only renders visible items for optimal performance
+ * - Best for very long conversations (100+ messages)
+ * - Uses VirtualizedList component ported from Gemini CLI
  *
  * @module tui/components/Messages/MessageList
  */
 
 import { getIcons } from "@vellum/shared";
-import { Box, Text, useInput } from "ink";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Box, Static, Text, useInput } from "ink";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Message } from "../../context/MessagesContext.js";
 import { useTheme } from "../../theme/index.js";
+import {
+  SCROLL_TO_ITEM_END,
+  VirtualizedList,
+  type VirtualizedListRef,
+} from "../common/VirtualizedList/index.js";
 import { StreamingText } from "./StreamingText.js";
 
 // =============================================================================
@@ -23,14 +37,31 @@ import { StreamingText } from "./StreamingText.js";
  * Props for the MessageList component.
  */
 export interface MessageListProps {
-  /** Array of messages to display */
+  /** Array of messages to display (for backward compatibility) */
   readonly messages: readonly Message[];
+  /** Completed messages for <Static> rendering (never re-render) */
+  readonly historyMessages?: readonly Message[];
+  /** Currently streaming message (only this causes re-renders) */
+  readonly pendingMessage?: Message | null;
   /** Whether to automatically scroll to bottom on new messages (default: true) */
   readonly autoScroll?: boolean;
   /** Callback when scroll position changes relative to bottom */
   readonly onScrollChange?: (isAtBottom: boolean) => void;
   /** Maximum height in lines (optional, for windowed display) */
   readonly maxHeight?: number;
+  /**
+   * Enable virtualized rendering for optimal performance with large lists.
+   * When true, only visible messages are rendered.
+   * Best for conversations with 100+ messages.
+   * @default false
+   */
+  readonly useVirtualizedList?: boolean;
+  /**
+   * Estimated height per message in lines (for virtualization).
+   * Can be a fixed number or function for variable heights.
+   * @default 4
+   */
+  readonly estimatedItemHeight?: number | ((index: number) => number);
 }
 
 // =============================================================================
@@ -74,7 +105,7 @@ function getRoleLabel(role: Message["role"]): string {
     case "user":
       return "You";
     case "assistant":
-      return "Assistant";
+      return "Vellum";
     case "system":
       return "System";
     case "tool":
@@ -101,7 +132,12 @@ interface MessageItemProps {
 /**
  * Renders a single message with role icon, timestamp, and content.
  */
-function MessageItem({ message, roleColor, textColor, mutedColor }: MessageItemProps) {
+const MessageItem = memo(function MessageItem({
+  message,
+  roleColor,
+  textColor,
+  mutedColor,
+}: MessageItemProps) {
   const icon = getRoleIcon(message.role);
   const label = getRoleLabel(message.role);
   const timestamp = formatTimestamp(message.timestamp);
@@ -151,7 +187,7 @@ function MessageItem({ message, roleColor, textColor, mutedColor }: MessageItemP
       )}
     </Box>
   );
-}
+});
 
 // =============================================================================
 // Main Component
@@ -161,17 +197,29 @@ function MessageItem({ message, roleColor, textColor, mutedColor }: MessageItemP
  * MessageList displays a scrollable list of conversation messages.
  *
  * Features:
- * - Renders messages in chronological order
+ * - Renders completed messages in <Static> (never re-render)
+ * - Only pending streaming message causes re-renders
  * - Auto-scrolls to bottom when new messages arrive
  * - Disables auto-scroll when user scrolls up (PageUp/Up arrows)
  * - Re-enables auto-scroll when user scrolls to bottom
  * - Keyboard navigation (PageUp/PageDown, Home/End)
  * - Optional windowed display with maxHeight
  *
+ * Optimization pattern from Gemini CLI:
+ * - historyMessages → <Static> (rendered once, never re-render)
+ * - pendingMessage → Active re-rendering during streaming
+ *
  * @example
  * ```tsx
  * // Basic usage with auto-scroll
  * <MessageList messages={messages} />
+ *
+ * // Optimized usage with Static rendering
+ * <MessageList
+ *   messages={messages}
+ *   historyMessages={historyMessages}
+ *   pendingMessage={pendingMessage}
+ * />
  *
  * // With scroll change callback
  * <MessageList
@@ -187,13 +235,24 @@ function MessageItem({ message, roleColor, textColor, mutedColor }: MessageItemP
  * />
  * ```
  */
-export function MessageList({
+const MessageList = memo(function MessageList({
   messages,
+  historyMessages,
+  pendingMessage,
   autoScroll = true,
   onScrollChange,
   maxHeight,
+  useVirtualizedList = false,
+  estimatedItemHeight = 4,
 }: MessageListProps) {
   const { theme } = useTheme();
+
+  // Ref for VirtualizedList imperative control
+  const virtualizedListRef = useRef<VirtualizedListRef<Message>>(null);
+
+  // Determine if we're using optimized Static rendering
+  // If historyMessages is provided, use the split architecture
+  const useStaticRendering = historyMessages !== undefined;
 
   // Normalize maxHeight - treat 0, undefined, null as "no max height"
   const effectiveMaxHeight = maxHeight && maxHeight > 0 ? maxHeight : undefined;
@@ -215,7 +274,7 @@ export function MessageList({
     return scrollOffset >= messages.length - effectiveMaxHeight;
   }, [scrollOffset, messages.length, effectiveMaxHeight]);
 
-  // Calculate visible messages for windowed display
+  // Calculate visible messages for windowed display (legacy mode only)
   const visibleMessages = useMemo(() => {
     if (!effectiveMaxHeight || messages.length <= effectiveMaxHeight) {
       return messages;
@@ -333,6 +392,28 @@ export function MessageList({
   const mutedColor = theme.semantic.text.muted;
   const borderColor = theme.semantic.border.default;
 
+  // Virtualized list callbacks must be defined unconditionally to keep hook order stable.
+  const renderMessageItem = useCallback(
+    ({ item }: { item: Message; index: number }) => (
+      <MessageItem
+        message={item}
+        roleColor={roleColors[item.role]}
+        textColor={textColor}
+        mutedColor={mutedColor}
+      />
+    ),
+    [roleColors, textColor, mutedColor]
+  );
+
+  const keyExtractor = useCallback((item: Message) => item.id, []);
+
+  const handleStickingChange = useCallback(
+    (isSticking: boolean) => {
+      onScrollChange?.(isSticking);
+    },
+    [onScrollChange]
+  );
+
   // Empty state
   if (messages.length === 0) {
     return (
@@ -348,6 +429,116 @@ export function MessageList({
   const showScrollUp = effectiveMaxHeight && scrollOffset > 0;
   const showScrollDown = effectiveMaxHeight && messages.length > effectiveMaxHeight && !isAtBottom;
 
+  // ==========================================================================
+  // Virtualized Rendering (for optimal performance with large lists)
+  // ==========================================================================
+  // When useVirtualizedList is enabled, we use VirtualizedList which only
+  // renders visible items. This is ideal for very long conversations.
+  if (useVirtualizedList) {
+    return (
+      <Box flexDirection="column" flexGrow={1} height={effectiveMaxHeight ?? "100%"}>
+        <VirtualizedList
+          ref={virtualizedListRef}
+          data={messages as Message[]}
+          renderItem={renderMessageItem}
+          keyExtractor={keyExtractor}
+          estimatedItemHeight={estimatedItemHeight}
+          initialScrollIndex={SCROLL_TO_ITEM_END}
+          initialScrollOffsetInIndex={SCROLL_TO_ITEM_END}
+          onStickingToBottomChange={handleStickingChange}
+          scrollbarThumbColor={theme.semantic.text.muted}
+        />
+
+        {/* Pending message for streaming (rendered separately for performance) */}
+        {pendingMessage && (
+          <Box paddingX={1}>
+            <MessageItem
+              message={pendingMessage}
+              roleColor={roleColors[pendingMessage.role]}
+              textColor={textColor}
+              mutedColor={mutedColor}
+            />
+          </Box>
+        )}
+
+        {/* Auto-scroll status indicator */}
+        {userScrolledUp && autoScroll && (
+          <Box justifyContent="center">
+            <Text color={mutedColor} italic>
+              Auto-scroll paused (scroll to bottom to resume)
+            </Text>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  // ==========================================================================
+  // Optimized Rendering with Static (for completed messages)
+  // ==========================================================================
+  // When historyMessages is provided, we use Ink's <Static> for completed
+  // messages. Static content is rendered once and never re-renders, which
+  // dramatically improves performance during streaming.
+  if (useStaticRendering && historyMessages) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        {/* Scroll up indicator */}
+        {showScrollUp && (
+          <Box justifyContent="center" borderBottom borderColor={borderColor}>
+            <Text color={mutedColor}>↑ {scrollOffset} more above ↑</Text>
+          </Box>
+        )}
+
+        {/* History messages - rendered in <Static>, NEVER re-render */}
+        <Static items={historyMessages as Message[]}>
+          {(message: Message) => (
+            <Box key={message.id} paddingX={1}>
+              <MessageItem
+                message={message}
+                roleColor={roleColors[message.role]}
+                textColor={textColor}
+                mutedColor={mutedColor}
+              />
+            </Box>
+          )}
+        </Static>
+
+        {/* Pending message - this is the ONLY thing that re-renders during streaming */}
+        {pendingMessage && (
+          <Box paddingX={1}>
+            <MessageItem
+              message={pendingMessage}
+              roleColor={roleColors[pendingMessage.role]}
+              textColor={textColor}
+              mutedColor={mutedColor}
+            />
+          </Box>
+        )}
+
+        {/* Scroll down indicator */}
+        {showScrollDown && (
+          <Box justifyContent="center" borderTop borderColor={borderColor}>
+            <Text color={mutedColor}>
+              ↓ {messages.length - scrollOffset - (effectiveMaxHeight ?? 0)} more below ↓
+            </Text>
+          </Box>
+        )}
+
+        {/* Auto-scroll status indicator when disabled by user scroll */}
+        {userScrolledUp && autoScroll && (
+          <Box justifyContent="center">
+            <Text color={mutedColor} italic>
+              Auto-scroll paused (scroll to bottom to resume)
+            </Text>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  // ==========================================================================
+  // Legacy Rendering (when historyMessages not provided)
+  // ==========================================================================
   return (
     <Box flexDirection="column" flexGrow={1}>
       {/* Scroll up indicator */}
@@ -389,6 +580,7 @@ export function MessageList({
       )}
     </Box>
   );
-}
+});
 
+export { MessageList };
 export default MessageList;

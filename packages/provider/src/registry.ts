@@ -232,10 +232,31 @@ export class ProviderRegistry {
     const { type, model, apiKey, credential: directCredential } = config;
     const cacheKey = getCacheKey(type, model);
 
+    console.log(`[Registry] get() called for ${type}, model=${model}`);
+
     // Return cached instance if available and caching is enabled
     if (this.enableCache) {
       const cached = this.cache.get(cacheKey);
       if (cached) {
+        console.log(`[Registry] Found cached provider, isInitialized=${cached.isInitialized?.()}`);
+        // Check if cached provider is initialized
+        if (cached.isInitialized?.()) {
+          return cached;
+        }
+        // Re-initialize cached provider if not initialized
+        const resolvedApiKey = await this.resolveApiKey(config);
+        console.log(
+          `[Registry] Re-initializing cached provider, apiKey=${resolvedApiKey ? "set" : "undefined"}`
+        );
+        if (cached.initialize) {
+          try {
+            await cached.initialize({ apiKey: resolvedApiKey });
+            console.log(`[Registry] Re-initialization succeeded`);
+          } catch (error) {
+            console.log(`[Registry] Re-initialization failed:`, error);
+            throw error;
+          }
+        }
         return cached;
       }
     }
@@ -261,18 +282,24 @@ export class ProviderRegistry {
       // If not found, provider may fall back to env vars
     }
 
-    // Configure provider with credential if available
-    if (credential && provider.configure) {
-      // Validate credential before configuring if enabled
-      if (this.validateOnCreate && provider.validateCredential) {
-        const validation = await provider.validateCredential(credential);
-        if (!validation.valid) {
-          throw new Error(
-            `Credential validation failed for ${type}: ${validation.error || "Invalid credential"}`
-          );
-        }
+    // Validate credential before initialization if enabled
+    if (credential && this.validateOnCreate && provider.validateCredential) {
+      const validation = await provider.validateCredential(credential);
+      if (!validation.valid) {
+        throw new Error(
+          `Credential validation failed for ${type}: ${validation.error || "Invalid credential"}`
+        );
       }
+    }
 
+    // Initialize provider with resolved API key
+    // This is CRITICAL: initialize() sets up the client and marks provider as initialized
+    // Without this, isInitialized() returns false and LLM.stream() will fail
+    const resolvedApiKey = credential?.value;
+    if (provider.initialize) {
+      await provider.initialize({ apiKey: resolvedApiKey });
+    } else if (credential && provider.configure) {
+      // Fallback for providers without initialize() method
       await provider.configure(credential);
     }
 
@@ -282,6 +309,33 @@ export class ProviderRegistry {
     }
 
     return provider;
+  }
+
+  /**
+   * Resolve API key from config (used for re-initializing cached providers)
+   *
+   * @param config - Provider configuration
+   * @returns Resolved API key or undefined
+   */
+  private async resolveApiKey(config: ProviderRegistryConfig): Promise<string | undefined> {
+    const { type, apiKey, credential: directCredential } = config;
+
+    if (apiKey) {
+      return apiKey;
+    }
+
+    if (directCredential) {
+      return directCredential.value;
+    }
+
+    if (this.credentialManager) {
+      const result = await this.credentialManager.resolve(type);
+      if (result.ok && result.value) {
+        return result.value.value;
+      }
+    }
+
+    return undefined;
   }
 
   /**

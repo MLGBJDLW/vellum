@@ -142,6 +142,36 @@ export class PromptBuilder {
   }
 
   /**
+   * Loads an external mode prompt from markdown files.
+   *
+   * Replaces hardcoded mode prompts with externalized versions from MD files.
+   * Requires a PromptLoader to be set via withLoader().
+   *
+   * @param mode - The mode name to load (e.g., 'vibe', 'plan', 'spec')
+   * @returns This builder for chaining
+   * @throws Error if no loader is configured
+   *
+   * @example
+   * ```typescript
+   * await builder
+   *   .withLoader(loader)
+   *   .withExternalMode('vibe');
+   * ```
+   */
+  async withExternalMode(mode: string): Promise<this> {
+    if (!this.#loader) {
+      throw new Error("PromptLoader required for external mode loading. Call withLoader() first.");
+    }
+
+    const content = await this.#loader.loadMode(mode);
+    if (content) {
+      this.#addLayer(content, 3, "mode");
+    }
+
+    return this;
+  }
+
+  /**
    * Sets a complete system prompt override.
    *
    * When set, this completely replaces all other layers during build.

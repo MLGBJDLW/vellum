@@ -78,9 +78,17 @@ export interface Message {
 
 /**
  * Messages state interface
+ *
+ * Uses a split architecture for optimal rendering:
+ * - `historyMessages`: Completed messages rendered in Ink's <Static> (never re-render)
+ * - `pendingMessage`: Currently streaming message (only this causes re-renders)
  */
 export interface MessagesState {
-  /** List of all messages in the conversation */
+  /** Completed messages - rendered in <Static>, never re-render */
+  readonly historyMessages: readonly Message[];
+  /** Currently streaming message - the only thing that re-renders */
+  readonly pendingMessage: Message | null;
+  /** List of all messages in the conversation (computed: history + pending) */
   readonly messages: readonly Message[];
   /** Whether any message is currently streaming */
   readonly isStreaming: boolean;
@@ -90,6 +98,8 @@ export interface MessagesState {
  * Initial messages state
  */
 const initialState: MessagesState = {
+  historyMessages: [],
+  pendingMessage: null,
   messages: [],
   isStreaming: false,
 };
@@ -148,6 +158,23 @@ export interface SetStreamingAction {
 }
 
 /**
+ * Commit pending message to history (for Static rendering)
+ */
+export interface CommitPendingMessageAction {
+  readonly type: "COMMIT_PENDING_MESSAGE";
+}
+
+/**
+ * Split a long streaming message at a safe point
+ * Moves completed content to history and keeps remainder as pending
+ */
+export interface SplitMessageAction {
+  readonly type: "SPLIT_MESSAGE";
+  /** Index to split at (content before this becomes history) */
+  readonly splitIndex: number;
+}
+
+/**
  * Discriminated union of all message actions
  */
 export type MessagesAction =
@@ -156,7 +183,26 @@ export type MessagesAction =
   | AppendToMessageAction
   | SetMessagesAction
   | ClearMessagesAction
-  | SetStreamingAction;
+  | SetStreamingAction
+  | CommitPendingMessageAction
+  | SplitMessageAction;
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Compute the combined messages array from history + pending
+ */
+function computeMessages(
+  historyMessages: readonly Message[],
+  pendingMessage: Message | null
+): readonly Message[] {
+  if (pendingMessage) {
+    return [...historyMessages, pendingMessage];
+  }
+  return historyMessages;
+}
 
 // =============================================================================
 // Reducer
@@ -165,6 +211,10 @@ export type MessagesAction =
 /**
  * Messages state reducer
  *
+ * Uses a split architecture for optimal rendering:
+ * - historyMessages: Completed messages (for <Static>)
+ * - pendingMessage: Currently streaming message (causes re-renders)
+ *
  * @param state - Current messages state
  * @param action - Action to apply
  * @returns New messages state
@@ -172,50 +222,86 @@ export type MessagesAction =
 function messagesReducer(state: MessagesState, action: MessagesAction): MessagesState {
   switch (action.type) {
     case "ADD_MESSAGE": {
-      const newMessages = [...state.messages, action.message];
+      const isStreaming = action.message.isStreaming ?? false;
+
+      if (isStreaming) {
+        // Streaming message becomes pendingMessage
+        return {
+          ...state,
+          pendingMessage: action.message,
+          messages: computeMessages(state.historyMessages, action.message),
+          isStreaming: true,
+        };
+      }
+      // Non-streaming message goes directly to history
+      const newHistory = [...state.historyMessages, action.message];
       return {
         ...state,
-        messages: newMessages,
-        // Update streaming state based on the new message
-        isStreaming: action.message.isStreaming ?? state.isStreaming,
+        historyMessages: newHistory,
+        messages: computeMessages(newHistory, state.pendingMessage),
+        isStreaming: state.pendingMessage?.isStreaming ?? false,
       };
     }
 
     case "UPDATE_MESSAGE": {
-      const messageIndex = state.messages.findIndex((m) => m.id === action.id);
+      // Check if updating pending message
+      if (state.pendingMessage?.id === action.id) {
+        const updatedPending = { ...state.pendingMessage, ...action.updates };
+        return {
+          ...state,
+          pendingMessage: updatedPending,
+          messages: computeMessages(state.historyMessages, updatedPending),
+          isStreaming: updatedPending.isStreaming ?? false,
+        };
+      }
+
+      // Update in history
+      const messageIndex = state.historyMessages.findIndex((m) => m.id === action.id);
       if (messageIndex === -1) {
         return state;
       }
 
-      const updatedMessages = [...state.messages];
-      const existingMessage = updatedMessages[messageIndex];
+      const updatedHistory = [...state.historyMessages];
+      const existingMessage = updatedHistory[messageIndex];
       if (existingMessage) {
-        updatedMessages[messageIndex] = {
+        updatedHistory[messageIndex] = {
           ...existingMessage,
           ...action.updates,
         };
       }
 
-      // Recalculate streaming state
-      const isStreaming = updatedMessages.some((m) => m.isStreaming === true);
-
       return {
         ...state,
-        messages: updatedMessages,
-        isStreaming,
+        historyMessages: updatedHistory,
+        messages: computeMessages(updatedHistory, state.pendingMessage),
+        isStreaming: state.pendingMessage?.isStreaming ?? false,
       };
     }
 
     case "APPEND_TO_MESSAGE": {
-      const messageIndex = state.messages.findIndex((m) => m.id === action.id);
+      // Appending only makes sense for pending (streaming) message
+      if (state.pendingMessage?.id === action.id) {
+        const updatedPending = {
+          ...state.pendingMessage,
+          content: state.pendingMessage.content + action.content,
+        };
+        return {
+          ...state,
+          pendingMessage: updatedPending,
+          messages: computeMessages(state.historyMessages, updatedPending),
+        };
+      }
+
+      // Fallback: update in history (for backward compat)
+      const messageIndex = state.historyMessages.findIndex((m) => m.id === action.id);
       if (messageIndex === -1) {
         return state;
       }
 
-      const updatedMessages = [...state.messages];
-      const existingMessage = updatedMessages[messageIndex];
+      const updatedHistory = [...state.historyMessages];
+      const existingMessage = updatedHistory[messageIndex];
       if (existingMessage) {
-        updatedMessages[messageIndex] = {
+        updatedHistory[messageIndex] = {
           ...existingMessage,
           content: existingMessage.content + action.content,
         };
@@ -223,17 +309,20 @@ function messagesReducer(state: MessagesState, action: MessagesAction): Messages
 
       return {
         ...state,
-        messages: updatedMessages,
+        historyMessages: updatedHistory,
+        messages: computeMessages(updatedHistory, state.pendingMessage),
       };
     }
 
     case "SET_MESSAGES": {
-      const updatedMessages = [...action.messages];
-      const isStreaming = updatedMessages.some((m) => m.isStreaming === true);
+      // Separate streaming and non-streaming messages
+      const streaming = action.messages.find((m) => m.isStreaming === true) ?? null;
+      const history = action.messages.filter((m) => m.isStreaming !== true);
       return {
-        ...state,
-        messages: updatedMessages,
-        isStreaming,
+        historyMessages: history,
+        pendingMessage: streaming,
+        messages: action.messages,
+        isStreaming: streaming !== null,
       };
     }
 
@@ -247,6 +336,57 @@ function messagesReducer(state: MessagesState, action: MessagesAction): Messages
         ...state,
         isStreaming: action.isStreaming,
       };
+
+    case "COMMIT_PENDING_MESSAGE": {
+      if (!state.pendingMessage) {
+        return state;
+      }
+      // Move pending to history with isStreaming: false
+      const completedMessage = {
+        ...state.pendingMessage,
+        isStreaming: false,
+      };
+      const newHistory = [...state.historyMessages, completedMessage];
+      return {
+        historyMessages: newHistory,
+        pendingMessage: null,
+        messages: newHistory,
+        isStreaming: false,
+      };
+    }
+
+    case "SPLIT_MESSAGE": {
+      if (!state.pendingMessage) {
+        return state;
+      }
+
+      const content = state.pendingMessage.content;
+      if (action.splitIndex <= 0 || action.splitIndex >= content.length) {
+        return state;
+      }
+
+      // Create completed portion for history
+      const completedMessage: Message = {
+        ...state.pendingMessage,
+        id: generateMessageId(), // New ID for the split-off portion
+        content: content.slice(0, action.splitIndex),
+        isStreaming: false,
+      };
+
+      // Keep remainder as pending
+      const remainingMessage: Message = {
+        ...state.pendingMessage,
+        content: content.slice(action.splitIndex),
+      };
+
+      const newHistory = [...state.historyMessages, completedMessage];
+      return {
+        historyMessages: newHistory,
+        pendingMessage: remainingMessage,
+        messages: computeMessages(newHistory, remainingMessage),
+        isStreaming: true,
+      };
+    }
 
     default:
       // Exhaustive check - TypeScript will error if a case is missing
@@ -283,8 +423,12 @@ export interface MessagesContextValue {
   readonly state: MessagesState;
   /** Dispatch function for state updates */
   readonly dispatch: Dispatch<MessagesAction>;
-  /** All messages in the conversation */
+  /** All messages in the conversation (history + pending) */
   readonly messages: readonly Message[];
+  /** Completed messages for <Static> rendering (never re-render) */
+  readonly historyMessages: readonly Message[];
+  /** Currently streaming message (only this causes re-renders) */
+  readonly pendingMessage: Message | null;
   /** Add a new message, returns the generated ID */
   readonly addMessage: (message: Omit<Message, "id" | "timestamp">) => string;
   /** Update an existing message */
@@ -295,6 +439,10 @@ export interface MessagesContextValue {
   readonly setMessages: (messages: readonly Message[]) => void;
   /** Clear all messages */
   readonly clearMessages: () => void;
+  /** Commit pending message to history (for Static rendering) */
+  readonly commitPendingMessage: () => void;
+  /** Split a long streaming message at a safe point (e.g., paragraph boundary) */
+  readonly splitMessageAtSafePoint: (splitIndex: number) => void;
 }
 
 /**
@@ -402,10 +550,17 @@ export function MessagesProvider({
   const [state, dispatch] = useReducer(
     messagesReducer,
     initialMessages,
-    (messages): MessagesState => ({
-      messages: messages ?? [],
-      isStreaming: false,
-    })
+    (messages): MessagesState => {
+      // Separate streaming and non-streaming from initial messages
+      const streaming = messages?.find((m) => m.isStreaming === true) ?? null;
+      const history = messages?.filter((m) => m.isStreaming !== true) ?? [];
+      return {
+        historyMessages: history,
+        pendingMessage: streaming,
+        messages: messages ?? [],
+        isStreaming: streaming !== null,
+      };
+    }
   );
 
   /**
@@ -452,6 +607,20 @@ export function MessagesProvider({
   }, []);
 
   /**
+   * Commit pending message to history (for Static rendering)
+   */
+  const commitPendingMessage = useCallback((): void => {
+    dispatch({ type: "COMMIT_PENDING_MESSAGE" });
+  }, []);
+
+  /**
+   * Split a long streaming message at a safe point
+   */
+  const splitMessageAtSafePoint = useCallback((splitIndex: number): void => {
+    dispatch({ type: "SPLIT_MESSAGE", splitIndex });
+  }, []);
+
+  /**
    * Memoized context value
    */
   const contextValue = useMemo<MessagesContextValue>(
@@ -459,13 +628,26 @@ export function MessagesProvider({
       state,
       dispatch,
       messages: state.messages,
+      historyMessages: state.historyMessages,
+      pendingMessage: state.pendingMessage,
       addMessage,
       updateMessage,
       appendToMessage,
       setMessages,
       clearMessages,
+      commitPendingMessage,
+      splitMessageAtSafePoint,
     }),
-    [state, addMessage, updateMessage, appendToMessage, setMessages, clearMessages]
+    [
+      state,
+      addMessage,
+      updateMessage,
+      appendToMessage,
+      setMessages,
+      clearMessages,
+      commitPendingMessage,
+      splitMessageAtSafePoint,
+    ]
   );
 
   return <MessagesContext value={contextValue}>{children}</MessagesContext>;

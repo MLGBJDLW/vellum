@@ -269,6 +269,14 @@ export interface InteractivePrompt {
   readonly onCancel?: () => CommandResult;
   /** Provider name (for credential-related prompts) */
   readonly provider?: string;
+  /** Form title (e.g., "🔐 Set API Key for Anthropic") */
+  readonly title?: string;
+  /** Help hint (e.g., "Your key starts with sk-ant-...") */
+  readonly helpText?: string;
+  /** Format example for the input */
+  readonly formatHint?: string;
+  /** Link to provider documentation */
+  readonly documentationUrl?: string;
 }
 
 /**

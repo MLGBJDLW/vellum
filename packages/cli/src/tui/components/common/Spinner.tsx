@@ -4,12 +4,15 @@
  * Reusable animated spinner for loading states.
  * Extracted from ThinkingBlock for general use.
  *
+ * Uses global AnimationContext for centralized timing to prevent
+ * flickering from multiple independent timers.
+ *
  * @module tui/components/common/Spinner
  */
 
 import { Text } from "ink";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useAnimationFrame } from "../../context/AnimationContext.js";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -24,7 +27,10 @@ export interface SpinnerProps {
   readonly color?: string;
   /** Animation frames (default: braille spinner) */
   readonly frames?: readonly string[];
-  /** Animation interval in milliseconds (default: 80) */
+  /**
+   * Animation interval in milliseconds
+   * @deprecated No longer used - interval is controlled globally by AnimationContext
+   */
   readonly interval?: number;
 }
 
@@ -69,8 +75,10 @@ export const SPINNER_STYLES = {
   box: ["▖", "▘", "▝", "▗"],
 } as const;
 
-/** Default animation interval in milliseconds */
-const DEFAULT_INTERVAL_MS = 80;
+/** Default animation interval in milliseconds
+ * @deprecated Interval is now controlled globally by AnimationContext (120ms default, 150ms for VS Code)
+ */
+const DEFAULT_INTERVAL_MS = 120;
 
 // =============================================================================
 // Spinner Component
@@ -103,18 +111,14 @@ const DEFAULT_INTERVAL_MS = 80;
 export function Spinner({
   color,
   frames = SPINNER_FRAMES,
-  interval = DEFAULT_INTERVAL_MS,
+  // interval prop kept for backward compatibility but no longer used
+  interval: _interval = DEFAULT_INTERVAL_MS,
 }: SpinnerProps): React.JSX.Element {
   const { theme } = useTheme();
-  const [frameIndex, setFrameIndex] = useState(0);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setFrameIndex((prev) => (prev + 1) % frames.length);
-    }, interval);
-
-    return () => clearInterval(timer);
-  }, [frames.length, interval]);
+  // Use global animation context instead of local timer
+  // This prevents flickering from multiple independent timers
+  const frameIndex = useAnimationFrame(frames);
 
   const spinnerColor = color ?? theme.colors.info;
 

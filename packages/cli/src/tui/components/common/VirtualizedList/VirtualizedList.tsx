@@ -1,0 +1,283 @@
+/**
+ * VirtualizedList Component
+ *
+ * A high-performance virtualized list component for terminal UIs.
+ * Only renders items that are currently visible in the viewport,
+ * with support for variable height items and auto-scroll to bottom.
+ *
+ * Ported from Gemini CLI with Vellum adaptations.
+ *
+ * @module tui/components/common/VirtualizedList
+ */
+
+import { Box, type DOMElement } from "ink";
+import type React from "react";
+import { forwardRef, useCallback, useImperativeHandle, useMemo } from "react";
+import { useBatchedScroll, useScrollAnchor, useVirtualization } from "./hooks/index.js";
+import { SCROLL_TO_ITEM_END, type VirtualizedListProps, type VirtualizedListRef } from "./types.js";
+
+/**
+ * VirtualizedList - Only renders visible items for optimal performance.
+ *
+ * Features:
+ * - Virtual rendering: Only items in viewport are mounted
+ * - Height estimation: Supports fixed or variable item heights
+ * - Auto-scroll: Sticks to bottom when new items added
+ * - Anchor-based scrolling: Stable during content changes
+ * - Imperative API: Control scrolling programmatically
+ *
+ * @example
+ * ```tsx
+ * const listRef = useRef<VirtualizedListRef<Message>>(null);
+ *
+ * <VirtualizedList
+ *   ref={listRef}
+ *   data={messages}
+ *   renderItem={({ item }) => <MessageItem message={item} />}
+ *   keyExtractor={(item) => item.id}
+ *   estimatedItemHeight={3}
+ *   initialScrollIndex={SCROLL_TO_ITEM_END}
+ *   initialScrollOffsetInIndex={SCROLL_TO_ITEM_END}
+ * />
+ *
+ * // Scroll programmatically
+ * listRef.current?.scrollToEnd();
+ * listRef.current?.scrollBy(-10);
+ * ```
+ */
+function VirtualizedListInner<T>(
+  props: VirtualizedListProps<T>,
+  ref: React.Ref<VirtualizedListRef<T>>
+) {
+  const {
+    data,
+    renderItem,
+    estimatedItemHeight,
+    keyExtractor,
+    initialScrollIndex,
+    initialScrollOffsetInIndex,
+    scrollbarThumbColor,
+    onScrollTopChange,
+    onStickingToBottomChange,
+  } = props;
+
+  // Note: theme reserved for future scrollbar styling
+  // const { theme } = useTheme();
+
+  // Initial virtualization pass with estimated heights
+  const initialVirtualization = useVirtualization({
+    dataLength: data.length,
+    estimatedItemHeight,
+    scrollTop: 0,
+    containerHeight: 24, // Default terminal height estimate
+  });
+
+  // Scroll anchor management
+  const {
+    scrollAnchor,
+    setScrollAnchor,
+    isStickingToBottom,
+    setIsStickingToBottom,
+    scrollTop,
+    getAnchorForScrollTop,
+  } = useScrollAnchor({
+    dataLength: data.length,
+    offsets: initialVirtualization.offsets,
+    heights: initialVirtualization.heights,
+    totalHeight: initialVirtualization.totalHeight,
+    containerHeight: initialVirtualization.measuredContainerHeight,
+    initialScrollIndex,
+    initialScrollOffsetInIndex,
+  });
+
+  // Full virtualization with actual scroll position
+  const {
+    heights: _heights,
+    offsets,
+    totalHeight,
+    startIndex,
+    endIndex,
+    topSpacerHeight,
+    bottomSpacerHeight,
+    itemRefCallback,
+    containerRef,
+    measuredContainerHeight,
+  } = useVirtualization({
+    dataLength: data.length,
+    estimatedItemHeight,
+    scrollTop,
+    containerHeight: initialVirtualization.measuredContainerHeight,
+  });
+
+  // Batched scroll for smooth updates
+  const { getScrollTop, setPendingScrollTop } = useBatchedScroll(scrollTop);
+
+  // Notify parent of scroll changes
+  const prevScrollTop = useMemo(() => ({ value: scrollTop }), [scrollTop]);
+  if (onScrollTopChange && prevScrollTop.value !== scrollTop) {
+    onScrollTopChange(scrollTop);
+  }
+
+  // Notify parent of sticking state changes
+  const prevSticking = useMemo(() => ({ value: isStickingToBottom }), [isStickingToBottom]);
+  if (onStickingToBottomChange && prevSticking.value !== isStickingToBottom) {
+    onStickingToBottomChange(isStickingToBottom);
+  }
+
+  // Imperative handle for external control
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollBy: (delta: number) => {
+        if (delta < 0) {
+          setIsStickingToBottom(false);
+        }
+        const currentScrollTop = getScrollTop();
+        const newScrollTop = Math.max(
+          0,
+          Math.min(totalHeight - measuredContainerHeight, currentScrollTop + delta)
+        );
+        setPendingScrollTop(newScrollTop);
+        setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+      },
+
+      scrollTo: (offset: number) => {
+        setIsStickingToBottom(false);
+        const newScrollTop = Math.max(0, Math.min(totalHeight - measuredContainerHeight, offset));
+        setPendingScrollTop(newScrollTop);
+        setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+      },
+
+      scrollToEnd: () => {
+        setIsStickingToBottom(true);
+        if (data.length > 0) {
+          setScrollAnchor({
+            index: data.length - 1,
+            offset: SCROLL_TO_ITEM_END,
+          });
+        }
+      },
+
+      scrollToIndex: ({ index, viewOffset = 0, viewPosition = 0 }) => {
+        setIsStickingToBottom(false);
+        const offset = offsets[index];
+        if (offset !== undefined) {
+          const newScrollTop = Math.max(
+            0,
+            Math.min(
+              totalHeight - measuredContainerHeight,
+              offset - viewPosition * measuredContainerHeight + viewOffset
+            )
+          );
+          setPendingScrollTop(newScrollTop);
+          setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+        }
+      },
+
+      scrollToItem: ({ item, viewOffset = 0, viewPosition = 0 }) => {
+        setIsStickingToBottom(false);
+        const index = data.indexOf(item);
+        if (index !== -1) {
+          const offset = offsets[index];
+          if (offset !== undefined) {
+            const newScrollTop = Math.max(
+              0,
+              Math.min(
+                totalHeight - measuredContainerHeight,
+                offset - viewPosition * measuredContainerHeight + viewOffset
+              )
+            );
+            setPendingScrollTop(newScrollTop);
+            setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+          }
+        }
+      },
+
+      getScrollIndex: () => scrollAnchor.index,
+
+      getScrollState: () => ({
+        scrollTop: getScrollTop(),
+        scrollHeight: totalHeight,
+        innerHeight: measuredContainerHeight,
+      }),
+
+      isAtBottom: () => isStickingToBottom,
+    }),
+    [
+      offsets,
+      scrollAnchor,
+      totalHeight,
+      getAnchorForScrollTop,
+      data,
+      measuredContainerHeight,
+      getScrollTop,
+      setPendingScrollTop,
+      setScrollAnchor,
+      setIsStickingToBottom,
+      isStickingToBottom,
+    ]
+  );
+
+  // Create ref callback wrapper
+  const createItemRef = useCallback(
+    (index: number) => (el: DOMElement | null) => {
+      itemRefCallback(index, el);
+    },
+    [itemRefCallback]
+  );
+
+  // Render visible items
+  const renderedItems = useMemo(() => {
+    const items: React.ReactElement[] = [];
+    for (let i = startIndex; i <= endIndex; i++) {
+      const item = data[i];
+      if (item) {
+        items.push(
+          <Box key={keyExtractor(item, i)} width="100%" ref={createItemRef(i)}>
+            {renderItem({ item, index: i })}
+          </Box>
+        );
+      }
+    }
+    return items;
+  }, [startIndex, endIndex, data, keyExtractor, renderItem, createItemRef]);
+
+  // Note: scrollbarThumbColor is reserved for future native scroll support
+  // Currently not used as Ink handles overflow internally
+  void scrollbarThumbColor;
+
+  return (
+    <Box
+      ref={containerRef as React.RefObject<DOMElement>}
+      overflowY="hidden"
+      overflowX="hidden"
+      width="100%"
+      height="100%"
+      flexDirection="column"
+    >
+      <Box flexShrink={0} width="100%" flexDirection="column">
+        {/* Top spacer for items above viewport */}
+        {topSpacerHeight > 0 && <Box height={topSpacerHeight} flexShrink={0} />}
+
+        {/* Visible items */}
+        {renderedItems}
+
+        {/* Bottom spacer for items below viewport */}
+        {bottomSpacerHeight > 0 && <Box height={bottomSpacerHeight} flexShrink={0} />}
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * VirtualizedList with forwardRef support for generic types.
+ */
+const VirtualizedList = forwardRef(VirtualizedListInner) as <T>(
+  props: VirtualizedListProps<T> & { ref?: React.Ref<VirtualizedListRef<T>> }
+) => React.ReactElement;
+
+// Add display name for debugging
+(VirtualizedList as React.FC).displayName = "VirtualizedList";
+
+export { VirtualizedList };
+export type { VirtualizedListProps, VirtualizedListRef };

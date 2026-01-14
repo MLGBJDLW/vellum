@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearProviderCache, createProvider, createProviderSync, getProvider } from "../factory.js";
 
 // Mock CredentialManager
@@ -7,10 +7,43 @@ const mockCredentialManager = {
   resolve: mockResolve,
 };
 
+// Store original env vars to restore after tests
+const originalEnv: Record<string, string | undefined> = {};
+
 describe("factory", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearProviderCache();
+
+    // Set mock API keys for provider creation tests
+    // Store original values
+    originalEnv.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+    originalEnv.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    originalEnv.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+    // Set test API keys
+    process.env.ANTHROPIC_API_KEY = "sk-ant-api03-test-key";
+    process.env.OPENAI_API_KEY = "sk-test-openai-key";
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "AIzaSyTestGoogleKey";
+  });
+
+  afterEach(() => {
+    // Restore original env vars
+    if (originalEnv.ANTHROPIC_API_KEY === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = originalEnv.ANTHROPIC_API_KEY;
+    }
+    if (originalEnv.OPENAI_API_KEY === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalEnv.OPENAI_API_KEY;
+    }
+    if (originalEnv.GOOGLE_GENERATIVE_AI_API_KEY === undefined) {
+      delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    } else {
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = originalEnv.GOOGLE_GENERATIVE_AI_API_KEY;
+    }
   });
 
   describe("createProvider (async)", () => {

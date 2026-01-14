@@ -46,7 +46,10 @@ describe("StreamingText", () => {
 
   describe("cursor behavior", () => {
     it("shows cursor when streaming", () => {
-      const { lastFrame } = render(<StreamingText content="Typing..." isStreaming={true} />);
+      // Disable typewriter effect for immediate content display test
+      const { lastFrame } = render(
+        <StreamingText content="Typing..." isStreaming={true} typewriterEffect={false} />
+      );
 
       expect(lastFrame()).toContain("Typing...");
       expect(lastFrame()).toContain("▊"); // Default cursor
@@ -60,8 +63,14 @@ describe("StreamingText", () => {
     });
 
     it("uses custom cursor character", () => {
+      // Disable typewriter effect for immediate content display test
       const { lastFrame } = render(
-        <StreamingText content="Custom" isStreaming={true} cursorChar="_" />
+        <StreamingText
+          content="Custom"
+          isStreaming={true}
+          cursorChar="_"
+          typewriterEffect={false}
+        />
       );
 
       expect(lastFrame()).toContain("Custom");

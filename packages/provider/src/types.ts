@@ -792,10 +792,29 @@ export interface Provider {
   getDefaultModel(): string;
 
   /**
+   * Initialize the provider with configuration options
+   *
+   * Sets up the underlying SDK client with authentication and configuration.
+   * This method is required for proper provider initialization in the registry.
+   *
+   * @param options - Provider configuration including API key
+   * @throws Error if initialization fails
+   */
+  initialize?(options: ProviderOptions): Promise<void>;
+
+  /**
+   * Check if the provider has been initialized and is ready to use
+   *
+   * @returns true if initialize() has been called successfully
+   */
+  isInitialized?(): boolean;
+
+  /**
    * Configure the provider with credentials
    *
    * @param credential - The credential to configure the provider with
    * @throws Error if credential is invalid or configuration fails
+   * @deprecated Use initialize() instead for proper provider initialization
    */
   configure?(credential: ProviderCredential): Promise<void>;
 

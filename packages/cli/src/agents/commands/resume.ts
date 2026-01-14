@@ -7,8 +7,9 @@
  * @module cli/agents/commands/resume
  */
 
-import type { OrchestratorCore } from "@vellum/core";
 import type { Command } from "commander";
+
+import { getOrCreateOrchestrator, getOrchestrator } from "../../orchestrator-singleton.js";
 
 import { createTaskPersistence, type TaskPersistence } from "../task-persistence.js";
 import {
@@ -175,33 +176,6 @@ function displayResumeResult(result: ResumeResult): void {
   console.log("");
 }
 
-/**
- * Create a mock OrchestratorCore for CLI execution.
- *
- * In a full implementation, this would be integrated with the
- * actual orchestrator instance.
- *
- * @returns Mock OrchestratorCore
- */
-function createMockOrchestrator(): OrchestratorCore {
-  return {
-    getTaskChain: () => null,
-    createTaskChain: () => ({
-      chainId: "",
-      rootTaskId: "",
-      nodes: new Map(),
-      maxDepth: 10,
-    }),
-    delegate: async () => ({
-      success: false,
-      error: "Not implemented in CLI mock",
-    }),
-    validateDelegation: () => ({ allowed: false, reason: "Not implemented" }),
-    getCurrentDepth: () => 0,
-    getAgentLevel: () => 0,
-  } as unknown as OrchestratorCore;
-}
-
 // =============================================================================
 // Command Actions
 // =============================================================================
@@ -341,7 +315,7 @@ export function registerResumeCommand(program: Command): void {
 
         // Create persistence and resumption instances
         const persistence = createTaskPersistence();
-        const orchestrator = createMockOrchestrator();
+        const orchestrator = getOrchestrator() ?? getOrCreateOrchestrator();
         const resumption = createTaskResumption(persistence, orchestrator);
 
         if (!chainId) {

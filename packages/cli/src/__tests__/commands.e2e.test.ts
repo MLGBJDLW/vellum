@@ -180,22 +180,27 @@ describe("E2E: /help command", () => {
 });
 
 // =============================================================================
-// E2E Test: /login Command (Interactive)
+// E2E Test: /auth set Command (Interactive)
 // =============================================================================
 
-describe("E2E: /login command (interactive)", () => {
+describe("E2E: /auth set command (interactive)", () => {
   let harness: CommandSystemHarness;
 
   beforeEach(() => {
     harness = new CommandSystemHarness();
     harness.registerCoreCommands();
 
-    // Add login command for testing
-    const loginCommand = createMockCommand({
-      name: "login",
+    // Add auth command for testing (with set subcommand)
+    const authCommand = createMockCommand({
+      name: "auth",
       category: "auth",
-      aliases: ["signin"],
       positionalArgs: [
+        {
+          name: "subcommand",
+          type: "string",
+          description: "Subcommand: status, set, clear",
+          required: false,
+        },
         {
           name: "provider",
           type: "string",
@@ -204,39 +209,47 @@ describe("E2E: /login command (interactive)", () => {
         },
       ],
       execute: async (ctx: CommandContext) => {
+        const subcommand = (ctx.parsedArgs.positional[0] as string) ?? "status";
         const provider =
-          (ctx.parsedArgs.positional[0] as string) ?? ctx.session.provider ?? "anthropic";
+          (ctx.parsedArgs.positional[1] as string) ?? ctx.session.provider ?? "anthropic";
+
+        if (subcommand === "set") {
+          return {
+            kind: "interactive",
+            prompt: {
+              inputType: "password",
+              message: `Enter API key for ${provider}:`,
+              placeholder: "sk-...",
+              provider,
+              handler: async (value: string) => {
+                if (!value.trim()) {
+                  return {
+                    kind: "error",
+                    code: "INVALID_ARGUMENT",
+                    message: "API key cannot be empty",
+                  };
+                }
+                return {
+                  kind: "success",
+                  message: `✅ Credential saved for ${provider}`,
+                };
+              },
+              onCancel: () => ({ kind: "success", message: "Auth cancelled" }),
+            },
+          };
+        }
 
         return {
-          kind: "interactive",
-          prompt: {
-            inputType: "password",
-            message: `Enter API key for ${provider}:`,
-            placeholder: "sk-...",
-            provider,
-            handler: async (value: string) => {
-              if (!value.trim()) {
-                return {
-                  kind: "error",
-                  code: "INVALID_ARGUMENT",
-                  message: "API key cannot be empty",
-                };
-              }
-              return {
-                kind: "success",
-                message: `✅ Credential saved for ${provider}`,
-              };
-            },
-            onCancel: () => ({ kind: "success", message: "Login cancelled" }),
-          },
+          kind: "success",
+          message: "Authentication status",
         };
       },
     });
-    harness.registry.register(loginCommand);
+    harness.registry.register(authCommand);
   });
 
-  it("should return interactive prompt for /login", async () => {
-    const result = await harness.execute("/login");
+  it("should return interactive prompt for /auth set", async () => {
+    const result = await harness.execute("/auth set");
 
     expect(result.kind).toBe("interactive");
     if (result.kind === "interactive") {
@@ -246,8 +259,8 @@ describe("E2E: /login command (interactive)", () => {
     }
   });
 
-  it("should accept provider argument: /login anthropic", async () => {
-    const result = await harness.execute("/login anthropic");
+  it("should accept provider argument: /auth set anthropic", async () => {
+    const result = await harness.execute("/auth set anthropic");
 
     expect(result.kind).toBe("interactive");
     if (result.kind === "interactive") {
@@ -257,7 +270,7 @@ describe("E2E: /login command (interactive)", () => {
   });
 
   it("should handle input submission via handler", async () => {
-    const result = await harness.execute("/login openai");
+    const result = await harness.execute("/auth set openai");
 
     expect(result.kind).toBe("interactive");
     if (result.kind === "interactive") {
@@ -271,7 +284,7 @@ describe("E2E: /login command (interactive)", () => {
   });
 
   it("should validate empty input", async () => {
-    const result = await harness.execute("/login");
+    const result = await harness.execute("/auth set");
 
     expect(result.kind).toBe("interactive");
     if (result.kind === "interactive") {
@@ -285,7 +298,7 @@ describe("E2E: /login command (interactive)", () => {
   });
 
   it("should handle cancellation", async () => {
-    const result = await harness.execute("/login");
+    const result = await harness.execute("/auth set");
 
     expect(result.kind).toBe("interactive");
     if (result.kind === "interactive") {

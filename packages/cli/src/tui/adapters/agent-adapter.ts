@@ -8,9 +8,10 @@
  */
 
 import type { AgentLoop, ExecutionResult } from "@vellum/core";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useMessages } from "../context/MessagesContext.js";
 import { useTools } from "../context/ToolsContext.js";
+import { findLastSafeSplitPoint } from "../utils/findLastSafeSplitPoint.js";
 
 // =============================================================================
 // Types
@@ -115,8 +116,62 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
   const { clearOnDisconnect = false } = options;
 
   // Context hooks
-  const { addMessage, appendToMessage, updateMessage, clearMessages } = useMessages();
+  const {
+    addMessage,
+    appendToMessage,
+    updateMessage,
+    clearMessages,
+    commitPendingMessage,
+    splitMessageAtSafePoint,
+  } = useMessages();
   const { addExecution, updateExecution, clearExecutions, registerCallId } = useTools();
+
+  // =============================================================================
+  // Stable Refs for Context Methods
+  // =============================================================================
+  // Store context methods in refs to avoid callback recreation on every render.
+  // This prevents the connect/disconnect cycle that resets streamingMessageRef
+  // during active streaming, which was causing message splitting and flickering.
+
+  const addMessageRef = useRef(addMessage);
+  const appendToMessageRef = useRef(appendToMessage);
+  const updateMessageRef = useRef(updateMessage);
+  const clearMessagesRef = useRef(clearMessages);
+  const commitPendingMessageRef = useRef(commitPendingMessage);
+  const splitMessageAtSafePointRef = useRef(splitMessageAtSafePoint);
+  const addExecutionRef = useRef(addExecution);
+  const updateExecutionRef = useRef(updateExecution);
+  const clearExecutionsRef = useRef(clearExecutions);
+  const registerCallIdRef = useRef(registerCallId);
+
+  // Keep refs up-to-date without triggering callback recreation
+  useEffect(() => {
+    addMessageRef.current = addMessage;
+    appendToMessageRef.current = appendToMessage;
+    updateMessageRef.current = updateMessage;
+    clearMessagesRef.current = clearMessages;
+    commitPendingMessageRef.current = commitPendingMessage;
+    splitMessageAtSafePointRef.current = splitMessageAtSafePoint;
+    addExecutionRef.current = addExecution;
+    updateExecutionRef.current = updateExecution;
+    clearExecutionsRef.current = clearExecutions;
+    registerCallIdRef.current = registerCallId;
+  }, [
+    addMessage,
+    appendToMessage,
+    updateMessage,
+    clearMessages,
+    commitPendingMessage,
+    splitMessageAtSafePoint,
+    addExecution,
+    updateExecution,
+    clearExecutions,
+    registerCallId,
+  ]);
+
+  // =============================================================================
+  // Connection State Refs
+  // =============================================================================
 
   // Track connection state
   const connectedLoopRef = useRef<AgentLoop | null>(null);
@@ -131,45 +186,63 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
   /**
    * Handle text streaming from AgentLoop
    * Maps to: appendToMessage in MessagesContext
+   *
+   * Uses refs for context methods to maintain callback stability and prevent
+   * message splitting during re-renders.
+   *
+   * When content exceeds the threshold, checks for safe split points
+   * (paragraph breaks, headers, list items - NOT inside code blocks)
+   * and splits to move completed content to Static for better performance.
    */
-  const handleText = useCallback(
-    (text: string) => {
-      const streaming = streamingMessageRef.current;
+  const handleText = useCallback((text: string) => {
+    const streaming = streamingMessageRef.current;
 
-      if (!streaming) {
-        // Start a new streaming message if we receive text without a message
-        const id = addMessage({
-          role: "assistant",
-          content: text,
-          isStreaming: true,
-        });
-        streamingMessageRef.current = {
-          id,
-          content: text,
-          hasStarted: true,
-        };
-      } else {
-        // Append to existing streaming message
-        streaming.content += text;
-        appendToMessage(streaming.id, text);
+    if (!streaming) {
+      // Start a new streaming message if we receive text without a message
+      const id = addMessageRef.current({
+        role: "assistant",
+        content: text,
+        isStreaming: true,
+      });
+      streamingMessageRef.current = {
+        id,
+        content: text,
+        hasStarted: true,
+      };
+    } else {
+      // Append to existing streaming message
+      streaming.content += text;
+      appendToMessageRef.current(streaming.id, text);
+
+      // Check if we should split at a safe point to improve performance
+      // This moves completed content to Static where it won't re-render
+      const splitIndex = findLastSafeSplitPoint(streaming.content, 2000);
+      if (splitIndex > 0) {
+        splitMessageAtSafePointRef.current(splitIndex);
+        // Update local tracking to reflect the split
+        streaming.content = streaming.content.slice(splitIndex);
       }
-    },
-    [addMessage, appendToMessage]
-  );
+    }
+  }, []); // Empty deps = stable callback
 
   /**
    * Handle message/complete events from AgentLoop
-   * Maps to: updateMessage (isStreaming: false) in MessagesContext
+   * Maps to: commitPendingMessage (move pending to history for Static rendering)
+   *
+   * When streaming completes, the pending message is committed to history.
+   * This moves it to Ink's <Static> component where it will never re-render.
    */
   const handleComplete = useCallback(() => {
     const streaming = streamingMessageRef.current;
 
     if (streaming) {
-      // Mark the message as complete (stop streaming)
-      updateMessage(streaming.id, { isStreaming: false });
+      // Commit the pending message to history (moves to <Static>)
+      // This is more efficient than just marking isStreaming: false
+      // because the message will never re-render once in <Static>
+      commitPendingMessageRef.current();
       streamingMessageRef.current = null;
     }
-  }, [updateMessage]);
+  }, []); // Empty deps = stable callback
 
   /**
    * Handle tool start from AgentLoop
@@ -182,7 +255,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       // If we already created a pending execution due to permissionRequired,
       // treat toolStart as an update (not a new execution) to avoid duplicates.
       if (existingExecutionId) {
-        updateExecution(existingExecutionId, {
+        updateExecutionRef.current(existingExecutionId, {
           status: "running",
           startedAt: new Date(),
         });
@@ -190,7 +263,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       }
 
       // Add execution to tools context
-      const executionId = addExecution({
+      const executionId = addExecutionRef.current({
         toolName: name,
         params: input,
         status: "running",
@@ -199,9 +272,9 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
       // Map the AgentLoop callId to our execution ID
       toolIdMapRef.current.set(callId, executionId);
-      registerCallId(callId, executionId);
+      registerCallIdRef.current(callId, executionId);
     },
-    [addExecution, registerCallId, updateExecution]
+    [] // Empty deps = stable callback
   );
 
   /**
@@ -215,7 +288,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
       if (executionId) {
         // Update the execution with result
-        updateExecution(executionId, {
+        updateExecutionRef.current(executionId, {
           status: result.result.success ? "complete" : "error",
           result: result.result.success ? result.result.output : undefined,
           error: !result.result.success ? new Error(String(result.result.error)) : undefined,
@@ -226,7 +299,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         toolIdMapRef.current.delete(callId);
       }
     },
-    [updateExecution]
+    [] // Empty deps = stable callback
   );
 
   /**
@@ -236,7 +309,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
   const handlePermissionRequired = useCallback(
     (callId: string, name: string, input: Record<string, unknown>) => {
       // Add execution in pending state (awaiting approval)
-      const executionId = addExecution({
+      const executionId = addExecutionRef.current({
         toolName: name,
         params: input,
         status: "pending",
@@ -244,9 +317,9 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
       // Map the callId to execution ID
       toolIdMapRef.current.set(callId, executionId);
-      registerCallId(callId, executionId);
+      registerCallIdRef.current(callId, executionId);
     },
-    [addExecution, registerCallId]
+    [] // Empty deps = stable callback
   );
 
   /**
@@ -258,13 +331,13 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       const executionId = toolIdMapRef.current.get(callId);
 
       if (executionId) {
-        updateExecution(executionId, {
+        updateExecutionRef.current(executionId, {
           status: "running",
           startedAt: new Date(),
         });
       }
     },
-    [updateExecution]
+    [] // Empty deps = stable callback
   );
 
   /**
@@ -276,7 +349,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       const executionId = toolIdMapRef.current.get(callId);
 
       if (executionId) {
-        updateExecution(executionId, {
+        updateExecutionRef.current(executionId, {
           status: "rejected",
           error: new Error(reason),
         });
@@ -285,14 +358,23 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         toolIdMapRef.current.delete(callId);
       }
     },
-    [updateExecution]
+    [] // Empty deps = stable callback
   );
 
   /**
    * Connect to an AgentLoop instance
+   *
+   * Now has empty dependencies since all handlers are stable (using refs).
+   * This prevents unnecessary disconnect/reconnect cycles during re-renders.
    */
   const connect = useCallback(
     (agentLoop: AgentLoop) => {
+      // Skip reconnection if already connected to the same loop
+      // This prevents resetting streaming state during re-renders
+      if (connectedLoopRef.current === agentLoop) {
+        return;
+      }
+
       // Disconnect from any existing loop first
       if (connectedLoopRef.current) {
         // Remove existing event listeners
@@ -305,7 +387,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         connectedLoopRef.current.off("permissionDenied", handlePermissionDenied);
       }
 
-      // Reset state
+      // Reset state only when connecting to a NEW loop
       streamingMessageRef.current = null;
       toolIdMapRef.current.clear();
 
@@ -335,6 +417,8 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
   /**
    * Disconnect from the current AgentLoop
+   *
+   * Uses refs for clear functions to maintain callback stability.
    */
   const disconnect = useCallback(() => {
     if (connectedLoopRef.current) {
@@ -355,10 +439,10 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       streamingMessageRef.current = null;
       toolIdMapRef.current.clear();
 
-      // Optionally clear contexts
+      // Optionally clear contexts (using refs for stability)
       if (clearOnDisconnect) {
-        clearMessages();
-        clearExecutions();
+        clearMessagesRef.current();
+        clearExecutionsRef.current();
       }
     }
   }, [
@@ -370,8 +454,6 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     handlePermissionGranted,
     handlePermissionDenied,
     clearOnDisconnect,
-    clearMessages,
-    clearExecutions,
   ]);
 
   // Cleanup on unmount
@@ -383,11 +465,17 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     };
   }, [disconnect]);
 
-  return {
-    connect,
-    disconnect,
-    isConnected: isConnectedRef.current,
-  };
+  // Memoize return value to ensure stable object reference across renders.
+  // This prevents useEffect re-runs in consumers that depend on the adapter object,
+  // which was causing disconnect/reconnect cycles during streaming.
+  return useMemo(
+    () => ({
+      connect,
+      disconnect,
+      isConnected: isConnectedRef.current,
+    }),
+    [connect, disconnect]
+  );
 }
 
 // =============================================================================
@@ -534,6 +622,11 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
 
   return {
     connect(agentLoop: AgentLoop) {
+      // Skip reconnection if already connected to the same loop
+      if (connectedLoop === agentLoop) {
+        return;
+      }
+
       // Disconnect existing
       if (connectedLoop) {
         connectedLoop.off("text", handleText);
@@ -545,7 +638,7 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
         connectedLoop.off("permissionDenied", handlePermissionDenied);
       }
 
-      // Reset state
+      // Reset state only when connecting to a NEW loop
       streamingMessage = null;
       toolIdMap.clear();
 

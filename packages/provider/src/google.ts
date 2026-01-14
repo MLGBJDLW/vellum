@@ -37,6 +37,7 @@ import type {
   StreamDoneEvent,
   StreamEndEvent,
   StreamEvent,
+  StreamReasoningEvent,
   StreamTextEvent,
   StreamToolCallDeltaEvent,
   StreamToolCallEndEvent,
@@ -194,10 +195,17 @@ export class GoogleProvider implements Provider {
    * @throws ProviderError if initialization fails
    */
   async initialize(options: ProviderOptions): Promise<void> {
+    console.log(
+      `[GoogleProvider] initialize() called, apiKey=${options.apiKey ? "set" : "undefined"}`
+    );
     try {
       const apiKey = options.apiKey ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+      console.log(
+        `[GoogleProvider] Resolved apiKey from env: ${process.env.GOOGLE_GENERATIVE_AI_API_KEY ? "set" : "undefined"}`
+      );
 
       if (!apiKey) {
+        console.log(`[GoogleProvider] No API key found, throwing error`);
         throw new ProviderError("No API key provided for Google AI", {
           code: ErrorCode.CREDENTIAL_NOT_FOUND,
           category: "credential_invalid",
@@ -484,6 +492,20 @@ export class GoogleProvider implements Provider {
       ...(params.frequencyPenalty !== undefined && { frequencyPenalty: params.frequencyPenalty }),
     };
 
+    // Add thinking configuration for Gemini 2.5+ models
+    if (params.thinking?.enabled) {
+      (
+        config as GenerateContentConfig & {
+          thinkingConfig?: { thinkingMode: string; thinkingBudget?: number };
+        }
+      ).thinkingConfig = {
+        thinkingMode: "enabled",
+        ...(params.thinking.budgetTokens !== undefined && {
+          thinkingBudget: params.thinking.budgetTokens,
+        }),
+      };
+    }
+
     // Add tools if present
     if (params.tools && params.tools.length > 0) {
       const { data: tools } = googleTransform.transformTools(params.tools, transformConfig);
@@ -559,12 +581,26 @@ export class GoogleProvider implements Provider {
       // Process content parts
       if (candidate?.content?.parts) {
         for (const part of candidate.content.parts) {
+          // Check if this part is thinking/reasoning content (Gemini 2.5 models)
+          // The SDK marks thinking parts with thought: true
+          const isThought = "thought" in part && part.thought === true;
+
           if ("text" in part && part.text) {
-            const textEvent: StreamTextEvent = {
-              type: "text",
-              content: part.text,
-            };
-            yield textEvent;
+            if (isThought) {
+              // Emit as reasoning event for thinking content
+              const reasoningEvent: StreamReasoningEvent = {
+                type: "reasoning",
+                content: part.text,
+              };
+              yield reasoningEvent;
+            } else {
+              // Emit as regular text event
+              const textEvent: StreamTextEvent = {
+                type: "text",
+                content: part.text,
+              };
+              yield textEvent;
+            }
           } else if ("functionCall" in part && part.functionCall) {
             const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             const name = part.functionCall.name ?? "";

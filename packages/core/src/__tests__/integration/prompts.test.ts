@@ -40,16 +40,6 @@ vi.mock("../../session/index.js", async (importOriginal) => {
   };
 });
 
-// Mock buildSystemPrompt for legacy path testing
-vi.mock("../../agent/prompt.js", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../../agent/prompt.js")>();
-  return {
-    ...original,
-    buildSystemPrompt: vi.fn().mockResolvedValue({ prompt: "Legacy system prompt", sections: [] }),
-  };
-});
-
-import { buildSystemPrompt } from "../../agent/prompt.js";
 // Re-import after mocking
 import { LLM } from "../../session/index.js";
 
@@ -144,9 +134,6 @@ describe("PromptBuilder Integration (T035)", () => {
       loop.addMessage(createSessionMessage("user", "Hello"));
       await loop.run();
 
-      // Verify buildSystemPrompt was NOT called (we're using PromptBuilder)
-      expect(buildSystemPrompt).not.toHaveBeenCalled();
-
       // The PromptBuilder content should be in the system prompt
       // Note: We verify the builder works correctly
       expect(promptBuilder.build()).toContain("AI assistant specialized in TypeScript");
@@ -233,63 +220,6 @@ describe("PromptBuilder Integration (T035)", () => {
         expect.stringContaining("PromptBuilder"),
         expect.objectContaining({
           layerCount: 2,
-        })
-      );
-    });
-  });
-
-  describe("AgentLoop without PromptBuilder (backward compatibility)", () => {
-    it("uses legacy buildSystemPrompt when no promptBuilder provided", async () => {
-      // No promptBuilder in config
-      const configWithoutBuilder: AgentLoopConfig = {
-        ...baseConfig,
-      };
-
-      vi.mocked(LLM.stream).mockReturnValue(
-        createMockStream([
-          { type: "text", content: "Response" },
-          { type: "done", stopReason: "end_turn" },
-        ]) as ReturnType<typeof LLM.stream>
-      );
-
-      const loop = new AgentLoop(configWithoutBuilder);
-      loop.addMessage(createSessionMessage("user", "Hello"));
-      await loop.run();
-
-      // Verify buildSystemPrompt WAS called (legacy path)
-      expect(buildSystemPrompt).toHaveBeenCalled();
-    });
-
-    it("legacy path receives correct config parameters", async () => {
-      const configWithoutBuilder: AgentLoopConfig = {
-        ...baseConfig,
-        mode: {
-          name: "plan",
-          description: "Planning mode",
-          tools: { edit: false, bash: false, web: true, mcp: true },
-          prompt: "You are a planning assistant.",
-        },
-      };
-
-      vi.mocked(LLM.stream).mockReturnValue(
-        createMockStream([
-          { type: "text", content: "OK" },
-          { type: "done", stopReason: "end_turn" },
-        ]) as ReturnType<typeof LLM.stream>
-      );
-
-      const loop = new AgentLoop(configWithoutBuilder);
-      loop.addMessage(createSessionMessage("user", "Plan something"));
-      await loop.run();
-
-      // Verify buildSystemPrompt was called with correct config
-      expect(buildSystemPrompt).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cwd: "/test/project",
-          projectRoot: "/test",
-          mode: "plan",
-          modePrompt: "You are a planning assistant.",
-          providerType: "anthropic",
         })
       );
     });
@@ -540,39 +470,6 @@ describe("PromptBuilder Integration (T035)", () => {
       expect(result.prompt).toContain("Second base");
       expect(result.prompt).toContain("First role");
       expect(result.prompt).toContain("Second role");
-    });
-
-    it("handles transition from legacy to PromptBuilder mid-session", async () => {
-      // First run without PromptBuilder
-      const configLegacy: AgentLoopConfig = { ...baseConfig };
-
-      vi.mocked(LLM.stream).mockReturnValue(
-        createMockStream([
-          { type: "text", content: "Legacy response" },
-          { type: "done", stopReason: "end_turn" },
-        ]) as ReturnType<typeof LLM.stream>
-      );
-
-      const loop1 = new AgentLoop(configLegacy);
-      loop1.addMessage(createSessionMessage("user", "First"));
-      await loop1.run();
-
-      expect(buildSystemPrompt).toHaveBeenCalled();
-      vi.mocked(buildSystemPrompt).mockClear();
-
-      // Second run with PromptBuilder
-      const promptBuilder = new PromptBuilder().withBase("New instructions");
-      const configNew: AgentLoopConfig = {
-        ...baseConfig,
-        promptBuilder,
-      };
-
-      const loop2 = new AgentLoop(configNew);
-      loop2.addMessage(createSessionMessage("user", "Second"));
-      await loop2.run();
-
-      // buildSystemPrompt should NOT be called for the second loop
-      expect(buildSystemPrompt).not.toHaveBeenCalled();
     });
   });
 });

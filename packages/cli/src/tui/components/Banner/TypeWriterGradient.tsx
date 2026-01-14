@@ -11,6 +11,7 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useAnimation } from "../../context/AnimationContext.js";
 import { interpolateColor } from "./ShimmerText.js";
 
 // =============================================================================
@@ -53,9 +54,6 @@ const DEFAULT_CHAR_SPEED = 5000;
 
 /** Default typing speed for line mode (lines per second) */
 const DEFAULT_LINE_SPEED = 50;
-
-/** Cursor blink interval in ms */
-const CURSOR_BLINK_INTERVAL = 500;
 
 /** Frame interval for chunk-based typing (targeting ~60fps) */
 const FRAME_INTERVAL_MS = 16;
@@ -187,7 +185,6 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
 
   // Refs for cleanup
   const typingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const cursorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completeCalledRef = useRef(false);
 
@@ -248,27 +245,22 @@ export const TypeWriterGradient = memo(function TypeWriterGradient({
     };
   }, [effectiveSpeed, totalItems, initialDelay, onComplete]);
 
-  // Cursor blink effect (only while typing)
+  // Use global animation context for cursor blink to prevent flickering
+  const { frame, isPaused } = useAnimation();
+
+  // Derive cursor visibility from animation frame instead of independent timer
+  const derivedCursorVisible = useMemo(() => {
+    if (!showCursor || isComplete) return false;
+    // Show cursor when animation is paused (e.g., input focused)
+    if (isPaused) return true;
+    // Toggle every ~4 frames (~500ms blink cycle)
+    return Math.floor(frame / 4) % 2 === 0;
+  }, [frame, isPaused, showCursor, isComplete]);
+
+  // Sync local state with derived value
   useEffect(() => {
-    if (!showCursor || isComplete) {
-      setCursorVisible(false);
-      if (cursorIntervalRef.current) {
-        clearInterval(cursorIntervalRef.current);
-        cursorIntervalRef.current = null;
-      }
-      return;
-    }
-
-    cursorIntervalRef.current = setInterval(() => {
-      setCursorVisible((prev) => !prev);
-    }, CURSOR_BLINK_INTERVAL);
-
-    return () => {
-      if (cursorIntervalRef.current) {
-        clearInterval(cursorIntervalRef.current);
-      }
-    };
-  }, [showCursor, isComplete]);
+    setCursorVisible(derivedCursorVisible);
+  }, [derivedCursorVisible]);
 
   // Build visible lines based on mode
   const visibleLines = useMemo(() => {

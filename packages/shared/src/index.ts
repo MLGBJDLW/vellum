@@ -92,7 +92,15 @@ export {
   tokyoNightTheme,
   unicodeIcons,
 } from "./theme/index.js";
+/**
+ * @deprecated Import AgentConfig from @vellum/core for orchestration hierarchy.
+ * @deprecated Import AgentState events via Events.agentStateChange from @vellum/core.
+ */
 export type { AgentConfig, AgentState } from "./types/agent.js";
+/**
+ * @deprecated Import Message and Role from @vellum/core instead.
+ * The new types support multi-part content (text, tool calls, files, etc.)
+ */
 export type { Message, MessageRole } from "./types/message.js";
 /**
  * @deprecated Import ModelInfo from @vellum/provider instead.
@@ -116,6 +124,10 @@ export {
   unwrap,
   unwrapOr,
 } from "./types/result.js";
+/**
+ * @deprecated Import Tool and defineTool from @vellum/core instead.
+ * The new Tool interface supports Zod validation, permissions, and typed results.
+ */
 export type { Tool, ToolResult } from "./types/tool.js";
 // Re-export common utilities
 export { createId } from "./utils/id.js";

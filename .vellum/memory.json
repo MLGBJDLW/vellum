@@ -1,7 +1,10 @@
 {
-  "version": "1.0.0",
-  "projectId": "vellum",
+  "version": 1,
+  "projectPath": "D:\\Apps\\vellum",
   "entries": {},
-  "createdAt": "2026-01-04T04:16:26.189Z",
-  "updatedAt": "2026-01-04T04:16:45.715Z"
+  "updatedAt": "2026-01-13T04:22:48.517Z",
+  "stats": {
+    "entryCount": 0,
+    "createdAt": "2026-01-13T04:22:48.517Z"
+  }
 }

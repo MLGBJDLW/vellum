@@ -3,6 +3,15 @@
  * @module trust
  */
 
+// Permission Bridge (plugin operation authorization)
+export {
+  type OperationResult,
+  PermissionBridge,
+  type PermissionChecker,
+  type PluginOperation,
+  type PluginOperationType,
+} from "./permission-bridge.js";
+
 export {
   // Store
   TrustStore,
