@@ -40,6 +40,48 @@ export interface CurrentTool {
 }
 
 /**
+ * Delegation state for subagent tracking (T059).
+ */
+export interface DelegationState {
+  /** Whether a delegation is currently active */
+  isActive: boolean;
+  /** Delegation ID for tracking */
+  delegationId: string | null;
+  /** Agent being delegated to */
+  delegatingTo: string | null;
+  /** Task being delegated */
+  task: string | null;
+  /** Latest subagent text chunk */
+  subagentText: string | null;
+}
+
+/**
+ * User prompt state for ask_followup_question tool.
+ */
+export interface UserPromptState {
+  /** Whether the prompt is visible */
+  visible: boolean;
+  /** The question to display to the user */
+  question: string;
+  /** Optional suggestions for the user */
+  suggestions?: string[];
+}
+
+/**
+ * Completion state for attempt_completion tool.
+ */
+export interface CompletionState {
+  /** Whether a completion was attempted */
+  attempted: boolean;
+  /** The result/summary of the completion */
+  result: string;
+  /** Whether verification was performed */
+  verified: boolean;
+  /** Whether verification passed (if verified) */
+  verificationPassed?: boolean;
+}
+
+/**
  * Hook status derived from AgentLoop state.
  */
 export type HookStatus =
@@ -68,6 +110,14 @@ export interface UseAgentLoopReturn {
   isLoading: boolean;
   /** Last error encountered */
   error: Error | null;
+  /** Current delegation state (T059) */
+  delegation: DelegationState;
+  /** Current user prompt state for ask_followup_question tool */
+  userPromptState: UserPromptState | null;
+  /** Submit user response to pending prompt */
+  submitUserResponse: (response: string) => void;
+  /** Current completion state for attempt_completion tool */
+  completionState: CompletionState | null;
   /** Run the agent with user input */
   run: (input: string) => Promise<void>;
   /** Cancel the current operation */
@@ -163,6 +213,21 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
   const [thinking, setThinking] = useState("");
   const [currentTool, setCurrentTool] = useState<CurrentTool | null>(null);
   const [error, setError] = useState<Error | null>(null);
+
+  // Delegation state (T059)
+  const [delegation, setDelegation] = useState<DelegationState>({
+    isActive: false,
+    delegationId: null,
+    delegatingTo: null,
+    task: null,
+    subagentText: null,
+  });
+
+  // User prompt state for ask_followup_question tool
+  const [userPromptState, setUserPromptState] = useState<UserPromptState | null>(null);
+
+  // Completion state for attempt_completion tool
+  const [completionState, setCompletionState] = useState<CompletionState | null>(null);
 
   // Track thinking start time for duration calculation
   const thinkingStartRef = useRef<number | null>(null);
@@ -346,6 +411,68 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       setError(err);
     };
 
+    // Delegation start handler (T059)
+    const handleDelegationStart = (delegationId: string, agent: string, task: string) => {
+      setDelegation({
+        isActive: true,
+        delegationId,
+        delegatingTo: agent,
+        task,
+        subagentText: null,
+      });
+    };
+
+    // Delegation complete handler (T059)
+    const handleDelegationComplete = (_delegationId: string, _agent: string, _result: string) => {
+      setDelegation({
+        isActive: false,
+        delegationId: null,
+        delegatingTo: null,
+        task: null,
+        subagentText: null,
+      });
+    };
+
+    // Subagent text handler (T059)
+    const handleSubagentText = (_delegationId: string, agent: string, chunk: string) => {
+      setDelegation((prev) => ({
+        ...prev,
+        subagentText: chunk,
+        delegatingTo: agent,
+      }));
+    };
+
+    // Subagent tool handler (T059)
+    const handleSubagentTool = (_delegationId: string, agent: string, toolName: string) => {
+      setDelegation((prev) => ({
+        ...prev,
+        subagentText: `${agent}: ${toolName}`,
+      }));
+    };
+
+    // User prompt handler for ask_followup_question tool
+    const handleUserPromptRequired = (prompt: { question: string; suggestions?: string[] }) => {
+      setUserPromptState({
+        visible: true,
+        question: prompt.question,
+        suggestions: prompt.suggestions,
+      });
+    };
+
+    // Completion handler for attempt_completion tool
+    const handleCompletionAttempted = (completion: {
+      result: string;
+      verified: boolean;
+      verificationPassed?: boolean;
+    }) => {
+      setCompletionState({
+        attempted: true,
+        result: completion.result,
+        verified: completion.verified,
+        verificationPassed: completion.verificationPassed,
+      });
+    };
+
     // Subscribe to events
     loop.on("stateChange", handleStateChange);
     loop.on("text", handleText);
@@ -361,6 +488,14 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     loop.on("loopDetected", handleLoopDetected);
     loop.on("retry", handleRetry);
     loop.on("retryExhausted", handleRetryExhausted);
+    // Delegation events (T059)
+    loop.on("delegationStart", handleDelegationStart);
+    loop.on("delegationComplete", handleDelegationComplete);
+    loop.on("subagentText", handleSubagentText);
+    loop.on("subagentTool", handleSubagentTool);
+    // User prompt and completion events
+    loop.on("userPrompt:required", handleUserPromptRequired);
+    loop.on("completion:attempted", handleCompletionAttempted);
 
     // Cleanup subscriptions and timers
     return () => {
@@ -385,6 +520,14 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       loop.off("loopDetected", handleLoopDetected);
       loop.off("retry", handleRetry);
       loop.off("retryExhausted", handleRetryExhausted);
+      // Delegation events cleanup (T059)
+      loop.off("delegationStart", handleDelegationStart);
+      loop.off("delegationComplete", handleDelegationComplete);
+      loop.off("subagentText", handleSubagentText);
+      loop.off("subagentTool", handleSubagentTool);
+      // User prompt and completion events cleanup
+      loop.off("userPrompt:required", handleUserPromptRequired);
+      loop.off("completion:attempted", handleCompletionAttempted);
     };
   }, [loop]);
 
@@ -442,7 +585,18 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     setError(null);
     thinkingStartRef.current = null;
     currentMessageRef.current = null;
+    setUserPromptState(null);
+    setCompletionState(null);
   }, []);
+
+  // Submit user response to pending prompt
+  const submitUserResponse = useCallback(
+    (response: string) => {
+      loop.submitUserResponse(response);
+      setUserPromptState(null);
+    },
+    [loop]
+  );
 
   return {
     status,
@@ -452,6 +606,10 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     currentTool,
     isLoading,
     error,
+    delegation,
+    userPromptState,
+    submitUserResponse,
+    completionState,
     run,
     cancel,
     clear,

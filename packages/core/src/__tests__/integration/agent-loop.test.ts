@@ -140,7 +140,7 @@ describe("AgentLoop Integration (T034)", () => {
     });
 
     it("handles tool call and execution", async () => {
-      const events = [
+      const toolCallEvents = [
         { type: "text", text: "Let me read that file." },
         {
           type: "toolCall",
@@ -152,9 +152,16 @@ describe("AgentLoop Integration (T034)", () => {
         { type: "done", stopReason: "tool_use" },
       ];
 
-      vi.mocked(LLM.stream).mockReturnValue(
-        createMockStream(events) as ReturnType<typeof LLM.stream>
-      );
+      // After tool execution, LLM returns text-only response to complete the loop
+      const completionEvents = [
+        { type: "text", text: "I've read the file." },
+        { type: "usage", usage: { inputTokens: 20, outputTokens: 15 } },
+        { type: "done", stopReason: "end_turn" },
+      ];
+
+      vi.mocked(LLM.stream)
+        .mockReturnValueOnce(createMockStream(toolCallEvents) as ReturnType<typeof LLM.stream>)
+        .mockReturnValueOnce(createMockStream(completionEvents) as ReturnType<typeof LLM.stream>);
 
       // Register a mock tool and mock its execution
       mockToolExecutor.registerTool({
@@ -378,7 +385,7 @@ describe("AgentLoop Integration (T034)", () => {
     });
 
     it("transitions through tool_executing state", async () => {
-      const events = [
+      const toolCallEvents = [
         {
           type: "toolCall",
           id: "tool-1",
@@ -388,9 +395,15 @@ describe("AgentLoop Integration (T034)", () => {
         { type: "done", stopReason: "tool_use" },
       ];
 
-      vi.mocked(LLM.stream).mockReturnValue(
-        createMockStream(events) as ReturnType<typeof LLM.stream>
-      );
+      // After tool execution, LLM returns text-only response to complete the loop
+      const completionEvents = [
+        { type: "text", text: "Done." },
+        { type: "done", stopReason: "end_turn" },
+      ];
+
+      vi.mocked(LLM.stream)
+        .mockReturnValueOnce(createMockStream(toolCallEvents) as ReturnType<typeof LLM.stream>)
+        .mockReturnValueOnce(createMockStream(completionEvents) as ReturnType<typeof LLM.stream>);
 
       mockToolExecutor.registerTool({
         definition: {

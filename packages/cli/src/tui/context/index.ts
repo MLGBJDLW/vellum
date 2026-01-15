@@ -55,7 +55,6 @@ export {
   useMcp,
   useMcpHub,
 } from "./McpContext.js";
-
 // Messages state context
 export {
   type AddMessageAction,
@@ -75,9 +74,29 @@ export {
   type UpdateMessageAction,
   useMessages,
 } from "./MessagesContext.js";
-
+// Overflow tracking context (ported from Gemini CLI)
+export {
+  OverflowContext,
+  type OverflowContextValue,
+  OverflowProvider,
+  type OverflowProviderProps,
+  type OverflowState,
+  useOverflow,
+  useOverflowOptional,
+} from "./OverflowContext.js";
 // Root provider composition
 export { RootProvider, type RootProviderProps } from "./RootProvider.js";
+// Scroll state context (ported from Gemini CLI)
+export {
+  ScrollContext,
+  type ScrollContextValue,
+  ScrollProvider,
+  type ScrollProviderProps,
+  type ScrollState,
+  useScroll,
+  useScrollOptional,
+  useScrollState,
+} from "./ScrollContext.js";
 
 // Tools state context
 export {

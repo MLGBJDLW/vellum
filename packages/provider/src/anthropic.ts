@@ -26,6 +26,7 @@ import { ErrorCode } from "@vellum/shared";
 import { createProviderError, ProviderError } from "./errors.js";
 import { ANTHROPIC_MODELS } from "./models/providers/anthropic.js";
 import { anthropicTransform } from "./transforms/anthropic.js";
+import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
 import type { TransformConfig } from "./transforms/types.js";
 import type {
   CompletionMessage,
@@ -513,7 +514,7 @@ export class AnthropicProvider implements Provider {
     return tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
+      input_schema: stripSchemaMetaFields(tool.inputSchema) as Anthropic.Tool.InputSchema,
     }));
   }
 

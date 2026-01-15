@@ -54,6 +54,11 @@ export type IconSet = {
   preference: string;
   decision: string;
   summary: string;
+
+  // Git/Workspace indicators
+  folder: string;
+  branch: string;
+  dirty: string;
 };
 
 /**
@@ -107,6 +112,11 @@ export const nerdFontIcons: IconSet = {
   preference: "\uf013", //
   decision: "\uf05b", //
   summary: "\uf249", //
+
+  // Git/Workspace indicators
+  folder: "\uf07b", // nf-fa-folder
+  branch: "\ue725", // nf-dev-git_branch
+  dirty: "\uf069", // nf-fa-asterisk
 };
 
 /**
@@ -151,6 +161,11 @@ export const unicodeIcons: IconSet = {
   preference: "⚙", // Gear
   decision: "◎", // Bullseye
   summary: "▪", // Black small square
+
+  // Git/Workspace indicators
+  folder: "▫", // White small square (folder)
+  branch: "⎇", // Alternative key symbol (branch)
+  dirty: "●", // Black circle (modified)
 };
 
 /**
@@ -195,6 +210,11 @@ export const asciiIcons: IconSet = {
   preference: "@",
   decision: "o",
   summary: "*",
+
+  // Git/Workspace indicators
+  folder: "[D]",
+  branch: "[B]",
+  dirty: "*",
 };
 
 // =============================================================================

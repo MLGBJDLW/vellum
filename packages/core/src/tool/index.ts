@@ -71,6 +71,30 @@ export {
 } from "./smart-edit.js";
 
 // =============================================================================
+// UnifiedToolContainer (T045)
+// =============================================================================
+
+export {
+  createToolContainer,
+  type ToolContainerConfig,
+  UnifiedToolContainer,
+} from "./container.js";
+
+// =============================================================================
+// Dynamic Tool Loader
+// =============================================================================
+
+export {
+  getToolValidationError,
+  isValidTool,
+  type LoadToolError,
+  type LoadToolsOptions,
+  type LoadToolsResult,
+  loadCustomTools,
+  loadToolFile,
+} from "./loader.js";
+
+// =============================================================================
 // Tool Groups System (T030)
 // =============================================================================
 
@@ -78,7 +102,41 @@ export * from "./groups.js";
 export * from "./mode-filter.js";
 
 // =============================================================================
+// Batch Execution (T075)
+// =============================================================================
+
+export {
+  type BatchExecutionContext,
+  type BatchExecutionError,
+  type BatchExecutionOptions,
+  type BatchExecutionResult,
+  type BatchToolCall,
+  createBatch,
+  executeBatch,
+  getSuccessfulResults,
+  isBatchSuccess,
+} from "./batch.js";
+
+// =============================================================================
 // Git Tools (T022)
 // =============================================================================
 
 export * from "./git/index.js";
+
+// =============================================================================
+// Output Truncation (T076)
+// =============================================================================
+
+export {
+  type ContentType,
+  createTruncator,
+  DEFAULT_MAX_LENGTH,
+  DEFAULT_PRESERVE_HEAD_RATIO,
+  DEFAULT_PRESERVE_TAIL,
+  detectContentType,
+  type TruncationOptions,
+  type TruncationResult,
+  truncateOutput,
+  truncateWithSpill,
+  wouldTruncate,
+} from "./truncation.js";

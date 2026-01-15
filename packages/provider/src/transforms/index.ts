@@ -74,6 +74,13 @@ export {
   openaiCompatTransform,
 } from "./openai-compat.js";
 
+// Schema Sanitizer (for Gemini and other providers with limited JSON Schema support)
+export type { JsonSchema, SanitizeOptions } from "./schema-sanitizer.js";
+export {
+  sanitizeJsonSchema,
+  sanitizeJsonSchemaForGemini,
+} from "./schema-sanitizer.js";
+
 // =============================================================================
 // Supported Providers
 // =============================================================================

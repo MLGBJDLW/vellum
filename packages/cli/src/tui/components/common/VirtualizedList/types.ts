@@ -45,6 +45,9 @@ export interface VirtualizedListProps<T> {
 
   /** Callback when sticking to bottom state changes */
   readonly onStickingToBottomChange?: (isSticking: boolean) => void;
+
+  /** Whether to align items to the bottom when content is shorter than the viewport */
+  readonly alignToBottom?: boolean;
 }
 
 /**

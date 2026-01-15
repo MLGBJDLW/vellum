@@ -3,7 +3,7 @@
  *
  * Main application layout with configurable regions:
  * - Header (top)
- * - Sidebar (optional, left)
+ * - Sidebar (optional, right)
  * - Content (main area)
  * - Footer (bottom)
  *
@@ -45,7 +45,7 @@ export interface LayoutProps {
   readonly header?: React.ReactNode;
   /** Footer region content (bottom) */
   readonly footer?: React.ReactNode;
-  /** Sidebar region content (left) */
+  /** Sidebar region content (right) */
   readonly sidebar?: React.ReactNode;
   /** Main content area */
   readonly children: React.ReactNode;
@@ -53,6 +53,12 @@ export interface LayoutProps {
   readonly showSidebar?: boolean;
   /** Force compact mode or auto-detect based on terminal width */
   readonly compactMode?: boolean;
+  /** Workspace name to show in header separator */
+  readonly workspace?: string;
+  /** Git branch to show in header separator */
+  readonly branch?: string;
+  /** Number of changed files to show in header separator */
+  readonly changedFiles?: number;
 }
 
 // =============================================================================
@@ -91,21 +97,88 @@ function useTerminalSize(): { columns: number; rows: number } {
 // =============================================================================
 
 /**
- * Simple horizontal line separator.
+ * Horizontal line separator with optional embedded info.
  */
 interface SeparatorProps {
   readonly color: string;
   readonly style?: "single" | "double";
+  /** Workspace name to embed in the separator */
+  readonly workspace?: string;
+  /** Git branch to embed in the separator */
+  readonly branch?: string;
+  /** Number of changed files */
+  readonly changedFiles?: number;
 }
 
-function Separator({ color, style = "single" }: SeparatorProps): React.JSX.Element {
+/** Minimum line chars on each side of embedded info */
+const MIN_LINE_PADDING = 4;
+
+function Separator({
+  color,
+  style = "single",
+  workspace,
+  branch,
+  changedFiles,
+}: SeparatorProps): React.JSX.Element {
   const { columns } = useTerminalSize();
   const char = style === "double" ? "═" : "─";
-  const line = char.repeat(columns);
+
+  // If no embedded info, render simple line
+  if (!workspace && !branch) {
+    const line = char.repeat(columns);
+    return (
+      <Box width="100%">
+        <Text color={color} wrap="truncate-end">
+          {line}
+        </Text>
+      </Box>
+    );
+  }
+
+  // Build embedded info string: "[ workspace | branch *N ]"
+  const parts: string[] = [];
+  if (workspace) {
+    parts.push(workspace);
+  }
+  if (branch) {
+    let branchPart = branch;
+    if (changedFiles && changedFiles > 0) {
+      branchPart += ` *${changedFiles}`;
+    }
+    parts.push(branchPart);
+  }
+
+  const infoText = parts.length > 0 ? `[ ${parts.join(" | ")} ]` : "";
+  const infoLength = infoText.length;
+
+  // Calculate available space for line chars
+  const availableSpace = columns - infoLength;
+
+  // If not enough space, fall back to simple line
+  if (availableSpace < MIN_LINE_PADDING * 2) {
+    const line = char.repeat(columns);
+    return (
+      <Box width="100%">
+        <Text color={color} wrap="truncate-end">
+          {line}
+        </Text>
+      </Box>
+    );
+  }
+
+  // Distribute line chars: more on right side for visual balance
+  const leftPadding = MIN_LINE_PADDING;
+  const rightPadding = availableSpace - leftPadding;
+
+  const leftLine = char.repeat(leftPadding);
+  const rightLine = char.repeat(Math.max(0, rightPadding));
+
   return (
     <Box width="100%">
       <Text color={color} wrap="truncate-end">
-        {line}
+        {leftLine}
+        {infoText}
+        {rightLine}
       </Text>
     </Box>
   );
@@ -118,13 +191,30 @@ function Separator({ color, style = "single" }: SeparatorProps): React.JSX.Eleme
 interface HeaderRegionProps {
   readonly children: React.ReactNode;
   readonly borderColor: string;
+  /** Workspace name to show in separator */
+  readonly workspace?: string;
+  /** Git branch to show in separator */
+  readonly branch?: string;
+  /** Number of changed files */
+  readonly changedFiles?: number;
 }
 
-function HeaderRegion({ children, borderColor }: HeaderRegionProps): React.JSX.Element {
+function HeaderRegion({
+  children,
+  borderColor,
+  workspace,
+  branch,
+  changedFiles,
+}: HeaderRegionProps): React.JSX.Element {
   return (
     <Box flexDirection="column" width="100%">
       <Box paddingX={1}>{children}</Box>
-      <Separator color={borderColor} />
+      <Separator
+        color={borderColor}
+        workspace={workspace}
+        branch={branch}
+        changedFiles={changedFiles}
+      />
     </Box>
   );
 }
@@ -166,11 +256,12 @@ function SidebarRegion({ children, width, borderColor }: SidebarRegionProps): Re
       width={width}
       borderStyle="single"
       borderColor={borderColor}
+      borderLeft={true}
       borderRight={false}
       borderTop={false}
       borderBottom={false}
-      borderLeft={true}
       paddingX={1}
+      overflow="hidden"
     >
       {children}
     </Box>
@@ -186,7 +277,7 @@ interface ContentRegionProps {
 
 function ContentRegion({ children }: ContentRegionProps): React.JSX.Element {
   return (
-    <Box flexDirection="column" flexGrow={1} flexShrink={0} paddingX={1}>
+    <Box flexDirection="column" flexGrow={1} flexShrink={1} paddingX={1} overflow="hidden">
       {children}
     </Box>
   );
@@ -203,17 +294,17 @@ function ContentRegion({ children }: ContentRegionProps): React.JSX.Element {
  * ```
  * ┌─────────────────────────────┐
  * │         Header              │
- * ├──────────┬──────────────────┤
- * │ Sidebar  │     Content      │
- * │ (opt)    │                  │
- * ├──────────┴──────────────────┤
+ * ├──────────────────┬──────────┤
+ * │     Content      │ Sidebar  │
+ * │                  │ (opt)    │
+ * ├──────────────────┴──────────┤
  * │         Footer              │
  * └─────────────────────────────┘
  * ```
  *
  * Features:
  * - Three main regions: header, content, footer
- * - Optional sidebar (left side, collapsible)
+ * - Optional sidebar (right side, collapsible)
  * - Auto-detect compact mode for narrow terminals
  * - Theme-aware border colors
  *
@@ -250,6 +341,9 @@ export function Layout({
   children,
   showSidebar,
   compactMode,
+  workspace,
+  branch,
+  changedFiles,
 }: LayoutProps): React.JSX.Element {
   const { theme } = useTheme();
   const { columns, rows } = useTerminalSize();
@@ -302,7 +396,16 @@ export function Layout({
   return (
     <Box flexDirection="column" width="100%" height={rows}>
       {/* Header Region */}
-      {header && <HeaderRegion borderColor={headerBorderColor}>{header}</HeaderRegion>}
+      {header && (
+        <HeaderRegion
+          borderColor={headerBorderColor}
+          workspace={workspace}
+          branch={branch}
+          changedFiles={changedFiles}
+        >
+          {header}
+        </HeaderRegion>
+      )}
 
       {/* Middle Section: Content + Sidebar (sidebar on right) */}
       <Box flexDirection="row" flexGrow={1} minHeight={0}>

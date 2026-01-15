@@ -55,6 +55,10 @@ export interface AgentModeIndicatorProps {
   readonly level?: AgentLevel;
   /** Compact display mode (icon only) */
   readonly compact?: boolean;
+  /** Whether delegation is currently active (T059) */
+  readonly isDelegating?: boolean;
+  /** Agent being delegated to (T059) */
+  readonly delegatingTo?: string;
 }
 
 // =============================================================================
@@ -196,6 +200,8 @@ export function AgentModeIndicator({
   agentName,
   level = 2,
   compact = false,
+  isDelegating = false,
+  delegatingTo,
 }: AgentModeIndicatorProps): React.JSX.Element {
   const { theme } = useTheme();
 
@@ -203,6 +209,31 @@ export function AgentModeIndicator({
   const displayName = useMemo(() => getAgentDisplayName(agentName), [agentName]);
   const levelColor = useMemo(() => getLevelColor(level, theme), [level, theme]);
   const levelLabel = LEVEL_LABELS[level];
+
+  // Show delegation indicator when active (GAP 3 fix - T059)
+  if (isDelegating && delegatingTo) {
+    const delegateIcon = getAgentIcon(delegatingTo);
+    const delegateName = getAgentDisplayName(delegatingTo);
+
+    if (compact) {
+      return (
+        <Box>
+          <Text color={theme.colors.warning}>⋯</Text>
+          <Text color={theme.semantic.text.muted}> </Text>
+          <Text>{delegateIcon}</Text>
+        </Box>
+      );
+    }
+
+    return (
+      <Box>
+        <Text color={theme.colors.warning}>⋯ Delegating to </Text>
+        <Text>{delegateIcon}</Text>
+        <Text color={theme.semantic.text.muted}> </Text>
+        <Text color={theme.colors.info}>{delegateName}</Text>
+      </Box>
+    );
+  }
 
   if (compact) {
     return (

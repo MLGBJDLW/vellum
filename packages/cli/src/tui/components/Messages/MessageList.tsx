@@ -18,15 +18,17 @@
  */
 
 import { getIcons } from "@vellum/shared";
-import { Box, Static, Text, useInput } from "ink";
+import { Box, type Key, Static, Text, useInput } from "ink";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Message } from "../../context/MessagesContext.js";
 import { useTheme } from "../../theme/index.js";
+import { MaxSizedBox } from "../common/MaxSizedBox.js";
 import {
   SCROLL_TO_ITEM_END,
   VirtualizedList,
   type VirtualizedListRef,
 } from "../common/VirtualizedList/index.js";
+import { MarkdownRenderer } from "./MarkdownRenderer.js";
 import { StreamingText } from "./StreamingText.js";
 
 // =============================================================================
@@ -125,7 +127,6 @@ function getRoleLabel(role: Message["role"]): string {
 interface MessageItemProps {
   readonly message: Message;
   readonly roleColor: string;
-  readonly textColor: string;
   readonly mutedColor: string;
 }
 
@@ -135,7 +136,6 @@ interface MessageItemProps {
 const MessageItem = memo(function MessageItem({
   message,
   roleColor,
-  textColor,
   mutedColor,
 }: MessageItemProps) {
   const icon = getRoleIcon(message.role);
@@ -166,24 +166,24 @@ const MessageItem = memo(function MessageItem({
         {message.isStreaming ? (
           <StreamingText content={message.content || ""} isStreaming={true} />
         ) : (
-          <Text color={textColor} wrap="wrap">
-            {message.content || "(empty)"}
-          </Text>
+          <MarkdownRenderer content={message.content || "(empty)"} compact />
         )}
       </Box>
 
-      {/* Tool calls, if any */}
+      {/* Tool calls, if any - wrapped in MaxSizedBox to handle overflow */}
       {message.toolCalls && message.toolCalls.length > 0 && (
-        <Box flexDirection="column" marginLeft={2} marginTop={1}>
-          {message.toolCalls.map((toolCall) => (
-            <Box key={toolCall.id}>
-              <Text color={mutedColor}>
-                {getIcons().tool} {toolCall.name}
-                <Text dimColor> [{toolCall.status}]</Text>
-              </Text>
-            </Box>
-          ))}
-        </Box>
+        <MaxSizedBox maxHeight={15} truncationIndicator="... (more tool calls)">
+          <Box flexDirection="column" marginLeft={2} marginTop={1}>
+            {message.toolCalls.map((toolCall) => (
+              <Box key={toolCall.id}>
+                <Text color={mutedColor}>
+                  {getIcons().tool} {toolCall.name}
+                  <Text dimColor> [{toolCall.status}]</Text>
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        </MaxSizedBox>
       )}
     </Box>
   );
@@ -333,51 +333,109 @@ const MessageList = memo(function MessageList({
     [messages.length, effectiveMaxHeight]
   );
 
+  // Helper: Handle virtualized list keyboard navigation
+  const handleVirtualizedNavigation = useCallback(
+    (key: Key, list: VirtualizedListRef<Message>): boolean => {
+      const scrollState = list.getScrollState();
+      if (scrollState.scrollHeight <= scrollState.innerHeight) {
+        return false;
+      }
+
+      const pageSize = Math.max(1, Math.floor(scrollState.innerHeight / 2));
+
+      if (key.pageUp) {
+        list.scrollBy(-pageSize);
+        setUserScrolledUp(true);
+        return true;
+      }
+
+      if (key.pageDown) {
+        const reachesBottom =
+          scrollState.scrollTop + pageSize >=
+          scrollState.scrollHeight - scrollState.innerHeight - 1;
+        if (reachesBottom) {
+          list.scrollToEnd();
+          setUserScrolledUp(false);
+        } else {
+          list.scrollBy(pageSize);
+        }
+        return true;
+      }
+
+      if (key.meta && key.upArrow) {
+        list.scrollTo(0);
+        setUserScrolledUp(true);
+        return true;
+      }
+
+      if (key.meta && key.downArrow) {
+        list.scrollToEnd();
+        setUserScrolledUp(false);
+        return true;
+      }
+
+      return false;
+    },
+    []
+  );
+
+  // Helper: Handle direct (non-virtualized) keyboard navigation
+  const handleDirectNavigation = useCallback(
+    (key: Key): boolean => {
+      if (!effectiveMaxHeight || messages.length <= effectiveMaxHeight) {
+        return false;
+      }
+
+      if (key.pageUp) {
+        scrollUp(Math.floor(effectiveMaxHeight / 2));
+        return true;
+      }
+
+      if (key.pageDown) {
+        scrollDown(Math.floor(effectiveMaxHeight / 2));
+        return true;
+      }
+
+      if (key.upArrow) {
+        scrollUp(1);
+        return true;
+      }
+
+      if (key.downArrow) {
+        scrollDown(1);
+        return true;
+      }
+
+      if (key.meta && key.upArrow) {
+        setScrollOffset(0);
+        setUserScrolledUp(true);
+        return true;
+      }
+
+      if (key.meta && key.downArrow) {
+        scrollToBottom();
+        return true;
+      }
+
+      return false;
+    },
+    [effectiveMaxHeight, messages.length, scrollUp, scrollDown, scrollToBottom]
+  );
+
   // Handle keyboard input for scrolling
   useInput(
     useCallback(
       (_char, key) => {
-        // Only handle scroll keys when effectiveMaxHeight is set (windowed mode)
-        if (!effectiveMaxHeight || messages.length <= effectiveMaxHeight) return;
-
-        // Page Up - scroll up by half a page
-        if (key.pageUp) {
-          scrollUp(Math.floor(effectiveMaxHeight / 2));
-          return;
-        }
-
-        // Page Down - scroll down by half a page
-        if (key.pageDown) {
-          scrollDown(Math.floor(effectiveMaxHeight / 2));
-          return;
-        }
-
-        // Up arrow - scroll up by one
-        if (key.upArrow) {
-          scrollUp(1);
-          return;
-        }
-
-        // Down arrow - scroll down by one
-        if (key.downArrow) {
-          scrollDown(1);
-          return;
-        }
-
-        // Home - scroll to top
-        if (key.meta && key.upArrow) {
-          setScrollOffset(0);
-          setUserScrolledUp(true);
-          return;
-        }
-
-        // End - scroll to bottom
-        if (key.meta && key.downArrow) {
-          scrollToBottom();
-          return;
+        if (useVirtualizedList) {
+          const list = virtualizedListRef.current;
+          if (list) {
+            handleVirtualizedNavigation(key, list);
+          }
+        } else {
+          handleDirectNavigation(key);
         }
       },
-      [effectiveMaxHeight, messages.length, scrollUp, scrollDown, scrollToBottom]
+      [useVirtualizedList, handleVirtualizedNavigation, handleDirectNavigation]
     )
   );
 
@@ -391,31 +449,47 @@ const MessageList = memo(function MessageList({
     }),
     [theme.colors.primary, theme.colors.success, theme.colors.warning, theme.colors.info]
   );
-  const textColor = theme.semantic.text.primary;
   const mutedColor = theme.semantic.text.muted;
   const borderColor = theme.semantic.border.default;
 
   // Virtualized list callbacks must be defined unconditionally to keep hook order stable.
   const renderMessageItem = useCallback(
     ({ item }: { item: Message; index: number }) => (
-      <MessageItem
-        message={item}
-        roleColor={roleColors[item.role]}
-        textColor={textColor}
-        mutedColor={mutedColor}
-      />
+      <MessageItem message={item} roleColor={roleColors[item.role]} mutedColor={mutedColor} />
     ),
-    [roleColors, textColor, mutedColor]
+    [roleColors, mutedColor]
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
 
   const handleStickingChange = useCallback(
     (isSticking: boolean) => {
+      setUserScrolledUp(!isSticking);
       onScrollChange?.(isSticking);
     },
     [onScrollChange]
   );
+
+  // IMPORTANT: pendingMessage is merged into allMessages to avoid Ink <Static>
+  // layout issues. Ink's <Static> doesn't participate in Flexbox layout and
+  // renders at top, causing position problems when rendered separately.
+  // NOTE: This useMemo MUST be before early return to satisfy React hooks rules.
+  const allMessages = useMemo(() => {
+    const msgs = messages as Message[];
+    return pendingMessage ? [...msgs, pendingMessage] : msgs;
+  }, [messages, pendingMessage]);
+
+  // Auto-scroll to end when new messages arrive (virtualized mode only)
+  const allMessagesLengthRef = useRef(allMessages.length);
+  useEffect(() => {
+    const hasNewMessages = allMessages.length > allMessagesLengthRef.current;
+    allMessagesLengthRef.current = allMessages.length;
+
+    if (!useVirtualizedList || !autoScroll || userScrolledUp || !hasNewMessages) {
+      return;
+    }
+    virtualizedListRef.current?.scrollToEnd();
+  }, [useVirtualizedList, autoScroll, userScrolledUp, allMessages]);
 
   // Empty state
   if (messages.length === 0) {
@@ -437,12 +511,13 @@ const MessageList = memo(function MessageList({
   // ==========================================================================
   // When useVirtualizedList is enabled, we use VirtualizedList which only
   // renders visible items. This is ideal for very long conversations.
+
   if (useVirtualizedList) {
     return (
-      <Box flexDirection="column" flexGrow={1} height={effectiveMaxHeight ?? "100%"}>
+      <Box flexDirection="column" flexGrow={1} minHeight={0} height={effectiveMaxHeight ?? "100%"}>
         <VirtualizedList
           ref={virtualizedListRef}
-          data={messages as Message[]}
+          data={allMessages}
           renderItem={renderMessageItem}
           keyExtractor={keyExtractor}
           estimatedItemHeight={estimatedItemHeight}
@@ -450,19 +525,8 @@ const MessageList = memo(function MessageList({
           initialScrollOffsetInIndex={SCROLL_TO_ITEM_END}
           onStickingToBottomChange={handleStickingChange}
           scrollbarThumbColor={theme.semantic.text.muted}
+          alignToBottom
         />
-
-        {/* Pending message for streaming (rendered separately for performance) */}
-        {pendingMessage && (
-          <Box paddingX={1}>
-            <MessageItem
-              message={pendingMessage}
-              roleColor={roleColors[pendingMessage.role]}
-              textColor={textColor}
-              mutedColor={mutedColor}
-            />
-          </Box>
-        )}
 
         {/* Auto-scroll status indicator */}
         {userScrolledUp && autoScroll && (
@@ -485,6 +549,9 @@ const MessageList = memo(function MessageList({
   if (useStaticRendering && historyMessages) {
     return (
       <Box flexDirection="column" flexGrow={1}>
+        {/* Spacer pushes messages toward Input at bottom */}
+        <Box flexGrow={1} />
+
         {/* Scroll up indicator */}
         {showScrollUp && (
           <Box justifyContent="center" borderBottom borderColor={borderColor}>
@@ -499,7 +566,6 @@ const MessageList = memo(function MessageList({
               <MessageItem
                 message={message}
                 roleColor={roleColors[message.role]}
-                textColor={textColor}
                 mutedColor={mutedColor}
               />
             </Box>
@@ -512,7 +578,6 @@ const MessageList = memo(function MessageList({
             <MessageItem
               message={pendingMessage}
               roleColor={roleColors[pendingMessage.role]}
-              textColor={textColor}
               mutedColor={mutedColor}
             />
           </Box>
@@ -544,6 +609,9 @@ const MessageList = memo(function MessageList({
   // ==========================================================================
   return (
     <Box flexDirection="column" flexGrow={1}>
+      {/* Spacer pushes messages toward Input at bottom */}
+      <Box flexGrow={1} />
+
       {/* Scroll up indicator */}
       {showScrollUp && (
         <Box justifyContent="center" borderBottom borderColor={borderColor}>
@@ -558,7 +626,6 @@ const MessageList = memo(function MessageList({
             key={message.id}
             message={message}
             roleColor={roleColors[message.role]}
-            textColor={textColor}
             mutedColor={mutedColor}
           />
         ))}

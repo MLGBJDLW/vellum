@@ -18,6 +18,8 @@ import { AppProvider, type AppState } from "./AppContext.js";
 import { BracketedPasteProvider } from "./BracketedPasteContext.js";
 import { McpProvider } from "./McpContext.js";
 import { type Message, MessagesProvider } from "./MessagesContext.js";
+import { OverflowProvider } from "./OverflowContext.js";
+import { ScrollProvider } from "./ScrollContext.js";
 import { ToolsProvider } from "./ToolsContext.js";
 
 // =============================================================================
@@ -110,13 +112,17 @@ export function RootProvider({
     <ThemeProvider theme={theme}>
       <AnimationProvider>
         <BracketedPasteProvider>
-          <AppProvider initialState={initialAppState}>
-            <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
-              <MessagesProvider initialMessages={initialMessages}>
-                <ToolsProvider>{children}</ToolsProvider>
-              </MessagesProvider>
-            </McpProvider>
-          </AppProvider>
+          <OverflowProvider>
+            <ScrollProvider autoScrollToBottom>
+              <AppProvider initialState={initialAppState}>
+                <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
+                  <MessagesProvider initialMessages={initialMessages}>
+                    <ToolsProvider>{children}</ToolsProvider>
+                  </MessagesProvider>
+                </McpProvider>
+              </AppProvider>
+            </ScrollProvider>
+          </OverflowProvider>
         </BracketedPasteProvider>
       </AnimationProvider>
     </ThemeProvider>

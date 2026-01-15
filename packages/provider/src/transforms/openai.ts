@@ -11,6 +11,7 @@ import type {
   ToolDefinition,
 } from "../types.js";
 import { AbstractProviderTransform } from "./base.js";
+import { stripSchemaMetaFields } from "./schema-sanitizer.js";
 import type {
   ParsedResponse,
   TransformConfig,
@@ -475,7 +476,7 @@ export class OpenAITransform extends AbstractProviderTransform<
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: tool.inputSchema,
+        parameters: stripSchemaMetaFields(tool.inputSchema),
       },
     }));
 

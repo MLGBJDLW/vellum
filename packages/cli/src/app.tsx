@@ -116,6 +116,7 @@ import { useAlternateBuffer } from "./tui/hooks/useAlternateBuffer.js";
 import { useBacktrack } from "./tui/hooks/useBacktrack.js";
 import { useCopyMode } from "./tui/hooks/useCopyMode.js";
 import { useDesktopNotification } from "./tui/hooks/useDesktopNotification.js";
+import { useGitStatus } from "./tui/hooks/useGitStatus.js";
 import { type HotkeyDefinition, useHotkeys } from "./tui/hooks/useHotkeys.js";
 import { useInputHistory } from "./tui/hooks/useInputHistory.js";
 import { useModeShortcuts } from "./tui/hooks/useModeShortcuts.js";
@@ -123,6 +124,7 @@ import { isScreenReaderEnabled, useScreenReader } from "./tui/hooks/useScreenRea
 import { useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
 import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
 import { useVim } from "./tui/hooks/useVim.js";
+import { useWorkspace } from "./tui/hooks/useWorkspace.js";
 import {
   getAlternateBufferEnabled,
   getBannerSeen,
@@ -491,6 +493,10 @@ function AppContent({
     notifyError,
   } = useDesktopNotification({ enabled: true });
 
+  // Workspace and git status for header separator
+  const { name: workspaceName } = useWorkspace();
+  const { branch: gitBranch, changedFiles: gitChangedFiles } = useGitStatus();
+
   // Alternate buffer configuration (T043)
   // Enabled by default (config defaults to true)
   // Automatically disabled when screen reader is detected for accessibility
@@ -505,6 +511,13 @@ function AppContent({
   const alternateBuffer = useAlternateBuffer({
     enabled: alternateBufferEnabled,
   });
+  // Destructure for convenience
+  const { isAlternate } = alternateBuffer;
+
+  // Terminal height for layout constraint when in alternate buffer mode
+  const terminalHeight = process.stdout.rows || 24;
+  void isAlternate; // Used for layout height calculation
+  void terminalHeight; // Used for layout height calculation
 
   // Hide the terminal cursor to avoid VS Code's blinking block over the message area.
   // We draw our own cursor in inputs and streaming text.
@@ -1707,13 +1720,6 @@ function AppContent({
         description: "Toggle fullscreen mode",
         scope: "global",
       },
-      // Hotkey help modal (?)
-      {
-        key: "?",
-        handler: () => setShowHelpModal((prev) => !prev),
-        description: "Show keyboard shortcuts help",
-        scope: "global",
-      },
     ],
     [
       backtrackState.canUndo,
@@ -1857,7 +1863,7 @@ function AppContent({
         const result = await initializeLsp({
           workspaceRoot: process.cwd(),
           toolRegistry: toolRegistry as LspIntegrationOptions["toolRegistry"],
-          autoInstall: false, // Don't auto-install servers
+          autoInstall: true, // Auto-install missing language servers
           logger: {
             debug: (msg) => console.debug(`[lsp] ${msg}`),
             info: (msg) => console.info(`[lsp] ${msg}`),
@@ -2929,6 +2935,9 @@ function AppContent({
       undoBacktrack={undoBacktrack}
       updateAvailable={updateAvailable}
       redoBacktrack={redoBacktrack}
+      workspace={workspaceName}
+      branch={gitBranch}
+      changedFiles={gitChangedFiles}
     />
   );
 }
@@ -3046,6 +3055,12 @@ interface AppContentViewProps {
   readonly undoBacktrack: () => void;
   readonly redoBacktrack: () => void;
   readonly updateAvailable: { current: string; latest: string } | null;
+  /** Workspace name for header separator */
+  readonly workspace: string;
+  /** Git branch for header separator */
+  readonly branch: string | null;
+  /** Number of changed files for header separator */
+  readonly changedFiles: number;
 }
 
 function renderSidebarContent({
@@ -3442,6 +3457,9 @@ function AppContentView({
   undoBacktrack,
   redoBacktrack,
   updateAvailable,
+  workspace,
+  branch,
+  changedFiles,
 }: AppContentViewProps): React.JSX.Element {
   const sidebar = renderSidebarContent({
     announce,
@@ -3570,124 +3588,133 @@ function AppContentView({
             footer={footer}
             sidebar={sidebar}
             showSidebar={showSidebar}
+            workspace={workspace}
+            branch={branch ?? undefined}
+            changedFiles={changedFiles}
           >
-            {isCurrentlyThinking && (
-              <ThinkingBlock
-                content={thinkingContent}
-                isStreaming={isCurrentlyThinking}
-                collapsed={thinkingCollapsed}
-                onToggle={() => setThinkingCollapsed((prev) => !prev)}
+            <Box flexDirection="column" flexGrow={1} overflow="hidden">
+              {isCurrentlyThinking && (
+                <ThinkingBlock
+                  content={thinkingContent}
+                  isStreaming={isCurrentlyThinking}
+                  collapsed={thinkingCollapsed}
+                  onToggle={() => setThinkingCollapsed((prev) => !prev)}
+                />
+              )}
+
+              <MessageList
+                messages={historyMessages}
+                pendingMessage={pendingMessage}
+                useVirtualizedList={true}
+                estimatedItemHeight={4}
               />
-            )}
+            </Box>
 
-            <MessageList
-              messages={historyMessages}
-              pendingMessage={pendingMessage}
-              useVirtualizedList={true}
-              estimatedItemHeight={4}
-            />
-
-            {interactivePrompt && (
-              <Box
-                borderStyle="round"
-                borderColor={themeContext.theme.colors.warning}
-                paddingX={2}
-                paddingY={1}
-                marginY={1}
-                flexDirection="column"
-              >
-                {/* Title section */}
-                {interactivePrompt.title && (
-                  <Box
-                    borderStyle="single"
-                    borderBottom
-                    borderColor={themeContext.theme.colors.warning}
-                    marginBottom={1}
-                  >
-                    <Text bold color={themeContext.theme.colors.warning}>
-                      🔐 {interactivePrompt.title}
-                    </Text>
-                  </Box>
-                )}
-                {/* Help text section */}
-                {interactivePrompt.helpText && (
-                  <Box marginBottom={1}>
-                    <Text color={themeContext.theme.semantic.text.muted}>
-                      {interactivePrompt.helpText}
-                    </Text>
-                  </Box>
-                )}
-                {/* Format hint */}
-                {interactivePrompt.formatHint && (
-                  <Text color={themeContext.theme.semantic.text.muted}>
-                    📋 Format: {interactivePrompt.formatHint}
-                  </Text>
-                )}
-                {/* Documentation URL hint */}
-                {interactivePrompt.documentationUrl && (
-                  <Text color={themeContext.theme.semantic.text.muted}>
-                    📚 Docs: {interactivePrompt.documentationUrl}
-                  </Text>
-                )}
-                {/* Input area with spacing */}
-                <Box flexDirection="column" marginTop={1}>
-                  {/* Original message (e.g., "API Key:") */}
-                  <Text>{interactivePrompt.message}</Text>
-                  {/* Select options */}
-                  {interactivePrompt.inputType === "select" && interactivePrompt.options && (
-                    <Box flexDirection="column" marginTop={1}>
-                      {interactivePrompt.options.map((option, index) => (
-                        <Text key={option}>{`${index + 1}. ${option}`}</Text>
-                      ))}
+            <Box flexShrink={0} flexDirection="column">
+              {interactivePrompt && (
+                <Box
+                  borderStyle="round"
+                  borderColor={themeContext.theme.colors.warning}
+                  paddingX={2}
+                  paddingY={1}
+                  marginY={1}
+                  flexDirection="column"
+                >
+                  {/* Title section */}
+                  {interactivePrompt.title && (
+                    <Box
+                      borderStyle="single"
+                      borderBottom
+                      borderColor={themeContext.theme.colors.warning}
+                      marginBottom={1}
+                    >
+                      <Text bold color={themeContext.theme.colors.warning}>
+                        🔐 {interactivePrompt.title}
+                      </Text>
                     </Box>
                   )}
-                  {/* Input field */}
-                  <Box marginTop={1} flexGrow={1}>
-                    <Text color={themeContext.theme.semantic.text.muted}>{promptPlaceholder} </Text>
-                    <Box flexGrow={1}>
-                      <TextInput
-                        value={promptValue}
-                        onChange={setPromptValue}
-                        onSubmit={handlePromptSubmit}
-                        mask={interactivePrompt.inputType === "password" ? "*" : undefined}
-                        focused={!suppressPromptEnter}
-                        suppressEnter={suppressPromptEnter}
-                        showBorder={false}
-                      />
+                  {/* Help text section */}
+                  {interactivePrompt.helpText && (
+                    <Box marginBottom={1}>
+                      <Text color={themeContext.theme.semantic.text.muted}>
+                        {interactivePrompt.helpText}
+                      </Text>
+                    </Box>
+                  )}
+                  {/* Format hint */}
+                  {interactivePrompt.formatHint && (
+                    <Text color={themeContext.theme.semantic.text.muted}>
+                      📋 Format: {interactivePrompt.formatHint}
+                    </Text>
+                  )}
+                  {/* Documentation URL hint */}
+                  {interactivePrompt.documentationUrl && (
+                    <Text color={themeContext.theme.semantic.text.muted}>
+                      📚 Docs: {interactivePrompt.documentationUrl}
+                    </Text>
+                  )}
+                  {/* Input area with spacing */}
+                  <Box flexDirection="column" marginTop={1}>
+                    {/* Original message (e.g., "API Key:") */}
+                    <Text>{interactivePrompt.message}</Text>
+                    {/* Select options */}
+                    {interactivePrompt.inputType === "select" && interactivePrompt.options && (
+                      <Box flexDirection="column" marginTop={1}>
+                        {interactivePrompt.options.map((option, index) => (
+                          <Text key={option}>{`${index + 1}. ${option}`}</Text>
+                        ))}
+                      </Box>
+                    )}
+                    {/* Input field */}
+                    <Box marginTop={1} flexGrow={1}>
+                      <Text color={themeContext.theme.semantic.text.muted}>
+                        {promptPlaceholder}{" "}
+                      </Text>
+                      <Box flexGrow={1}>
+                        <TextInput
+                          value={promptValue}
+                          onChange={setPromptValue}
+                          onSubmit={handlePromptSubmit}
+                          mask={interactivePrompt.inputType === "password" ? "*" : undefined}
+                          focused={!suppressPromptEnter}
+                          suppressEnter={suppressPromptEnter}
+                          showBorder={false}
+                        />
+                      </Box>
                     </Box>
                   </Box>
+                  {/* Footer hint */}
+                  <Box marginTop={1}>
+                    <Text dimColor>Press Enter to submit, Esc to cancel</Text>
+                  </Box>
                 </Box>
-                {/* Footer hint */}
-                <Box marginTop={1}>
-                  <Text dimColor>Press Enter to submit, Esc to cancel</Text>
-                </Box>
-              </Box>
-            )}
+              )}
 
-            <EnhancedCommandInput
-              onMessage={handleMessage}
-              onCommand={handleCommand}
-              commands={commandOptions}
-              getSubcommands={getSubcommands}
-              getLevel3Items={getLevel3Items}
-              groupedCommands={true}
-              categoryOrder={categoryOrder}
-              categoryLabels={categoryLabels}
-              placeholder={isLoading ? "Thinking..." : "Type a message or /command..."}
-              disabled={isLoading || !!interactivePrompt || !!pendingOperation}
-              focused={
-                !isLoading &&
-                !showModeSelector &&
-                !showModelSelector &&
-                !showSessionManager &&
-                !showHelpModal &&
-                !activeApproval &&
-                !interactivePrompt &&
-                !pendingOperation
-              }
-              historyKey="vellum-command-history"
-              cwd={process.cwd()}
-            />
+              <EnhancedCommandInput
+                onMessage={handleMessage}
+                onCommand={handleCommand}
+                commands={commandOptions}
+                getSubcommands={getSubcommands}
+                getLevel3Items={getLevel3Items}
+                groupedCommands={true}
+                categoryOrder={categoryOrder}
+                categoryLabels={categoryLabels}
+                placeholder={isLoading ? "Thinking..." : "Type a message or /command..."}
+                disabled={isLoading || !!interactivePrompt || !!pendingOperation}
+                focused={
+                  !isLoading &&
+                  !showModeSelector &&
+                  !showModelSelector &&
+                  !showSessionManager &&
+                  !showHelpModal &&
+                  !activeApproval &&
+                  !interactivePrompt &&
+                  !pendingOperation
+                }
+                historyKey="vellum-command-history"
+                cwd={process.cwd()}
+              />
+            </Box>
           </Layout>
         </>
       )}

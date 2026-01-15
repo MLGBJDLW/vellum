@@ -49,6 +49,18 @@ export {
   type UseFileSuggestionsResult,
   useFileSuggestions,
 } from "./useFileSuggestions.js";
+// Flicker detection hook (ported from Gemini CLI)
+export {
+  calculateSafeContainerHeight,
+  type FlickerDetectorResult,
+  isContentOverflowing,
+  type UseFlickerDetectorOptions,
+  useFlickerDetector,
+} from "./useFlickerDetector.js";
+export {
+  type GitStatus,
+  useGitStatus,
+} from "./useGitStatus.js";
 export {
   createStandardHotkeys,
   formatHotkey,
@@ -108,3 +120,8 @@ export {
   type VimModeAction,
   type VimMotionAction,
 } from "./useVim.js";
+// Workspace and Git status hooks (Header Bar)
+export {
+  useWorkspace,
+  type WorkspaceInfo,
+} from "./useWorkspace.js";

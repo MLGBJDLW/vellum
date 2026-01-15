@@ -12,7 +12,8 @@
 
 import { Box, type DOMElement } from "ink";
 import type React from "react";
-import { forwardRef, useCallback, useImperativeHandle, useMemo } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import { useScrollOptional } from "../../../context/ScrollContext.js";
 import { useBatchedScroll, useScrollAnchor, useVirtualization } from "./hooks/index.js";
 import { SCROLL_TO_ITEM_END, type VirtualizedListProps, type VirtualizedListRef } from "./types.js";
 
@@ -59,6 +60,7 @@ function VirtualizedListInner<T>(
     scrollbarThumbColor,
     onScrollTopChange,
     onStickingToBottomChange,
+    alignToBottom = false,
   } = props;
 
   // Note: theme reserved for future scrollbar styling
@@ -108,6 +110,11 @@ function VirtualizedListInner<T>(
     scrollTop,
     containerHeight: initialVirtualization.measuredContainerHeight,
   });
+
+  const extraTopSpacerHeight =
+    alignToBottom && measuredContainerHeight > totalHeight
+      ? measuredContainerHeight - totalHeight
+      : 0;
 
   // Batched scroll for smooth updates
   const { getScrollTop, setPendingScrollTop } = useBatchedScroll(scrollTop);
@@ -218,6 +225,83 @@ function VirtualizedListInner<T>(
     ]
   );
 
+  // ==========================================================================
+  // ScrollContext Integration
+  // ==========================================================================
+  const scrollContext = useScrollOptional();
+  const lastReportedScrollTop = useRef<number>(scrollTop);
+
+  // Report dimensions to ScrollContext when they change
+  useEffect(() => {
+    if (scrollContext) {
+      scrollContext.updateDimensions(totalHeight, measuredContainerHeight);
+    }
+  }, [scrollContext, totalHeight, measuredContainerHeight]);
+
+  // Sync internal scrollTop changes to ScrollContext (debounced to avoid loops)
+  useEffect(() => {
+    if (scrollContext && scrollTop !== lastReportedScrollTop.current) {
+      lastReportedScrollTop.current = scrollTop;
+      // Only sync if the context's scrollTop differs significantly
+      const contextScrollTop = scrollContext.state.scrollTop;
+      if (Math.abs(scrollTop - contextScrollTop) > 1) {
+        scrollContext.scrollTo(scrollTop);
+      }
+    }
+  }, [scrollContext, scrollTop]);
+
+  // Listen for external scroll commands from ScrollContext
+  useEffect(() => {
+    if (!scrollContext) return;
+
+    const unsubscribe = scrollContext.onScrollChange((externalScrollTop) => {
+      // Avoid reacting to our own updates
+      if (Math.abs(externalScrollTop - scrollTop) <= 1) return;
+
+      // Apply external scroll command
+      const newScrollTop = Math.max(
+        0,
+        Math.min(totalHeight - measuredContainerHeight, externalScrollTop)
+      );
+      setPendingScrollTop(newScrollTop);
+      setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+
+      // Update sticking state based on position
+      const atBottom = newScrollTop >= totalHeight - measuredContainerHeight - 1;
+      setIsStickingToBottom(atBottom);
+    });
+
+    return unsubscribe;
+  }, [
+    scrollContext,
+    scrollTop,
+    totalHeight,
+    measuredContainerHeight,
+    setPendingScrollTop,
+    setScrollAnchor,
+    getAnchorForScrollTop,
+    setIsStickingToBottom,
+  ]);
+
+  // Respond to scrollToBottom via context state changes
+  useEffect(() => {
+    if (scrollContext?.state.isAtBottom && !isStickingToBottom && data.length > 0) {
+      // Context indicates we should be at bottom but we're not sticking
+      // This happens when scrollToBottom() is called on the context
+      setIsStickingToBottom(true);
+      setScrollAnchor({
+        index: data.length - 1,
+        offset: SCROLL_TO_ITEM_END,
+      });
+    }
+  }, [
+    scrollContext?.state.isAtBottom,
+    isStickingToBottom,
+    data.length,
+    setIsStickingToBottom,
+    setScrollAnchor,
+  ]);
+
   // Create ref callback wrapper
   const createItemRef = useCallback(
     (index: number) => (el: DOMElement | null) => {
@@ -257,6 +341,7 @@ function VirtualizedListInner<T>(
     >
       <Box flexShrink={0} width="100%" flexDirection="column">
         {/* Top spacer for items above viewport */}
+        {extraTopSpacerHeight > 0 && <Box height={extraTopSpacerHeight} flexShrink={0} />}
         {topSpacerHeight > 0 && <Box height={topSpacerHeight} flexShrink={0} />}
 
         {/* Visible items */}

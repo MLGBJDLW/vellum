@@ -19,7 +19,13 @@ export {
 
 // HotkeyHints (sidebar footer hints)
 export { type HotkeyHint, HotkeyHints, type HotkeyHintsProps } from "./HotkeyHints.js";
-
+// MaxSizedBox (Ported from Gemini CLI)
+export {
+  MaxSizedBox,
+  type MaxSizedBoxProps,
+  type MaxSizedBoxState,
+  useMaxSizedBox,
+} from "./MaxSizedBox.js";
 // Spinner (Chain 21)
 export {
   LoadingIndicator,

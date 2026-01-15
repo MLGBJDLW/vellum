@@ -25,6 +25,7 @@ import type {
 import { createProviderError, ProviderError } from "./errors.js";
 import { OPENAI_MODELS } from "./models/providers/openai.js";
 import { openaiTransform } from "./transforms/openai.js";
+import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
 import type { TransformConfig } from "./transforms/types.js";
 import type {
   CompletionMessage,
@@ -615,7 +616,7 @@ export class OpenAIProvider {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: tool.inputSchema,
+        parameters: stripSchemaMetaFields(tool.inputSchema),
       },
     }));
   }

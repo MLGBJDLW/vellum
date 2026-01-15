@@ -142,10 +142,10 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
 
     if (scrollAnchor.offset === SCROLL_TO_ITEM_END) {
       const itemHeight = heights[scrollAnchor.index] ?? 0;
-      return offset + itemHeight - containerHeight;
+      return Math.max(0, offset + itemHeight - containerHeight);
     }
 
-    return offset + scrollAnchor.offset;
+    return Math.max(0, offset + scrollAnchor.offset);
   })();
 
   // Track previous values for auto-scroll logic

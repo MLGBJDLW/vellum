@@ -12,6 +12,7 @@ import { getIcons, getRoleBorderColor, getRoleTextColor, type VellumTheme } from
 import { Box, Text } from "ink";
 import type { Message, MessageTokenUsage } from "../../context/MessagesContext.js";
 import { useTheme } from "../../theme/index.js";
+import { MarkdownRenderer } from "./MarkdownRenderer.js";
 import { StreamingText } from "./StreamingText.js";
 
 // =============================================================================
@@ -183,7 +184,6 @@ export function MessageBubble({
   // Get role-specific styling using semantic tokens
   const roleColor = getRoleColor(message.role, theme);
   const borderColor = getMessageBorderColor(message.role, theme);
-  const textColor = theme.semantic.text.primary;
   const mutedColor = theme.semantic.text.muted;
   const alignment = getAlignment(message.role);
 
@@ -243,9 +243,7 @@ export function MessageBubble({
           {message.isStreaming ? (
             <StreamingText content={message.content || ""} isStreaming={true} />
           ) : (
-            <Text color={textColor} wrap="wrap">
-              {message.content || "(empty)"}
-            </Text>
+            <MarkdownRenderer content={message.content || "(empty)"} compact={compact} />
           )}
         </Box>
 

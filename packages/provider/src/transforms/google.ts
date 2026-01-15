@@ -11,6 +11,7 @@ import type {
   ToolDefinition,
 } from "../types.js";
 import { AbstractProviderTransform } from "./base.js";
+import { sanitizeJsonSchemaForGemini } from "./schema-sanitizer.js";
 import type {
   ParsedResponse,
   TransformConfig,
@@ -464,6 +465,11 @@ export class GoogleTransform extends AbstractProviderTransform<
    *
    * Gemini tools have the format:
    * { functionDeclarations: [{ name, description, parameters: { type: "OBJECT", properties, required } }] }
+   *
+   * This method also sanitizes the JSON Schema to remove fields unsupported by Gemini:
+   * - exclusiveMinimum/exclusiveMaximum → converted to minimum/maximum
+   * - propertyNames, patternProperties, etc. → removed
+   * - $schema, $id, $ref, etc. → removed
    */
   transformTools(tools: ToolDefinition[], _config: TransformConfig): TransformResult<GeminiTool[]> {
     const warnings: TransformWarning[] = [];
@@ -473,10 +479,12 @@ export class GoogleTransform extends AbstractProviderTransform<
     }
 
     const functionDeclarations: GeminiFunctionDeclaration[] = tools.map((tool) => {
-      // Extract properties and required from inputSchema
-      const schema = tool.inputSchema || {};
-      const properties = (schema.properties as Record<string, unknown>) || {};
-      const required = (schema.required as string[]) || [];
+      // Sanitize the schema to remove Gemini-unsupported fields
+      const sanitizedSchema = sanitizeJsonSchemaForGemini(tool.inputSchema || {});
+
+      // Extract properties and required from sanitized schema
+      const properties = (sanitizedSchema.properties as Record<string, unknown>) || {};
+      const required = (sanitizedSchema.required as string[]) || [];
 
       return {
         name: tool.name,

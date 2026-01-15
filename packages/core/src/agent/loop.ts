@@ -4,8 +4,11 @@
 
 import { EventEmitter } from "node:events";
 import type { StreamEvent, TokenUsage, ToolDefinition } from "@vellum/provider";
-import type { OrchestratorCore } from "../agents/orchestrator/core.js";
+import type { OrchestratorCore, SubagentHandle } from "../agents/orchestrator/core.js";
 import type { SubsessionManager } from "../agents/session/subsession-manager.js";
+import type { UserPromptSignal } from "../builtin/ask-followup.js";
+import type { AttemptCompletionOutput } from "../builtin/attempt-completion.js";
+import type { DelegateAgentSignal } from "../builtin/delegate-agent.js";
 import { SessionAgentsIntegration } from "../context/agents/session-integration.js";
 import type { LLMLogger } from "../logger/llm-logger.js";
 import type { Logger } from "../logger/logger.js";
@@ -14,9 +17,12 @@ import type { TrustPreset } from "../permission/types.js";
 import type { PromptBuilder } from "../prompts/prompt-builder.js";
 import { classifyError, type ErrorInfo, isFatal, isRetryable } from "../session/errors.js";
 import {
+  createAssistantMessage,
+  createToolResultMessage,
   LLM,
   type LLMStreamEvent,
   type SessionMessage,
+  SessionParts,
   toModelMessages,
 } from "../session/index.js";
 import { RetryAbortedError } from "../session/retry.js";
@@ -136,6 +142,24 @@ export interface AgentLoopConfig {
   promptBuilder?: PromptBuilder;
   /** ModeManager for coding mode integration (T057) */
   modeManager?: import("./mode-manager.js").ModeManager;
+  /**
+   * Maximum iterations for the agentic loop (T058).
+   * When the agent executes tools, it will automatically re-invoke the LLM
+   * to continue reasoning until:
+   * - The LLM returns a text-only response (no tool calls)
+   * - This limit is reached
+   * - Cancellation is requested
+   * - Permission is blocked
+   * @default 50
+   */
+  maxIterations?: number;
+  /**
+   * Enable automatic continuation after tool execution (T058).
+   * When true, the agent will re-invoke the LLM after each tool execution
+   * to continue reasoning. When false, the agent stops after first response.
+   * @default true
+   */
+  continueAfterTools?: boolean;
 }
 
 /**
@@ -176,6 +200,28 @@ export interface AgentLoopEvents {
   retry: [attempt: number, error: Error, delay: number];
   /** Emitted when all retries are exhausted (T025) */
   retryExhausted: [error: Error, attempts: number];
+  /** Emitted when agentic loop starts a new iteration (T058) */
+  iterationStart: [iteration: number, maxIterations: number];
+  /** Emitted when agentic loop continues after tool execution (T058) */
+  iterationContinue: [iteration: number, toolCallCount: number];
+  /** Emitted when agentic loop reaches max iterations (T058) */
+  maxIterationsReached: [iteration: number, maxIterations: number];
+  /** Emitted when delegation to a subagent starts (T059) */
+  delegationStart: [delegationId: string, agent: string, task: string];
+  /** Emitted when delegation to a subagent completes (T059) */
+  delegationComplete: [delegationId: string, agent: string, result: string];
+  /** Emitted when text is streamed from a subagent (T059) */
+  subagentText: [delegationId: string, agent: string, chunk: string];
+  /** Emitted when a subagent executes a tool (T059) */
+  subagentTool: [delegationId: string, agent: string, toolName: string];
+  /** Emitted when user input is required (GAP 1 fix - ask_followup_question) */
+  "userPrompt:required": [prompt: { question: string; suggestions?: string[] }];
+  /** Emitted when user responds to a prompt (GAP 1 fix - ask_followup_question) */
+  "userPrompt:response": [response: string];
+  /** Emitted when agent attempts completion (GAP 2 fix - attempt_completion) */
+  "completion:attempted": [
+    completion: { result: string; verified: boolean; verificationPassed?: boolean },
+  ];
 }
 
 /**
@@ -268,12 +314,35 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** ModeManager for coding mode integration (T057) */
   private readonly modeManager?: import("./mode-manager.js").ModeManager;
 
+  /** Current iteration count for the agentic loop (T058) */
+  private iterationCount = 0;
+
+  /** Pending user prompt awaiting response (GAP 1 fix) */
+  private pendingUserPrompt: {
+    question: string;
+    suggestions?: string[];
+    resolve: (response: string) => void;
+  } | null = null;
+
+  /** Flag to signal completion was attempted (GAP 2 fix) */
+  private completionAttempted = false;
+
+  /** Maximum iterations allowed for the agentic loop (T058) */
+  private readonly maxIterations: number;
+
+  /** Whether to continue after tool execution (T058) */
+  private readonly continueAfterTools: boolean;
+
   constructor(config: AgentLoopConfig) {
     super();
     this.config = config;
     this.state = "idle";
     this.context = createStateContext(config.sessionId);
     this.cancellation = new CancellationToken();
+
+    // Initialize agentic loop settings (T058)
+    this.maxIterations = config.maxIterations ?? 50;
+    this.continueAfterTools = config.continueAfterTools ?? true;
 
     // Initialize tool executor (T014)
     this.toolExecutor =
@@ -615,6 +684,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.terminationContext = createTerminationContext();
     this.recentToolCalls = [];
     this.recentResponses = [];
+    // GAP 2 FIX: Reset completion state as well
+    this.completionAttempted = false;
   }
 
   /**
@@ -820,9 +891,15 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    *
    * This is the main entry point for starting the agent.
    * The loop will continue until:
-   * - The task is complete
+   * - The LLM returns a text-only response (no tool calls)
+   * - Maximum iterations reached
    * - User cancels the operation
    * - An unrecoverable error occurs
+   * - Permission is blocked
+   *
+   * (T058) Implements agentic auto-continuation:
+   * After tool execution, the loop automatically re-invokes the LLM
+   * to continue reasoning until a natural stopping point.
    *
    * Integrates with Logger (T041) and TelemetryInstrumentor (T042).
    */
@@ -833,6 +910,35 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       this.transitionTo("terminated");
       return;
     }
+
+    // Check max iterations limit (T058)
+    if (this.iterationCount >= this.maxIterations) {
+      this.logger?.warn("Max iterations reached, stopping agentic loop", {
+        iterations: this.iterationCount,
+        maxIterations: this.maxIterations,
+      });
+      this.emit("maxIterationsReached", this.iterationCount, this.maxIterations);
+      this.emit("terminated", TerminationReason.MAX_STEPS, {
+        shouldTerminate: true,
+        reason: TerminationReason.MAX_STEPS,
+        metadata: {
+          stepsExecuted: this.iterationCount,
+          context: { limit: this.maxIterations },
+        },
+      });
+      this.transitionTo("idle");
+      this.emit("complete");
+      return;
+    }
+
+    // Increment iteration count (T058)
+    this.iterationCount++;
+    this.emit("iterationStart", this.iterationCount, this.maxIterations);
+
+    this.logger?.debug("Starting agentic loop iteration", {
+      iteration: this.iterationCount,
+      maxIterations: this.maxIterations,
+    });
 
     // Transition to streaming state
     if (!this.transitionTo("streaming")) {
@@ -855,6 +961,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       provider: this.config.providerType,
       model: this.config.model,
       messageCount: this.messages.length,
+      iteration: this.iterationCount,
     });
 
     try {
@@ -918,6 +1025,15 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         tokenUsage: this.terminationContext.tokenUsage,
         cancelled: this.cancellation.isCancelled,
       });
+
+      // GAP 3 & 4 FIX: Update termination flags based on stream result
+      // Set hasTextOnly if we got a response with no tool calls
+      if (pendingToolCalls.length === 0) {
+        this.terminationContext.hasTextOnly = true;
+      }
+      // Set hasNaturalStop - the stream completed normally (done event received)
+      // This flag indicates the LLM finished its turn without requesting more action
+      this.terminationContext.hasNaturalStop = pendingToolCalls.length === 0;
 
       // Determine next state based on stream completion
       if (this.cancellation.isCancelled) {
@@ -1019,14 +1135,50 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   }
 
   /**
-   * Execute pending tool calls (T014).
+   * Resets iteration counter (T058).
+   * Call this when starting a fresh agentic session.
+   */
+  resetIterationCount(): void {
+    this.iterationCount = 0;
+  }
+
+  /**
+   * Gets current iteration count (T058).
+   */
+  getIterationCount(): number {
+    return this.iterationCount;
+  }
+
+  /**
+   * Gets the maximum iterations setting (T058).
+   */
+  getMaxIterations(): number {
+    return this.maxIterations;
+  }
+
+  /**
+   * Execute pending tool calls (T014) with auto-continuation (T058).
+   *
+   * Executes all pending tool calls, collects results, adds them to message
+   * history, and automatically re-invokes the LLM if configured.
    *
    * @param toolCalls - Array of tool calls from LLM
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Tool execution requires multiple permission checks, error handling branches, and state transitions
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Tool execution requires multiple permission checks, error handling branches, state transitions, and agentic continuation logic
   private async executeToolCalls(
     toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
   ): Promise<void> {
+    // Collect tool results for adding to message history (T058)
+    const toolResults: Array<{
+      id: string;
+      name: string;
+      result: string;
+      isError: boolean;
+    }> = [];
+
+    // Track if any permission was blocked (stops continuation)
+    let permissionBlocked = false;
+
     for (const call of toolCalls) {
       // Check for cancellation between tool calls
       if (this.cancellation.isCancelled) {
@@ -1049,6 +1201,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
             toolName: call.name,
             callId: call.id,
           });
+          toolResults.push({ id: call.id, name: call.name, result: error, isError: true });
           continue; // Skip to next tool call
         }
       }
@@ -1059,13 +1212,15 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       try {
         // Tool not found
         if (!this.toolExecutor.getTool(call.name)) {
+          const error = `Tool not found: ${call.name}`;
           this.emit("error", new ToolNotFoundError(call.name));
           this.emit("toolEnd", call.id, call.name, {
-            result: { success: false, error: `Tool not found: ${call.name}` },
+            result: { success: false, error },
             timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
             toolName: call.name,
             callId: call.id,
           });
+          toolResults.push({ id: call.id, name: call.name, result: error, isError: true });
           continue;
         }
 
@@ -1085,24 +1240,45 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
             toolName: call.name,
             callId: call.id,
           });
+          toolResults.push({ id: call.id, name: call.name, result: error, isError: true });
           continue;
         }
 
         if (permission === "ask") {
           // Handle wait_permission state (T015)
+          // Note: Permission blocking stops auto-continuation
+          permissionBlocked = true;
           await this.handlePermissionRequired(call.id, call.name, call.input);
           continue;
         }
 
         // Permission allowed - now we can emit toolStart and execute
         this.emit("toolStart", call.id, call.name, call.input);
-        const result = await this.toolExecutor.execute(call.name, call.input, toolContext);
-        this.emit("toolEnd", call.id, call.name, result);
+        const executionResult = await this.toolExecutor.execute(call.name, call.input, toolContext);
+        this.emit("toolEnd", call.id, call.name, executionResult);
+
+        // Process tool result through unified signal dispatcher (GAP 1, 2, 5 fix)
+        let resultContent: string;
+        if (executionResult.result.success) {
+          const output = executionResult.result.output;
+          // Use unified signal dispatcher to handle all signal types
+          resultContent = await this.processToolResultSignals(output, call.id, call.name);
+        } else {
+          resultContent = executionResult.result.error ?? "Unknown error";
+        }
+
+        toolResults.push({
+          id: call.id,
+          name: call.name,
+          result: resultContent,
+          isError: !executionResult.result.success,
+        });
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
 
         if (err instanceof PermissionDeniedError) {
           this.emit("permissionDenied", call.id, call.name, err.message);
+          permissionBlocked = true;
         }
 
         if (err instanceof ToolNotFoundError) {
@@ -1113,6 +1289,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
             toolName: call.name,
             callId: call.id,
           });
+          toolResults.push({ id: call.id, name: call.name, result: err.message, isError: true });
           continue;
         }
 
@@ -1123,15 +1300,68 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           toolName: call.name,
           callId: call.id,
         });
+        toolResults.push({ id: call.id, name: call.name, result: err.message, isError: true });
       }
     }
 
-    // After all tools executed, transition back to streaming or idle
-    if (!this.cancellation.isCancelled && this.state === "tool_executing") {
-      this.transitionTo("streaming");
-      // Emit complete after all tool calls finish (T038 fix)
+    // After all tools executed, handle state transition and auto-continuation (T058)
+    if (this.cancellation.isCancelled) {
+      this.transitionTo("terminated");
       this.emit("complete");
+      return;
     }
+
+    // Add assistant message with tool calls to history (T058)
+    const assistantParts = toolCalls.map((call) =>
+      SessionParts.tool(call.id, call.name, call.input)
+    );
+    const assistantMessage = createAssistantMessage(assistantParts, {
+      model: this.config.model,
+      provider: this.config.providerType,
+    });
+    this.messages.push(assistantMessage);
+
+    // Add tool results to message history (T058)
+    for (const toolResult of toolResults) {
+      const resultMessage = createToolResultMessage(
+        toolResult.id,
+        toolResult.result,
+        toolResult.isError
+      );
+      this.messages.push(resultMessage);
+    }
+
+    // Check if we should auto-continue (T058)
+    // GAP 2 FIX: Don't continue if completion was attempted
+    if (
+      this.continueAfterTools &&
+      !permissionBlocked &&
+      !this.completionAttempted &&
+      toolResults.length > 0 &&
+      this.iterationCount < this.maxIterations &&
+      this.state === "tool_executing"
+    ) {
+      this.logger?.debug("Auto-continuing agentic loop after tool execution", {
+        iteration: this.iterationCount,
+        maxIterations: this.maxIterations,
+        toolCallCount: toolResults.length,
+      });
+
+      this.emit("iterationContinue", this.iterationCount, toolResults.length);
+
+      // Transition back to idle before next run (state machine requirement)
+      this.transitionTo("idle");
+
+      // Auto-continue: re-invoke the LLM to continue reasoning
+      await this.run();
+      return;
+    }
+
+    // No continuation - complete the loop
+    if (this.state === "tool_executing") {
+      this.transitionTo("idle");
+    }
+    this.emit("complete");
   }
 
   /**
@@ -1218,6 +1448,394 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     }
 
     return undefined;
+  }
+
+  /**
+   * Handle delegation signal from delegate_agent tool (GAP 1 fix - T059).
+   *
+   * Detects if the tool output contains a DelegateAgentSignal and spawns
+   * a subagent through the orchestrator. Pipes subagent events back to parent.
+   *
+   * @param output - Tool execution output to check for delegation signal
+   * @param callId - Original tool call ID for tracking
+   * @param toolName - Name of the tool that returned the signal
+   * @returns Subagent result string if delegation occurred, null otherwise
+   */
+  private async handleDelegationSignal(
+    output: unknown,
+    _callId: string,
+    _toolName: string
+  ): Promise<string | null> {
+    // Check if output is a delegation signal
+    if (!this.isDelegateAgentSignal(output)) {
+      return null;
+    }
+
+    const signal = this.extractDelegationSignal(output);
+    const agent = signal.task.split(" ")[0] ?? "subagent"; // Extract agent hint from task
+
+    // Emit delegation start event
+    this.emit("delegationStart", signal.delegationId, agent, signal.task);
+
+    this.logger?.debug("Delegation signal detected", {
+      delegationId: signal.delegationId,
+      task: signal.task,
+      model: signal.model,
+      maxTurns: signal.maxTurns,
+    });
+
+    // Check if orchestrator is available for spawning subagents
+    if (!this.config.orchestrator) {
+      this.logger?.warn("Delegation requested but no orchestrator configured", {
+        delegationId: signal.delegationId,
+      });
+      // Return the signal message as-is when no orchestrator
+      return `Delegation requested (ID: ${signal.delegationId}) but no orchestrator available to spawn subagent. Task: ${signal.task}`;
+    }
+
+    try {
+      // Spawn subagent through orchestrator
+      const handle = await this.spawnSubagentWithEvents(signal, agent);
+
+      // Wait for subagent completion
+      await this.waitForSubagentCompletion(handle, signal.delegationId, agent);
+
+      // Emit delegation complete event
+      const result = `Subagent ${agent} completed task: ${signal.task}`;
+      this.emit("delegationComplete", signal.delegationId, agent, result);
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger?.error("Subagent delegation failed", {
+        delegationId: signal.delegationId,
+        error: errorMessage,
+      });
+
+      this.emit(
+        "delegationComplete",
+        signal.delegationId,
+        agent,
+        `Delegation failed: ${errorMessage}`
+      );
+
+      return `Delegation failed: ${errorMessage}`;
+    }
+  }
+
+  /**
+   * Type guard to check if output is a DelegateAgentSignal.
+   */
+  private isDelegateAgentSignal(output: unknown): output is DelegateAgentSignal {
+    if (!output || typeof output !== "object") {
+      return false;
+    }
+
+    // Check for signal wrapper pattern from delegate_agent tool
+    const maybeWrapper = output as { signal?: unknown; message?: string };
+    if (maybeWrapper.signal && typeof maybeWrapper.signal === "object") {
+      const signal = maybeWrapper.signal as Record<string, unknown>;
+      return signal.type === "delegate_agent" && typeof signal.task === "string";
+    }
+
+    // Check for direct signal pattern
+    const maybeSignal = output as Record<string, unknown>;
+    return maybeSignal.type === "delegate_agent" && typeof maybeSignal.task === "string";
+  }
+
+  /**
+   * Extract the actual signal from the tool output.
+   */
+  private extractDelegationSignal(output: unknown): DelegateAgentSignal {
+    const maybeWrapper = output as { signal?: DelegateAgentSignal };
+    if (maybeWrapper.signal) {
+      return maybeWrapper.signal;
+    }
+    return output as DelegateAgentSignal;
+  }
+
+  // ============================================
+  // GAP 1 FIX: UserPromptSignal Handling
+  // ============================================
+
+  /**
+   * Type guard to check if output is a UserPromptSignal (from ask_followup_question).
+   * The signal is embedded in the output as _prompt field.
+   */
+  private isUserPromptSignal(output: unknown): output is { _prompt: UserPromptSignal } {
+    if (!output || typeof output !== "object") {
+      return false;
+    }
+
+    const maybeSignal = output as { _prompt?: unknown };
+    if (!maybeSignal._prompt || typeof maybeSignal._prompt !== "object") {
+      return false;
+    }
+
+    const prompt = maybeSignal._prompt as Record<string, unknown>;
+    return prompt.type === "user_prompt" && typeof prompt.question === "string";
+  }
+
+  /**
+   * Handle UserPromptSignal from ask_followup_question tool.
+   * Emits event for TUI/CLI and waits for user response.
+   *
+   * @param output - The tool output containing the signal
+   * @returns Promise resolving to user's response
+   */
+  private async handleUserPromptSignal(output: { _prompt: UserPromptSignal }): Promise<string> {
+    const prompt = output._prompt;
+
+    this.logger?.debug("User prompt signal detected", {
+      question: prompt.question,
+      hasSuggestions: !!prompt.suggestions?.length,
+    });
+
+    // Emit event for TUI/CLI to handle
+    this.emit("userPrompt:required", {
+      question: prompt.question,
+      suggestions: prompt.suggestions,
+    });
+
+    // Wait for user response via event
+    const userResponse = await this.waitForUserInput(prompt.question, prompt.suggestions);
+
+    return userResponse;
+  }
+
+  /**
+   * Wait for user input via event-based communication.
+   * TUI/CLI should emit 'userPrompt:response' with the user's answer.
+   *
+   * @param question - The question being asked
+   * @param suggestions - Optional suggestions
+   * @returns Promise resolving to user's response
+   */
+  private waitForUserInput(_question: string, _suggestions?: string[]): Promise<string> {
+    return new Promise((resolve) => {
+      this.pendingUserPrompt = {
+        question: _question,
+        suggestions: _suggestions,
+        resolve,
+      };
+
+      // Listen for user response
+      this.once("userPrompt:response", (response: string) => {
+        this.pendingUserPrompt = null;
+        resolve(response);
+      });
+    });
+  }
+
+  /**
+   * Submit a user response to a pending prompt.
+   * Call this from TUI/CLI when user provides input.
+   *
+   * @param response - The user's response text
+   */
+  submitUserResponse(response: string): void {
+    if (this.pendingUserPrompt) {
+      this.pendingUserPrompt.resolve(response);
+      this.pendingUserPrompt = null;
+    } else {
+      // Also emit the event for listeners
+      this.emit("userPrompt:response", response);
+    }
+  }
+
+  /**
+   * Check if there's a pending user prompt.
+   */
+  hasPendingUserPrompt(): boolean {
+    return this.pendingUserPrompt !== null;
+  }
+
+  /**
+   * Get the pending user prompt details.
+   */
+  getPendingUserPrompt(): { question: string; suggestions?: string[] } | null {
+    if (!this.pendingUserPrompt) {
+      return null;
+    }
+    return {
+      question: this.pendingUserPrompt.question,
+      suggestions: this.pendingUserPrompt.suggestions,
+    };
+  }
+
+  // ============================================
+  // GAP 2 FIX: Completion Signal Handling
+  // ============================================
+
+  /**
+   * Type guard to check if output is a completion signal (from attempt_completion).
+   */
+  private isCompletionSignal(output: unknown): output is AttemptCompletionOutput {
+    if (!output || typeof output !== "object") {
+      return false;
+    }
+
+    const maybeCompletion = output as Record<string, unknown>;
+    return maybeCompletion.completed === true && typeof maybeCompletion.result === "string";
+  }
+
+  /**
+   * Handle completion signal from attempt_completion tool.
+   * Sets termination flags and emits event.
+   *
+   * @param output - The completion signal output
+   */
+  private handleCompletionSignal(output: AttemptCompletionOutput): void {
+    this.logger?.debug("Completion signal detected", {
+      result: output.result,
+      verified: output.verified,
+      verificationPassed: output.verificationPassed,
+    });
+
+    // Set completion flag - this will prevent auto-continuation
+    this.completionAttempted = true;
+
+    // Set termination flags for the termination checker
+    this.terminationContext.hasNaturalStop = true;
+
+    // Emit event for TUI/CLI to display completion
+    this.emit("completion:attempted", {
+      result: output.result,
+      verified: output.verified,
+      verificationPassed: output.verificationPassed,
+    });
+  }
+
+  /**
+   * Check if completion was attempted in this session.
+   */
+  isCompletionAttempted(): boolean {
+    return this.completionAttempted;
+  }
+
+  /**
+   * Reset completion state (for new tasks in same session).
+   */
+  resetCompletionState(): void {
+    this.completionAttempted = false;
+  }
+
+  // ============================================
+  // GAP 5 FIX: Unified Signal Dispatcher
+  // ============================================
+
+  /**
+   * Process tool result and handle any embedded signals.
+   * This is the unified entry point for all signal handling.
+   *
+   * Signal priority:
+   * 1. Delegation signal (delegate_agent) - spawns subagent
+   * 2. User prompt signal (ask_followup_question) - waits for user
+   * 3. Completion signal (attempt_completion) - marks task complete
+   * 4. Default - stringify and return
+   *
+   * @param output - The tool execution output
+   * @param callId - The tool call ID
+   * @param toolName - The tool name
+   * @returns Processed result string
+   */
+  private async processToolResultSignals(
+    output: unknown,
+    callId: string,
+    toolName: string
+  ): Promise<string> {
+    // 1. Check for delegation signal (handled first as it spawns subagent)
+    const delegationResult = await this.handleDelegationSignal(output, callId, toolName);
+    if (delegationResult !== null) {
+      return delegationResult;
+    }
+
+    // 2. Check for user prompt signal
+    if (this.isUserPromptSignal(output)) {
+      return await this.handleUserPromptSignal(output);
+    }
+
+    // 3. Check for completion signal
+    if (this.isCompletionSignal(output)) {
+      this.handleCompletionSignal(output);
+      return output.result;
+    }
+
+    // 4. Default: stringify and return
+    return typeof output === "string" ? output : JSON.stringify(output);
+  }
+
+  /**
+   * Spawn subagent and wire up event forwarding (GAP 2 fix - T059).
+   *
+   * @param signal - Delegation signal with task details
+   * @param agentSlug - Agent slug to spawn
+   * @returns Subagent handle
+   */
+  private async spawnSubagentWithEvents(
+    signal: DelegateAgentSignal,
+    agentSlug: string
+  ): Promise<SubagentHandle> {
+    const orchestrator = this.config.orchestrator;
+    if (!orchestrator) {
+      throw new Error("Orchestrator not configured for delegation");
+    }
+
+    // Spawn the subagent
+    const handle = await orchestrator.spawnSubagent(agentSlug, signal.task, {
+      timeout: signal.maxTurns ? signal.maxTurns * 60000 : undefined, // Convert turns to rough timeout
+    });
+
+    this.logger?.debug("Subagent spawned", {
+      delegationId: signal.delegationId,
+      handleId: handle.id,
+      agentSlug: handle.agentSlug,
+      taskId: handle.taskId,
+    });
+
+    return handle;
+  }
+
+  /**
+   * Wait for subagent completion and forward events (GAP 2 fix - T059).
+   *
+   * @param handle - Subagent handle to wait on
+   * @param delegationId - Delegation ID for event correlation
+   * @param agent - Agent name for event attribution
+   */
+  private async waitForSubagentCompletion(
+    handle: SubagentHandle,
+    delegationId: string,
+    agent: string
+  ): Promise<void> {
+    // For now, poll the handle status until complete
+    // In a full implementation, this would use proper event subscription
+    const pollInterval = 1000; // 1 second
+    const maxWaitTime = 300000; // 5 minutes default
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitTime) {
+      if (this.cancellation.isCancelled) {
+        throw new Error("Delegation cancelled");
+      }
+
+      // Check handle status
+      if (handle.status === "completed") {
+        return;
+      }
+
+      if (handle.status === "failed" || handle.status === "cancelled") {
+        throw new Error(`Subagent ${handle.status}: ${handle.agentSlug}`);
+      }
+
+      // Emit periodic progress for UI
+      this.emit("subagentTool", delegationId, agent, "processing...");
+
+      // Wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error("Subagent execution timed out");
   }
 
   /**

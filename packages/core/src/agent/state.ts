@@ -91,7 +91,16 @@ export const VALID_TRANSITIONS: Readonly<Record<AgentState, readonly AgentState[
     "shutdown",
     "idle",
   ],
-  tool_executing: ["streaming", "wait_permission", "recovering", "retry", "terminated", "shutdown"],
+  // T058: Added "idle" transition for agentic loop auto-continuation
+  tool_executing: [
+    "streaming",
+    "wait_permission",
+    "recovering",
+    "retry",
+    "terminated",
+    "shutdown",
+    "idle",
+  ],
   wait_permission: ["tool_executing", "streaming", "paused", "terminated", "shutdown", "idle"],
   wait_input: ["streaming", "paused", "terminated", "shutdown", "idle"],
   paused: [

@@ -65,8 +65,8 @@ export const textColors = {
   /** User message color */
   user: "#60A5FA",
 
-  /** Assistant message color */
-  assistant: "#A78BFA",
+  /** Assistant message color - bright white for readability */
+  assistant: "#ffffff",
 
   /** System message color */
   system: "#9CA3AF",

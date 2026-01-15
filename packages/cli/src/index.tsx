@@ -12,6 +12,7 @@ import {
   normalizeMode,
   SANDBOX_POLICIES,
   type SandboxPolicy,
+  UnifiedToolContainer,
 } from "@vellum/core";
 import { ProviderRegistry } from "@vellum/provider";
 import { createId } from "@vellum/shared";
@@ -245,7 +246,13 @@ program
       // Register cleanup for graceful shutdown
       setShutdownCleanup(cleanup);
 
-      // Create AgentLoop with PromptBuilder
+      // Create unified tool container (T045: Single source of truth for tools)
+      const toolContainer = new UnifiedToolContainer({
+        cwd: process.cwd(),
+      });
+      toolContainer.registerBuiltins();
+
+      // Create AgentLoop with PromptBuilder and unified tool container
       agentLoop = new AgentLoop({
         sessionId: createId(),
         mode: modeConfig,
@@ -257,6 +264,9 @@ program
         promptBuilder, // Use MD-loaded prompts
         // Dynamic thinking config getter for runtime /think toggling
         getThinkingConfig: getEffectiveThinkingConfig,
+        // T045: Wire unified tool container
+        tools: toolContainer.getProviderToolDefinitions(),
+        toolExecutor: toolContainer.getExecutor(),
       });
     } catch (error) {
       console.error(
@@ -270,13 +280,22 @@ program
       process.env.TERM_PROGRAM === "vscode" ||
       process.env.VSCODE_INJECTION === "1" ||
       Boolean(process.env.VSCODE_GIT_IPC_HANDLE);
+    const isScreenReaderActive = Boolean(
+      process.env.ACCESSIBILITY === "true" || process.env.SCREEN_READER === "true"
+    );
     const inkRenderOptions = isVSCodeTerminal
       ? {
           stdout: createCompatStdout(),
+          stderr: process.stderr,
+          stdin: process.stdin,
           incrementalRendering: true,
           maxFps: 20,
+          exitOnCtrlC: true,
+          alternateBuffer: !isScreenReaderActive,
         }
-      : undefined;
+      : {
+          alternateBuffer: !isScreenReaderActive,
+        };
 
     render(
       <App

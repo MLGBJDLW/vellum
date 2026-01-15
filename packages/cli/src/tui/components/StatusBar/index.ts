@@ -11,6 +11,14 @@ export {
   type AgentType,
 } from "./AgentModeIndicator.js";
 export { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
+export {
+  GitIndicator,
+  type GitIndicatorProps,
+} from "./GitIndicator.js";
+export {
+  HeaderBar,
+  type HeaderBarProps,
+} from "./HeaderBar.js";
 export { ModelIndicator, type ModelIndicatorProps } from "./ModelIndicator.js";
 export {
   SandboxIndicator,
@@ -32,3 +40,7 @@ export {
   TrustModeIndicator,
   type TrustModeIndicatorProps,
 } from "./TrustModeIndicator.js";
+export {
+  WorkspaceIndicator,
+  type WorkspaceIndicatorProps,
+} from "./WorkspaceIndicator.js";

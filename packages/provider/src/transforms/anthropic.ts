@@ -11,6 +11,7 @@ import type {
   ToolDefinition,
 } from "../types.js";
 import { AbstractProviderTransform } from "./base.js";
+import { stripSchemaMetaFields } from "./schema-sanitizer.js";
 import type {
   CacheControl,
   CachedMessage,
@@ -322,7 +323,7 @@ export class AnthropicTransform extends AbstractProviderTransform<
     const transformed = tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      input_schema: tool.inputSchema,
+      input_schema: stripSchemaMetaFields(tool.inputSchema),
     }));
 
     return this.createResult(transformed, warnings);
