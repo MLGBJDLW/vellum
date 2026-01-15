@@ -51,9 +51,45 @@ export class NewlineGate {
   private buffer: string = "";
   private lastFeedTime: number = 0;
   private readonly config: NewlineGateConfig;
+  private autoFlushTimer: ReturnType<typeof setInterval> | null = null;
+  private autoFlushCallback: (() => void) | null = null;
 
   constructor(config: Partial<NewlineGateConfig> = {}) {
     this.config = { ...DEFAULT_NEWLINE_GATE_CONFIG, ...config };
+  }
+
+  /**
+   * Start automatic flush timer.
+   * Periodically checks for timeout/overflow conditions and calls callback when flush is needed.
+   * Timer interval is half the flush timeout for responsive detection.
+   *
+   * @param callback - Called when auto-flush triggers (after flushing buffer)
+   */
+  startAutoFlush(callback: () => void): void {
+    this.stopAutoFlush(); // Clear any existing timer
+    this.autoFlushCallback = callback;
+
+    // Check at half the timeout interval for responsive detection
+    const checkInterval = Math.max(10, Math.floor(this.config.flushTimeoutMs / 2));
+
+    this.autoFlushTimer = setInterval(() => {
+      const flushed = this.forceFlushIfNeeded();
+      if (flushed && this.autoFlushCallback) {
+        this.autoFlushCallback();
+      }
+    }, checkInterval);
+  }
+
+  /**
+   * Stop automatic flush timer.
+   * Should be called when stream ends or gate is disposed.
+   */
+  stopAutoFlush(): void {
+    if (this.autoFlushTimer) {
+      clearInterval(this.autoFlushTimer);
+      this.autoFlushTimer = null;
+    }
+    this.autoFlushCallback = null;
   }
 
   /**
@@ -92,8 +128,9 @@ export class NewlineGate {
     return content;
   }
 
-  /** Reset gate state */
+  /** Reset gate state and stop auto-flush timer */
   reset(): void {
+    this.stopAutoFlush();
     this.buffer = "";
     this.lastFeedTime = 0;
   }

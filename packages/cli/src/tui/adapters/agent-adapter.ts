@@ -271,6 +271,23 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
   }, []); // Empty deps = stable callback
 
   /**
+   * Handle error events from AgentLoop
+   * Ensures streaming state is properly reset when an error occurs.
+   */
+  const handleError = useCallback((error: Error) => {
+    const streaming = streamingMessageRef.current;
+
+    if (streaming) {
+      // Mark the message as no longer streaming
+      updateMessageRef.current(streaming.id, { isStreaming: false });
+      streamingMessageRef.current = null;
+    }
+
+    // Log error for debugging (could also emit to a context/store if needed)
+    console.error("[AgentAdapter] AgentLoop error:", error.message);
+  }, []); // Empty deps = stable callback
+
+  /**
    * Handle tool start from AgentLoop
    * Maps to: addExecution in ToolsContext
    */
@@ -407,6 +424,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         connectedLoopRef.current.off("text", handleText);
         connectedLoopRef.current.off("thinking", handleThinking);
         connectedLoopRef.current.off("complete", handleComplete);
+        connectedLoopRef.current.off("error", handleError);
         connectedLoopRef.current.off("toolStart", handleToolStart);
         connectedLoopRef.current.off("toolEnd", handleToolEnd);
         connectedLoopRef.current.off("permissionRequired", handlePermissionRequired);
@@ -422,6 +440,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       agentLoop.on("text", handleText);
       agentLoop.on("thinking", handleThinking);
       agentLoop.on("complete", handleComplete);
+      agentLoop.on("error", handleError);
       agentLoop.on("toolStart", handleToolStart);
       agentLoop.on("toolEnd", handleToolEnd);
       agentLoop.on("permissionRequired", handlePermissionRequired);
@@ -436,6 +455,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       handleText,
       handleThinking,
       handleComplete,
+      handleError,
       handleToolStart,
       handleToolEnd,
       handlePermissionRequired,
@@ -455,6 +475,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       connectedLoopRef.current.off("text", handleText);
       connectedLoopRef.current.off("thinking", handleThinking);
       connectedLoopRef.current.off("complete", handleComplete);
+      connectedLoopRef.current.off("error", handleError);
       connectedLoopRef.current.off("toolStart", handleToolStart);
       connectedLoopRef.current.off("toolEnd", handleToolEnd);
       connectedLoopRef.current.off("permissionRequired", handlePermissionRequired);
@@ -479,6 +500,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     handleText,
     handleThinking,
     handleComplete,
+    handleError,
     handleToolStart,
     handleToolEnd,
     handlePermissionRequired,
@@ -603,6 +625,14 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
     }
   };
 
+  const handleError = (error: Error) => {
+    if (streamingMessage) {
+      dispatchers.updateMessage(streamingMessage.id, { isStreaming: false });
+      streamingMessage = null;
+    }
+    console.error("[AgentAdapter] AgentLoop error:", error.message);
+  };
+
   const handleToolStart = (callId: string, name: string, input: Record<string, unknown>) => {
     const executionId = dispatchers.addExecution({
       toolName: name,
@@ -671,6 +701,7 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
       if (connectedLoop) {
         connectedLoop.off("text", handleText);
         connectedLoop.off("complete", handleComplete);
+        connectedLoop.off("error", handleError);
         connectedLoop.off("toolStart", handleToolStart);
         connectedLoop.off("toolEnd", handleToolEnd);
         connectedLoop.off("permissionRequired", handlePermissionRequired);
@@ -685,6 +716,7 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
       // Subscribe
       agentLoop.on("text", handleText);
       agentLoop.on("complete", handleComplete);
+      agentLoop.on("error", handleError);
       agentLoop.on("toolStart", handleToolStart);
       agentLoop.on("toolEnd", handleToolEnd);
       agentLoop.on("permissionRequired", handlePermissionRequired);
@@ -698,6 +730,7 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
       if (connectedLoop) {
         connectedLoop.off("text", handleText);
         connectedLoop.off("complete", handleComplete);
+        connectedLoop.off("error", handleError);
         connectedLoop.off("toolStart", handleToolStart);
         connectedLoop.off("toolEnd", handleToolEnd);
         connectedLoop.off("permissionRequired", handlePermissionRequired);

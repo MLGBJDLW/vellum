@@ -87,7 +87,7 @@ import type { AutocompleteOption } from "./tui/components/Input/Autocomplete.js"
 import { EnhancedCommandInput } from "./tui/components/Input/EnhancedCommandInput.js";
 import type { SlashCommand } from "./tui/components/Input/slash-command-utils.js";
 import { TextInput } from "./tui/components/Input/TextInput.js";
-import { McpPanel } from "./tui/components/index.js";
+import { InitErrorBanner, McpPanel } from "./tui/components/index.js";
 import { Layout } from "./tui/components/Layout.js";
 import { MemoryPanel, type MemoryPanelProps } from "./tui/components/MemoryPanel.js";
 import { MessageList } from "./tui/components/Messages/MessageList.js";
@@ -243,6 +243,8 @@ interface AppProps {
   theme?: ThemeName;
   /** Force banner display on startup */
   banner?: boolean;
+  /** Initialization error (when provider fails to initialize) */
+  initError?: Error;
 }
 
 type AppContentProps = AppProps & {
@@ -398,6 +400,7 @@ export function App({
   toolExecutor: toolExecutorProp,
   theme = "parchment",
   banner,
+  initError,
 }: AppProps) {
   // Shared tool registry for the running tool system.
   // This registry is used by commands, the tools UI, and MCP tool registration.
@@ -436,6 +439,7 @@ export function App({
           agentLoop={agentLoopProp}
           toolRegistry={toolRegistry}
           banner={banner}
+          initError={initError}
         />
       </ErrorBoundary>
     </RootProvider>
@@ -455,6 +459,7 @@ function AppContent({
   agentLoop: agentLoopProp,
   banner,
   toolRegistry,
+  initError,
 }: AppContentProps) {
   const { exit } = useInkApp();
   const themeContext = useTheme();
@@ -2886,6 +2891,7 @@ function AppContent({
       handleReject={handleReject}
       handleSessionSelected={handleSessionSelected}
       handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
+      initError={initError}
       interactivePrompt={interactivePrompt}
       loadSessionPreviewMessages={loadSessionPreviewMessages}
       isLoading={isLoading}
@@ -2999,6 +3005,7 @@ interface AppContentViewProps {
   readonly loadSessionPreviewMessages: (
     sessionId: string
   ) => Promise<readonly SessionPreviewMessage[] | null>;
+  readonly initError?: Error;
   readonly isLoading: boolean;
   readonly thinkingModeEnabled: boolean;
   readonly isCurrentlyThinking: boolean;
@@ -3334,6 +3341,7 @@ interface AppHeaderProps {
   readonly dismissTip: () => void;
   readonly handleCreateBacktrackBranch: () => void;
   readonly handleSwitchBacktrackBranch: (branchId: string) => void;
+  readonly initError?: Error;
   readonly redoBacktrack: () => void;
   readonly specPhase: number;
   readonly undoBacktrack: () => void;
@@ -3347,12 +3355,14 @@ function AppHeader({
   dismissTip,
   handleCreateBacktrackBranch,
   handleSwitchBacktrackBranch,
+  initError,
   redoBacktrack,
   specPhase,
   undoBacktrack,
 }: AppHeaderProps): React.JSX.Element {
   return (
     <Box flexDirection="column">
+      {initError && <InitErrorBanner error={initError} />}
       <TipBanner tip={currentTip} onDismiss={dismissTip} compact />
       {currentMode === "spec" && (
         <PhaseProgressIndicator currentPhase={specPhase} showLabels showPercentage />
@@ -3412,6 +3422,7 @@ function AppContentView({
   handleReject,
   handleSessionSelected,
   handleSwitchBacktrackBranch,
+  initError,
   interactivePrompt,
   loadSessionPreviewMessages,
   isLoading,
@@ -3580,6 +3591,7 @@ function AppContentView({
                 dismissTip={dismissTip}
                 handleCreateBacktrackBranch={handleCreateBacktrackBranch}
                 handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
+                initError={initError}
                 redoBacktrack={redoBacktrack}
                 specPhase={specPhase}
                 undoBacktrack={undoBacktrack}

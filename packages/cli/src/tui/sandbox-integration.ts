@@ -15,6 +15,8 @@ import {
   type SandboxResult,
 } from "@vellum/sandbox";
 
+import { SANDBOX_DENIED_PATHS, SANDBOX_PERMISSIONS, SANDBOX_RESOURCES } from "./config/index.js";
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -78,10 +80,10 @@ let sandboxExecutor: SandboxExecutor | null = null;
 export function initializeSandbox(options: SandboxIntegrationOptions = {}): SandboxExecutor {
   const {
     workingDirectory = process.cwd(),
-    allowNetwork = false,
-    allowFileSystem = true,
-    timeoutMs = 30000,
-    maxOutputBytes = 1024 * 1024, // 1MB
+    allowNetwork = SANDBOX_PERMISSIONS.ALLOW_NETWORK,
+    allowFileSystem = SANDBOX_PERMISSIONS.ALLOW_FILE_SYSTEM,
+    timeoutMs = SANDBOX_RESOURCES.TIMEOUT_MS,
+    maxOutputBytes = SANDBOX_RESOURCES.MAX_OUTPUT_BYTES,
     environment = {},
   } = options;
 
@@ -90,15 +92,15 @@ export function initializeSandbox(options: SandboxIntegrationOptions = {}): Sand
     strategy: "subprocess",
     workingDir: workingDirectory,
     environment,
-    enableAudit: false,
+    enableAudit: SANDBOX_PERMISSIONS.ENABLE_AUDIT,
     resources: {
       cpuTimeMs: timeoutMs,
-      wallTimeMs: timeoutMs + 5000,
-      memoryBytes: 512 * 1024 * 1024, // 512MB
-      maxFileDescriptors: 100,
-      maxProcesses: 10,
+      wallTimeMs: timeoutMs + SANDBOX_RESOURCES.WALL_TIME_BUFFER_MS,
+      memoryBytes: SANDBOX_RESOURCES.MEMORY_BYTES,
+      maxFileDescriptors: SANDBOX_RESOURCES.MAX_FILE_DESCRIPTORS,
+      maxProcesses: SANDBOX_RESOURCES.MAX_PROCESSES,
       maxOutputBytes,
-      maxFileSizeBytes: 50 * 1024 * 1024, // 50MB
+      maxFileSizeBytes: SANDBOX_RESOURCES.MAX_FILE_SIZE_BYTES,
     },
     network: {
       allowNetwork,
@@ -110,9 +112,9 @@ export function initializeSandbox(options: SandboxIntegrationOptions = {}): Sand
       rootDir: workingDirectory,
       readOnlyPaths: [],
       readWritePaths: allowFileSystem ? [workingDirectory] : [],
-      deniedPaths: ["/etc/passwd", "/etc/shadow"],
-      useOverlay: false,
-      maxDiskUsageBytes: 100 * 1024 * 1024, // 100MB
+      deniedPaths: [...SANDBOX_DENIED_PATHS],
+      useOverlay: SANDBOX_PERMISSIONS.USE_OVERLAY,
+      maxDiskUsageBytes: SANDBOX_RESOURCES.MAX_DISK_USAGE_BYTES,
     },
   };
 
@@ -237,10 +239,10 @@ export function createBoundSandbox(
   ) => Promise<SandboxedExecutionResult>;
   cleanup: () => Promise<void>;
 } {
-  const timeoutMs = options.timeoutMs ?? 30000;
-  const allowNetwork = options.allowNetwork ?? false;
-  const allowFileSystem = options.allowFileSystem ?? true;
-  const maxOutputBytes = options.maxOutputBytes ?? 1024 * 1024;
+  const timeoutMs = options.timeoutMs ?? SANDBOX_RESOURCES.TIMEOUT_MS;
+  const allowNetwork = options.allowNetwork ?? SANDBOX_PERMISSIONS.ALLOW_NETWORK;
+  const allowFileSystem = options.allowFileSystem ?? SANDBOX_PERMISSIONS.ALLOW_FILE_SYSTEM;
+  const maxOutputBytes = options.maxOutputBytes ?? SANDBOX_RESOURCES.MAX_OUTPUT_BYTES;
 
   // Create a dedicated executor for this directory
   const config: SandboxConfig = {
@@ -248,15 +250,15 @@ export function createBoundSandbox(
     strategy: "subprocess",
     workingDir: workingDirectory,
     environment: options.environment ?? {},
-    enableAudit: false,
+    enableAudit: SANDBOX_PERMISSIONS.ENABLE_AUDIT,
     resources: {
       cpuTimeMs: timeoutMs,
-      wallTimeMs: timeoutMs + 5000,
-      memoryBytes: 512 * 1024 * 1024,
-      maxFileDescriptors: 100,
-      maxProcesses: 10,
+      wallTimeMs: timeoutMs + SANDBOX_RESOURCES.WALL_TIME_BUFFER_MS,
+      memoryBytes: SANDBOX_RESOURCES.MEMORY_BYTES,
+      maxFileDescriptors: SANDBOX_RESOURCES.MAX_FILE_DESCRIPTORS,
+      maxProcesses: SANDBOX_RESOURCES.MAX_PROCESSES,
       maxOutputBytes,
-      maxFileSizeBytes: 50 * 1024 * 1024,
+      maxFileSizeBytes: SANDBOX_RESOURCES.MAX_FILE_SIZE_BYTES,
     },
     network: {
       allowNetwork,
@@ -269,8 +271,8 @@ export function createBoundSandbox(
       readOnlyPaths: [],
       readWritePaths: allowFileSystem ? [workingDirectory] : [],
       deniedPaths: [],
-      useOverlay: false,
-      maxDiskUsageBytes: 100 * 1024 * 1024,
+      useOverlay: SANDBOX_PERMISSIONS.USE_OVERLAY,
+      maxDiskUsageBytes: SANDBOX_RESOURCES.MAX_DISK_USAGE_BYTES,
     },
   };
 

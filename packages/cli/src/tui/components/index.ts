@@ -19,6 +19,8 @@ export {
 } from "./CostDisplay.js";
 // Common components
 export * from "./common/index.js";
+// Init Error Banner
+export { InitErrorBanner, type InitErrorBannerProps } from "./InitErrorBanner.js";
 // Component subdirectories
 export * from "./Input/index.js";
 // Layout

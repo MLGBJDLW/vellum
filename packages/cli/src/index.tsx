@@ -218,6 +218,7 @@ program
 
     // Create AgentLoop with real LLM provider
     let agentLoop: AgentLoop | undefined;
+    let initError: Error | undefined;
     try {
       // Initialize credential manager for secure credential resolution
       const { createCredentialManager } = await import("./commands/auth.js");
@@ -269,11 +270,9 @@ program
         toolExecutor: toolContainer.getExecutor(),
       });
     } catch (error) {
-      console.error(
-        "[CLI] Failed to initialize agent:",
-        error instanceof Error ? error.message : String(error)
-      );
-      // Continue without agentLoop - App will fall back to echo mode
+      initError = error instanceof Error ? error : new Error(String(error));
+      console.error("[CLI] Failed to initialize agent:", initError.message);
+      // Continue without agentLoop - App will show error banner and fall back to echo mode
     }
 
     const isVSCodeTerminal =
@@ -307,6 +306,7 @@ program
         theme={options.theme as import("./tui/theme/index.js").ThemeName}
         banner={options.banner}
         agentLoop={agentLoop}
+        initError={initError}
       />,
       inkRenderOptions
     );
