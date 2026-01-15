@@ -18,6 +18,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { z } from "zod";
+import { detectShell } from "../shell/index.js";
 
 // =============================================================================
 // Constants
@@ -99,6 +100,7 @@ export function buildEnvironmentInfo(
     `  Working directory: ${config.cwd}`,
     `  Is directory a git repo: ${config.isGitRepo ? "yes" : "no"}`,
     `  Platform: ${process.platform}`,
+    `  Shell: ${detectShell().shell}`,
     `  Today's date: ${new Date().toDateString()}`,
     `</env>`,
   ];

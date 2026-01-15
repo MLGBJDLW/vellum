@@ -88,7 +88,7 @@ export function generateJsonSchema(options: GenerateSchemaOptions = {}): JsonSch
 
   // Convert Zod schema to JSON Schema using native Zod v4 function
   const result = z.toJSONSchema(CustomAgentDefinitionSchema, {
-    target: "draft-2020-12",
+    target: "openapi-3.0",
     unrepresentable: "any",
   });
 

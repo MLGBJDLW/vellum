@@ -318,7 +318,7 @@ class ToolRegistryImpl implements ToolRegistry {
 
       // Convert Zod schema to JSON Schema using Zod v4 native function
       const jsonSchema = z.toJSONSchema(tool.definition.parameters, {
-        target: "draft-2020-12",
+        target: "openapi-3.0",
         unrepresentable: "any",
       });
 

@@ -7,6 +7,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ToolDefinition } from "@vellum/provider";
+import { z } from "zod";
 import { AgentLevel } from "../../agent/level.js";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
 import { MODE_CONFIGS } from "../../agent/modes.js";
@@ -260,13 +261,10 @@ export async function executeWorkerTask(
     name: tool.definition.name,
     description: tool.definition.description,
     // Convert Zod schema to JSON schema for the LLM
-    inputSchema: tool.definition.parameters._def
-      ? ((
-          tool.definition.parameters as unknown as {
-            _def: { jsonSchema?: Record<string, unknown> };
-          }
-        )._def.jsonSchema ?? {})
-      : {},
+    inputSchema: z.toJSONSchema(tool.definition.parameters, {
+      target: "openapi-3.0",
+      unrepresentable: "any",
+    }) as Record<string, unknown>,
   }));
 
   // Create session ID for this worker execution

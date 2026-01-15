@@ -16,6 +16,7 @@ import { readFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { basename } from "node:path";
 import { FrontmatterParser, promptFrontmatterSchema } from "@vellum/shared";
+import { detectShell } from "../shell/index.js";
 import { promptParseError, promptYamlError } from "./errors.js";
 import type { PromptCategory, PromptLoaded, PromptLocation, PromptVariables } from "./types.js";
 
@@ -33,15 +34,6 @@ const VARIABLE_PATTERN = /\{\{(\w+)\}\}/g;
  * Built-in variable names that are automatically available.
  */
 const BUILTIN_VARIABLES = ["os", "shell", "cwd", "date", "mode", "provider", "model"] as const;
-
-/**
- * Default shell by operating system.
- */
-const DEFAULT_SHELLS: Record<string, string> = {
-  win32: "powershell",
-  darwin: "zsh",
-  linux: "bash",
-};
 
 // =============================================================================
 // Types
@@ -288,7 +280,7 @@ export class PromptParser {
     const os = platform();
     return {
       os,
-      shell: DEFAULT_SHELLS[os] ?? "sh",
+      shell: detectShell().shell,
       cwd: process.cwd(),
       date: new Date().toISOString().split("T")[0] ?? "",
       mode: "vibe",
