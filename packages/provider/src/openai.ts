@@ -23,6 +23,8 @@ import type {
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
 import { createProviderError, ProviderError } from "./errors.js";
+import type { ReasoningEffort } from "./models/index.js";
+import { getModelInfo } from "./models/index.js";
 import { OPENAI_MODELS } from "./models/providers/openai.js";
 import { openaiTransform } from "./transforms/openai.js";
 import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
@@ -486,6 +488,61 @@ export class OpenAIProvider {
   }
 
   /**
+   * Provider type for model metadata lookup.
+   * Subclasses (OpenAI-compatible providers) override to use their catalog.
+   */
+  protected getProviderTypeForModelInfo(): string {
+    return this.name;
+  }
+
+  /**
+   * Resolve reasoning effort for models that support reasoning.
+   * Returns undefined when unsupported or explicitly disabled.
+   */
+  private resolveReasoningEffort(params: CompletionParams): ReasoningEffort | undefined {
+    if (!params.thinking?.enabled) {
+      return undefined;
+    }
+
+    const modelInfo = getModelInfo(this.getProviderTypeForModelInfo(), params.model);
+    if (!modelInfo.supportsReasoning) {
+      if (process.env.VELLUM_DEBUG) {
+        console.debug(
+          `[OpenAIProvider] Thinking disabled: model ${params.model} does not support reasoning.`
+        );
+      }
+      return undefined;
+    }
+
+    const supportedEfforts = modelInfo.reasoningEfforts ?? [];
+    const requested = params.thinking.reasoningEffort;
+    const fallback = modelInfo.defaultReasoningEffort ?? supportedEfforts[0];
+    const allowedEfforts =
+      supportedEfforts.length > 0 ? supportedEfforts : fallback ? [fallback] : [];
+
+    let resolved: ReasoningEffort | undefined;
+    if (requested && allowedEfforts.includes(requested)) {
+      resolved = requested;
+    } else if (fallback && allowedEfforts.includes(fallback)) {
+      resolved = fallback;
+    }
+
+    if (resolved === "none") {
+      return undefined;
+    }
+
+    if (requested && !allowedEfforts.includes(requested)) {
+      if (process.env.VELLUM_DEBUG) {
+        console.debug(
+          `[OpenAIProvider] Reasoning effort '${requested}' not supported by ${params.model}; omitting effort.`
+        );
+      }
+    }
+
+    return resolved;
+  }
+
+  /**
    * Build the OpenAI API request from completion params
    */
   private buildRequest(
@@ -558,6 +615,13 @@ export class OpenAIProvider {
       request.tools = this.convertTools(params.tools);
     }
 
+    const reasoningEffort = this.resolveReasoningEffort(params);
+    if (reasoningEffort) {
+      (
+        request as ChatCompletionCreateParamsNonStreaming & { reasoning_effort?: string }
+      ).reasoning_effort = reasoningEffort;
+    }
+
     return request;
   }
 
@@ -602,6 +666,13 @@ export class OpenAIProvider {
     }
     if (params.tools && params.tools.length > 0) {
       request.tools = this.convertTools(params.tools);
+    }
+
+    const reasoningEffort = this.resolveReasoningEffort(params);
+    if (reasoningEffort) {
+      (
+        request as ChatCompletionCreateParamsStreaming & { reasoning_effort?: string }
+      ).reasoning_effort = reasoningEffort;
     }
 
     return request;

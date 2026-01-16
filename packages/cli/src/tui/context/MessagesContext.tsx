@@ -74,6 +74,8 @@ export interface Message {
   readonly toolCalls?: readonly ToolCallInfo[];
   /** Token usage for this message turn (assistant messages only) */
   readonly tokenUsage?: MessageTokenUsage;
+  /** Whether this message is a continuation of a previous split message */
+  readonly isContinuation?: boolean;
 }
 
 /**
@@ -374,10 +376,11 @@ function messagesReducer(state: MessagesState, action: MessagesAction): Messages
         isStreaming: false,
       };
 
-      // Keep remainder as pending
+      // Keep remainder as pending - mark as continuation of split message
       const remainingMessage: Message = {
         ...state.pendingMessage,
         content: content.slice(action.splitIndex),
+        isContinuation: true,
       };
 
       const newHistory = [...state.historyMessages, completedMessage];

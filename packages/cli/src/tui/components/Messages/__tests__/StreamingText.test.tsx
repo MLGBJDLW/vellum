@@ -10,6 +10,7 @@
 import { render } from "ink-testing-library";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AnimationProvider } from "../../../context/AnimationContext.js";
 import { StreamingText } from "../StreamingText.js";
 
 // =============================================================================
@@ -78,41 +79,44 @@ describe("StreamingText", () => {
       expect(lastFrame()).not.toContain("▊");
     });
 
-    it("blinks cursor every 500ms when cursorBlink is true", async () => {
-      const { lastFrame, frames } = render(
-        <StreamingText content="Blinking" isStreaming={true} cursorBlink={true} />
+    it("blinks cursor when animation frames advance", async () => {
+      const { lastFrame } = render(
+        <AnimationProvider tickInterval={100}>
+          <StreamingText
+            content="Blinking"
+            isStreaming={true}
+            cursorBlink={true}
+            typewriterEffect={false}
+          />
+        </AnimationProvider>
       );
 
       // Initially cursor is visible
       expect(lastFrame()).toContain("▊");
 
-      // Record initial frame count
-      const initialFrameCount = frames.length;
-
-      // After 500ms, the interval callback fires and toggles state
+      // After 4 ticks (frame=4), cursor should be hidden
       await act(async () => {
-        vi.advanceTimersByTime(500);
+        vi.advanceTimersByTime(400);
       });
+      expect(lastFrame()).not.toContain("▊");
 
-      // If a new frame was rendered, check it
-      if (frames.length > initialFrameCount) {
-        expect(lastFrame()).not.toContain("▊");
-      }
-
-      // After another 500ms, cursor should toggle back
+      // After 4 more ticks (frame=8), cursor should be visible again
       await act(async () => {
-        vi.advanceTimersByTime(500);
+        vi.advanceTimersByTime(400);
       });
-
-      // Verify the blink cycle completed (visible again)
-      if (frames.length > initialFrameCount + 1) {
-        expect(lastFrame()).toContain("▊");
-      }
+      expect(lastFrame()).toContain("▊");
     });
 
     it("does not blink cursor when cursorBlink is false", () => {
       const { lastFrame } = render(
-        <StreamingText content="No blink" isStreaming={true} cursorBlink={false} />
+        <AnimationProvider tickInterval={100}>
+          <StreamingText
+            content="No blink"
+            isStreaming={true}
+            cursorBlink={false}
+            typewriterEffect={false}
+          />
+        </AnimationProvider>
       );
 
       // Cursor is visible
@@ -190,31 +194,18 @@ describe("StreamingText", () => {
     });
   });
 
-  describe("interval cleanup", () => {
-    it("cleans up interval on unmount", () => {
+  describe("animation cleanup", () => {
+    it("cleans up animation interval on unmount", () => {
       const clearIntervalSpy = vi.spyOn(global, "clearInterval");
 
       const { unmount } = render(
-        <StreamingText content="Test" isStreaming={true} cursorBlink={true} />
+        <AnimationProvider tickInterval={100}>
+          <StreamingText content="Test" isStreaming={true} cursorBlink={true} />
+        </AnimationProvider>
       );
 
       act(() => {
         unmount();
-      });
-
-      expect(clearIntervalSpy).toHaveBeenCalled();
-      clearIntervalSpy.mockRestore();
-    });
-
-    it("cleans up interval when streaming stops", () => {
-      const clearIntervalSpy = vi.spyOn(global, "clearInterval");
-
-      const { rerender } = render(
-        <StreamingText content="Test" isStreaming={true} cursorBlink={true} />
-      );
-
-      act(() => {
-        rerender(<StreamingText content="Test" isStreaming={false} cursorBlink={true} />);
       });
 
       expect(clearIntervalSpy).toHaveBeenCalled();

@@ -244,8 +244,8 @@
     "closeKey": "Esc/q 关闭"
   },
   "thinking": {
-    "expandHint": "(按 Enter 展开)",
-    "collapseHint": "(按 Enter 收起)",
+    "expandHint": "(按 Ctrl+E 展开)",
+    "collapseHint": "(按 Ctrl+E 收起)",
     "label": "思考中..."
   },
   "splash": {

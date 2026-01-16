@@ -9,7 +9,9 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "pnpm -F @vellum/cli dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:core": "pnpm -F @vellum/core dev",
+    "dev:cli": "pnpm -F @vellum/cli dev",
     "build": "pnpm -r build",
     "test": "vitest",
     "test:run": "vitest run",

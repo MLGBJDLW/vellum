@@ -18,6 +18,8 @@ Spec mode follows a 6-phase structured workflow.
 Checkpoints at each phase ensure alignment with requirements.
 All decisions are documented for traceability.
 
+**Workspace access**: Use tools directly. Do not ask how to open files or whether you can inspect code.
+
 ### Core Principles
 
 | Principle | Description |

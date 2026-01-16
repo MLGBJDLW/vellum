@@ -100,11 +100,14 @@ export interface ExecutionLogger {
 
 /**
  * Default console logger for tool execution.
+ * Only logs when VELLUM_DEBUG environment variable is set.
  */
 export const defaultExecutionLogger: ExecutionLogger = {
   logExecution(entry: ToolExecutionLog): void {
-    const logFn = entry.resultType === "success" ? console.debug : console.warn;
-    logFn("[ToolExecutor]", JSON.stringify(entry));
+    if (process.env.VELLUM_DEBUG) {
+      const logFn = entry.resultType === "success" ? console.debug : console.warn;
+      logFn("[ToolExecutor]", JSON.stringify(entry));
+    }
   },
 };
 

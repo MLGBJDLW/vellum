@@ -252,8 +252,8 @@ export async function executeWorkerTask(
 
   // Filter tools from the subsession's registry
   const availableTools = subsession.toolRegistry.list();
-  const filteredTools = availableTools.filter((tool) =>
-    allowedToolNames.includes(tool.definition.name)
+  const filteredTools = availableTools.filter(
+    (tool) => allowedToolNames.includes(tool.definition.name) && tool.definition.enabled !== false
   );
 
   // Convert tools to LLM tool definitions

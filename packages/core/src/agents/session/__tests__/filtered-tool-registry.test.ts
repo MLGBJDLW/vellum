@@ -99,18 +99,16 @@ describe("FilteredToolRegistry", () => {
     createMockTool("execute", "shell"),
     createMockTool("delegate_task", "agent"),
     createMockTool("new_task", "agent"),
-    createMockTool("switch_mode", "agent"),
     createMockTool("fetch", "browser"),
     createMockTool("request", "browser"),
     createMockTool("mcp_tool", "mcp"),
   ];
 
   describe("WORKER_BLOCKED_TOOLS constant", () => {
-    it("should contain delegate_task, new_task, switch_mode", () => {
+    it("should contain delegate_task, new_task", () => {
       expect(WORKER_BLOCKED_TOOLS).toContain("delegate_task");
       expect(WORKER_BLOCKED_TOOLS).toContain("new_task");
-      expect(WORKER_BLOCKED_TOOLS).toContain("switch_mode");
-      expect(WORKER_BLOCKED_TOOLS).toHaveLength(3);
+      expect(WORKER_BLOCKED_TOOLS).toHaveLength(2);
     });
   });
 
@@ -131,14 +129,6 @@ describe("FilteredToolRegistry", () => {
       expect(filtered.get("new_task")).toBeUndefined();
     });
 
-    it("should block switch_mode for workers", () => {
-      const baseRegistry = createMockRegistry(testTools);
-      const filtered = createFilteredToolRegistry(baseRegistry, AgentLevel.worker);
-
-      expect(filtered.isAllowed("switch_mode")).toBe(false);
-      expect(filtered.get("switch_mode")).toBeUndefined();
-    });
-
     it("should allow non-delegation tools for workers", () => {
       const baseRegistry = createMockRegistry(testTools);
       const filtered = createFilteredToolRegistry(baseRegistry, AgentLevel.worker);
@@ -157,7 +147,6 @@ describe("FilteredToolRegistry", () => {
 
       expect(filtered.isAllowed("delegate_task")).toBe(true);
       expect(filtered.isAllowed("new_task")).toBe(true);
-      expect(filtered.isAllowed("switch_mode")).toBe(true);
       expect(filtered.isAllowed("read_file")).toBe(true);
       expect(filtered.get("delegate_task")).toBeDefined();
     });
@@ -168,7 +157,6 @@ describe("FilteredToolRegistry", () => {
 
       expect(filtered.isAllowed("delegate_task")).toBe(true);
       expect(filtered.isAllowed("new_task")).toBe(true);
-      expect(filtered.isAllowed("switch_mode")).toBe(true);
       expect(filtered.get("new_task")).toBeDefined();
     });
   });
@@ -308,7 +296,6 @@ describe("FilteredToolRegistry", () => {
       const blocked = filtered.getBlocked();
       expect(blocked).toContain("delegate_task");
       expect(blocked).toContain("new_task");
-      expect(blocked).toContain("switch_mode");
     });
 
     it("should include tool group blocked tools", () => {
@@ -333,7 +320,6 @@ describe("FilteredToolRegistry", () => {
       // Level blocks
       expect(blocked).toContain("delegate_task");
       expect(blocked).toContain("new_task");
-      expect(blocked).toContain("switch_mode");
       // Tool group blocks
       expect(blocked).toContain("fetch");
       expect(blocked).toContain("request");

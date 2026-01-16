@@ -556,7 +556,7 @@ describe("SkillManager", () => {
         compatibility: { tools: ["read_file", "write_file", "search"] },
       });
       const skillB = createMockLoaded("skill-b", "workspace", {
-        compatibility: { tools: ["read_file", "search", "list_files"] },
+        compatibility: { tools: ["read_file", "search", "list_dir"] },
       });
 
       const restrictions = manager.getToolRestrictions([skillA, skillB]);
@@ -565,7 +565,7 @@ describe("SkillManager", () => {
       expect(restrictions.allowed).toContain("read_file");
       expect(restrictions.allowed).toContain("search");
       expect(restrictions.allowed).not.toContain("write_file");
-      expect(restrictions.allowed).not.toContain("list_files");
+      expect(restrictions.allowed).not.toContain("list_dir");
     });
 
     it("should compute union for denied tools across multiple skills", () => {

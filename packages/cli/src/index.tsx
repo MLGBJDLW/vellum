@@ -261,6 +261,7 @@ program
         model: effectiveModel,
         cwd: process.cwd(),
         projectRoot: process.cwd(),
+        interactive: true,
         orchestrator,
         promptBuilder, // Use MD-loaded prompts
         // Dynamic thinking config getter for runtime /think toggling
@@ -268,6 +269,9 @@ program
         // T045: Wire unified tool container
         tools: toolContainer.getProviderToolDefinitions(),
         toolExecutor: toolContainer.getExecutor(),
+        // Enable AGENTS.md and Skills integration for project context
+        enableAgentsIntegration: true,
+        enableSkillsIntegration: true,
       });
     } catch (error) {
       initError = error instanceof Error ? error : new Error(String(error));

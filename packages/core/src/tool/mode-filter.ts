@@ -53,6 +53,8 @@ export interface ToolAllowedResult {
 export interface GetToolsForModeOptions {
   /** Additional custom tool names to include */
   readonly customTools?: readonly string[];
+  /** Whether to include interactive-only tools (e.g., ask_followup_question) */
+  readonly interactive?: boolean;
 }
 
 /**
@@ -154,6 +156,7 @@ function getAllowedGroups(mode: CodingMode): ToolGroup[] {
 export function getToolsForMode(mode: CodingMode, options?: GetToolsForModeOptions): string[] {
   const allowedGroups = getAllowedGroups(mode);
   const groupTools = getToolsFromGroups(allowedGroups);
+  const interactive = options?.interactive ?? false;
 
   // Create a set for deduplication
   const tools = new Set<string>(groupTools);
@@ -161,6 +164,10 @@ export function getToolsForMode(mode: CodingMode, options?: GetToolsForModeOptio
   // Add always-available tools
   for (const tool of ALWAYS_AVAILABLE_TOOLS) {
     tools.add(tool);
+  }
+
+  if (!interactive) {
+    tools.delete("ask_followup_question");
   }
 
   // Add custom tools if provided

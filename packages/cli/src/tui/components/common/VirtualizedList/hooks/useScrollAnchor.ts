@@ -169,13 +169,17 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
 
     const listGrew = dataLength > prevDataLength.current;
     const containerChanged = prevContainerHeight.current !== containerHeight;
+    // Detect content height growth (triggers during streaming output)
+    const contentHeightGrew = totalHeight > prevTotalHeight.current;
 
     // Scroll to end conditions:
     // 1. List grew AND we were already at the bottom (or sticking)
     // 2. We are sticking to bottom AND container size changed
+    // 3. We are sticking to bottom AND content height grew (streaming content)
     if (
       (listGrew && (isStickingToBottom || wasAtBottom)) ||
-      (isStickingToBottom && containerChanged)
+      (isStickingToBottom && containerChanged) ||
+      (isStickingToBottom && contentHeightGrew)
     ) {
       setScrollAnchor({
         index: dataLength > 0 ? dataLength - 1 : 0,

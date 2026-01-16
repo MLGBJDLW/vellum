@@ -187,6 +187,7 @@ describe("Type Inference Tests", () => {
       const thinking: ThinkingConfig = {
         enabled: true,
         budgetTokens: 5000,
+        reasoningEffort: "medium",
       };
 
       const params: CompletionParams = {

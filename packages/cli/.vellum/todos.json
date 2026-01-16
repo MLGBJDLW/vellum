@@ -1,0 +1,12 @@
+{
+  "nextId": 2,
+  "items": [
+    {
+      "id": 1,
+      "text": "Respond to the user's greeting",
+      "completed": true,
+      "createdAt": "2026-01-16T03:58:13.340Z",
+      "completedAt": "2026-01-16T03:58:14.578Z"
+    }
+  ]
+}

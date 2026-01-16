@@ -244,8 +244,8 @@
     "closeKey": "Esc/q close"
   },
   "thinking": {
-    "expandHint": "(press Enter to expand)",
-    "collapseHint": "(press Enter to collapse)",
+    "expandHint": "(press Ctrl+E to expand)",
+    "collapseHint": "(press Ctrl+E to collapse)",
     "label": "Thinking..."
   },
   "splash": {

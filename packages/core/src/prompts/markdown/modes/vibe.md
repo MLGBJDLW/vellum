@@ -17,6 +17,8 @@ level: worker
 Vibe mode is for quick, trusted tasks. Execute autonomously without checkpoints.
 Optimized for speed and flow state maintenance.
 
+**Workspace access**: Use tools directly. Do not ask how to open files or whether you can inspect code.
+
 ### Core Principles
 
 | Principle | Description |

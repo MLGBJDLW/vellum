@@ -131,4 +131,11 @@ export abstract class OpenAICompatibleProvider extends OpenAIProvider {
       modelId: model,
     };
   }
+
+  /**
+   * Use provider-specific catalog when resolving model capabilities.
+   */
+  protected override getProviderTypeForModelInfo(): string {
+    return this.providerName;
+  }
 }

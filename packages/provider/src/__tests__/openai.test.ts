@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OpenAIProvider } from "../openai.js";
-import type { ProviderCredential } from "../types.js";
+import type { CompletionParams, ProviderCredential } from "../types.js";
 
 describe("OpenAIProvider", () => {
   const originalEnv = process.env;
@@ -307,6 +307,50 @@ describe("OpenAIProvider", () => {
         { role: "assistant", content: "Hi there!" },
       ]);
       expect(count).toBeGreaterThan(0);
+    });
+  });
+
+  describe("thinking config", () => {
+    it("should omit reasoning_effort for models without supported efforts", () => {
+      const provider = new OpenAIProvider();
+      const request = (
+        provider as unknown as {
+          buildRequest: (
+            params: CompletionParams,
+            isOSeries: boolean
+          ) => { reasoning_effort?: string };
+        }
+      ).buildRequest(
+        {
+          model: "o1",
+          messages: [{ role: "user", content: "Hello" }],
+          thinking: { enabled: true, reasoningEffort: "high" },
+        },
+        true
+      );
+
+      expect(request.reasoning_effort).toBeUndefined();
+    });
+
+    it("should include reasoning_effort for supported models", () => {
+      const provider = new OpenAIProvider();
+      const request = (
+        provider as unknown as {
+          buildRequest: (
+            params: CompletionParams,
+            isOSeries: boolean
+          ) => { reasoning_effort?: string };
+        }
+      ).buildRequest(
+        {
+          model: "o3",
+          messages: [{ role: "user", content: "Hello" }],
+          thinking: { enabled: true, reasoningEffort: "high" },
+        },
+        true
+      );
+
+      expect(request.reasoning_effort).toBe("high");
     });
   });
 });

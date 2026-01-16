@@ -21,7 +21,6 @@ import type { Tool, ToolKind } from "../../types/tool.js";
  * the anti-recursion protocol (REQ-037):
  * - delegate_task: Spawns a new subagent
  * - new_task: Creates a new task (implicit delegation)
- * - switch_mode: Changes agent mode (could escalate privileges)
  *
  * @example
  * ```typescript
@@ -30,7 +29,7 @@ import type { Tool, ToolKind } from "../../types/tool.js";
  * }
  * ```
  */
-export const WORKER_BLOCKED_TOOLS = ["delegate_task", "new_task", "switch_mode"] as const;
+export const WORKER_BLOCKED_TOOLS = ["delegate_task", "new_task"] as const;
 
 // ============================================
 // FilteredToolRegistry Interface

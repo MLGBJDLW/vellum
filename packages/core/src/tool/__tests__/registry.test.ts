@@ -298,8 +298,8 @@ describe("ToolRegistry", () => {
 
     it("should return multiple tools of same kind", () => {
       const anotherReadTool = defineTool({
-        name: "list_files",
-        description: "List files in directory",
+        name: "list_dir",
+        description: "List directory entries",
         parameters: z.object({ path: z.string() }),
         kind: "read",
         async execute() {

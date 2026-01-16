@@ -28,7 +28,7 @@ describe("TOOL_GROUPS", () => {
     expect(TOOL_GROUPS["@readonly"]).toContain("read_file");
     expect(TOOL_GROUPS["@readonly"]).toContain("Glob");
     expect(TOOL_GROUPS["@readonly"]).toContain("Grep");
-    expect(TOOL_GROUPS["@readonly"]).toContain("list_files");
+    expect(TOOL_GROUPS["@readonly"]).toContain("list_dir");
     expect(TOOL_GROUPS["@readonly"]).toContain("semantic_search");
   });
 
@@ -254,7 +254,7 @@ describe("ToolAllowlistFilter", () => {
       expect(filter.isAllowed("read_file")).toBe(true);
       expect(filter.isAllowed("Glob")).toBe(true);
       expect(filter.isAllowed("Grep")).toBe(true);
-      expect(filter.isAllowed("list_files")).toBe(true);
+      expect(filter.isAllowed("list_dir")).toBe(true);
 
       // Should not allow edit operations
       expect(filter.isAllowed("WriteFile")).toBe(false);

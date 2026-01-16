@@ -10,6 +10,7 @@ import type { UserPromptSignal } from "../builtin/ask-followup.js";
 import type { AttemptCompletionOutput } from "../builtin/attempt-completion.js";
 import type { DelegateAgentSignal } from "../builtin/delegate-agent.js";
 import { SessionAgentsIntegration } from "../context/agents/session-integration.js";
+import { ErrorCode, VellumError } from "../errors/index.js";
 import type { LLMLogger } from "../logger/llm-logger.js";
 import type { Logger } from "../logger/logger.js";
 import { DefaultPermissionChecker } from "../permission/checker.js";
@@ -130,6 +131,8 @@ export interface AgentLoopConfig {
   parentSessionId?: string;
   /** Agent level for hierarchy constraints (T048) */
   agentLevel?: AgentLevel;
+  /** Whether the session is interactive (enables interactive-only tools like ask_followup_question) */
+  interactive?: boolean;
   /** Enable AGENTS.md protocol integration (optional, defaults to false) */
   enableAgentsIntegration?: boolean;
   /** Enable Skills System integration (T053) */
@@ -324,6 +327,15 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     resolve: (response: string) => void;
   } | null = null;
 
+  /** Track whether the current stream produced any text content */
+  private streamHasText = false;
+
+  /** Track whether the current stream produced any reasoning content */
+  private streamHasThinking = false;
+
+  /** Track whether the current stream produced any tool calls */
+  private streamHasToolCalls = false;
+
   /** Flag to signal completion was attempted (GAP 2 fix) */
   private completionAttempted = false;
 
@@ -507,10 +519,21 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
     // Get current mode and allowed tools
     const currentMode = this.modeManager.getCurrentMode();
-    const allowedToolNames = new Set(getToolsForMode(currentMode));
+    const interactive = this.config.interactive ?? false;
+    const allowedToolNames = new Set(getToolsForMode(currentMode, { interactive }));
 
-    // Filter tools by allowed names
-    const filtered = this.config.tools.filter((tool) => allowedToolNames.has(tool.name));
+    // Filter tools by allowed names and session capabilities
+    const filtered = this.config.tools.filter((tool) => {
+      if (!allowedToolNames.has(tool.name)) {
+        return false;
+      }
+
+      if (tool.name === "attempt_completion") {
+        return false;
+      }
+
+      return true;
+    });
 
     // Log if tools were filtered
     if (filtered.length !== this.config.tools.length) {
@@ -789,8 +812,23 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       const result = await this.streamProcessor.processStream(wrappedStream);
 
       if (result.ok) {
+        const hasTextPart = result.value.parts.some(
+          (part) => part.type === "text" && part.content.trim().length > 0
+        );
+        const hasThinkingPart = result.value.parts.some(
+          (part) => part.type === "reasoning" && part.content.trim().length > 0
+        );
+
+        if (hasTextPart) {
+          this.streamHasText = true;
+        }
+        if (hasThinkingPart) {
+          this.streamHasThinking = true;
+        }
+
         for (const part of result.value.parts) {
           if (part.type === "tool") {
+            this.streamHasToolCalls = true;
             pendingToolCalls.push({
               id: part.id,
               name: part.name,
@@ -911,6 +949,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return;
     }
 
+    // Reset stream state for this run
+    this.streamHasText = false;
+    this.streamHasThinking = false;
+    this.streamHasToolCalls = false;
+
     // Check max iterations limit (T058)
     if (this.iterationCount >= this.maxIterations) {
       this.logger?.warn("Max iterations reached, stopping agentic loop", {
@@ -1005,6 +1048,31 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       const pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> =
         [];
       await this.processStreamResponse(stream, pendingToolCalls);
+
+      if (
+        !this.cancellation.isCancelled &&
+        pendingToolCalls.length === 0 &&
+        !this.streamHasText &&
+        !this.streamHasToolCalls
+      ) {
+        const hasThinkingOnly = this.streamHasThinking;
+        throw new VellumError(
+          hasThinkingOnly
+            ? "Model stream ended with only reasoning content."
+            : "Model stream ended with no response text.",
+          ErrorCode.LLM_INVALID_RESPONSE,
+          {
+            isRetryable: true,
+            retryDelay: 1000,
+            context: {
+              provider: this.config.providerType,
+              model: this.config.model,
+              requestId: this.currentRequestId,
+              hasThinkingOnly,
+            },
+          }
+        );
+      }
 
       // Calculate duration (T041)
       const durationMs = this.llmRequestStartTime ? Date.now() - this.llmRequestStartTime : 0;
@@ -1183,6 +1251,21 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Check for cancellation between tool calls
       if (this.cancellation.isCancelled) {
         break;
+      }
+
+      // Check for unknown tool marker from repairToolCall
+      if (call.name.startsWith("__unknown_")) {
+        const originalName = call.name.replace(/^__unknown_|__$/g, "");
+        const error = `LLM requested unknown tool: ${originalName}`;
+        this.emit("error", new VellumError(error, ErrorCode.TOOL_NOT_FOUND));
+        this.emit("toolEnd", call.id, call.name, {
+          result: { success: false, error },
+          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+          toolName: call.name,
+          callId: call.id,
+        });
+        toolResults.push({ id: call.id, name: call.name, result: error, isError: true });
+        continue;
       }
 
       // Check AGENTS.md tool allowlist if integration is available
@@ -1965,17 +2048,28 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
   ): Promise<void> {
     switch (event.type) {
-      case "text":
+      case "text": {
+        const textContent = event.content ?? (event as { text?: string }).text ?? "";
+        if (textContent.trim().length > 0) {
+          this.streamHasText = true;
+        }
         // Emit text delta
-        this.emit("text", event.content);
+        this.emit("text", textContent);
         break;
+      }
 
-      case "reasoning":
+      case "reasoning": {
+        const thinkingContent = event.content ?? (event as { text?: string }).text ?? "";
+        if (thinkingContent.trim().length > 0) {
+          this.streamHasThinking = true;
+        }
         // Emit thinking/reasoning delta
-        this.emit("thinking", event.content);
+        this.emit("thinking", thinkingContent);
         break;
+      }
 
       case "toolCall":
+        this.streamHasToolCalls = true;
         // Collect tool call for execution (Phase 3)
         pendingToolCalls.push({
           id: event.id,
@@ -2031,6 +2125,14 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           return;
         }
 
+        if (event.type === "error") {
+          yield {
+            ok: false as const,
+            error: new Error(`[${event.code}] ${event.message}`),
+          };
+          return;
+        }
+
         // Convert LLMStreamEvent to StreamEvent
         const streamEvent = this.convertToStreamEvent(event);
         if (streamEvent) {
@@ -2054,10 +2156,16 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private convertToStreamEvent(event: LLMStreamEvent): StreamEvent | undefined {
     switch (event.type) {
       case "text":
-        return { type: "text", content: event.content };
+        return {
+          type: "text",
+          content: event.content ?? (event as { text?: string }).text ?? "",
+        };
 
       case "reasoning":
-        return { type: "reasoning", content: event.content };
+        return {
+          type: "reasoning",
+          content: event.content ?? (event as { text?: string }).text ?? "",
+        };
 
       case "toolCall":
         // Complete tool call - emit as tool_call_start + end combo

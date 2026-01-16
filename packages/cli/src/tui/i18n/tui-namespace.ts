@@ -118,6 +118,11 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
     importance: "Importance: ",
     keybindings: "j/k: navigate • Enter: select • g/G: top/bottom",
   },
+  thinking: {
+    expandHint: "(press Enter to expand)",
+    collapseHint: "(press Enter to collapse)",
+    label: "Thinking...",
+  },
   errors: {
     connectionFailed: "Connection failed",
     timeout: "Request timed out",
@@ -281,6 +286,11 @@ const ZH_TRANSLATIONS: Record<string, unknown> = {
     tags: "标签：",
     importance: "重要性：",
     keybindings: "j/k: 导航 • Enter: 选择 • g/G: 顶部/底部",
+  },
+  thinking: {
+    expandHint: "(按 Enter 展开)",
+    collapseHint: "(按 Enter 折叠)",
+    label: "思考中...",
   },
   errors: {
     connectionFailed: "连接失败",

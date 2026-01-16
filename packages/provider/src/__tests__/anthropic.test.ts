@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnthropicProvider } from "../anthropic.js";
-import type { ProviderCredential } from "../types.js";
+import type { CompletionParams, ProviderCredential } from "../types.js";
 
 describe("AnthropicProvider", () => {
   const originalEnv = process.env;
@@ -334,6 +334,40 @@ describe("AnthropicProvider", () => {
       // For tests without mocking, it falls back to estimation
       const count = await provider.countTokens("Hello, world!");
       expect(count).toBeGreaterThan(0);
+    });
+  });
+
+  describe("thinking config", () => {
+    it("should skip thinking config for models without reasoning support", () => {
+      const provider = new AnthropicProvider();
+      const request = (
+        provider as unknown as {
+          buildRequest: (params: CompletionParams) => { thinking?: unknown };
+        }
+      ).buildRequest({
+        model: "claude-3-5-sonnet-20241022",
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: { enabled: true, reasoningEffort: "high" },
+      });
+
+      expect(request.thinking).toBeUndefined();
+    });
+
+    it("should map reasoning effort to thinking budget when no budget provided", () => {
+      const provider = new AnthropicProvider();
+      const request = (
+        provider as unknown as {
+          buildRequest: (params: CompletionParams) => {
+            thinking?: { budget_tokens?: number };
+          };
+        }
+      ).buildRequest({
+        model: "claude-sonnet-4-20250514",
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: { enabled: true, reasoningEffort: "high" },
+      });
+
+      expect(request.thinking?.budget_tokens).toBe(20000);
     });
   });
 });

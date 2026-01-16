@@ -22,12 +22,33 @@ export interface UISettings {
 }
 
 /**
+ * Thinking mode configuration.
+ */
+export interface ThinkingSettings {
+  enabled?: boolean;
+  budgetTokens?: number;
+  priority?: "global" | "mode" | "merge";
+}
+
+/**
+ * Model configuration.
+ */
+export interface ModelSettings {
+  provider?: string;
+  modelId?: string;
+}
+
+/**
  * Settings file structure.
  */
-interface VellumSettings {
+export interface VellumSettings {
   language?: LocaleCode;
   bannerSeen?: boolean;
   ui?: UISettings;
+  thinking?: ThinkingSettings;
+  theme?: string;
+  model?: ModelSettings;
+  mode?: string; // "vibe" | "plan" | "spec"
   [key: string]: unknown;
 }
 
@@ -100,6 +121,50 @@ function writeSettings(settings: VellumSettings): boolean {
     // Silently handle any error (permission, disk space, etc.)
     return false;
   }
+}
+
+/**
+ * Load the current settings from the settings file.
+ *
+ * @returns Current settings object, or empty object if file doesn't exist
+ */
+export function loadSettings(): VellumSettings {
+  return readSettings() ?? {};
+}
+
+/**
+ * Save settings to the settings file.
+ *
+ * @param settings - Complete settings object to save
+ * @returns True if successful, false on error
+ */
+export function saveSettings(settings: VellumSettings): boolean {
+  return writeSettings(settings);
+}
+
+/**
+ * Save a single user setting by key.
+ *
+ * This is a convenience helper that loads current settings,
+ * updates the specified key, and saves back to disk.
+ *
+ * @param key - The setting key to update
+ * @param value - The new value for the setting
+ *
+ * @example
+ * ```typescript
+ * await saveUserSetting("thinking", { enabled: true, budgetTokens: 20000 });
+ * await saveUserSetting("theme", "dracula");
+ * await saveUserSetting("mode", "plan");
+ * ```
+ */
+export async function saveUserSetting<K extends keyof VellumSettings>(
+  key: K,
+  value: VellumSettings[K]
+): Promise<void> {
+  const current = loadSettings();
+  const updated = { ...current, [key]: value };
+  saveSettings(updated);
 }
 
 /**
@@ -255,4 +320,124 @@ export function getUISettings(): UISettings {
   return {
     alternateBuffer: settings?.ui?.alternateBuffer ?? true,
   };
+}
+
+// =============================================================================
+// Thinking Settings
+// =============================================================================
+
+/**
+ * Get the saved thinking settings.
+ *
+ * @returns Thinking settings object, or undefined if not saved
+ *
+ * @example
+ * ```typescript
+ * const thinking = getThinkingSettings();
+ * if (thinking?.enabled) {
+ *   enableThinking(thinking.budgetTokens);
+ * }
+ * ```
+ */
+export function getThinkingSettings(): ThinkingSettings | undefined {
+  const settings = readSettings();
+  return settings?.thinking;
+}
+
+/**
+ * Save thinking settings.
+ *
+ * @param thinking - Thinking settings to save
+ */
+export function setThinkingSettings(thinking: ThinkingSettings): void {
+  const existingSettings = readSettings() ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    thinking,
+  };
+  writeSettings(newSettings);
+}
+
+// =============================================================================
+// Theme Settings
+// =============================================================================
+
+/**
+ * Get the saved theme preference.
+ *
+ * @returns Theme name, or undefined if not saved
+ */
+export function getThemeFromSettings(): string | undefined {
+  const settings = readSettings();
+  return settings?.theme;
+}
+
+/**
+ * Save theme preference.
+ *
+ * @param theme - Theme name to save
+ */
+export function setThemeInSettings(theme: string): void {
+  const existingSettings = readSettings() ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    theme,
+  };
+  writeSettings(newSettings);
+}
+
+// =============================================================================
+// Mode Settings
+// =============================================================================
+
+/**
+ * Get the saved mode preference.
+ *
+ * @returns Mode name, or undefined if not saved
+ */
+export function getModeFromSettings(): string | undefined {
+  const settings = readSettings();
+  return settings?.mode;
+}
+
+/**
+ * Save mode preference.
+ *
+ * @param mode - Mode name to save
+ */
+export function setModeInSettings(mode: string): void {
+  const existingSettings = readSettings() ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    mode,
+  };
+  writeSettings(newSettings);
+}
+
+// =============================================================================
+// Model Settings
+// =============================================================================
+
+/**
+ * Get the saved model configuration.
+ *
+ * @returns Model settings, or undefined if not saved
+ */
+export function getModelSettings(): ModelSettings | undefined {
+  const settings = readSettings();
+  return settings?.model;
+}
+
+/**
+ * Save model configuration.
+ *
+ * @param model - Model settings to save
+ */
+export function setModelSettings(model: ModelSettings): void {
+  const existingSettings = readSettings() ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    model,
+  };
+  writeSettings(newSettings);
 }

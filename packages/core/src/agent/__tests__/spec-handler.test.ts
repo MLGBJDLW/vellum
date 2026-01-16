@@ -221,8 +221,8 @@ describe("SpecModeHandler", () => {
         const access = handler.getToolAccess();
 
         expect(access.groups).toContain("read");
-        expect(access.enabled).toContain("run_tests");
-        expect(access.enabled).toContain("vitest");
+        expect(access.enabled).toContain("bash");
+        expect(access.enabled).toContain("shell");
       });
     });
 

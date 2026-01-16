@@ -137,7 +137,7 @@ export abstract class BaseModeHandler implements ModeHandler {
    */
   protected createReadTestAccess(): ToolAccessConfig {
     return {
-      enabled: ["run_tests", "test", "vitest", "jest", "pytest"],
+      enabled: ["bash", "shell"],
       disabled: [],
       groups: ["read"],
     };

@@ -16,6 +16,8 @@ level: workflow
 
 Plan mode creates a structured plan before execution. Uses `todo_manage` tool to create visible, trackable progress. One checkpoint for plan approval, then autonomous execution with real-time status updates.
 
+**Workspace access**: Use tools directly. Do not ask how to open files or whether you can inspect code.
+
 ### Core Principles
 
 | Principle | Description |

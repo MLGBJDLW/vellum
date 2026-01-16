@@ -77,7 +77,6 @@ export const BUILTIN_TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
       "doc_lookup",
       "recall_memory",
       "skill",
-      "lsp",
     ],
     description: "File reading, search, and information retrieval tools",
   },
@@ -111,7 +110,7 @@ export const BUILTIN_TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
   },
 
   modes: {
-    tools: ["switch_mode"],
+    tools: [],
     alwaysAvailable: true,
     description: "Mode switching tools (always available)",
   },
@@ -147,11 +146,7 @@ export const BUILTIN_TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
  * Tools that are always available regardless of mode or permissions.
  * These are essential for agent operation and user interaction.
  */
-export const ALWAYS_AVAILABLE_TOOLS = [
-  "ask_followup_question",
-  "attempt_completion",
-  "switch_mode",
-] as const;
+export const ALWAYS_AVAILABLE_TOOLS = ["ask_followup_question", "attempt_completion"] as const;
 
 /**
  * Type representing an always-available tool name.

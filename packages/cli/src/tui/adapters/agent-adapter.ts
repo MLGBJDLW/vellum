@@ -46,6 +46,20 @@ export interface UseAgentAdapterOptions {
    * @default false
    */
   clearOnDisconnect?: boolean;
+
+  /**
+   * Whether to enable message splitting for long streaming responses.
+   *
+   * When enabled, long messages are split at safe points (paragraph breaks)
+   * and completed portions are moved to historyMessages for <Static> rendering.
+   *
+   * **WARNING**: This can cause messages to disappear in VirtualizedList mode
+   * because historyMessages may be outside the visible render window.
+   * Only enable if using standard (non-virtualized) message rendering.
+   *
+   * @default false
+   */
+  enableMessageSplitting?: boolean;
 }
 
 /**
@@ -76,6 +90,8 @@ interface StreamingMessage {
   id: string;
   /** Accumulated content */
   content: string;
+  /** Accumulated thinking content */
+  thinking: string;
   /** Whether this message has started streaming */
   hasStarted: boolean;
 }
@@ -119,7 +135,7 @@ interface StreamingMessage {
  * ```
  */
 export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentAdapterReturn {
-  const { clearOnDisconnect = false } = options;
+  const { clearOnDisconnect = false, enableMessageSplitting = false } = options;
 
   // Context hooks
   const {
@@ -204,6 +220,20 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
    * Forwards thinking content to external callback if registered.
    */
   const handleThinking = useCallback((text: string) => {
+    if (!streamingMessageRef.current) {
+      const id = addMessageRef.current({
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      });
+      streamingMessageRef.current = {
+        id,
+        content: "",
+        thinking: "",
+        hasStarted: true,
+      };
+    }
+    streamingMessageRef.current.thinking += text;
     if (onThinkingRef.current) {
       onThinkingRef.current(text);
     }
@@ -233,6 +263,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       streamingMessageRef.current = {
         id,
         content: text,
+        thinking: "",
         hasStarted: true,
       };
     } else {
@@ -240,13 +271,19 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       streaming.content += text;
       appendToMessageRef.current(streaming.id, text);
 
-      // Check if we should split at a safe point to improve performance
-      // This moves completed content to Static where it won't re-render
-      const splitIndex = findLastSafeSplitPoint(streaming.content, 2000);
-      if (splitIndex > 0) {
-        splitMessageAtSafePointRef.current(splitIndex);
-        // Update local tracking to reflect the split
-        streaming.content = streaming.content.slice(splitIndex);
+      // Only split messages if explicitly enabled.
+      // Splitting can cause messages to disappear in VirtualizedList mode
+      // because split portions are moved to historyMessages which may not be rendered.
+      if (enableMessageSplitting) {
+        // Check if we should split at a safe point to improve performance
+        // This moves completed content to Static where it won't re-render
+        // Uses newline-gated strategy - only splits at paragraph breaks (\n\n)
+        const splitIndex = findLastSafeSplitPoint(streaming.content);
+        if (splitIndex > 0) {
+          splitMessageAtSafePointRef.current(splitIndex);
+          // Update local tracking to reflect the split
+          streaming.content = streaming.content.slice(splitIndex);
+        }
       }
     }
   }, []); // Empty deps = stable callback
@@ -262,6 +299,9 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     const streaming = streamingMessageRef.current;
 
     if (streaming) {
+      // NOTE: Do NOT copy thinking to content - they are separate concerns.
+      // Thinking content should stay in the thinking field and be rendered
+      // by the ThinkingBlock component, not mixed with regular content.
       // Commit the pending message to history (moves to <Static>)
       // This is more efficient than just marking isStreaming: false
       // because the message will never re-render once in <Static>
@@ -278,9 +318,18 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     const streaming = streamingMessageRef.current;
 
     if (streaming) {
-      // Mark the message as no longer streaming
-      updateMessageRef.current(streaming.id, { isStreaming: false });
+      const content =
+        streaming.content.trim().length > 0 ? streaming.content : `⚠️ ${error.message}`;
+      // Mark the message as no longer streaming and surface the error
+      updateMessageRef.current(streaming.id, { isStreaming: false, content });
+      commitPendingMessageRef.current();
       streamingMessageRef.current = null;
+    } else {
+      addMessageRef.current({
+        role: "assistant",
+        content: `⚠️ ${error.message}`,
+        isStreaming: false,
+      });
     }
 
     // Log error for debugging (could also emit to a context/store if needed)
@@ -553,7 +602,7 @@ export interface AdapterDispatchers {
   /** Append content to an existing message */
   appendToMessage: (id: string, content: string) => void;
   /** Update a message's properties */
-  updateMessage: (id: string, updates: { isStreaming?: boolean }) => void;
+  updateMessage: (id: string, updates: Partial<{ content: string; isStreaming: boolean }>) => void;
   /** Add a tool execution to the tools context */
   addExecution: (execution: {
     toolName: string;
@@ -611,15 +660,30 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
         content: text,
         isStreaming: true,
       });
-      streamingMessage = { id, content: text, hasStarted: true };
+      streamingMessage = { id, content: text, thinking: "", hasStarted: true };
     } else {
       streamingMessage.content += text;
       dispatchers.appendToMessage(streamingMessage.id, text);
     }
   };
 
+  const handleThinking = (text: string) => {
+    if (!streamingMessage) {
+      const id = dispatchers.addMessage({
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      });
+      streamingMessage = { id, content: "", thinking: "", hasStarted: true };
+    }
+    streamingMessage.thinking += text;
+  };
+
   const handleComplete = () => {
     if (streamingMessage) {
+      if (streamingMessage.content.trim().length === 0 && streamingMessage.thinking.trim()) {
+        dispatchers.updateMessage(streamingMessage.id, { content: streamingMessage.thinking });
+      }
       dispatchers.updateMessage(streamingMessage.id, { isStreaming: false });
       streamingMessage = null;
     }
@@ -700,6 +764,7 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
       // Disconnect existing
       if (connectedLoop) {
         connectedLoop.off("text", handleText);
+        connectedLoop.off("thinking", handleThinking);
         connectedLoop.off("complete", handleComplete);
         connectedLoop.off("error", handleError);
         connectedLoop.off("toolStart", handleToolStart);
@@ -715,6 +780,7 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
 
       // Subscribe
       agentLoop.on("text", handleText);
+      agentLoop.on("thinking", handleThinking);
       agentLoop.on("complete", handleComplete);
       agentLoop.on("error", handleError);
       agentLoop.on("toolStart", handleToolStart);
@@ -729,6 +795,7 @@ export function createAgentAdapter(dispatchers: AdapterDispatchers): AgentAdapte
     disconnect() {
       if (connectedLoop) {
         connectedLoop.off("text", handleText);
+        connectedLoop.off("thinking", handleThinking);
         connectedLoop.off("complete", handleComplete);
         connectedLoop.off("error", handleError);
         connectedLoop.off("toolStart", handleToolStart);

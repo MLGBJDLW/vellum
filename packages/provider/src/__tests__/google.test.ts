@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GoogleProvider } from "../google.js";
-import type { ProviderCredential } from "../types.js";
+import type { CompletionParams, ProviderCredential } from "../types.js";
 
 describe("GoogleProvider", () => {
   const originalEnv = process.env;
@@ -263,6 +263,56 @@ describe("GoogleProvider", () => {
       // For tests without mocking, it falls back to estimation
       const count = await provider.countTokens("Hello, world!");
       expect(count).toBeGreaterThan(0);
+    });
+  });
+
+  describe("thinking config", () => {
+    it("should skip thinking config for models without reasoning support", () => {
+      const provider = new GoogleProvider();
+      const request = (
+        provider as unknown as {
+          buildRequest: (params: CompletionParams) => { config: { thinkingConfig?: unknown } };
+        }
+      ).buildRequest({
+        model: "gemini-1.5-flash",
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: { enabled: true, reasoningEffort: "high" },
+      });
+
+      expect(request.config.thinkingConfig).toBeUndefined();
+    });
+
+    it("should omit thinking config when reasoning effort is unsupported and no budget is provided", () => {
+      const provider = new GoogleProvider();
+      const request = (
+        provider as unknown as {
+          buildRequest: (params: CompletionParams) => { config: { thinkingConfig?: unknown } };
+        }
+      ).buildRequest({
+        model: "gemini-2.5-flash",
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: { enabled: true, reasoningEffort: "high" },
+      });
+
+      expect(request.config.thinkingConfig).toBeUndefined();
+    });
+
+    it("should fall back to default reasoning effort when unsupported", () => {
+      const provider = new GoogleProvider();
+      const request = (
+        provider as unknown as {
+          buildRequest: (params: CompletionParams) => {
+            config: { thinkingConfig?: { thinkingLevel?: string; includeThoughts?: boolean } };
+          };
+        }
+      ).buildRequest({
+        model: "gemini-3-pro-preview",
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: { enabled: true, reasoningEffort: "medium" },
+      });
+
+      expect(request.config.thinkingConfig?.thinkingLevel).toBe("LOW");
+      expect(request.config.thinkingConfig?.includeThoughts).toBe(true);
     });
   });
 });

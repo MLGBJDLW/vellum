@@ -9,6 +9,11 @@
  */
 
 import { loadConfig } from "@vellum/core";
+import {
+  getThinkingSettings,
+  setThinkingSettings,
+  type ThinkingSettings,
+} from "../tui/i18n/index.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, success } from "./types.js";
 
@@ -57,10 +62,22 @@ const defaultThinkingState: ThinkingState = {
 };
 
 /**
- * Load initial thinking state from config file.
- * Falls back to defaults if config cannot be loaded or thinking section is missing.
+ * Load initial thinking state from settings file first, then config file.
+ * Settings file takes precedence (user-modified via /think command).
+ * Falls back to config, then defaults if neither is available.
  */
 function loadInitialThinkingState(): ThinkingState {
+  // First try to load from persisted settings (user preference)
+  const savedSettings = getThinkingSettings();
+  if (savedSettings) {
+    return {
+      enabled: savedSettings.enabled ?? defaultThinkingState.enabled,
+      budgetTokens: savedSettings.budgetTokens ?? defaultThinkingState.budgetTokens,
+      priority: savedSettings.priority ?? defaultThinkingState.priority,
+    };
+  }
+
+  // Fall back to config file
   const result = loadConfig({ suppressDeprecationWarnings: true });
   if (!result.ok || !result.value.thinking) {
     return { ...defaultThinkingState };
@@ -85,6 +102,20 @@ let thinkingState: ThinkingState = loadInitialThinkingState();
 type ThinkingStateListener = (state: ThinkingState) => void;
 const listeners: Set<ThinkingStateListener> = new Set();
 
+/**
+ * Persist current thinking state to settings file.
+ * Called async to avoid blocking UI.
+ */
+function persistThinkingState(): void {
+  const settings: ThinkingSettings = {
+    enabled: thinkingState.enabled,
+    budgetTokens: thinkingState.budgetTokens,
+    priority: thinkingState.priority,
+  };
+  // Fire-and-forget - don't block UI for settings persistence
+  setThinkingSettings(settings);
+}
+
 // =============================================================================
 // Public API for State Management
 // =============================================================================
@@ -106,6 +137,7 @@ export function getThinkingState(): Readonly<ThinkingState> {
 export function setThinkingEnabled(enabled: boolean): void {
   thinkingState = { ...thinkingState, enabled };
   notifyListeners();
+  persistThinkingState();
 }
 
 /**
@@ -116,6 +148,7 @@ export function setThinkingEnabled(enabled: boolean): void {
 export function setThinkingBudget(budgetTokens: number): void {
   thinkingState = { ...thinkingState, budgetTokens };
   notifyListeners();
+  persistThinkingState();
 }
 
 /**
@@ -126,6 +159,7 @@ export function setThinkingBudget(budgetTokens: number): void {
 export function toggleThinking(): boolean {
   thinkingState = { ...thinkingState, enabled: !thinkingState.enabled };
   notifyListeners();
+  persistThinkingState();
   return thinkingState.enabled;
 }
 
@@ -168,6 +202,7 @@ export function resetThinkingState(): void {
 export function setThinkingPriority(priority: ThinkingPriority): void {
   thinkingState = { ...thinkingState, priority };
   notifyListeners();
+  persistThinkingState();
 }
 
 /**

@@ -24,6 +24,8 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import { ErrorCode } from "@vellum/shared";
 import { createProviderError, ProviderError } from "./errors.js";
+import type { ReasoningEffort } from "./models/index.js";
+import { getModelInfo } from "./models/index.js";
 import { ANTHROPIC_MODELS } from "./models/providers/anthropic.js";
 import { anthropicTransform } from "./transforms/anthropic.js";
 import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
@@ -68,6 +70,20 @@ const ANTHROPIC_KEY_PATTERN = /^sk-ant-api03-/;
  * Default maximum tokens for completions
  */
 const DEFAULT_MAX_TOKENS = 4096;
+
+/**
+ * Default thinking budget when not specified
+ */
+const DEFAULT_THINKING_BUDGET = 10000;
+
+const THINKING_BUDGET_BY_EFFORT: Partial<Record<ReasoningEffort, number>> = {
+  minimal: 2000,
+  low: 5000,
+  medium: DEFAULT_THINKING_BUDGET,
+  high: 20000,
+  xhigh: 40000,
+  none: 0,
+};
 
 // =============================================================================
 // Provider Options
@@ -452,6 +468,77 @@ export class AnthropicProvider implements Provider {
     };
   }
 
+  private resolveReasoningEffort(
+    params: CompletionParams,
+    modelInfo: ModelInfo
+  ): ReasoningEffort | undefined {
+    if (!params.thinking?.enabled) {
+      return undefined;
+    }
+
+    if (!modelInfo.supportsReasoning) {
+      return undefined;
+    }
+
+    const supportedEfforts = modelInfo.reasoningEfforts ?? [];
+    const requested = params.thinking.reasoningEffort;
+    const fallback = modelInfo.defaultReasoningEffort ?? supportedEfforts[0];
+    const allowedEfforts =
+      supportedEfforts.length > 0 ? supportedEfforts : fallback ? [fallback] : [];
+
+    let resolved: ReasoningEffort | undefined;
+    if (requested && allowedEfforts.includes(requested)) {
+      resolved = requested;
+    } else if (fallback && allowedEfforts.includes(fallback)) {
+      resolved = fallback;
+    }
+
+    if (resolved === "none") {
+      return undefined;
+    }
+
+    if (requested && !allowedEfforts.includes(requested)) {
+      if (process.env.VELLUM_DEBUG) {
+        console.debug(
+          `[AnthropicProvider] Reasoning effort '${requested}' not supported by ${params.model}; omitting effort.`
+        );
+      }
+    }
+
+    return resolved;
+  }
+
+  /**
+   * Resolve thinking configuration if the model supports reasoning.
+   */
+  private resolveThinkingConfig(params: CompletionParams): { budgetTokens: number } | null {
+    if (!params.thinking?.enabled) {
+      return null;
+    }
+
+    const modelInfo = getModelInfo(this.name, params.model);
+    if (!modelInfo.supportsReasoning) {
+      if (process.env.VELLUM_DEBUG) {
+        console.debug(
+          `[AnthropicProvider] Thinking disabled: model ${params.model} does not support reasoning.`
+        );
+      }
+      return null;
+    }
+
+    if (params.thinking.reasoningEffort === "none") {
+      return null;
+    }
+
+    const resolvedEffort = this.resolveReasoningEffort(params, modelInfo);
+    const budgetTokens =
+      params.thinking.budgetTokens ??
+      (resolvedEffort ? THINKING_BUDGET_BY_EFFORT[resolvedEffort] : undefined) ??
+      DEFAULT_THINKING_BUDGET;
+
+    return { budgetTokens };
+  }
+
   /**
    * Build the Anthropic API request from completion params
    */
@@ -490,15 +577,13 @@ export class AnthropicProvider implements Provider {
       request.tools = this.convertTools(params.tools);
     }
 
-    // Add extended thinking if enabled
-    if (params.thinking?.enabled) {
-      // Extended thinking requires specific parameters
-      const thinkingBudget = params.thinking.budgetTokens ?? 10000;
+    const thinkingConfig = this.resolveThinkingConfig(params);
+    if (thinkingConfig) {
       (
         request as MessageCreateParams & { thinking?: { type: string; budget_tokens: number } }
       ).thinking = {
         type: "enabled",
-        budget_tokens: thinkingBudget,
+        budget_tokens: thinkingConfig.budgetTokens,
       };
       // Extended thinking requires temperature = 1
       request.temperature = 1;

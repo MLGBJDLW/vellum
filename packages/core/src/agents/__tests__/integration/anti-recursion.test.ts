@@ -49,7 +49,6 @@ function createBaseRegistry(): ToolRegistry {
   // Register delegation tools (agent kind)
   registry.register(createMockTool("delegate_task", "agent"));
   registry.register(createMockTool("new_task", "agent"));
-  registry.register(createMockTool("switch_mode", "agent"));
 
   // Register regular tools (various kinds)
   registry.register(createMockTool("read_file", "read"));
@@ -89,17 +88,11 @@ describe("Anti-Recursion: Level 2 Worker Delegation Blocking", () => {
       expect(workerRegistry.get("new_task")).toBeUndefined();
     });
 
-    it("should block switch_mode tool for Level 2 workers", () => {
-      expect(workerRegistry.isAllowed("switch_mode")).toBe(false);
-      expect(workerRegistry.get("switch_mode")).toBeUndefined();
-    });
-
     it("should report all blocked tools correctly", () => {
       const blocked = workerRegistry.getBlocked();
 
       expect(blocked).toContain("delegate_task");
       expect(blocked).toContain("new_task");
-      expect(blocked).toContain("switch_mode");
     });
 
     it("should match WORKER_BLOCKED_TOOLS constant", () => {
@@ -141,7 +134,6 @@ describe("Anti-Recursion: Level 2 Worker Delegation Blocking", () => {
 
       expect(toolNames).not.toContain("delegate_task");
       expect(toolNames).not.toContain("new_task");
-      expect(toolNames).not.toContain("switch_mode");
     });
 
     it("should not include delegation tools in getDefinitions", () => {
@@ -150,12 +142,11 @@ describe("Anti-Recursion: Level 2 Worker Delegation Blocking", () => {
 
       expect(defNames).not.toContain("delegate_task");
       expect(defNames).not.toContain("new_task");
-      expect(defNames).not.toContain("switch_mode");
     });
 
     it("should have correct size excluding blocked tools", () => {
-      // Base has 8 tools, worker blocks 3 (delegate_task, new_task, switch_mode)
-      expect(baseRegistry.size).toBe(8);
+      // Base has 7 tools, worker blocks 2 (delegate_task, new_task)
+      expect(baseRegistry.size).toBe(7);
       expect(workerRegistry.size).toBe(5);
     });
 
@@ -184,20 +175,6 @@ describe("Anti-Recursion: Level 2 Worker Delegation Blocking", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Test Case 5: Level 2 worker cannot access switch_mode tool
-  // ---------------------------------------------------------------------------
-  describe("switch_mode tool blocking", () => {
-    it("should prevent worker from seeing switch_mode in tool list", () => {
-      const tools = workerRegistry.list();
-      const hasSwitchMode = tools.some((t) => t.definition.name === "switch_mode");
-      expect(hasSwitchMode).toBe(false);
-    });
-
-    it("should prevent worker from executing switch_mode (tool not available)", () => {
-      const tool = workerRegistry.get("switch_mode");
-      expect(tool).toBeUndefined();
-    });
-  });
 });
 
 // =============================================================================
@@ -315,7 +292,6 @@ describe("Anti-Recursion: Valid Delegation Paths", () => {
 
       expect(orchestratorRegistry.isAllowed("delegate_task")).toBe(true);
       expect(orchestratorRegistry.isAllowed("new_task")).toBe(true);
-      expect(orchestratorRegistry.isAllowed("switch_mode")).toBe(true);
       expect(orchestratorRegistry.get("delegate_task")).toBeDefined();
     });
   });
@@ -337,7 +313,6 @@ describe("Anti-Recursion: Valid Delegation Paths", () => {
 
       expect(workflowRegistry.isAllowed("delegate_task")).toBe(true);
       expect(workflowRegistry.isAllowed("new_task")).toBe(true);
-      expect(workflowRegistry.isAllowed("switch_mode")).toBe(true);
       expect(workflowRegistry.get("delegate_task")).toBeDefined();
     });
   });
@@ -477,8 +452,6 @@ describe("Anti-Recursion: Full Integration Path", () => {
       expect(workerRegistry.isAllowed("Delegate_Task")).toBe(false);
       expect(workerRegistry.isAllowed("NEW_TASK")).toBe(false);
       expect(workerRegistry.isAllowed("New_Task")).toBe(false);
-      expect(workerRegistry.isAllowed("SWITCH_MODE")).toBe(false);
-      expect(workerRegistry.isAllowed("Switch_Mode")).toBe(false);
     });
   });
 

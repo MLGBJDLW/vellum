@@ -72,6 +72,7 @@ export const attemptCompletionTool = defineTool({
   parameters: attemptCompletionParamsSchema,
   kind: "agent",
   category: "agent",
+  enabled: false,
 
   async execute(input, ctx) {
     // Check for cancellation

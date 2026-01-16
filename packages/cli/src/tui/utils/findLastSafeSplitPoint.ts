@@ -10,66 +10,83 @@
  */
 
 /**
- * Find the last safe point to split markdown text.
+ * Detect if an index is inside a code block.
  *
- * Safe split points are:
- * - After paragraph breaks (\n\n)
- * - After list items (\n- or \n* or \n1.)
- * - After headers (\n#)
+ * Searches backwards from the given index to find any opening ```.
+ * If found, checks if there's a closing ``` after it before our index.
  *
- * NOT safe (avoid splitting inside):
- * - Code blocks (``` ... ```)
- * - Inline code (`)
- * - Mid-word
- *
- * @param text - The text to analyze
- * @param minLength - Minimum length before looking for split (default 2000)
- * @returns Split index or -1 if no safe split found
+ * @param content - The text to analyze
+ * @param index - The index to check
+ * @returns true if inside a code block
  */
-export function findLastSafeSplitPoint(text: string, minLength = 2000): number {
-  // Don't split short text
-  if (text.length < minLength) {
+function isIndexInsideCodeBlock(content: string, index: number): boolean {
+  // Find all code block markers before the index
+  const textBefore = content.slice(0, index);
+  const markers = [...textBefore.matchAll(/```/g)];
+
+  // If odd number of markers, we're inside a code block
+  return markers.length % 2 !== 0;
+}
+
+/**
+ * Find the start of the enclosing code block (if any).
+ *
+ * @param content - The text to analyze
+ * @param index - The index to check
+ * @returns Start index of enclosing code block, or -1 if not inside one
+ */
+function findEnclosingCodeBlockStart(content: string, index: number): number {
+  if (!isIndexInsideCodeBlock(content, index)) {
     return -1;
   }
 
-  // Count open code blocks - don't split inside them
-  const codeBlockMatches = text.match(/```/g);
-  const openCodeBlocks = (codeBlockMatches?.length ?? 0) % 2 !== 0;
-  if (openCodeBlocks) {
-    // We're inside a code block, find the last complete block
-    const lastClosingBlock = text.lastIndexOf("```\n");
-    if (lastClosingBlock > minLength) {
-      return lastClosingBlock + 4; // After the closing ``` and newline
-    }
-    return -1; // Can't safely split inside code block
+  // Find the last opening ``` before the index
+  const textBefore = content.slice(0, index);
+  const lastOpening = textBefore.lastIndexOf("```");
+  return lastOpening;
+}
+
+/**
+ * Find the last safe point to split markdown text.
+ *
+ * Newline-gated strategy (like Codex/Gemini CLI):
+ * - Only splits at double newlines (\n\n) - paragraph boundaries
+ * - Never splits inside code blocks
+ * - No arbitrary character limit - waits for natural break points
+ *
+ * This prevents visual jitter from mid-sentence or mid-paragraph splits.
+ *
+ * @param text - The text to analyze
+ * @param _minLength - Deprecated, kept for API compatibility (ignored)
+ * @returns Split index after \n\n, or -1 if no safe split found
+ */
+export function findLastSafeSplitPoint(text: string, _minLength = 0): number {
+  // Check if we're currently inside a code block
+  const enclosingBlockStart = findEnclosingCodeBlockStart(text, text.length);
+  if (enclosingBlockStart !== -1) {
+    // End of content is inside a code block - split right before it
+    return enclosingBlockStart;
   }
 
-  // Find safe split points (paragraph breaks, list items, headers)
-  const safeSplitPatterns = [
-    /\n\n(?=[A-Z#\-*\d])/g, // Paragraph break before new content
-    /\n(?=#{1,6}\s)/g, // Before headers
-    /\n(?=[-*]\s)/g, // Before list items
-    /\n(?=\d+\.\s)/g, // Before numbered list items
-  ];
-
-  let bestSplit = -1;
-  for (const pattern of safeSplitPatterns) {
-    let match: RegExpExecArray | null = pattern.exec(text);
-    while (match !== null) {
-      if (match.index > minLength && match.index > bestSplit) {
-        bestSplit = match.index + 1; // After the newline(s)
-      }
-      match = pattern.exec(text);
+  // Search for the last double newline (\n\n) not inside a code block
+  let searchStartIndex = text.length;
+  while (searchStartIndex >= 0) {
+    const dnlIndex = text.lastIndexOf("\n\n", searchStartIndex);
+    if (dnlIndex === -1) {
+      // No more double newlines found
+      break;
     }
+
+    const potentialSplitPoint = dnlIndex + 2;
+    if (!isIndexInsideCodeBlock(text, potentialSplitPoint)) {
+      return potentialSplitPoint;
+    }
+
+    // If potentialSplitPoint was inside a code block,
+    // search before the \n\n we just found
+    searchStartIndex = dnlIndex - 1;
   }
 
-  // If no good split found, try just a double newline
-  if (bestSplit === -1) {
-    const lastDoubleNewline = text.lastIndexOf("\n\n");
-    if (lastDoubleNewline > minLength) {
-      bestSplit = lastDoubleNewline + 2;
-    }
-  }
-
-  return bestSplit;
+  // No safe split point found - don't split
+  return -1;
 }

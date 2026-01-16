@@ -28,6 +28,8 @@ export interface ThinkingBlockProps {
   collapsed?: boolean;
   /** Callback when the expand/collapse state is toggled */
   onToggle?: () => void;
+  /** Enable keyboard toggle handling (default: true) */
+  keyboardToggleEnabled?: boolean;
   /** Number of tokens used in thinking (optional) */
   tokenCount?: number;
   /** Duration of the thinking phase in milliseconds */
@@ -127,6 +129,7 @@ export function ThinkingBlock({
   isStreaming = false,
   collapsed: controlledCollapsed,
   onToggle,
+  keyboardToggleEnabled = true,
   tokenCount,
   duration,
   // Legacy props
@@ -156,11 +159,14 @@ export function ThinkingBlock({
   }, [isControlled, onToggle]);
 
   // Handle input for keyboard toggle (Enter or Space)
-  useInput((input, key) => {
-    if (key.return || input === " ") {
-      handleToggle();
-    }
-  });
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input.toLowerCase() === "e") {
+        handleToggle();
+      }
+    },
+    { isActive: keyboardToggleEnabled }
+  );
 
   // Build metrics display string
   const metricsDisplay = buildMetricsDisplay(duration, tokenCount);

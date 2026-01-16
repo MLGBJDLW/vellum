@@ -233,28 +233,40 @@ export class ProviderRegistry {
     const { type, model, apiKey, credential: directCredential } = config;
     const cacheKey = getCacheKey(type, model);
 
-    console.log(`[Registry] get() called for ${type}, model=${model}`);
+    if (process.env.VELLUM_DEBUG) {
+      console.log(`[Registry] get() called for ${type}, model=${model}`);
+    }
 
     // Return cached instance if available and caching is enabled
     if (this.enableCache) {
       const cached = this.cache.get(cacheKey);
       if (cached) {
-        console.log(`[Registry] Found cached provider, isInitialized=${cached.isInitialized?.()}`);
+        if (process.env.VELLUM_DEBUG) {
+          console.log(
+            `[Registry] Found cached provider, isInitialized=${cached.isInitialized?.()}`
+          );
+        }
         // Check if cached provider is initialized
         if (cached.isInitialized?.()) {
           return cached;
         }
         // Re-initialize cached provider if not initialized
         const resolvedApiKey = await this.resolveApiKey(config);
-        console.log(
-          `[Registry] Re-initializing cached provider, apiKey=${resolvedApiKey ? "set" : "undefined"}`
-        );
+        if (process.env.VELLUM_DEBUG) {
+          console.log(
+            `[Registry] Re-initializing cached provider, apiKey=${resolvedApiKey ? "set" : "undefined"}`
+          );
+        }
         if (cached.initialize) {
           try {
             await cached.initialize({ apiKey: resolvedApiKey });
-            console.log(`[Registry] Re-initialization succeeded`);
+            if (process.env.VELLUM_DEBUG) {
+              console.log(`[Registry] Re-initialization succeeded`);
+            }
           } catch (error) {
-            console.log(`[Registry] Re-initialization failed:`, error);
+            if (process.env.VELLUM_DEBUG) {
+              console.log(`[Registry] Re-initialization failed:`, error);
+            }
             throw error;
           }
         }

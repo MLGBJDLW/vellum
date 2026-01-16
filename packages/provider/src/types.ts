@@ -158,6 +158,8 @@ export interface ThinkingConfig {
   enabled: boolean;
   /** Maximum tokens for the thinking process */
   budgetTokens?: number;
+  /** Reasoning effort level (if supported by the model) */
+  reasoningEffort?: import("./models/types.js").ReasoningEffort;
 }
 
 /**
@@ -635,6 +637,10 @@ export interface ModelInfo {
   supportsVision: boolean;
   /** Whether the model supports extended thinking/reasoning */
   supportsReasoning: boolean;
+  /** Supported reasoning effort levels (if applicable) */
+  reasoningEfforts?: import("./models/types.js").ReasoningEffort[];
+  /** Default reasoning effort level (if applicable) */
+  defaultReasoningEffort?: import("./models/types.js").ReasoningEffort;
   /** Whether the model supports streaming responses */
   supportsStreaming?: boolean;
   /** Price per million input tokens (USD) */

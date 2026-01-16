@@ -99,7 +99,6 @@ function createTestManager(): SubsessionManager {
     createMockTool("execute", "shell"),
     createMockTool("delegate_task", "agent"),
     createMockTool("new_task", "agent"),
-    createMockTool("switch_mode", "agent"),
     createMockTool("fetch", "browser"),
   ];
 
@@ -787,7 +786,6 @@ describe("SubsessionManager", () => {
       // Worker should not have access to delegation tools
       expect(worker.toolRegistry.isAllowed("delegate_task")).toBe(false);
       expect(worker.toolRegistry.isAllowed("new_task")).toBe(false);
-      expect(worker.toolRegistry.isAllowed("switch_mode")).toBe(false);
 
       // Worker should have access to regular tools
       expect(worker.toolRegistry.isAllowed("read_file")).toBe(true);
@@ -804,7 +802,6 @@ describe("SubsessionManager", () => {
 
       expect(orchestrator.toolRegistry.isAllowed("delegate_task")).toBe(true);
       expect(orchestrator.toolRegistry.isAllowed("new_task")).toBe(true);
-      expect(orchestrator.toolRegistry.isAllowed("switch_mode")).toBe(true);
       expect(orchestrator.toolRegistry.isAllowed("read_file")).toBe(true);
     });
 

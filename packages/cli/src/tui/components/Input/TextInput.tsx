@@ -174,9 +174,9 @@ function TextInputComponent({
   // Rapid input buffering for paste fallback (when bracketed paste is not available)
   const inputBufferRef = useRef<string>("");
   const inputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Use longer threshold for mask inputs (API keys) to smooth rapid character display
-  // Increased from 50/100ms to 100/150ms to reduce rendering frequency and prevent flickering
-  const RAPID_INPUT_THRESHOLD = mask ? 150 : 100; // ms - mask needs more buffer time
+  // Use shorter threshold for faster input response
+  // Reduced from 100/150ms to 50/80ms for improved responsiveness
+  const RAPID_INPUT_THRESHOLD = mask ? 80 : 50; // ms - reduced for faster response
 
   // Refs to store latest value and cursorPosition for setTimeout callback
   // This avoids closure trap where setTimeout captures stale values

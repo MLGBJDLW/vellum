@@ -14,14 +14,17 @@
  * @module @vellum/core/session/llm
  */
 
-import type {
-  CompletionMessage,
-  CompletionParams,
-  LLMProvider,
-  ProviderRegistry,
-  ProviderType,
-  StreamEvent,
-  ToolDefinition,
+import {
+  type CompletionMessage,
+  type CompletionParams,
+  getModelInfo,
+  type LLMProvider,
+  type ProviderRegistry,
+  type ProviderType,
+  type ReasoningEffort,
+  reasoningEffortSchema,
+  type StreamEvent,
+  type ToolDefinition,
 } from "@vellum/provider";
 import { ErrorCode } from "@vellum/shared";
 import { z } from "zod";
@@ -69,6 +72,7 @@ export const StreamConfigSchema = z.object({
     .object({
       enabled: z.boolean(),
       budgetTokens: z.number().positive().optional(),
+      reasoningEffort: reasoningEffortSchema.optional(),
     })
     .optional(),
   /** Abort signal for cancellation */
@@ -78,6 +82,69 @@ export const StreamConfigSchema = z.object({
 });
 
 export type StreamConfig = z.infer<typeof StreamConfigSchema>;
+
+// =============================================================================
+// Thinking Capability Resolution
+// =============================================================================
+
+function resolveThinkingConfig(
+  thinking: StreamConfig["thinking"] | undefined,
+  providerType: string,
+  model: string
+): CompletionParams["thinking"] | undefined {
+  if (!thinking?.enabled) {
+    return undefined;
+  }
+
+  const modelInfo = getModelInfo(providerType, model);
+  if (!modelInfo.supportsReasoning) {
+    if (process.env.VELLUM_DEBUG) {
+      console.debug(
+        `[LLM] Thinking disabled: model ${model} (${providerType}) does not support reasoning.`
+      );
+    }
+    return undefined;
+  }
+
+  const supportedEfforts = modelInfo.reasoningEfforts ?? [];
+  const requestedEffort = thinking.reasoningEffort;
+  const fallbackEffort = modelInfo.defaultReasoningEffort ?? supportedEfforts[0];
+  const allowedEfforts =
+    supportedEfforts.length > 0 ? supportedEfforts : fallbackEffort ? [fallbackEffort] : [];
+
+  let resolvedEffort: ReasoningEffort | undefined;
+  if (requestedEffort && allowedEfforts.includes(requestedEffort)) {
+    resolvedEffort = requestedEffort;
+  } else if (fallbackEffort && allowedEfforts.includes(fallbackEffort)) {
+    resolvedEffort = fallbackEffort;
+  }
+
+  if (requestedEffort && !allowedEfforts.includes(requestedEffort)) {
+    if (process.env.VELLUM_DEBUG) {
+      console.debug(
+        `[LLM] Reasoning effort '${requestedEffort}' not supported by ${model}; omitting effort.`
+      );
+    }
+  }
+
+  if (resolvedEffort === "none") {
+    return undefined;
+  }
+
+  const result: { enabled: true; budgetTokens?: number; reasoningEffort?: ReasoningEffort } = {
+    enabled: true,
+  };
+
+  if (thinking.budgetTokens !== undefined) {
+    result.budgetTokens = thinking.budgetTokens;
+  }
+
+  if (resolvedEffort) {
+    result.reasoningEffort = resolvedEffort;
+  }
+
+  return result;
+}
 
 /**
  * Tool call repair result
@@ -102,6 +169,10 @@ export type LLMStreamEvent = StreamEvent & {
 // =============================================================================
 // Tool Call Repair
 // =============================================================================
+
+function normalizeToolName(name: string): string {
+  return name.toLowerCase().replace(/[_-]/g, "");
+}
 
 /**
  * Attempts to repair a failed tool call by handling common issues:
@@ -146,13 +217,26 @@ export function repairToolCall(
     };
   }
 
-  // Unknown tool - return as invalid with error context
+  const normalizedName = normalizeToolName(toolName);
+  if (normalizedName !== lowerName) {
+    for (const originalName of availableTools.values()) {
+      if (normalizeToolName(originalName) === normalizedName) {
+        return {
+          repaired: true,
+          toolName: originalName,
+          input,
+        };
+      }
+    }
+  }
+
+  // Unknown tool - return with special marker prefix for detection
   return {
-    repaired: true,
-    toolName: "invalid",
+    repaired: false,
+    toolName: `__unknown_${toolName}__`,
     input: {
-      tool: toolName,
-      error: `Unknown tool: ${toolName}`,
+      originalTool: toolName,
+      error: `Unknown tool requested by LLM: ${toolName}`,
     },
   };
 }
@@ -272,6 +356,12 @@ export namespace LLM {
       ? buildToolLookup(validated.tools)
       : new Map<string, string>();
 
+    const resolvedThinking = resolveThinkingConfig(
+      validated.thinking,
+      validated.providerType,
+      validated.model
+    );
+
     // Build completion params
     const completionParams: CompletionParams = {
       model: validated.model,
@@ -279,7 +369,7 @@ export namespace LLM {
       temperature: validated.temperature,
       maxTokens,
       tools: validated.tools,
-      thinking: validated.thinking,
+      thinking: resolvedThinking,
     };
 
     // Create abort-aware stream

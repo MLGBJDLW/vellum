@@ -15,10 +15,14 @@ import {
   type GenerateContentConfig,
   type GenerateContentResponse,
   GoogleGenAI,
+  type ThinkingConfig,
+  ThinkingLevel,
   type Tool,
 } from "@google/genai";
 import { ErrorCode } from "@vellum/shared";
 import { createProviderError, ProviderError } from "./errors.js";
+import type { ReasoningEffort } from "./models/index.js";
+import { getModelInfo } from "./models/index.js";
 import { GOOGLE_MODELS } from "./models/providers/google.js";
 import { googleTransform } from "./transforms/google.js";
 import type { TransformConfig } from "./transforms/types.js";
@@ -62,6 +66,23 @@ const GOOGLE_KEY_PATTERN = /^AIza/;
  * Default maximum tokens for completions
  */
 const DEFAULT_MAX_TOKENS = 8192;
+
+const THINKING_BUDGET_BY_EFFORT: Partial<Record<ReasoningEffort, number>> = {
+  minimal: 128,
+  low: 512,
+  medium: 1024,
+  high: 4096,
+  xhigh: 8192,
+  none: 0,
+};
+
+const THINKING_LEVEL_BY_EFFORT: Partial<Record<ReasoningEffort, ThinkingLevel>> = {
+  minimal: ThinkingLevel.MINIMAL,
+  low: ThinkingLevel.LOW,
+  medium: ThinkingLevel.MEDIUM,
+  high: ThinkingLevel.HIGH,
+  xhigh: ThinkingLevel.HIGH,
+};
 
 // =============================================================================
 // Provider Options
@@ -195,17 +216,23 @@ export class GoogleProvider implements Provider {
    * @throws ProviderError if initialization fails
    */
   async initialize(options: ProviderOptions): Promise<void> {
-    console.log(
-      `[GoogleProvider] initialize() called, apiKey=${options.apiKey ? "set" : "undefined"}`
-    );
+    if (process.env.VELLUM_DEBUG) {
+      console.log(
+        `[GoogleProvider] initialize() called, apiKey=${options.apiKey ? "set" : "undefined"}`
+      );
+    }
     try {
       const apiKey = options.apiKey ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-      console.log(
-        `[GoogleProvider] Resolved apiKey from env: ${process.env.GOOGLE_GENERATIVE_AI_API_KEY ? "set" : "undefined"}`
-      );
+      if (process.env.VELLUM_DEBUG) {
+        console.log(
+          `[GoogleProvider] Resolved apiKey from env: ${process.env.GOOGLE_GENERATIVE_AI_API_KEY ? "set" : "undefined"}`
+        );
+      }
 
       if (!apiKey) {
-        console.log(`[GoogleProvider] No API key found, throwing error`);
+        if (process.env.VELLUM_DEBUG) {
+          console.log(`[GoogleProvider] No API key found, throwing error`);
+        }
         throw new ProviderError("No API key provided for Google AI", {
           code: ErrorCode.CREDENTIAL_NOT_FOUND,
           category: "credential_invalid",
@@ -461,6 +488,145 @@ export class GoogleProvider implements Provider {
     };
   }
 
+  private resolveReasoningEffort(
+    params: CompletionParams,
+    modelInfo: ModelInfo
+  ): ReasoningEffort | undefined {
+    if (!params.thinking?.enabled) {
+      return undefined;
+    }
+
+    if (!modelInfo.supportsReasoning) {
+      return undefined;
+    }
+
+    const supportedEfforts = modelInfo.reasoningEfforts ?? [];
+    const requested = params.thinking.reasoningEffort;
+    const fallback = modelInfo.defaultReasoningEffort ?? supportedEfforts[0];
+    const allowedEfforts =
+      supportedEfforts.length > 0 ? supportedEfforts : fallback ? [fallback] : [];
+
+    let resolved: ReasoningEffort | undefined;
+    if (requested && allowedEfforts.includes(requested)) {
+      resolved = requested;
+    } else if (fallback && allowedEfforts.includes(fallback)) {
+      resolved = fallback;
+    }
+
+    if (resolved === "none") {
+      return undefined;
+    }
+
+    if (requested && !allowedEfforts.includes(requested)) {
+      if (process.env.VELLUM_DEBUG) {
+        console.debug(
+          `[GoogleProvider] Reasoning effort '${requested}' not supported by ${params.model}; omitting effort.`
+        );
+      }
+    }
+
+    return resolved;
+  }
+
+  private resolveThinkingBudget(
+    params: CompletionParams,
+    modelInfo?: ModelInfo
+  ): number | undefined {
+    if (params.thinking?.budgetTokens !== undefined) {
+      return params.thinking.budgetTokens;
+    }
+
+    if (!params.thinking) {
+      return undefined;
+    }
+
+    const resolvedModelInfo = modelInfo ?? getModelInfo(this.name, params.model);
+    const effort = this.resolveReasoningEffort(params, resolvedModelInfo);
+    if (!effort) {
+      return undefined;
+    }
+
+    return THINKING_BUDGET_BY_EFFORT[effort];
+  }
+
+  private resolveThinkingLevel(
+    params: CompletionParams,
+    modelInfo: ModelInfo
+  ): ThinkingLevel | undefined {
+    const effort = this.resolveReasoningEffort(params, modelInfo);
+    if (!effort) {
+      return undefined;
+    }
+
+    return THINKING_LEVEL_BY_EFFORT[effort];
+  }
+
+  private isGemini3Model(modelId: string): boolean {
+    return modelId.toLowerCase().startsWith("gemini-3");
+  }
+
+  private isGemini25Model(modelId: string): boolean {
+    return modelId.toLowerCase().startsWith("gemini-2.5");
+  }
+
+  private shouldEnableThinking(params: CompletionParams, modelInfo?: ModelInfo): boolean {
+    if (!params.thinking?.enabled) {
+      return false;
+    }
+
+    const resolvedModelInfo = modelInfo ?? getModelInfo(this.name, params.model);
+    if (!resolvedModelInfo.supportsReasoning) {
+      if (process.env.VELLUM_DEBUG) {
+        console.debug(
+          `[GoogleProvider] Thinking disabled: model ${params.model} does not support reasoning.`
+        );
+      }
+      return false;
+    }
+
+    if (params.thinking.reasoningEffort === "none") {
+      return false;
+    }
+
+    const resolvedEffort = this.resolveReasoningEffort(params, resolvedModelInfo);
+    if (params.thinking.budgetTokens !== undefined) {
+      return true;
+    }
+
+    return resolvedEffort !== undefined;
+  }
+
+  private buildThinkingConfig(params: CompletionParams): ThinkingConfig | undefined {
+    const modelInfo = getModelInfo(this.name, params.model);
+    if (!this.shouldEnableThinking(params, modelInfo)) {
+      return undefined;
+    }
+
+    const modelId = modelInfo.id || params.model;
+    if (this.isGemini3Model(modelId)) {
+      const thinkingLevel = this.resolveThinkingLevel(params, modelInfo);
+      if (!thinkingLevel) {
+        return undefined;
+      }
+
+      return {
+        thinkingLevel,
+        includeThoughts: true,
+      };
+    }
+
+    if (this.isGemini25Model(modelId)) {
+      const thinkingBudget = this.resolveThinkingBudget(params, modelInfo);
+      if (thinkingBudget === undefined) {
+        return undefined;
+      }
+
+      return { thinkingBudget };
+    }
+
+    return undefined;
+  }
+
   /**
    * Build the Google API request from completion params
    */
@@ -492,18 +658,10 @@ export class GoogleProvider implements Provider {
       ...(params.frequencyPenalty !== undefined && { frequencyPenalty: params.frequencyPenalty }),
     };
 
-    // Add thinking configuration for Gemini 2.5+ models
-    if (params.thinking?.enabled) {
-      (
-        config as GenerateContentConfig & {
-          thinkingConfig?: { thinkingMode: string; thinkingBudget?: number };
-        }
-      ).thinkingConfig = {
-        thinkingMode: "enabled",
-        ...(params.thinking.budgetTokens !== undefined && {
-          thinkingBudget: params.thinking.budgetTokens,
-        }),
-      };
+    // Add thinking configuration for Gemini 2.5/3 models
+    const thinkingConfig = this.buildThinkingConfig(params);
+    if (thinkingConfig) {
+      config.thinkingConfig = thinkingConfig;
     }
 
     // Add tools if present
@@ -584,6 +742,19 @@ export class GoogleProvider implements Provider {
           // Check if this part is thinking/reasoning content (Gemini 2.5 models)
           // The SDK marks thinking parts with thought: true
           const isThought = "thought" in part && part.thought === true;
+
+          // Debug logging for Gemini stream parts
+          if (process.env.VELLUM_DEBUG) {
+            console.error(
+              "[Gemini Stream] part:",
+              JSON.stringify({
+                hasText: "text" in part,
+                isThought,
+                thoughtValue: (part as Record<string, unknown>).thought,
+                textPreview: "text" in part && part.text ? part.text.substring(0, 100) : undefined,
+              })
+            );
+          }
 
           if ("text" in part && part.text) {
             if (isThought) {

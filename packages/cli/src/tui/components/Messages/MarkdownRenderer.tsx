@@ -10,6 +10,7 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
+import { useAnimation } from "../../context/AnimationContext.js";
 import { useTheme } from "../../theme/index.js";
 import { DiffView } from "./DiffView.js";
 
@@ -25,6 +26,14 @@ export interface MarkdownRendererProps {
   readonly content: string;
   /** Reduce spacing for compact display (default: false) */
   readonly compact?: boolean;
+  /** Override base text color (optional) */
+  readonly textColor?: string;
+  /** Whether content is currently streaming (optional) */
+  readonly isStreaming?: boolean;
+  /** Cursor character while streaming (default: '▊') */
+  readonly cursorChar?: string;
+  /** Whether cursor should blink while streaming (default: true) */
+  readonly cursorBlink?: boolean;
 }
 
 /**
@@ -245,7 +254,7 @@ function InlineRenderer({
             );
           case "italic":
             return (
-              <Text key={elementKey} dimColor italic color={textColor}>
+              <Text key={elementKey} italic color={textColor}>
                 {element.content}
               </Text>
             );
@@ -259,7 +268,7 @@ function InlineRenderer({
             return (
               <Text key={elementKey} color={linkColor} underline>
                 {element.content}
-                {element.url && <Text dimColor> ({element.url})</Text>}
+                {element.url && <Text color={codeColor}> ({element.url})</Text>}
               </Text>
             );
           default:
@@ -283,12 +292,14 @@ function CodeBlockRenderer({
   language,
   bgColor,
   textColor,
+  mutedColor,
   compact,
 }: {
   readonly content: string;
   readonly language?: string;
   readonly bgColor: string;
   readonly textColor: string;
+  readonly mutedColor: string;
   readonly compact: boolean;
 }): React.JSX.Element {
   return (
@@ -299,7 +310,7 @@ function CodeBlockRenderer({
       paddingX={1}
     >
       {language && (
-        <Text dimColor italic>
+        <Text color={mutedColor} italic>
           {language}
         </Text>
       )}
@@ -354,11 +365,16 @@ function isDiffContent(content: string, language?: string): boolean {
 export function MarkdownRenderer({
   content,
   compact = false,
+  textColor: textColorOverride,
+  isStreaming = false,
+  cursorChar = "▊",
+  cursorBlink = true,
 }: MarkdownRendererProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { frame, isPaused } = useAnimation();
 
   // Theme colors
-  const textColor = theme.semantic.text.primary;
+  const textColor = textColorOverride ?? theme.semantic.text.primary;
   const mutedColor = theme.semantic.text.muted;
   const codeColor = theme.semantic.syntax.keyword;
   const codeBgColor = theme.semantic.background.code;
@@ -367,11 +383,25 @@ export function MarkdownRenderer({
   // Parse markdown content
   const nodes = useMemo(() => parseMarkdown(content), [content]);
 
+  const cursorVisible = useMemo(() => {
+    if (!isStreaming || !cursorBlink) return true;
+    if (isPaused) return true;
+    return Math.floor(frame / 4) % 2 === 0;
+  }, [frame, isPaused, isStreaming, cursorBlink]);
+
+  const cursor = isStreaming && cursorVisible ? cursorChar : "";
+  const lastNodeIndex = nodes.length - 1;
+
+  if (nodes.length === 0) {
+    return <Box flexDirection="column">{cursor && <Text color={textColor}>{cursor}</Text>}</Box>;
+  }
+
   return (
     <Box flexDirection="column">
       {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Markdown node renderer with many node types */}
       {nodes.map((node, index) => {
         const key = `${node.type}-${index}`;
+        const isLastNode = index === lastNodeIndex;
 
         switch (node.type) {
           case "header": {
@@ -381,6 +411,7 @@ export function MarkdownRenderer({
               <Box key={key} marginTop={compact ? 0 : 1} marginBottom={compact ? 0 : 1}>
                 <Text bold color={textColor}>
                   {prefix} {node.content}
+                  {isLastNode && cursor}
                 </Text>
               </Box>
             );
@@ -392,18 +423,22 @@ export function MarkdownRenderer({
               return (
                 <Box key={key} marginTop={compact ? 0 : 1} marginBottom={compact ? 0 : 1}>
                   <DiffView diff={node.content} compact={compact} />
+                  {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
                 </Box>
               );
             }
             return (
-              <CodeBlockRenderer
-                key={key}
-                content={node.content}
-                language={node.language}
-                bgColor={mutedColor}
-                textColor={textColor}
-                compact={compact}
-              />
+              <Box key={key} marginTop={compact ? 0 : 1} marginBottom={compact ? 0 : 1}>
+                <CodeBlockRenderer
+                  content={node.content}
+                  language={node.language}
+                  bgColor={mutedColor}
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  compact={compact}
+                />
+                {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
+              </Box>
             );
           }
 
@@ -426,6 +461,7 @@ export function MarkdownRenderer({
                     codeBgColor={codeBgColor}
                     linkColor={linkColor}
                   />
+                  {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
                 </Text>
               </Box>
             );
@@ -444,6 +480,7 @@ export function MarkdownRenderer({
                     codeBgColor={codeBgColor}
                     linkColor={linkColor}
                   />
+                  {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
                 </Text>
               </Box>
             );

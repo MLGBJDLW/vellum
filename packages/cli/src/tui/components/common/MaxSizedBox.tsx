@@ -286,11 +286,13 @@ export function MaxSizedBox({
   /**
    * Render the content with optional truncation
    */
+  const resolvedHeight = measuredHeight > 0 ? effectiveHeight : undefined;
+
   return (
     <Box
       flexDirection="column"
       width={width}
-      height={effectiveHeight}
+      height={resolvedHeight}
       overflow="hidden"
       padding={padding}
       paddingX={paddingX}

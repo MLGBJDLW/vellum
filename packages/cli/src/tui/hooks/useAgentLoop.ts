@@ -299,14 +299,57 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
         thinkingStartRef.current = Date.now();
       }
 
+      // Create streaming message if not exists (same pattern as handleText)
+      // This ensures UI shows response even when thinking arrives before text
+      if (!currentMessageRef.current) {
+        currentMessageRef.current = {
+          id: generateMessageId(),
+          content: "",
+          thinking: "",
+          thinkingDuration: 0,
+        };
+
+        // Add initial message to UI so it knows there's a response
+        const current = currentMessageRef.current;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: current.id,
+            role: "assistant",
+            content: "",
+            timestamp: Date.now(),
+            thinking: text,
+            thinkingDuration: 0,
+          },
+        ]);
+      }
+
       setThinking((prev) => prev + text);
 
-      // Also accumulate in current message ref
-      if (currentMessageRef.current) {
-        currentMessageRef.current.thinking += text;
-        currentMessageRef.current.thinkingDuration =
-          Date.now() - (thinkingStartRef.current ?? Date.now());
-      }
+      // Accumulate in current message ref
+      currentMessageRef.current.thinking += text;
+      currentMessageRef.current.thinkingDuration =
+        Date.now() - (thinkingStartRef.current ?? Date.now());
+
+      // Update message with accumulated thinking
+      const current = currentMessageRef.current;
+      setMessages((prev) => {
+        const existingIndex = prev.findIndex((m) => m.id === current.id);
+        const existing = prev[existingIndex];
+        if (existingIndex >= 0 && existing) {
+          const updated = [...prev];
+          updated[existingIndex] = {
+            id: existing.id,
+            role: existing.role,
+            content: existing.content,
+            timestamp: existing.timestamp,
+            thinking: current.thinking,
+            thinkingDuration: current.thinkingDuration,
+          };
+          return updated;
+        }
+        return prev;
+      });
     };
 
     // Tool start handler
@@ -349,6 +392,15 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     // Error handler
     const handleError = (err: Error) => {
       setError(err);
+      // Surface error as assistant message for visibility
+      const errorMessage: AgentMessage = {
+        id: generateMessageId(),
+        role: "assistant",
+        content: `⚠️ ${err.message}`,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      currentMessageRef.current = null;
     };
 
     // Complete handler

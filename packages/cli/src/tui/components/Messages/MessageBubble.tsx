@@ -13,7 +13,6 @@ import { Box, Text } from "ink";
 import type { Message, MessageTokenUsage } from "../../context/MessagesContext.js";
 import { useTheme } from "../../theme/index.js";
 import { MarkdownRenderer } from "./MarkdownRenderer.js";
-import { StreamingText } from "./StreamingText.js";
 
 // =============================================================================
 // Types
@@ -240,11 +239,12 @@ export function MessageBubble({
 
         {/* Message content */}
         <Box marginLeft={showAvatar ? 2 : 0} marginTop={compact ? 0 : 0}>
-          {message.isStreaming ? (
-            <StreamingText content={message.content || ""} isStreaming={true} />
-          ) : (
-            <MarkdownRenderer content={message.content || "(empty)"} compact={compact} />
-          )}
+          <MarkdownRenderer
+            content={message.content || (message.isStreaming ? "" : "(empty)")}
+            compact={compact}
+            textColor={roleColor}
+            isStreaming={message.isStreaming}
+          />
         </Box>
 
         {/* Tool calls, if any */}
@@ -252,9 +252,12 @@ export function MessageBubble({
           <Box flexDirection="column" marginLeft={showAvatar ? 2 : 0} marginTop={1}>
             {message.toolCalls.map((toolCall) => (
               <Box key={toolCall.id}>
-                <Text color={mutedColor}>
-                  {getIcons().tool} {toolCall.name}
-                  <Text dimColor> [{toolCall.status}]</Text>
+                <Text>
+                  {getIcons().tool}{" "}
+                  <Text color={theme.colors.accent} bold>
+                    {toolCall.name}
+                  </Text>
+                  <Text color={mutedColor}> [{toolCall.status}]</Text>
                 </Text>
               </Box>
             ))}
