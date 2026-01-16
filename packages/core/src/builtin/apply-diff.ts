@@ -12,6 +12,7 @@ import { dirname } from "node:path";
 import { z } from "zod";
 import { createSmartEditEngine, type StrategyName } from "../tool/smart-edit.js";
 import { defineTool, fail, ok } from "../types/index.js";
+import type { DiffMetadata } from "../types/tool.js";
 import { validatePath } from "./utils/index.js";
 
 /**
@@ -55,6 +56,8 @@ export interface ApplyDiffOutput {
   smartEditUsed?: boolean;
   /** Strategy used by SmartEdit (if applicable) */
   smartEditStrategy?: StrategyName;
+  /** Diff metadata for rendering (optional, backward compatible) */
+  diffMeta?: DiffMetadata;
 }
 
 /**
@@ -342,6 +345,11 @@ export const applyDiffTool = defineTool({
         linesRemoved,
         smartEditUsed: smartEditUsed || undefined,
         smartEditStrategy,
+        diffMeta: {
+          diff: input.diff,
+          additions: linesAdded,
+          deletions: linesRemoved,
+        },
       });
     } catch (error) {
       if (error instanceof Error) {

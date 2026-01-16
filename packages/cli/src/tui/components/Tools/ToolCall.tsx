@@ -13,6 +13,7 @@ import type React from "react";
 import { useAnimation } from "../../context/AnimationContext.js";
 import type { ToolExecution, ToolExecutionStatus } from "../../context/ToolsContext.js";
 import { useTheme } from "../../theme/index.js";
+import { DiffView } from "../Messages/DiffView.js";
 
 // =============================================================================
 // Types
@@ -28,6 +29,30 @@ export interface ToolCallProps {
   readonly compact?: boolean;
   /** Whether to show duration for completed executions (default: false) */
   readonly showDuration?: boolean;
+}
+
+/**
+ * Result shape when tool output includes diff metadata.
+ */
+interface DiffMetaResult {
+  diffMeta?: {
+    diff: string;
+    additions: number;
+    deletions: number;
+  };
+  path?: string;
+}
+
+/**
+ * Type guard to check if a tool result contains diff metadata.
+ */
+function hasDiffMeta(result: unknown): result is DiffMetaResult {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "diffMeta" in result &&
+    typeof (result as DiffMetaResult).diffMeta?.diff === "string"
+  );
 }
 
 // =============================================================================
@@ -199,28 +224,72 @@ export function ToolCall({
   // Compact mode: single line with minimal info
   if (compact) {
     return (
-      <Box>
-        <StatusIcon status={execution.status} />
-        <Text color={textColor}> {execution.toolName}</Text>
+      <Box flexDirection="column">
+        <Box>
+          <StatusIcon status={execution.status} />
+          <Text color={textColor}> {execution.toolName}</Text>
+        </Box>
+        {execution.status === "complete" &&
+        execution.result &&
+        hasDiffMeta(execution.result) &&
+        execution.result.diffMeta ? (
+          <Box marginTop={1} flexDirection="column">
+            <Text dimColor>
+              {execution.result.diffMeta.additions > 0 && (
+                <Text color="green">+{execution.result.diffMeta.additions}</Text>
+              )}
+              {execution.result.diffMeta.deletions > 0 && (
+                <Text color="red"> -{execution.result.diffMeta.deletions}</Text>
+              )}
+            </Text>
+            <DiffView
+              diff={execution.result.diffMeta.diff}
+              fileName={execution.result.path}
+              compact
+            />
+          </Box>
+        ) : null}
       </Box>
     );
   }
 
   // Full mode: status icon, name, and optional duration
   return (
-    <Box flexDirection="row" gap={1}>
-      <StatusIcon status={execution.status} />
-      <Text color={textColor}>{execution.toolName}</Text>
-      {duration !== undefined && (
-        <Text color={mutedColor} dimColor>
-          ({formatDuration(duration)})
-        </Text>
-      )}
-      {execution.status === "error" && execution.error && (
-        <Text color="red" dimColor>
-          - {execution.error.message}
-        </Text>
-      )}
+    <Box flexDirection="column">
+      <Box flexDirection="row" gap={1}>
+        <StatusIcon status={execution.status} />
+        <Text color={textColor}>{execution.toolName}</Text>
+        {duration !== undefined && (
+          <Text color={mutedColor} dimColor>
+            ({formatDuration(duration)})
+          </Text>
+        )}
+        {execution.status === "error" && execution.error && (
+          <Text color="red" dimColor>
+            - {execution.error.message}
+          </Text>
+        )}
+      </Box>
+      {execution.status === "complete" &&
+      execution.result &&
+      hasDiffMeta(execution.result) &&
+      execution.result.diffMeta ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text dimColor>
+            {execution.result.diffMeta.additions > 0 && (
+              <Text color="green">+{execution.result.diffMeta.additions}</Text>
+            )}
+            {execution.result.diffMeta.deletions > 0 && (
+              <Text color="red"> -{execution.result.diffMeta.deletions}</Text>
+            )}
+          </Text>
+          <DiffView
+            diff={execution.result.diffMeta.diff}
+            fileName={execution.result.path}
+            compact
+          />
+        </Box>
+      ) : null}
     </Box>
   );
 }

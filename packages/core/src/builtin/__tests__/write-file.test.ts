@@ -13,6 +13,7 @@ vi.mock("node:fs/promises", () => ({
   writeFile: vi.fn(),
   mkdir: vi.fn(),
   stat: vi.fn(),
+  readFile: vi.fn(),
 }));
 
 // Mock path-security module
@@ -57,6 +58,7 @@ describe("writeFileTool", () => {
     it("should create new file", async () => {
       // File doesn't exist
       vi.mocked(fs.stat).mockRejectedValue({ code: "ENOENT" });
+      vi.mocked(fs.readFile).mockRejectedValue({ code: "ENOENT" });
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
       vi.mocked(fs.writeFile).mockResolvedValue(undefined);
 
@@ -77,6 +79,7 @@ describe("writeFileTool", () => {
     it("should overwrite existing file", async () => {
       // File exists
       vi.mocked(fs.stat).mockResolvedValue({} as Stats);
+      vi.mocked(fs.readFile).mockResolvedValue("old content");
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
       vi.mocked(fs.writeFile).mockResolvedValue(undefined);
 
@@ -94,6 +97,7 @@ describe("writeFileTool", () => {
     it("should create parent directories automatically", async () => {
       // File doesn't exist
       vi.mocked(fs.stat).mockRejectedValue({ code: "ENOENT" });
+      vi.mocked(fs.readFile).mockRejectedValue({ code: "ENOENT" });
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
       vi.mocked(fs.writeFile).mockResolvedValue(undefined);
 
@@ -110,6 +114,7 @@ describe("writeFileTool", () => {
 
     it("should handle read-only filesystem error", async () => {
       vi.mocked(fs.stat).mockRejectedValue({ code: "ENOENT" });
+      vi.mocked(fs.readFile).mockRejectedValue({ code: "ENOENT" });
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
 
       const error = new Error("Read-only") as NodeJS.ErrnoException;
@@ -129,6 +134,7 @@ describe("writeFileTool", () => {
 
     it("should handle filesystem access denied error", async () => {
       vi.mocked(fs.stat).mockRejectedValue({ code: "ENOENT" });
+      vi.mocked(fs.readFile).mockRejectedValue({ code: "ENOENT" });
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
 
       const error = new Error("Access denied") as NodeJS.ErrnoException;
@@ -189,6 +195,7 @@ describe("writeFileTool", () => {
 
     it("should handle disk full error", async () => {
       vi.mocked(fs.stat).mockRejectedValue({ code: "ENOENT" });
+      vi.mocked(fs.readFile).mockRejectedValue({ code: "ENOENT" });
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
 
       const error = new Error("No space") as NodeJS.ErrnoException;

@@ -803,6 +803,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /**
    * Processes the LLM stream and collects tool calls.
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Core stream processing with many event types
   private async processStreamResponse(
     stream: AsyncIterable<StreamEvent>,
     pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>

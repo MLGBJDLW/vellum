@@ -47,6 +47,16 @@ export {
   bashParamsSchema,
   bashTool,
 } from "./bash.js";
+// Batch tool execution
+export {
+  type BatchOperationResult,
+  type BatchOutput,
+  type BatchParams,
+  batchParamsSchema,
+  batchTool,
+  getBatchToolRegistry,
+  setBatchToolRegistry,
+} from "./batch.js";
 // Browser automation tools
 export {
   type BrowserOutput,
@@ -93,6 +103,20 @@ export {
 } from "./doc-lookup.js";
 // Example tools (for demonstration)
 export { exampleReadFileTool, exampleWriteFileTool } from "./example-tools.js";
+// Glob pattern matching
+export {
+  type GlobOutput,
+  type GlobParams,
+  globParamsSchema,
+  globTool,
+} from "./glob.js";
+// Insert at line tool
+export {
+  type InsertAtLineOutput,
+  type InsertAtLineParams,
+  insertAtLineParamsSchema,
+  insertAtLineTool,
+} from "./insert-at-line.js";
 // Directory listing tool
 export {
   type DirEntry,
@@ -101,6 +125,15 @@ export {
   listDirParamsSchema,
   listDirTool,
 } from "./list-dir.js";
+// Multi-edit tool
+export {
+  type EditOperation,
+  type EditResult,
+  type MultiEditOutput,
+  type MultiEditParams,
+  multiEditParamsSchema,
+  multiEditTool,
+} from "./multi-edit.js";
 // File operation tools
 export {
   type ReadFileOutput,
@@ -108,6 +141,14 @@ export {
   readFileParamsSchema,
   readFileTool,
 } from "./read-file.js";
+// Batch file reading
+export {
+  type FileReadResult,
+  type ReadManyFilesOutput,
+  type ReadManyFilesParams,
+  readManyFilesParamsSchema,
+  readManyFilesTool,
+} from "./read-many-files.js";
 export {
   type RecallMemoryOutput,
   type RecallMemoryParams,
@@ -122,6 +163,18 @@ export {
   saveMemoryParamsSchema,
   saveMemoryTool,
 } from "./save-memory.js";
+// High-performance search facade and backends
+export {
+  type BackendType as SearchBackendType,
+  getSearchFacade,
+  resetSearchFacade,
+  SearchFacade,
+  type SearchMatch as FileSearchMatch,
+  type SearchMode as FileSearchMode,
+  type SearchOptions as FileSearchOptions,
+  type SearchResult as FileSearchResult,
+  type SearchStats as FileSearchStats,
+} from "./search/index.js";
 export {
   type FileReplaceResult,
   type SearchAndReplaceOutput,
@@ -234,12 +287,17 @@ export const ALL_BUILTIN_TOOLS = [
   askFollowupQuestionTool,
   attemptCompletionTool,
   bashTool,
+  batchTool,
   browserTool,
   codebaseSearchTool,
   delegateAgentTool,
   docLookupTool,
+  globTool,
+  insertAtLineTool,
   listDirTool,
+  multiEditTool,
   readFileTool,
+  readManyFilesTool,
   recallMemoryTool,
   saveMemoryTool,
   searchAndReplaceTool,
@@ -284,12 +342,17 @@ import { applyPatchTool } from "./apply-patch.js";
 import { askFollowupQuestionTool } from "./ask-followup.js";
 import { attemptCompletionTool } from "./attempt-completion.js";
 import { bashTool } from "./bash.js";
+import { batchTool } from "./batch.js";
 import { browserTool } from "./browser.js";
 import { codebaseSearchTool } from "./codebase-search.js";
 import { delegateAgentTool } from "./delegate-agent.js";
 import { docLookupTool } from "./doc-lookup.js";
+import { globTool } from "./glob.js";
+import { insertAtLineTool } from "./insert-at-line.js";
 import { listDirTool } from "./list-dir.js";
+import { multiEditTool } from "./multi-edit.js";
 import { readFileTool } from "./read-file.js";
+import { readManyFilesTool } from "./read-many-files.js";
 import { recallMemoryTool } from "./recall-memory.js";
 import { saveMemoryTool } from "./save-memory.js";
 import { searchAndReplaceTool } from "./search-and-replace.js";

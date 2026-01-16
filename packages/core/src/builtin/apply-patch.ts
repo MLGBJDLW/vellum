@@ -8,10 +8,11 @@
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, relative } from "node:path";
+import { createTwoFilesPatch, diffLines } from "diff";
 import { z } from "zod";
-
 import { defineTool, fail, ok } from "../types/index.js";
+import type { DiffMetadata } from "../types/tool.js";
 import { validatePath } from "./utils/index.js";
 
 /**
@@ -53,6 +54,8 @@ export interface ApplyPatchOutput {
   totalCount: number;
   /** Details of any failed patches */
   failures: Array<{ index: number; error: string }>;
+  /** Diff metadata showing the changes made */
+  diffMeta?: DiffMetadata;
 }
 
 /**
@@ -215,8 +218,10 @@ export const applyPatchTool = defineTool({
     try {
       // Read the current file content
       let content: string;
+      let oldContent = "";
       try {
         content = await readFile(resolvedPath, { encoding: "utf-8" });
+        oldContent = content;
       } catch (error) {
         const nodeError = error as NodeJS.ErrnoException;
         if (nodeError.code === "ENOENT") {
@@ -244,6 +249,7 @@ export const applyPatchTool = defineTool({
       }
 
       // Only write if at least one patch was applied
+      let diffMeta: DiffMetadata | undefined;
       if (appliedCount > 0) {
         // Create parent directories if needed
         const parentDir = dirname(resolvedPath);
@@ -251,6 +257,19 @@ export const applyPatchTool = defineTool({
 
         // Write the patched content
         await writeFile(resolvedPath, content, { encoding: "utf-8" });
+
+        // Generate diff metadata
+        const relativePath = relative(ctx.workingDir, resolvedPath);
+        const diff = createTwoFilesPatch(relativePath, relativePath, oldContent, content, "", "");
+
+        let additions = 0;
+        let deletions = 0;
+        for (const change of diffLines(oldContent, content)) {
+          if (change.added) additions += change.count ?? 0;
+          if (change.removed) deletions += change.count ?? 0;
+        }
+
+        diffMeta = { diff, additions, deletions };
       }
 
       // Return partial success if some patches failed
@@ -265,6 +284,7 @@ export const applyPatchTool = defineTool({
         appliedCount,
         totalCount: blocks.length,
         failures,
+        diffMeta,
       });
     } catch (error) {
       if (error instanceof Error) {

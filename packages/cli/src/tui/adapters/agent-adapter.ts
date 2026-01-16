@@ -250,43 +250,46 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
    * (paragraph breaks, headers, list items - NOT inside code blocks)
    * and splits to move completed content to Static for better performance.
    */
-  const handleText = useCallback((text: string) => {
-    const streaming = streamingMessageRef.current;
+  const handleText = useCallback(
+    (text: string) => {
+      const streaming = streamingMessageRef.current;
 
-    if (!streaming) {
-      // Start a new streaming message if we receive text without a message
-      const id = addMessageRef.current({
-        role: "assistant",
-        content: text,
-        isStreaming: true,
-      });
-      streamingMessageRef.current = {
-        id,
-        content: text,
-        thinking: "",
-        hasStarted: true,
-      };
-    } else {
-      // Append to existing streaming message
-      streaming.content += text;
-      appendToMessageRef.current(streaming.id, text);
+      if (!streaming) {
+        // Start a new streaming message if we receive text without a message
+        const id = addMessageRef.current({
+          role: "assistant",
+          content: text,
+          isStreaming: true,
+        });
+        streamingMessageRef.current = {
+          id,
+          content: text,
+          thinking: "",
+          hasStarted: true,
+        };
+      } else {
+        // Append to existing streaming message
+        streaming.content += text;
+        appendToMessageRef.current(streaming.id, text);
 
-      // Only split messages if explicitly enabled.
-      // Splitting can cause messages to disappear in VirtualizedList mode
-      // because split portions are moved to historyMessages which may not be rendered.
-      if (enableMessageSplitting) {
-        // Check if we should split at a safe point to improve performance
-        // This moves completed content to Static where it won't re-render
-        // Uses newline-gated strategy - only splits at paragraph breaks (\n\n)
-        const splitIndex = findLastSafeSplitPoint(streaming.content);
-        if (splitIndex > 0) {
-          splitMessageAtSafePointRef.current(splitIndex);
-          // Update local tracking to reflect the split
-          streaming.content = streaming.content.slice(splitIndex);
+        // Only split messages if explicitly enabled.
+        // Splitting can cause messages to disappear in VirtualizedList mode
+        // because split portions are moved to historyMessages which may not be rendered.
+        if (enableMessageSplitting) {
+          // Check if we should split at a safe point to improve performance
+          // This moves completed content to Static where it won't re-render
+          // Uses newline-gated strategy - only splits at paragraph breaks (\n\n)
+          const splitIndex = findLastSafeSplitPoint(streaming.content);
+          if (splitIndex > 0) {
+            splitMessageAtSafePointRef.current(splitIndex);
+            // Update local tracking to reflect the split
+            streaming.content = streaming.content.slice(splitIndex);
+          }
         }
       }
-    }
-  }, []); // Empty deps = stable callback
+    },
+    [enableMessageSplitting]
+  ); // Depends on enableMessageSplitting flag
 
   /**
    * Handle message/complete events from AgentLoop

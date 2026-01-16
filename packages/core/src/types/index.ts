@@ -72,6 +72,8 @@ export {
 export {
   // T017: defineTool Factory
   type DefineToolConfig,
+  // Diff metadata for file operations
+  type DiffMetadata,
   defineTool,
   fail,
   ok,

@@ -14,6 +14,25 @@ import type { TrustPreset } from "../permission/types.js";
 import type { Result } from "./result.js";
 
 // =============================================================================
+// Diff Metadata for File Operations
+// =============================================================================
+
+/**
+ * Diff metadata for file operations that modify content
+ *
+ * Provides unified diff output and statistics for file-modifying tools.
+ * Can be rendered by DiffView component in TUI.
+ */
+export interface DiffMetadata {
+  /** Unified diff string (can be rendered by DiffView component) */
+  diff: string;
+  /** Number of lines added */
+  additions: number;
+  /** Number of lines deleted */
+  deletions: number;
+}
+
+// =============================================================================
 // T012: ToolKindSchema Enum
 // =============================================================================
 

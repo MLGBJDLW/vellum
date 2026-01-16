@@ -8,10 +8,12 @@
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, relative } from "node:path";
+import { createTwoFilesPatch, diffLines } from "diff";
 import { z } from "zod";
 import { createSmartEditEngine, type StrategyName } from "../tool/smart-edit.js";
 import { defineTool, fail, ok } from "../types/index.js";
+import type { DiffMetadata } from "../types/tool.js";
 import { validatePath } from "./utils/index.js";
 
 /**
@@ -55,6 +57,8 @@ export interface SmartEditOutput {
     matchLength?: number;
     similarity?: number;
   };
+  /** Diff metadata showing what changed */
+  diffMeta: DiffMetadata;
 }
 
 /**
@@ -97,6 +101,7 @@ export const smartEditTool = defineTool({
   kind: "write",
   category: "filesystem",
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multi-strategy text matching and replacement
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {
@@ -160,12 +165,24 @@ export const smartEditTool = defineTool({
       // Write the modified content
       await writeFile(resolvedPath, result.output, { encoding: "utf-8" });
 
+      // Generate diff metadata
+      const relativePath = relative(ctx.workingDir, resolvedPath);
+      const diff = createTwoFilesPatch(relativePath, relativePath, content, result.output, "", "");
+      let additions = 0;
+      let deletions = 0;
+      for (const change of diffLines(content, result.output)) {
+        if (change.added) additions += change.count ?? 0;
+        if (change.removed) deletions += change.count ?? 0;
+      }
+      const diffMeta: DiffMetadata = { diff, additions, deletions };
+
       return ok({
         path: resolvedPath,
         applied: true,
         strategyUsed: result.strategy,
         confidence: result.confidence,
         details: result.matchDetails,
+        diffMeta,
       });
     } catch (error) {
       if (error instanceof Error) {

@@ -77,8 +77,8 @@ const SEPARATOR = " │ ";
 /** Mode display configuration */
 const MODES_CONFIG: Array<{ mode: CodingMode; icon: string; label: string }> = [
   { mode: "vibe", icon: "◐", label: "vibe" },
-  { mode: "plan", icon: "◇", label: "plan" },
-  { mode: "spec", icon: "◈", label: "spec" },
+  { mode: "plan", icon: "◑", label: "plan" },
+  { mode: "spec", icon: "◒", label: "spec" },
 ];
 
 /** Agent name to abbreviation mapping for status bar display */

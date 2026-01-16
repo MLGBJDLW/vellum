@@ -352,6 +352,7 @@ const MessageList = memo(function MessageList({
 
   // Helper: Handle virtualized list keyboard navigation
   const handleVirtualizedNavigation = useCallback(
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex keyboard navigation with many key combinations
     (key: Key, list: VirtualizedListRef<Message>): boolean => {
       const scrollState = list.getScrollState();
       if (scrollState.scrollHeight <= scrollState.innerHeight) {

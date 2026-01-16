@@ -24,9 +24,11 @@ import {
   getTextContent,
   ProjectMemoryService,
   registerAllBuiltinTools,
+  registerGitTools,
   SessionListService,
   SessionParts,
   StorageManager,
+  setBatchToolRegistry,
   updateSessionMetadata,
 } from "@vellum/core";
 import { createId } from "@vellum/shared";
@@ -478,6 +480,8 @@ export function App({
 
     const registry = createToolRegistry();
     registerAllBuiltinTools(registry);
+    registerGitTools(registry);
+    setBatchToolRegistry(registry);
     return registry;
   }, [toolRegistryProp]);
 
@@ -2900,7 +2904,7 @@ function AppContent({
     return () => {
       agentLoopProp.off("userPrompt:required", handleUserPromptRequired);
     };
-  }, [agentLoopProp, setFollowupPrompt]);
+  }, [agentLoopProp]);
 
   // Fallback: Update token usage from messages when no AgentLoop (simulated)
   useEffect(() => {
@@ -3558,6 +3562,7 @@ function AppHeader({
   );
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex TUI view with many conditional renders and state handlers
 function AppContentView({
   agentName,
   announce,

@@ -428,10 +428,8 @@ describe("StatusBar", () => {
         />
       );
       const frame = lastFrame() ?? "";
-      // Mode selector icons must be present (labels may be truncated in narrow width)
-      expect(frame).toContain("◐"); // vibe mode icon
-      expect(frame).toContain("◇"); // Think mode icon
-      expect(frame).toContain("◈"); // Orch mode icon
+      // Mode selector shows only current mode icon by default
+      expect(frame).toContain("◐"); // vibe mode icon (current mode)
       // Model indicator (name may be truncated)
       expect(frame).toMatch(/claude-3/);
       // Context progress (shows progress bar and percentage)
@@ -602,13 +600,15 @@ describe("StatusBar", () => {
         <StatusBar mode="vibe" modelName="claude-3" thinking={{ active: false }} />
       );
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("◇");
+      expect(frame).toContain("◇"); // inactive thinking icon
     });
   });
 
   describe("Mode Selector", () => {
     it("should highlight active mode", () => {
-      const { lastFrame } = renderWithTheme(<StatusBar mode="plan" modelName="claude-3" />);
+      const { lastFrame } = renderWithTheme(
+        <StatusBar mode="plan" modelName="claude-3" showAllModes={true} />
+      );
       const frame = lastFrame() ?? "";
       // All modes should be visible
       expect(frame).toContain("vibe");
@@ -619,7 +619,7 @@ describe("StatusBar", () => {
     it("should show spec mode correctly", () => {
       const { lastFrame } = renderWithTheme(<StatusBar mode="spec" modelName="claude-3" />);
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("◈");
+      expect(frame).toContain("◒");
       expect(frame).toContain("spec");
     });
   });

@@ -7,10 +7,12 @@
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, relative } from "node:path";
+import { createTwoFilesPatch, diffLines } from "diff";
 import { z } from "zod";
 
 import { defineTool, fail, ok } from "../types/index.js";
+import type { DiffMetadata } from "../types/tool.js";
 import { validatePath } from "./utils/index.js";
 
 /**
@@ -44,6 +46,8 @@ export interface FileReplaceResult {
   modified: boolean;
   /** Error message if failed */
   error?: string;
+  /** Diff metadata for this file (if modified) */
+  diffMeta?: DiffMetadata;
 }
 
 /** Output type for search_and_replace tool */
@@ -56,6 +60,8 @@ export interface SearchAndReplaceOutput {
   filesProcessed: number;
   /** Results per file */
   results: FileReplaceResult[];
+  /** Combined diff metadata for all modified files */
+  diffMeta?: DiffMetadata;
 }
 
 /**
@@ -205,10 +211,24 @@ export const searchAndReplaceTool = defineTool({
 
           await writeFile(resolvedPath, newContent, { encoding: "utf-8" });
 
+          // Generate diff metadata
+          const relativePath = relative(ctx.workingDir, resolvedPath);
+          const diff = createTwoFilesPatch(relativePath, relativePath, content, newContent, "", "");
+
+          let additions = 0;
+          let deletions = 0;
+          for (const change of diffLines(content, newContent)) {
+            if (change.added) additions += change.count ?? 0;
+            if (change.removed) deletions += change.count ?? 0;
+          }
+
+          const diffMeta: DiffMetadata = { diff, additions, deletions };
+
           results.push({
             path: filePath,
             replacements: matchCount,
             modified: true,
+            diffMeta,
           });
           totalReplacements += matchCount;
           filesModified++;
@@ -244,11 +264,32 @@ export const searchAndReplaceTool = defineTool({
       }
     }
 
+    // Combine all per-file diffs into a single diffMeta
+    let combinedDiffMeta: DiffMetadata | undefined;
+    const modifiedResults = results.filter((r) => r.modified && r.diffMeta);
+    if (modifiedResults.length > 0) {
+      const combinedDiff = modifiedResults.map((r) => r.diffMeta?.diff).join("\n");
+      const totalAdditions = modifiedResults.reduce(
+        (sum, r) => sum + (r.diffMeta?.additions ?? 0),
+        0
+      );
+      const totalDeletions = modifiedResults.reduce(
+        (sum, r) => sum + (r.diffMeta?.deletions ?? 0),
+        0
+      );
+      combinedDiffMeta = {
+        diff: combinedDiff,
+        additions: totalAdditions,
+        deletions: totalDeletions,
+      };
+    }
+
     return ok({
       totalReplacements,
       filesModified,
       filesProcessed: input.paths.length,
       results,
+      diffMeta: combinedDiffMeta,
     });
   },
 

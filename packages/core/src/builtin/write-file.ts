@@ -7,11 +7,12 @@
  * @module builtin/write-file
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, relative } from "node:path";
+import { createTwoFilesPatch, diffLines } from "diff";
 import { z } from "zod";
-
 import { defineTool, fail, ok } from "../types/index.js";
+import type { DiffMetadata } from "../types/tool.js";
 import { validatePath } from "./utils/index.js";
 
 /**
@@ -35,6 +36,8 @@ export interface WriteFileOutput {
   bytesWritten: number;
   /** Whether the file was created (true) or overwritten (false) */
   created: boolean;
+  /** Diff metadata for modified files (undefined for new files) */
+  diffMeta?: DiffMetadata;
 }
 
 /**
@@ -64,6 +67,7 @@ export const writeFileTool = defineTool({
   kind: "write",
   category: "filesystem",
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: File write with permission checks, backup, and diff generation
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {
@@ -85,16 +89,14 @@ export const writeFileTool = defineTool({
     }
 
     try {
-      // Check if file exists to determine if we're creating or overwriting
-      let created = false;
+      // Read existing content if file exists (for diff generation)
+      let oldContent = "";
+      let created = true;
       try {
-        const { stat } = await import("node:fs/promises");
-        await stat(resolvedPath);
-        // File exists, will be overwritten
+        oldContent = await readFile(resolvedPath, "utf-8");
         created = false;
       } catch {
         // File doesn't exist, will be created
-        created = true;
       }
 
       // Create parent directories if needed
@@ -104,10 +106,34 @@ export const writeFileTool = defineTool({
       // Write the file
       await writeFile(resolvedPath, input.content, { encoding: "utf-8" });
 
+      // Generate diff metadata for modified files (not new files)
+      let diffMeta: DiffMetadata | undefined;
+      if (!created) {
+        const relativePath = relative(ctx.workingDir, resolvedPath);
+        const diff = createTwoFilesPatch(
+          relativePath,
+          relativePath,
+          oldContent,
+          input.content,
+          "",
+          ""
+        );
+
+        let additions = 0;
+        let deletions = 0;
+        for (const change of diffLines(oldContent, input.content)) {
+          if (change.added) additions += change.count ?? 0;
+          if (change.removed) deletions += change.count ?? 0;
+        }
+
+        diffMeta = { diff, additions, deletions };
+      }
+
       return ok({
         path: resolvedPath,
         bytesWritten: Buffer.byteLength(input.content, "utf-8"),
         created,
+        diffMeta,
       });
     } catch (error) {
       if (error instanceof Error) {

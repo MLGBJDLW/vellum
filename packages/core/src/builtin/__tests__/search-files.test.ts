@@ -58,6 +58,7 @@ describe("searchFilesTool", () => {
           isRegex: false,
           caseSensitive: false,
           maxResults: 100,
+          contextLines: 2,
         },
         mockContext
       );
@@ -67,7 +68,8 @@ describe("searchFilesTool", () => {
         expect(result.output.matches.length).toBe(1);
         expect(result.output.matches[0]?.file).toBe("test.ts");
         expect(result.output.matches[0]?.line).toBe(1);
-        expect(result.output.matches[0]?.match).toBe("foo");
+        // match now contains the full line content (from facade)
+        expect(result.output.matches[0]?.match).toContain("foo");
       }
     });
 
@@ -81,6 +83,7 @@ describe("searchFilesTool", () => {
           isRegex: true,
           caseSensitive: false,
           maxResults: 100,
+          contextLines: 2,
         },
         mockContext
       );
@@ -101,6 +104,7 @@ describe("searchFilesTool", () => {
           isRegex: false,
           caseSensitive: true,
           maxResults: 100,
+          contextLines: 2,
         },
         mockContext
       );
@@ -112,6 +116,7 @@ describe("searchFilesTool", () => {
           isRegex: false,
           caseSensitive: false,
           maxResults: 100,
+          contextLines: 2,
         },
         mockContext
       );
@@ -139,6 +144,7 @@ describe("searchFilesTool", () => {
           isRegex: false,
           caseSensitive: false,
           maxResults: 5,
+          contextLines: 2,
         },
         mockContext
       );
@@ -160,6 +166,7 @@ describe("searchFilesTool", () => {
           isRegex: false,
           caseSensitive: false,
           maxResults: 100,
+          contextLines: 2,
         },
         mockContext
       );
@@ -184,6 +191,7 @@ describe("searchFilesTool", () => {
           isRegex: false,
           caseSensitive: false,
           maxResults: 100,
+          contextLines: 2,
         },
         mockContext
       );
@@ -203,6 +211,7 @@ describe("searchFilesTool", () => {
           isRegex: true,
           caseSensitive: false,
           maxResults: 100,
+          contextLines: 2,
         },
         mockContext
       );
@@ -221,6 +230,7 @@ describe("searchFilesTool", () => {
           isRegex: false,
           caseSensitive: false,
           maxResults: 100,
+          contextLines: 2,
         },
         mockContext
       );
@@ -242,6 +252,7 @@ describe("searchFilesTool", () => {
           isRegex: false,
           caseSensitive: false,
           maxResults: 100,
+          contextLines: 2,
         },
         { ...mockContext, abortSignal: abortController.signal }
       );
@@ -263,6 +274,7 @@ describe("searchFilesTool", () => {
             isRegex: false,
             caseSensitive: false,
             maxResults: 100,
+            contextLines: 2,
           },
           mockContext
         )
