@@ -36,6 +36,10 @@ export {
 } from "./TokenBreakdown.js";
 export { TokenCounter, type TokenCounterProps } from "./TokenCounter.js";
 export {
+  ToolIndicator,
+  type ToolIndicatorProps,
+} from "./ToolIndicator.js";
+export {
   type TrustMode,
   TrustModeIndicator,
   type TrustModeIndicatorProps,

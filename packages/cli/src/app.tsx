@@ -47,6 +47,7 @@ import {
   customAgentsCommand,
   enhancedAuthCommands,
   exitCommand,
+  getEffectiveThinkingConfig,
   getThinkingState,
   helpCommand,
   initSlashCommand,
@@ -166,7 +167,7 @@ import { type ThemeName, useTheme } from "./tui/theme/index.js";
 import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
 // Cursor management utilities
 import { CursorManager } from "./tui/utils/cursor-manager.js";
-import { calculateCost, getContextWindow } from "./utils/index.js";
+import { calculateCost, getContextWindow, getModelInfo } from "./utils/index.js";
 
 /**
  * Get default model for a given provider
@@ -303,6 +304,72 @@ function buildSessionSummary(messages: readonly SessionMessage[]): string | unde
     }
   }
   return undefined;
+}
+
+// =============================================================================
+// Task 2: Focus Debug Component
+// =============================================================================
+
+interface FocusDebuggerProps {
+  isLoading: boolean;
+  showModeSelector: boolean;
+  showModelSelector: boolean;
+  showSessionManager: boolean;
+  showHelpModal: boolean;
+  activeApproval: unknown;
+  interactivePrompt: unknown;
+  pendingOperation: unknown;
+}
+
+/**
+ * Debug component that logs focus conditions when they change.
+ * Helps diagnose input focus issues.
+ */
+function FocusDebugger({
+  isLoading,
+  showModeSelector,
+  showModelSelector,
+  showSessionManager,
+  showHelpModal,
+  activeApproval,
+  interactivePrompt,
+  pendingOperation,
+}: FocusDebuggerProps): null {
+  const shouldFocus =
+    !isLoading &&
+    !showModeSelector &&
+    !showModelSelector &&
+    !showSessionManager &&
+    !showHelpModal &&
+    !activeApproval &&
+    !interactivePrompt &&
+    !pendingOperation;
+
+  useEffect(() => {
+    console.log("[Focus Debug]", {
+      isLoading,
+      showModeSelector,
+      showModelSelector,
+      showSessionManager,
+      showHelpModal,
+      activeApproval: !!activeApproval,
+      interactivePrompt: !!interactivePrompt,
+      pendingOperation: !!pendingOperation,
+      shouldFocus,
+    });
+  }, [
+    shouldFocus,
+    isLoading,
+    showModeSelector,
+    showModelSelector,
+    showSessionManager,
+    showHelpModal,
+    activeApproval,
+    interactivePrompt,
+    pendingOperation,
+  ]);
+
+  return null;
 }
 
 // =============================================================================
@@ -463,10 +530,13 @@ function AppContent({
 }: AppContentProps) {
   const { exit } = useInkApp();
   const themeContext = useTheme();
-  const { messages, addMessage, clearMessages, setMessages, historyMessages, pendingMessage } =
-    useMessages();
+  const { messages, addMessage, clearMessages, setMessages, pendingMessage } = useMessages();
   const [isLoading, setIsLoading] = useState(false);
   const [interactivePrompt, setInteractivePrompt] = useState<InteractivePrompt | null>(null);
+  const [followupPrompt, setFollowupPrompt] = useState<{
+    question: string;
+    suggestions: string[];
+  } | null>(null);
   const [promptValue, setPromptValue] = useState("");
   const [pendingOperation, setPendingOperation] = useState<AsyncOperation | null>(null);
 
@@ -880,6 +950,7 @@ function AppContent({
 
   // Thinking state for ThinkingBlock
   const [thinkingContent, setThinkingContent] = useState("");
+  const thinkingWarningRef = useRef<Set<string>>(new Set());
 
   // ==========================================================================
   // FIX 2: Session Management - Connect Real Session Data
@@ -1114,6 +1185,12 @@ function AppContent({
 
   const { executions, pendingApproval, approveExecution, rejectExecution, approveAll } = useTools();
 
+  // Compute the currently running tool for status bar display
+  const currentRunningTool = useMemo(() => {
+    const runningExecution = executions.find((e) => e.status === "running");
+    return runningExecution?.toolName;
+  }, [executions]);
+
   const loadTodos = useCallback(async (): Promise<readonly TodoItemData[]> => {
     const todoFilePath = join(process.cwd(), ".vellum", "todos.json");
 
@@ -1259,6 +1336,17 @@ function AppContent({
   const [thinkingModeEnabled, setThinkingModeEnabled] = useState(() => getThinkingState().enabled);
   const [isCurrentlyThinking, setIsCurrentlyThinking] = useState(false);
   const [thinkingCollapsed, setThinkingCollapsed] = useState(true);
+
+  // Auto-collapse thinking block after thinking completes
+  useEffect(() => {
+    if (!isCurrentlyThinking && thinkingContent.length > 0) {
+      // Delay auto-collapse to let user see final content
+      const timer = setTimeout(() => {
+        setThinkingCollapsed(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isCurrentlyThinking, thinkingContent.length]);
 
   // Subscribe to global thinking state changes (mode toggle via /think)
   useEffect(() => {
@@ -1459,6 +1547,7 @@ function AppContent({
       !showSessionManager &&
       !showOnboarding &&
       !interactivePrompt &&
+      !followupPrompt &&
       !pendingOperation,
     onModeSwitch: (mode, success) => {
       if (success) {
@@ -1748,6 +1837,7 @@ function AppContent({
       !showSessionManager &&
       !showOnboarding &&
       !interactivePrompt &&
+      !followupPrompt &&
       !pendingOperation,
   });
 
@@ -1862,41 +1952,40 @@ function AppContent({
   // Initialize LSP on mount (non-blocking, graceful fallback)
   useEffect(() => {
     let cancelled = false;
+    const isDebug = !!process.env.VELLUM_DEBUG;
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: LSP init with conditional logging
     const loadLsp = async () => {
       try {
         const result = await initializeLsp({
           workspaceRoot: process.cwd(),
           toolRegistry: toolRegistry as LspIntegrationOptions["toolRegistry"],
           autoInstall: true, // Auto-install missing language servers
-          logger: {
-            debug: (msg) => console.debug(`[lsp] ${msg}`),
-            info: (msg) => console.info(`[lsp] ${msg}`),
-            warn: (msg) => console.warn(`[lsp] ${msg}`),
-            error: (msg) => console.error(`[lsp] ${msg}`),
-          },
+          logger: isDebug
+            ? {
+                debug: (msg) => console.debug(`[lsp] ${msg}`),
+                info: (msg) => console.info(`[lsp] ${msg}`),
+                warn: (msg) => console.warn(`[lsp] ${msg}`),
+                error: (msg) => console.error(`[lsp] ${msg}`),
+              }
+            : undefined,
         });
 
-        if (!cancelled) {
-          setLspResult(result);
+        if (cancelled) return;
 
-          if (result.success) {
-            console.debug(
-              `[lsp] Initialized with ${result.toolCount} tools, ${result.availableServers.length} servers available`
-            );
-          } else {
-            // LSP initialization failed - this is non-critical
-            console.debug(`[lsp] Initialization skipped: ${result.error}`);
-          }
-
-          setLspLoading(false);
+        setLspResult(result);
+        if (isDebug) {
+          const msg = result.success
+            ? `[lsp] Initialized with ${result.toolCount} tools, ${result.availableServers.length} servers available`
+            : `[lsp] Initialization skipped: ${result.error}`;
+          console.debug(msg);
         }
+        setLspLoading(false);
       } catch (error) {
-        if (!cancelled) {
-          // LSP is optional - log but don't fail
-          console.debug("[lsp] Failed to initialize (non-critical):", error);
-          setLspLoading(false);
-        }
+        if (cancelled) return;
+        // LSP is optional - log but don't fail
+        if (isDebug) console.debug("[lsp] Failed to initialize (non-critical):", error);
+        setLspLoading(false);
       }
     };
 
@@ -2113,6 +2202,30 @@ function AppContent({
     }
   }, [interactivePrompt, handleCommandResult]);
 
+  const resolveFollowupResponse = useCallback(
+    (rawValue: string, suggestions: readonly string[]): string => {
+      const trimmed = rawValue.trim();
+      let response = trimmed;
+
+      if (suggestions.length > 0 && trimmed.length > 0) {
+        const index = Number.parseInt(trimmed, 10);
+        if (!Number.isNaN(index) && index >= 1 && index <= suggestions.length) {
+          response = suggestions[index - 1] ?? trimmed;
+        } else {
+          const match = suggestions.find(
+            (option) => option.toLowerCase() === trimmed.toLowerCase()
+          );
+          if (match) {
+            response = match;
+          }
+        }
+      }
+
+      return response;
+    },
+    []
+  );
+
   // Handle Ctrl+C and ESC for cancellation (T031)
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This handler must process multiple input types in a single callback for proper event handling
   useInput((inputChar, key) => {
@@ -2120,6 +2233,12 @@ function AppContent({
       if (key.escape) {
         handlePromptCancel();
       }
+      return;
+    }
+
+    if (followupPrompt && key.escape) {
+      agentLoopProp?.submitUserResponse("");
+      setFollowupPrompt(null);
       return;
     }
 
@@ -2243,6 +2362,16 @@ function AppContent({
     async (text: string) => {
       if (!text.trim()) return;
 
+      if (followupPrompt && agentLoopProp) {
+        const response = resolveFollowupResponse(text, followupPrompt.suggestions);
+        setFollowupPrompt(null);
+        addToHistory(response);
+        addMessage({ role: "user", content: response });
+        announce(`You said: ${response}`);
+        agentLoopProp.submitUserResponse(response);
+        return;
+      }
+
       // Fix 4: Reset turn usage when a new turn starts
       setTurnUsage({
         inputTokens: 0,
@@ -2321,9 +2450,26 @@ function AppContent({
       // Announce for screen reader
       announce(`You said: ${processedText}`);
 
+      const effectiveThinking = getEffectiveThinkingConfig(
+        BUILTIN_CODING_MODES[currentMode]?.extendedThinking
+      );
+      if (effectiveThinking.enabled) {
+        const modelInfo = getModelInfo(currentProvider, currentModel);
+        const warningKey = `${currentProvider}/${currentModel}`;
+        if (!modelInfo.supportsReasoning && !thinkingWarningRef.current.has(warningKey)) {
+          addMessage({
+            role: "assistant",
+            content:
+              `⚠️ Thinking mode is enabled, but ${currentProvider}/${modelInfo.name} ` +
+              "does not support reasoning. Running this request without thinking.",
+          });
+          thinkingWarningRef.current.add(warningKey);
+        }
+      }
+
       setIsLoading(true);
       setIsCurrentlyThinking(true);
-      setThinkingContent(""); // Clear previous thinking content, real content flows via thinking event
+      setThinkingContent(""); // Clear previous thinking content at REQUEST START, not in finally
 
       // Use AgentLoop if available (T038)
       if (agentLoopProp) {
@@ -2350,7 +2496,7 @@ function AppContent({
           addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
         } finally {
           setIsCurrentlyThinking(false);
-          setThinkingContent("");
+          // Note: Don't clear thinkingContent here - let it persist until next request
           setIsLoading(false);
           cancellationRef.current = null;
         }
@@ -2409,10 +2555,14 @@ function AppContent({
       addMessage,
       announce,
       agentLoopProp,
+      currentModel,
       currentMode,
+      currentProvider,
+      followupPrompt,
       modeManager,
       notifyTaskComplete,
       notifyError,
+      resolveFollowupResponse,
     ]
   );
 
@@ -2730,6 +2880,28 @@ function AppContent({
     };
   }, [agentLoopProp, currentModel, currentProvider, costService]);
 
+  // Handle user prompt requests from ask_followup_question (GAP 1)
+  useEffect(() => {
+    if (!agentLoopProp) {
+      return;
+    }
+
+    const handleUserPromptRequired = (prompt: { question: string; suggestions?: string[] }) => {
+      const suggestions = prompt.suggestions ?? [];
+
+      setFollowupPrompt({
+        question: prompt.question,
+        suggestions,
+      });
+    };
+
+    agentLoopProp.on("userPrompt:required", handleUserPromptRequired);
+
+    return () => {
+      agentLoopProp.off("userPrompt:required", handleUserPromptRequired);
+    };
+  }, [agentLoopProp, setFollowupPrompt]);
+
   // Fallback: Update token usage from messages when no AgentLoop (simulated)
   useEffect(() => {
     // Only use fallback when no agentLoop is provided
@@ -2892,13 +3064,14 @@ function AppContent({
       handleSessionSelected={handleSessionSelected}
       handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
       initError={initError}
+      followupPrompt={followupPrompt}
       interactivePrompt={interactivePrompt}
       loadSessionPreviewMessages={loadSessionPreviewMessages}
       isLoading={isLoading}
       thinkingModeEnabled={thinkingModeEnabled}
       isCurrentlyThinking={isCurrentlyThinking}
       memoryEntries={memoryEntries}
-      historyMessages={historyMessages}
+      messages={messages}
       pendingMessage={pendingMessage}
       pendingOperation={pendingOperation}
       promptPlaceholder={promptPlaceholder}
@@ -2925,6 +3098,7 @@ function AppContent({
           rejectExecution(e.id);
         })
       }
+      currentRunningTool={currentRunningTool}
       showSidebar={showSidebar}
       sidebarContent={sidebarContent}
       specPhase={specPhase}
@@ -3001,6 +3175,7 @@ interface AppContentViewProps {
   readonly handleReject: () => void;
   readonly handleSessionSelected: (id: string) => void;
   readonly handleSwitchBacktrackBranch: (branchId: string) => void;
+  readonly followupPrompt: { question: string; suggestions: string[] } | null;
   readonly interactivePrompt: InteractivePrompt | null;
   readonly loadSessionPreviewMessages: (
     sessionId: string
@@ -3010,7 +3185,7 @@ interface AppContentViewProps {
   readonly thinkingModeEnabled: boolean;
   readonly isCurrentlyThinking: boolean;
   readonly memoryEntries: MemoryPanelProps["entries"];
-  readonly historyMessages: readonly Message[];
+  readonly messages: readonly Message[];
   readonly pendingMessage: Message | null;
   readonly pendingOperation: AsyncOperation | null;
   readonly promptPlaceholder: string;
@@ -3062,6 +3237,8 @@ interface AppContentViewProps {
   readonly undoBacktrack: () => void;
   readonly redoBacktrack: () => void;
   readonly updateAvailable: { current: string; latest: string } | null;
+  /** Currently running tool name for status bar display */
+  readonly currentRunningTool?: string;
   /** Workspace name for header separator */
   readonly workspace: string;
   /** Git branch for header separator */
@@ -3423,13 +3600,14 @@ function AppContentView({
   handleSessionSelected,
   handleSwitchBacktrackBranch,
   initError,
+  followupPrompt,
   interactivePrompt,
   loadSessionPreviewMessages,
   isLoading,
   thinkingModeEnabled,
   isCurrentlyThinking,
   memoryEntries,
-  historyMessages,
+  messages,
   pendingMessage,
   pendingOperation,
   promptPlaceholder,
@@ -3468,6 +3646,7 @@ function AppContentView({
   undoBacktrack,
   redoBacktrack,
   updateAvailable,
+  currentRunningTool,
   workspace,
   branch,
   changedFiles,
@@ -3487,6 +3666,7 @@ function AppContentView({
       mode={currentMode}
       agentName={agentName}
       modelName={currentModel}
+      currentTool={currentRunningTool}
       tokens={{
         current: totalTokens,
         max: contextWindow,
@@ -3509,12 +3689,32 @@ function AppContentView({
       cost={tokenUsage.totalCost}
       trustMode={trustMode}
       thinking={{ active: thinkingModeEnabled }}
+      showAllModes={showModeSelector}
     />
   );
 
   // Conditional rendering to avoid hook count mismatch from early returns
   const showBannerView = shouldShowBanner && !bannerSplashComplete;
   const showMainView = !showOnboarding && !showBannerView;
+
+  const commandPlaceholder = followupPrompt
+    ? "Reply to follow-up..."
+    : isLoading
+      ? "Thinking..."
+      : "Type a message or /command...";
+
+  const commandInputDisabled =
+    (isLoading && !followupPrompt) || !!interactivePrompt || !!pendingOperation;
+
+  const commandInputFocused =
+    (!isLoading || !!followupPrompt) &&
+    !showModeSelector &&
+    !showModelSelector &&
+    !showSessionManager &&
+    !showHelpModal &&
+    !activeApproval &&
+    !interactivePrompt &&
+    !pendingOperation;
 
   return (
     <>
@@ -3604,25 +3804,52 @@ function AppContentView({
             branch={branch ?? undefined}
             changedFiles={changedFiles}
           >
-            <Box flexDirection="column" flexGrow={1} overflow="hidden">
-              {isCurrentlyThinking && (
+            <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
+              {/* Show ThinkingBlock when content exists OR currently streaming */}
+              {(thinkingContent.length > 0 || isCurrentlyThinking) && (
                 <ThinkingBlock
                   content={thinkingContent}
                   isStreaming={isCurrentlyThinking}
                   collapsed={thinkingCollapsed}
                   onToggle={() => setThinkingCollapsed((prev) => !prev)}
+                  keyboardToggleEnabled={!interactivePrompt && !pendingOperation && !followupPrompt}
                 />
               )}
 
               <MessageList
-                messages={historyMessages}
+                messages={messages}
                 pendingMessage={pendingMessage}
                 useVirtualizedList={true}
                 estimatedItemHeight={4}
+                isFocused={
+                  !showModeSelector &&
+                  !showModelSelector &&
+                  !showSessionManager &&
+                  !showHelpModal &&
+                  !activeApproval &&
+                  !interactivePrompt &&
+                  !pendingOperation
+                }
               />
             </Box>
 
             <Box flexShrink={0} flexDirection="column">
+              {followupPrompt && (
+                <Box marginTop={1} flexDirection="column">
+                  <Text color={themeContext.theme.semantic.text.secondary}>
+                    ↳ {followupPrompt.question}
+                  </Text>
+                  {followupPrompt.suggestions.length > 0 && (
+                    <Box marginTop={1} flexDirection="column">
+                      <Text dimColor>Options:</Text>
+                      {followupPrompt.suggestions.map((option, index) => (
+                        <Text key={option}>{`${index + 1}. ${option}`}</Text>
+                      ))}
+                    </Box>
+                  )}
+                  <Text dimColor>Type your reply and press Enter (Esc to skip)</Text>
+                </Box>
+              )}
               {interactivePrompt && (
                 <Box
                   borderStyle="round"
@@ -3702,6 +3929,17 @@ function AppContentView({
                 </Box>
               )}
 
+              {/* Focus Debug: logs focus conditions when they change */}
+              <FocusDebugger
+                isLoading={isLoading}
+                showModeSelector={showModeSelector}
+                showModelSelector={showModelSelector}
+                showSessionManager={showSessionManager}
+                showHelpModal={showHelpModal}
+                activeApproval={activeApproval}
+                interactivePrompt={interactivePrompt}
+                pendingOperation={pendingOperation}
+              />
               <EnhancedCommandInput
                 onMessage={handleMessage}
                 onCommand={handleCommand}
@@ -3711,18 +3949,9 @@ function AppContentView({
                 groupedCommands={true}
                 categoryOrder={categoryOrder}
                 categoryLabels={categoryLabels}
-                placeholder={isLoading ? "Thinking..." : "Type a message or /command..."}
-                disabled={isLoading || !!interactivePrompt || !!pendingOperation}
-                focused={
-                  !isLoading &&
-                  !showModeSelector &&
-                  !showModelSelector &&
-                  !showSessionManager &&
-                  !showHelpModal &&
-                  !activeApproval &&
-                  !interactivePrompt &&
-                  !pendingOperation
-                }
+                placeholder={commandPlaceholder}
+                disabled={commandInputDisabled}
+                focused={commandInputFocused}
                 historyKey="vellum-command-history"
                 cwd={process.cwd()}
               />

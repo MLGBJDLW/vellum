@@ -17,6 +17,7 @@ import { ModelIndicator } from "./ModelIndicator.js";
 import { SandboxIndicator } from "./SandboxIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
 import { TokenBreakdown, type TokenStats } from "./TokenBreakdown.js";
+import { ToolIndicator } from "./ToolIndicator.js";
 import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeIndicator.js";
 
 // =============================================================================
@@ -60,6 +61,10 @@ export interface StatusBarProps {
   readonly cost?: number;
   /** Whether to show a border (default: false for unified footer) */
   readonly showBorder?: boolean;
+  /** Whether to show all modes or only active (default: false) */
+  readonly showAllModes?: boolean;
+  /** Currently executing tool name (shown with spinner when active) */
+  readonly currentTool?: string;
 }
 
 // =============================================================================
@@ -154,6 +159,8 @@ export function StatusBar({
   thinking,
   cost,
   showBorder = false,
+  showAllModes = false,
+  currentTool,
 }: StatusBarProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
@@ -175,9 +182,13 @@ export function StatusBar({
     : undefined;
 
   // Render mode selector (all modes shown, active highlighted)
+  const visibleModes = showAllModes
+    ? MODES_CONFIG
+    : MODES_CONFIG.filter((modeConfig) => modeConfig.mode === mode);
+
   const modeSection = (
     <Box key="modes" flexDirection="row">
-      {MODES_CONFIG.map((modeConfig, index) => {
+      {visibleModes.map((modeConfig, index) => {
         const isActive = modeConfig.mode === mode;
         return (
           <Text key={modeConfig.mode}>
@@ -206,6 +217,11 @@ export function StatusBar({
 
   // Collect right-side indicators
   const rightIndicators: React.ReactNode[] = [];
+
+  // Tool indicator (show currently executing tool with spinner)
+  if (currentTool) {
+    rightIndicators.push(<ToolIndicator key="tool" toolName={currentTool} />);
+  }
 
   // Model indicator (compact, name only)
   if (modelName) {
@@ -276,7 +292,7 @@ export function StatusBar({
     rightIndicators.push(
       <Box key="sidebar-hint">
         <Text color={theme.semantic.text.muted} dimColor>
-          ^\ bar
+          Ctrl+K/Alt+K sidebar
         </Text>
       </Box>
     );

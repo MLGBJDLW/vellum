@@ -29,7 +29,6 @@ import {
   type VirtualizedListRef,
 } from "../common/VirtualizedList/index.js";
 import { MarkdownRenderer } from "./MarkdownRenderer.js";
-import { StreamingText } from "./StreamingText.js";
 
 // =============================================================================
 // Types
@@ -64,6 +63,12 @@ export interface MessageListProps {
    * @default 4
    */
   readonly estimatedItemHeight?: number | ((index: number) => number);
+  /**
+   * Whether this component has focus for keyboard input.
+   * Controls whether PageUp/PageDown/arrow keys work.
+   * @default true (active when not specified for backward compatibility)
+   */
+  readonly isFocused?: boolean;
 }
 
 // =============================================================================
@@ -128,6 +133,7 @@ interface MessageItemProps {
   readonly message: Message;
   readonly roleColor: string;
   readonly mutedColor: string;
+  readonly accentColor: string;
 }
 
 /**
@@ -137,6 +143,7 @@ const MessageItem = memo(function MessageItem({
   message,
   roleColor,
   mutedColor,
+  accentColor,
 }: MessageItemProps) {
   const icon = getRoleIcon(message.role);
   const label = getRoleLabel(message.role);
@@ -144,30 +151,35 @@ const MessageItem = memo(function MessageItem({
 
   return (
     <Box flexDirection="column" marginBottom={1}>
-      {/* Message header: role icon, label, and timestamp */}
+      {/* Message header: role icon, label, and timestamp (or minimal for continuations) */}
       <Box>
-        <Text>
-          {icon}{" "}
-          <Text color={roleColor} bold>
-            {label}
-          </Text>
-          <Text color={mutedColor}> • {timestamp}</Text>
-          {message.isStreaming && (
-            <Text color={mutedColor} italic>
-              {" "}
-              (streaming...)
+        {message.isContinuation ? (
+          <Text color={mutedColor}>↳</Text>
+        ) : (
+          <Text>
+            {icon}{" "}
+            <Text color={roleColor} bold>
+              {label}
             </Text>
-          )}
-        </Text>
+            <Text color={mutedColor}> • {timestamp}</Text>
+            {message.isStreaming && (
+              <Text color={mutedColor} italic>
+                {" "}
+                (streaming...)
+              </Text>
+            )}
+          </Text>
+        )}
       </Box>
 
       {/* Message content */}
       <Box marginLeft={2} marginTop={0}>
-        {message.isStreaming ? (
-          <StreamingText content={message.content || ""} isStreaming={true} />
-        ) : (
-          <MarkdownRenderer content={message.content || "(empty)"} compact />
-        )}
+        <MarkdownRenderer
+          content={message.content || (message.isStreaming ? "" : "(empty)")}
+          compact
+          textColor={roleColor}
+          isStreaming={message.isStreaming}
+        />
       </Box>
 
       {/* Tool calls, if any - wrapped in MaxSizedBox to handle overflow */}
@@ -176,9 +188,12 @@ const MessageItem = memo(function MessageItem({
           <Box flexDirection="column" marginLeft={2} marginTop={1}>
             {message.toolCalls.map((toolCall) => (
               <Box key={toolCall.id}>
-                <Text color={mutedColor}>
-                  {getIcons().tool} {toolCall.name}
-                  <Text dimColor> [{toolCall.status}]</Text>
+                <Text>
+                  {getIcons().tool}{" "}
+                  <Text color={accentColor} bold>
+                    {toolCall.name}
+                  </Text>
+                  <Text color={mutedColor}> [{toolCall.status}]</Text>
                 </Text>
               </Box>
             ))}
@@ -244,18 +259,20 @@ const MessageList = memo(function MessageList({
   maxHeight,
   useVirtualizedList = false,
   estimatedItemHeight = 4,
+  isFocused,
 }: MessageListProps) {
   const { theme } = useTheme();
 
   // Ref for VirtualizedList imperative control
   const virtualizedListRef = useRef<VirtualizedListRef<Message>>(null);
 
-  // Determine if we're using optimized Static rendering
-  // If historyMessages is provided, use the split architecture
-  const useStaticRendering = historyMessages !== undefined;
-
   // Normalize maxHeight - treat 0, undefined, null as "no max height"
   const effectiveMaxHeight = maxHeight && maxHeight > 0 ? maxHeight : undefined;
+
+  // Determine if we're using optimized Static rendering
+  // If historyMessages is provided, use the split architecture
+  // NOTE: Static rendering does not support windowed scrolling; fall back when maxHeight is set.
+  const useStaticRendering = historyMessages !== undefined && !effectiveMaxHeight;
 
   // Current scroll position (index of the first visible message in windowed mode)
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -342,6 +359,7 @@ const MessageList = memo(function MessageList({
       }
 
       const pageSize = Math.max(1, Math.floor(scrollState.innerHeight / 2));
+      const lineStep = 1;
 
       if (key.pageUp) {
         list.scrollBy(-pageSize);
@@ -359,6 +377,37 @@ const MessageList = memo(function MessageList({
         } else {
           list.scrollBy(pageSize);
         }
+        return true;
+      }
+
+      if (key.upArrow) {
+        list.scrollBy(-lineStep);
+        setUserScrolledUp(true);
+        return true;
+      }
+
+      if (key.downArrow) {
+        const reachesBottom =
+          scrollState.scrollTop + lineStep >=
+          scrollState.scrollHeight - scrollState.innerHeight - 1;
+        if (reachesBottom) {
+          list.scrollToEnd();
+          setUserScrolledUp(false);
+        } else {
+          list.scrollBy(lineStep);
+        }
+        return true;
+      }
+
+      if (key.home) {
+        list.scrollTo(0);
+        setUserScrolledUp(true);
+        return true;
+      }
+
+      if (key.end) {
+        list.scrollToEnd();
+        setUserScrolledUp(false);
         return true;
       }
 
@@ -423,6 +472,7 @@ const MessageList = memo(function MessageList({
   );
 
   // Handle keyboard input for scrolling
+  // isActive defaults to true when isFocused is undefined (backward compatible)
   useInput(
     useCallback(
       (_char, key) => {
@@ -436,28 +486,40 @@ const MessageList = memo(function MessageList({
         }
       },
       [useVirtualizedList, handleVirtualizedNavigation, handleDirectNavigation]
-    )
+    ),
+    { isActive: isFocused !== false }
   );
 
   // Theme-based styling
   const roleColors: Record<Message["role"], string> = useMemo(
     () => ({
-      user: theme.colors.primary,
-      assistant: theme.colors.success,
-      system: theme.colors.warning,
-      tool: theme.colors.info,
+      user: theme.semantic.text.role.user,
+      assistant: theme.semantic.text.role.assistant,
+      system: theme.semantic.text.role.system,
+      tool: theme.semantic.text.role.tool,
     }),
-    [theme.colors.primary, theme.colors.success, theme.colors.warning, theme.colors.info]
+    [
+      theme.semantic.text.role.user,
+      theme.semantic.text.role.assistant,
+      theme.semantic.text.role.system,
+      theme.semantic.text.role.tool,
+    ]
   );
   const mutedColor = theme.semantic.text.muted;
+  const accentColor = theme.colors.accent;
   const borderColor = theme.semantic.border.default;
 
   // Virtualized list callbacks must be defined unconditionally to keep hook order stable.
   const renderMessageItem = useCallback(
     ({ item }: { item: Message; index: number }) => (
-      <MessageItem message={item} roleColor={roleColors[item.role]} mutedColor={mutedColor} />
+      <MessageItem
+        message={item}
+        roleColor={roleColors[item.role]}
+        mutedColor={mutedColor}
+        accentColor={accentColor}
+      />
     ),
-    [roleColors, mutedColor]
+    [roleColors, mutedColor, accentColor]
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
@@ -476,23 +538,45 @@ const MessageList = memo(function MessageList({
   // NOTE: This useMemo MUST be before early return to satisfy React hooks rules.
   const allMessages = useMemo(() => {
     const msgs = messages as Message[];
-    return pendingMessage ? [...msgs, pendingMessage] : msgs;
+    if (!pendingMessage) {
+      return msgs;
+    }
+
+    const lastMessage = msgs.length > 0 ? msgs[msgs.length - 1] : undefined;
+    if (lastMessage?.id === pendingMessage.id) {
+      return msgs;
+    }
+
+    return [...msgs, pendingMessage];
   }, [messages, pendingMessage]);
 
-  // Auto-scroll to end when new messages arrive (virtualized mode only)
+  // Auto-scroll to end when new messages arrive or pending content updates (virtualized mode only)
   const allMessagesLengthRef = useRef(allMessages.length);
+  const prevPendingContentRef = useRef<string | undefined>(pendingMessage?.content);
   useEffect(() => {
     const hasNewMessages = allMessages.length > allMessagesLengthRef.current;
+    const pendingContentChanged = pendingMessage?.content !== prevPendingContentRef.current;
     allMessagesLengthRef.current = allMessages.length;
+    prevPendingContentRef.current = pendingMessage?.content;
 
-    if (!useVirtualizedList || !autoScroll || userScrolledUp || !hasNewMessages) {
+    // Scroll when: new message arrived OR pending message content is streaming
+    const shouldScroll = hasNewMessages || (pendingMessage?.isStreaming && pendingContentChanged);
+
+    if (!useVirtualizedList || !autoScroll || userScrolledUp || !shouldScroll) {
       return;
     }
     virtualizedListRef.current?.scrollToEnd();
-  }, [useVirtualizedList, autoScroll, userScrolledUp, allMessages]);
+  }, [
+    useVirtualizedList,
+    autoScroll,
+    userScrolledUp,
+    allMessages,
+    pendingMessage?.content,
+    pendingMessage?.isStreaming,
+  ]);
 
   // Empty state
-  if (messages.length === 0) {
+  if (allMessages.length === 0) {
     return (
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
         <Text color={mutedColor} italic>
@@ -567,6 +651,7 @@ const MessageList = memo(function MessageList({
                 message={message}
                 roleColor={roleColors[message.role]}
                 mutedColor={mutedColor}
+                accentColor={accentColor}
               />
             </Box>
           )}
@@ -579,6 +664,7 @@ const MessageList = memo(function MessageList({
               message={pendingMessage}
               roleColor={roleColors[pendingMessage.role]}
               mutedColor={mutedColor}
+              accentColor={accentColor}
             />
           </Box>
         )}
@@ -627,6 +713,7 @@ const MessageList = memo(function MessageList({
             message={message}
             roleColor={roleColors[message.role]}
             mutedColor={mutedColor}
+            accentColor={accentColor}
           />
         ))}
       </Box>
