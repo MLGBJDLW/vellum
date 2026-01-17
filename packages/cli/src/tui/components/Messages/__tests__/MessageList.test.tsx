@@ -132,12 +132,17 @@ describe("MessageList", () => {
     });
   });
 
-  describe("Tool Calls", () => {
-    it("should render tool calls when present", () => {
+  describe("Tool Group Messages", () => {
+    it("should render tool_group message as inline tool rows", () => {
       const messages = [
         createMessage({
           role: "assistant",
-          content: "Using a tool",
+          content: "Let me read that file",
+        }),
+        createMessage({
+          id: "tool-group-1",
+          role: "tool_group",
+          content: "",
           toolCalls: [
             {
               id: "tc-1",
@@ -152,15 +157,20 @@ describe("MessageList", () => {
       const { lastFrame } = renderWithTheme(<MessageList messages={messages} />);
 
       const frame = lastFrame() ?? "";
+      expect(frame).toContain("Let me read that file");
       expect(frame).toContain("read_file");
-      expect(frame).toContain("completed");
     });
 
-    it("should render multiple tool calls", () => {
+    it("should render tool_group when multiple tool calls present", () => {
       const messages = [
         createMessage({
           role: "assistant",
-          content: "Multiple tools",
+          content: "Processing multiple files",
+        }),
+        createMessage({
+          id: "tool-group-1",
+          role: "tool_group",
+          content: "",
           toolCalls: [
             {
               id: "tc-1",
@@ -181,10 +191,33 @@ describe("MessageList", () => {
       const { lastFrame } = renderWithTheme(<MessageList messages={messages} />);
 
       const frame = lastFrame() ?? "";
+      expect(frame).toContain("Processing multiple files");
       expect(frame).toContain("read_file");
       expect(frame).toContain("write_file");
-      expect(frame).toContain("completed");
-      expect(frame).toContain("running");
+    });
+
+    it("should not render a Tools header for tool_group rows", () => {
+      const messages = [
+        createMessage({
+          id: "tool-group-1",
+          role: "tool_group",
+          content: "",
+          toolCalls: [
+            {
+              id: "tc-1",
+              name: "bash",
+              arguments: { command: "ls" },
+              status: "pending",
+            },
+          ],
+        }),
+      ];
+
+      const { lastFrame } = renderWithTheme(<MessageList messages={messages} />);
+
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("bash");
+      expect(frame).not.toContain("Tools");
     });
   });
 

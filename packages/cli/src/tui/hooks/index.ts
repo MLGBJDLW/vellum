@@ -6,7 +6,6 @@
 
 export {
   type AgentMessage,
-  type CurrentTool,
   type HookStatus,
   type UseAgentLoopReturn,
   useAgentLoop,
@@ -95,6 +94,19 @@ export {
   type UsePermissionHandlerReturn,
   usePermissionHandler,
 } from "./usePermissionHandler.js";
+// Persistence hooks
+export {
+  type PersistenceStatus,
+  type UsePersistenceOptions,
+  type UsePersistenceReturn,
+  usePersistence,
+} from "./usePersistence.js";
+export {
+  PERSISTENCE_SHORTCUTS,
+  type UsePersistenceShortcutsOptions,
+  type UsePersistenceShortcutsReturn,
+  usePersistenceShortcuts,
+} from "./usePersistenceShortcuts.js";
 export {
   type AnnouncementPriority,
   formatForScreenReader,

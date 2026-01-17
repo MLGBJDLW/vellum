@@ -12,7 +12,15 @@
 
 import { Box, type DOMElement } from "ink";
 import type React from "react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useScrollOptional } from "../../../context/ScrollContext.js";
 import { useBatchedScroll, useScrollAnchor, useVirtualization } from "./hooks/index.js";
 import { SCROLL_TO_ITEM_END, type VirtualizedListProps, type VirtualizedListRef } from "./types.js";
@@ -66,12 +74,14 @@ function VirtualizedListInner<T>(
   // Note: theme reserved for future scrollbar styling
   // const { theme } = useTheme();
 
+  const [containerHeight, setContainerHeight] = useState(24);
+
   // Initial virtualization pass with estimated heights
   const initialVirtualization = useVirtualization({
     dataLength: data.length,
     estimatedItemHeight,
     scrollTop: 0,
-    containerHeight: 24, // Default terminal height estimate
+    containerHeight,
   });
 
   // Scroll anchor management
@@ -87,7 +97,7 @@ function VirtualizedListInner<T>(
     offsets: initialVirtualization.offsets,
     heights: initialVirtualization.heights,
     totalHeight: initialVirtualization.totalHeight,
-    containerHeight: initialVirtualization.measuredContainerHeight,
+    containerHeight,
     initialScrollIndex,
     initialScrollOffsetInIndex,
   });
@@ -108,8 +118,14 @@ function VirtualizedListInner<T>(
     dataLength: data.length,
     estimatedItemHeight,
     scrollTop,
-    containerHeight: initialVirtualization.measuredContainerHeight,
+    containerHeight,
   });
+
+  useEffect(() => {
+    if (measuredContainerHeight > 0 && measuredContainerHeight !== containerHeight) {
+      setContainerHeight(measuredContainerHeight);
+    }
+  }, [measuredContainerHeight, containerHeight]);
 
   const extraTopSpacerHeight =
     alignToBottom && measuredContainerHeight > totalHeight
@@ -336,8 +352,9 @@ function VirtualizedListInner<T>(
       overflowY="hidden"
       overflowX="hidden"
       width="100%"
-      height="100%"
       flexDirection="column"
+      flexGrow={1}
+      minHeight={0}
     >
       <Box flexShrink={0} width="100%" flexDirection="column">
         {/* Top spacer for items above viewport */}

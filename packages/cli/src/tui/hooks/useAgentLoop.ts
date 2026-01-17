@@ -29,17 +29,6 @@ export interface AgentMessage {
 }
 
 /**
- * Tool execution information.
- */
-export interface CurrentTool {
-  callId: string;
-  name: string;
-  input: Record<string, unknown>;
-  status: "pending" | "executing" | "completed" | "failed";
-  result?: ExecutionResult;
-}
-
-/**
  * Delegation state for subagent tracking (T059).
  */
 export interface DelegationState {
@@ -104,8 +93,6 @@ export interface UseAgentLoopReturn {
   messages: AgentMessage[];
   /** Current thinking content being streamed */
   thinking: string;
-  /** Current tool being executed */
-  currentTool: CurrentTool | null;
   /** Whether an operation is in progress */
   isLoading: boolean;
   /** Last error encountered */
@@ -163,10 +150,13 @@ function generateMessageId(): string {
  * React hook for managing AgentLoop in React Ink applications.
  *
  * Provides:
- * - Reactive state (status, messages, thinking, currentTool)
+ * - Reactive state (status, messages, thinking)
  * - Methods (run, cancel, clear)
  * - Automatic event subscription and cleanup
  * - Ctrl+C and ESC cancellation integration
+ *
+ * Note: Tool execution state is managed via ToolsContext.
+ * Use useTools().executions for tool status display.
  *
  * @param loop - The AgentLoop instance to wrap
  *
@@ -178,7 +168,6 @@ function generateMessageId(): string {
  *     status,
  *     messages,
  *     thinking,
- *     currentTool,
  *     isLoading,
  *     run,
  *     cancel,
@@ -199,7 +188,6 @@ function generateMessageId(): string {
  *     <Box flexDirection="column">
  *       <MessageList messages={messages} />
  *       {thinking && <ThinkingBlock thinking={thinking} duration={0} />}
- *       {currentTool && <Text>Executing: {currentTool.name}</Text>}
  *       <Input onSubmit={handleSubmit} disabled={isLoading} />
  *     </Box>
  *   );
@@ -211,7 +199,6 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
   const [agentState, setAgentState] = useState<AgentState>(loop.getState());
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [thinking, setThinking] = useState("");
-  const [currentTool, setCurrentTool] = useState<CurrentTool | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
   // Delegation state (T059)
@@ -231,9 +218,6 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
 
   // Track thinking start time for duration calculation
   const thinkingStartRef = useRef<number | null>(null);
-
-  // Track tool clear timeout for cleanup (T038 fix)
-  const toolClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Track current streaming message for accumulation
   const currentMessageRef = useRef<{
@@ -352,41 +336,13 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       });
     };
 
-    // Tool start handler
-    const handleToolStart = (callId: string, name: string, input: Record<string, unknown>) => {
-      setCurrentTool({
-        callId,
-        name,
-        input,
-        status: "executing",
-      });
+    // Tool event handlers (events still fired but state managed by ToolsContext)
+    const handleToolStart = (_callId: string, _name: string, _input: Record<string, unknown>) => {
+      // Tool state is managed by ToolsContext, not here
     };
 
-    // Tool end handler
-    const handleToolEnd = (callId: string, _name: string, result: ExecutionResult) => {
-      setCurrentTool((prev) => {
-        if (prev?.callId === callId) {
-          return {
-            callId: prev.callId,
-            name: prev.name,
-            input: prev.input,
-            status: result.result.success ? "completed" : "failed",
-            result,
-          } as CurrentTool;
-        }
-        return prev;
-      });
-
-      // Clear previous timeout if exists (prevent memory leaks)
-      if (toolClearTimeoutRef.current) {
-        clearTimeout(toolClearTimeoutRef.current);
-      }
-
-      // Clear tool after a short delay
-      toolClearTimeoutRef.current = setTimeout(() => {
-        setCurrentTool((prev) => (prev?.callId === callId ? null : prev));
-        toolClearTimeoutRef.current = null;
-      }, 100);
+    const handleToolEnd = (_callId: string, _name: string, _result: ExecutionResult) => {
+      // Tool state is managed by ToolsContext, not here
     };
 
     // Error handler
@@ -420,14 +376,9 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       // This handler can be extended for message-level operations
     };
 
-    // Tool call handler - track pending tool calls
-    const handleToolCall = (id: string, name: string, input: Record<string, unknown>) => {
-      setCurrentTool({
-        callId: id,
-        name,
-        input,
-        status: "pending",
-      });
+    // Tool call handler - events still fired but state managed by ToolsContext
+    const handleToolCall = (_id: string, _name: string, _input: Record<string, unknown>) => {
+      // Tool state is managed by ToolsContext, not here
     };
 
     // Usage handler - track token usage
@@ -438,7 +389,6 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
 
     // Terminated handler - handle cancellation/termination
     const handleTerminated = () => {
-      setCurrentTool(null);
       setThinking("");
       thinkingStartRef.current = null;
     };
@@ -549,14 +499,8 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     loop.on("userPrompt:required", handleUserPromptRequired);
     loop.on("completion:attempted", handleCompletionAttempted);
 
-    // Cleanup subscriptions and timers
+    // Cleanup subscriptions
     return () => {
-      // Clear tool timeout to prevent memory leaks
-      if (toolClearTimeoutRef.current) {
-        clearTimeout(toolClearTimeoutRef.current);
-        toolClearTimeoutRef.current = null;
-      }
-
       // Unsubscribe from all events
       loop.off("stateChange", handleStateChange);
       loop.off("text", handleText);
@@ -622,7 +566,6 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
   const cancel = useCallback(
     (reason?: string) => {
       loop.cancel(reason);
-      setCurrentTool(null);
       setThinking("");
       thinkingStartRef.current = null;
     },
@@ -633,7 +576,6 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
   const clear = useCallback(() => {
     setMessages([]);
     setThinking("");
-    setCurrentTool(null);
     setError(null);
     thinkingStartRef.current = null;
     currentMessageRef.current = null;
@@ -655,7 +597,6 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     agentState,
     messages,
     thinking,
-    currentTool,
     isLoading,
     error,
     delegation,

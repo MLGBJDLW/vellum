@@ -95,7 +95,10 @@ describe("globTool", () => {
         ReturnType<typeof fs.stat>
       >);
 
-      const result = await globTool.execute({ patterns: ["**/*.ts"] }, mockContext);
+      const result = await globTool.execute(
+        { patterns: ["**/*.ts"], dot: false, maxFiles: 1000 },
+        mockContext
+      );
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -119,7 +122,10 @@ describe("globTool", () => {
         ReturnType<typeof fs.stat>
       >);
 
-      const result = await globTool.execute({ patterns: ["**/*.ts"], maxFiles: 10 }, mockContext);
+      const result = await globTool.execute(
+        { patterns: ["**/*.ts"], dot: false, maxFiles: 10 },
+        mockContext
+      );
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -133,7 +139,10 @@ describe("globTool", () => {
       abortController.abort();
       const ctx = createMockContext({ abortSignal: abortController.signal });
 
-      const result = await globTool.execute({ patterns: ["**/*.ts"] }, ctx);
+      const result = await globTool.execute(
+        { patterns: ["**/*.ts"], dot: false, maxFiles: 1000 },
+        ctx
+      );
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -178,7 +187,7 @@ describe("readManyFilesTool", () => {
       } as unknown as Awaited<ReturnType<typeof fs.stat>>);
 
       const result = await readManyFilesTool.execute(
-        { paths: ["src/a.ts", "src/b.ts"] },
+        { paths: ["src/a.ts", "src/b.ts"], maxFiles: 1000, maxSizePerFile: 100000 },
         mockContext
       );
 
@@ -200,7 +209,7 @@ describe("readManyFilesTool", () => {
       vi.mocked(fs.readFile).mockResolvedValue("content A");
 
       const result = await readManyFilesTool.execute(
-        { paths: ["src/a.ts", "src/missing.ts"] },
+        { paths: ["src/a.ts", "src/missing.ts"], maxFiles: 1000, maxSizePerFile: 100000 },
         mockContext
       );
 
@@ -213,7 +222,12 @@ describe("readManyFilesTool", () => {
 
     it("should require paths or patterns", async () => {
       const result = await readManyFilesTool.execute(
-        {} as { paths?: string[]; patterns?: string[] },
+        { maxFiles: 1000, maxSizePerFile: 100000 } as {
+          paths?: string[];
+          patterns?: string[];
+          maxFiles: number;
+          maxSizePerFile: number;
+        },
         mockContext
       );
 
@@ -252,6 +266,8 @@ describe("batchTool", () => {
       const result = await batchTool.execute(
         {
           operations: [{ tool: "read_file", params: { path: "a.ts" } }],
+          concurrency: 1,
+          stopOnError: true,
         },
         mockContext
       );
@@ -298,6 +314,7 @@ describe("batchTool", () => {
             { tool: "read_file", params: { path: "c.ts" }, id: "file-c" },
           ],
           concurrency: 3,
+          stopOnError: true,
         },
         mockContext
       );
@@ -334,6 +351,8 @@ describe("batchTool", () => {
       const result = await batchTool.execute(
         {
           operations: [{ tool: "batch", params: { operations: [] } }],
+          concurrency: 1,
+          stopOnError: true,
         },
         mockContext
       );
@@ -424,6 +443,7 @@ describe("multiEditTool", () => {
           edits: [
             { type: "replace", startLine: 100, content: "REPLACED" }, // Line doesn't exist
           ],
+          dryRun: false,
         },
         mockContext
       );
@@ -540,6 +560,7 @@ describe("insertAtLineTool", () => {
           path: "test.ts",
           line: 100,
           content: "// Won't work",
+          position: "after",
         },
         mockContext
       );
@@ -560,6 +581,7 @@ describe("insertAtLineTool", () => {
           path: "nonexistent.ts",
           line: 1,
           content: "// Won't work",
+          position: "after",
         },
         mockContext
       );

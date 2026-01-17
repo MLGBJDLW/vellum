@@ -41,6 +41,7 @@ const UI_TO_SESSION_ROLE: Record<MessageRole, SessionRole> = {
   assistant: "assistant",
   system: "system",
   tool: "tool_result",
+  tool_group: "tool_result", // tool_group maps to tool_result for session storage
 };
 
 // =============================================================================

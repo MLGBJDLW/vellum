@@ -107,6 +107,11 @@ export {
   type ComplexityLevel,
   type ComplexityResult,
   ComplexityResultSchema,
+  // Context Integration (T403)
+  type ContextIntegration,
+  type ContextIntegrationConfig,
+  type ContextManageResult,
+  type ContextManagerConfig,
   canAgentSpawn,
   canEdit,
   canSpawn,
@@ -115,6 +120,8 @@ export {
   // Agent Factory (T050, T056)
   createAgentFactory,
   createComplexityAnalyzer,
+  createContextIntegration,
+  createContextIntegrationFromLoopConfig,
   createLoopDetectionContext,
   createModeDetector,
   // Mode Loader (T006)

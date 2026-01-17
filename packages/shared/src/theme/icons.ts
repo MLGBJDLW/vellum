@@ -59,6 +59,9 @@ export type IconSet = {
   folder: string;
   branch: string;
   dirty: string;
+
+  // Thinking/Reasoning
+  thinking: string;
 };
 
 /**
@@ -117,6 +120,9 @@ export const nerdFontIcons: IconSet = {
   folder: "\uf07b", // nf-fa-folder
   branch: "\ue725", // nf-dev-git_branch
   dirty: "\uf069", // nf-fa-asterisk
+
+  // Thinking/Reasoning
+  thinking: "\uf5dc", // nf-fa-brain
 };
 
 /**
@@ -166,6 +172,9 @@ export const unicodeIcons: IconSet = {
   folder: "▫", // White small square (folder)
   branch: "⎇", // Alternative key symbol (branch)
   dirty: "●", // Black circle (modified)
+
+  // Thinking/Reasoning
+  thinking: "◔", // Circle with upper right quadrant black
 };
 
 /**
@@ -215,6 +224,9 @@ export const asciiIcons: IconSet = {
   folder: "[D]",
   branch: "[B]",
   dirty: "*",
+
+  // Thinking/Reasoning
+  thinking: "?",
 };
 
 // =============================================================================

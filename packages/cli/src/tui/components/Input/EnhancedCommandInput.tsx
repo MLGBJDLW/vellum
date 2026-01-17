@@ -310,10 +310,13 @@ export function EnhancedCommandInput({
 
   // History navigation only when no autocomplete is active
   useInput(
-    (_input, key) => {
-      if (key.upArrow) {
+    (input, key) => {
+      // ↑ or Ctrl+P - previous history
+      if (key.upArrow || (key.ctrl && input === "p")) {
         handleHistoryUp();
-      } else if (key.downArrow) {
+      }
+      // ↓ or Ctrl+N - next history
+      else if (key.downArrow || (key.ctrl && input === "n")) {
         handleHistoryDown();
       }
     },

@@ -277,47 +277,40 @@ export function getAllMentionSuggestions(): MentionSuggestion[] {
       type: "file",
       label: "file",
       description: "Include a file's contents",
-      icon: "📄",
       example: "@file:./src/index.ts",
     },
     {
       type: "folder",
       label: "folder",
       description: "List a directory's contents",
-      icon: "📁",
       example: "@folder:./src",
     },
     {
       type: "url",
       label: "url",
       description: "Fetch content from a URL",
-      icon: "🌐",
       example: "@url:https://example.com",
     },
     {
       type: "codebase",
       label: "codebase",
       description: "Search the codebase semantically",
-      icon: "🔍",
       example: "@codebase:authentication logic",
     },
     {
       type: "git-diff",
       label: "git-diff",
       description: "Include current git changes",
-      icon: "📝",
     },
     {
       type: "problems",
       label: "problems",
       description: "Include LSP diagnostics/errors",
-      icon: "⚠️",
     },
     {
       type: "terminal",
       label: "terminal",
       description: "Include recent terminal output",
-      icon: "💻",
     },
   ];
 }

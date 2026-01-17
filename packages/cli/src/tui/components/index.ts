@@ -51,7 +51,6 @@ export {
 export * from "./Sidebar/index.js";
 export * from "./StatusBar/index.js";
 export * from "./session/index.js";
-export { ThinkingBlock, type ThinkingBlockProps } from "./ThinkingBlock.js";
 // Tip Banner
 export { TipBanner, type TipBannerProps } from "./TipBanner.js";
 // Todo Panel (Phase 26)

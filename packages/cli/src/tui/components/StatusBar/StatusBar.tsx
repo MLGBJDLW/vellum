@@ -14,10 +14,10 @@ import { useTheme } from "../../theme/index.js";
 import type { AgentLevel } from "./AgentModeIndicator.js";
 import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 import { ModelIndicator } from "./ModelIndicator.js";
+import type { PersistenceStatusIndicatorProps } from "./PersistenceStatusIndicator.js";
 import { SandboxIndicator } from "./SandboxIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
 import { TokenBreakdown, type TokenStats } from "./TokenBreakdown.js";
-import { ToolIndicator } from "./ToolIndicator.js";
 import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeIndicator.js";
 
 // =============================================================================
@@ -63,8 +63,11 @@ export interface StatusBarProps {
   readonly showBorder?: boolean;
   /** Whether to show all modes or only active (default: false) */
   readonly showAllModes?: boolean;
-  /** Currently executing tool name (shown with spinner when active) */
-  readonly currentTool?: string;
+  /** Persistence status for session save indicator */
+  readonly persistence?: Pick<
+    PersistenceStatusIndicatorProps,
+    "status" | "unsavedCount" | "lastSavedAt"
+  >;
 }
 
 // =============================================================================
@@ -160,7 +163,9 @@ export function StatusBar({
   cost,
   showBorder = false,
   showAllModes = false,
-  currentTool,
+  // NOTE: persistence prop kept for API compatibility but no longer rendered in footer
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  persistence: _persistence,
 }: StatusBarProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
@@ -217,11 +222,6 @@ export function StatusBar({
 
   // Collect right-side indicators
   const rightIndicators: React.ReactNode[] = [];
-
-  // Tool indicator (show currently executing tool with spinner)
-  if (currentTool) {
-    rightIndicators.push(<ToolIndicator key="tool" toolName={currentTool} />);
-  }
 
   // Model indicator (compact, name only)
   if (modelName) {
@@ -286,6 +286,9 @@ export function StatusBar({
     );
   }
 
+  // NOTE: Persistence status indicator moved to Sidebar's SystemStatusPanel (T034 UI cleanup)
+  // The persistence prop is kept for API compatibility but no longer rendered in footer.
+
   // Sidebar toggle hint (show only if there's room - not shown when many indicators present)
   // Skip when there are 4+ indicators to avoid terminal overflow
   if (rightIndicators.length < 4) {
@@ -333,8 +336,11 @@ export function StatusBar({
       {/* Left: Mode selector */}
       {modeSection}
 
-      {/* Right: Model, Context, Cost */}
-      <Box flexDirection="row">{renderedRightItems}</Box>
+      {/* Right: Model, Context, Cost - with separator from mode section */}
+      <Box flexDirection="row">
+        <Text color={theme.semantic.border.muted}>{SEPARATOR}</Text>
+        {renderedRightItems}
+      </Box>
     </Box>
   );
 }

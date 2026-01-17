@@ -27,7 +27,15 @@ export {
   toUIMessage,
   toUIMessages,
 } from "./message-adapter.js";
-
+// Persistence Bridge - Advanced persistence integration
+export {
+  createPersistenceBridge,
+  PersistenceBridge,
+  type PersistenceBridgeCallbacks,
+  type PersistenceBridgeOptions,
+  type SyncResult,
+  type SyncState,
+} from "./persistence-bridge.js";
 // Session Adapter - Session persistence
 export {
   createMemorySessionStorage,

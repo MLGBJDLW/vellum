@@ -194,68 +194,45 @@ describe("MessageBubble", () => {
       expect(lastFrame()).toContain("Compact message");
     });
 
-    it("hides tool calls in compact mode", () => {
+    it("renders assistant message in compact mode without extra spacing", () => {
       const message = createTestMessage({
         role: "assistant",
-        content: "Message with tools",
-        toolCalls: [
-          {
-            id: "tool-1",
-            name: "read_file",
-            arguments: { path: "/test.txt" },
-            status: "completed",
-          },
-        ],
+        content: "Compact assistant message",
       });
 
       const { lastFrame } = renderWithTheme(<MessageBubble message={message} compact />);
 
-      expect(lastFrame()).toContain("Message with tools");
-      expect(lastFrame()).not.toContain("read_file");
+      expect(lastFrame()).toContain("Compact assistant message");
+      expect(lastFrame()).toContain("Vellum");
     });
   });
 
-  describe("tool calls", () => {
-    it("renders tool calls for assistant messages", () => {
+  describe("unknown/unhandled roles", () => {
+    it("renders unknown role with fallback label", () => {
+      // tool_group role is not handled by MessageBubble (use ToolGroupItem instead)
+      // This tests the fallback behavior for unrecognized roles
       const message = createTestMessage({
-        role: "assistant",
-        content: "Executing tools...",
-        toolCalls: [
-          {
-            id: "tool-1",
-            name: "read_file",
-            arguments: { path: "/test.txt" },
-            status: "completed",
-          },
-          {
-            id: "tool-2",
-            name: "write_file",
-            arguments: { path: "/output.txt" },
-            status: "running",
-          },
-        ],
+        role: "tool_group", // Not handled by MessageBubble
+        content: "Some content",
       });
 
       const { lastFrame } = renderWithTheme(<MessageBubble message={message} />);
 
-      expect(lastFrame()).toContain("read_file");
-      expect(lastFrame()).toContain("completed");
-      expect(lastFrame()).toContain("write_file");
-      expect(lastFrame()).toContain("running");
+      // Shows "Unknown" label for unhandled roles
+      expect(lastFrame()).toContain("Unknown");
+      expect(lastFrame()).toContain("Some content");
     });
 
-    it("does not render tool calls section when empty", () => {
+    it("renders unknown role with empty content placeholder", () => {
       const message = createTestMessage({
-        role: "assistant",
-        content: "No tools",
-        toolCalls: [],
+        role: "tool_group",
+        content: "",
       });
 
       const { lastFrame } = renderWithTheme(<MessageBubble message={message} />);
 
-      expect(lastFrame()).toContain("No tools");
-      // Should only have the main content, no extra tool icons
-      expect(lastFrame()?.split(icons.tool).length).toBeLessThanOrEqual(1);
+      // Empty content shows placeholder
+      expect(lastFrame()).toContain("(empty)");
     });
   });
 
@@ -264,14 +241,6 @@ describe("MessageBubble", () => {
       const message = createTestMessage({
         role: "assistant",
         content: "Full featured message",
-        toolCalls: [
-          {
-            id: "tool-1",
-            name: "test_tool",
-            arguments: {},
-            status: "pending",
-          },
-        ],
       });
 
       const { lastFrame } = renderWithTheme(
@@ -282,7 +251,18 @@ describe("MessageBubble", () => {
       expect(lastFrame()).toContain(icons.assistant); // Avatar
       expect(lastFrame()).toContain("Vellum");
       expect(lastFrame()).toContain("•"); // Timestamp separator
-      expect(lastFrame()).toContain("test_tool");
+    });
+
+    it("renders message with thinking content", () => {
+      const message = createTestMessage({
+        role: "assistant",
+        content: "Final response",
+        thinking: "Let me think about this...",
+      });
+
+      const { lastFrame } = renderWithTheme(<MessageBubble message={message} />);
+
+      expect(lastFrame()).toContain("Final response");
     });
   });
 });

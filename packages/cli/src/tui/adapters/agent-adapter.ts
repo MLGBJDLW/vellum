@@ -9,6 +9,7 @@
 
 import type { AgentLoop, ExecutionResult } from "@vellum/core";
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import type { ToolCallInfo } from "../context/MessagesContext.js";
 import { useMessages } from "../context/MessagesContext.js";
 import { useTools } from "../context/ToolsContext.js";
 import { findLastSafeSplitPoint } from "../utils/findLastSafeSplitPoint.js";
@@ -70,12 +71,6 @@ export interface UseAgentAdapterReturn extends AgentAdapter {
    * Whether currently connected to an AgentLoop
    */
   isConnected: boolean;
-
-  /**
-   * Set callback to receive thinking content from AgentLoop.
-   * @param callback - Function to receive thinking text, or null to unregister
-   */
-  setOnThinking: (callback: ((text: string) => void) | null) => void;
 }
 
 // =============================================================================
@@ -141,10 +136,14 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
   const {
     addMessage,
     appendToMessage,
+    appendToThinking,
     updateMessage,
     clearMessages,
     commitPendingMessage,
     splitMessageAtSafePoint,
+    addToolGroup,
+    updateToolGroup,
+    historyMessages,
   } = useMessages();
   const { addExecution, updateExecution, clearExecutions, registerCallId } = useTools();
 
@@ -157,38 +156,50 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
   const addMessageRef = useRef(addMessage);
   const appendToMessageRef = useRef(appendToMessage);
+  const appendToThinkingRef = useRef(appendToThinking);
   const updateMessageRef = useRef(updateMessage);
   const clearMessagesRef = useRef(clearMessages);
   const commitPendingMessageRef = useRef(commitPendingMessage);
   const splitMessageAtSafePointRef = useRef(splitMessageAtSafePoint);
+  const addToolGroupRef = useRef(addToolGroup);
+  const updateToolGroupRef = useRef(updateToolGroup);
   const addExecutionRef = useRef(addExecution);
   const updateExecutionRef = useRef(updateExecution);
   const clearExecutionsRef = useRef(clearExecutions);
   const registerCallIdRef = useRef(registerCallId);
+  const historyMessagesRef = useRef(historyMessages);
 
   // Keep refs up-to-date without triggering callback recreation
   useEffect(() => {
     addMessageRef.current = addMessage;
     appendToMessageRef.current = appendToMessage;
+    appendToThinkingRef.current = appendToThinking;
     updateMessageRef.current = updateMessage;
     clearMessagesRef.current = clearMessages;
     commitPendingMessageRef.current = commitPendingMessage;
     splitMessageAtSafePointRef.current = splitMessageAtSafePoint;
+    addToolGroupRef.current = addToolGroup;
+    updateToolGroupRef.current = updateToolGroup;
     addExecutionRef.current = addExecution;
     updateExecutionRef.current = updateExecution;
     clearExecutionsRef.current = clearExecutions;
     registerCallIdRef.current = registerCallId;
+    historyMessagesRef.current = historyMessages;
   }, [
     addMessage,
     appendToMessage,
+    appendToThinking,
     updateMessage,
     clearMessages,
     commitPendingMessage,
     splitMessageAtSafePoint,
+    addToolGroup,
+    updateToolGroup,
     addExecution,
     updateExecution,
     clearExecutions,
     registerCallId,
+    historyMessages,
   ]);
 
   // =============================================================================
@@ -202,42 +213,100 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
   // Track current streaming message
   const streamingMessageRef = useRef<StreamingMessage | null>(null);
 
+  // Pending tool calls awaiting an assistant message to attach to (for persistence)
+  const pendingToolCallsRef = useRef<Map<string, ToolCallInfo>>(new Map());
+
   // Map tool call IDs to execution IDs (for context correlation)
   const toolIdMapRef = useRef<Map<string, string>>(new Map());
 
+  // Map tool call IDs to tool_group message IDs (for inline UI rendering)
+  const toolGroupMapRef = useRef<Map<string, string>>(new Map());
+
   // =============================================================================
-  // Thinking Event Callback (for external handling)
+  // Thinking Event Handling
   // =============================================================================
 
   /**
-   * Ref to store external thinking callback.
-   * This allows app.tsx to receive thinking events without tight coupling.
+   * Detect if the new assistant message should be marked as a continuation.
+   * A continuation occurs when:
+   * - The last message in history is a tool_group
+   * - The message before that was an assistant message
+   *
+   * This allows the UI to render a minimal `↳` indicator instead of the full header.
    */
-  const onThinkingRef = useRef<((text: string) => void) | null>(null);
+  const isContinuationAfterToolGroup = useCallback((): boolean => {
+    const history = historyMessagesRef.current;
+    if (history.length < 2) {
+      return false;
+    }
+    const lastMessage = history[history.length - 1];
+    const secondLastMessage = history[history.length - 2];
+
+    // Check if last is tool_group and second-last is assistant
+    return lastMessage?.role === "tool_group" && secondLastMessage?.role === "assistant";
+  }, []);
+
+  /**
+   * Store or update a pending tool call until a streaming message exists.
+   * Ensures tool call data is persisted even when tools fire before text.
+   */
+  const upsertPendingToolCall = useCallback((toolCallInfo: ToolCallInfo) => {
+    const existing = pendingToolCallsRef.current.get(toolCallInfo.id);
+    if (existing) {
+      pendingToolCallsRef.current.set(toolCallInfo.id, {
+        ...existing,
+        ...toolCallInfo,
+        arguments:
+          Object.keys(toolCallInfo.arguments).length > 0
+            ? toolCallInfo.arguments
+            : existing.arguments,
+      });
+    } else {
+      pendingToolCallsRef.current.set(toolCallInfo.id, toolCallInfo);
+    }
+  }, []);
+
+  /**
+   * Flush any pending tool calls to attach to the next assistant message.
+   */
+  const flushPendingToolCalls = useCallback((): ToolCallInfo[] | undefined => {
+    if (pendingToolCallsRef.current.size === 0) {
+      return undefined;
+    }
+    const calls = Array.from(pendingToolCallsRef.current.values());
+    pendingToolCallsRef.current.clear();
+    return calls;
+  }, []);
 
   /**
    * Handle thinking streaming from AgentLoop.
-   * Forwards thinking content to external callback if registered.
+   * Appends thinking content directly to the streaming message.
    */
-  const handleThinking = useCallback((text: string) => {
-    if (!streamingMessageRef.current) {
-      const id = addMessageRef.current({
-        role: "assistant",
-        content: "",
-        isStreaming: true,
-      });
-      streamingMessageRef.current = {
-        id,
-        content: "",
-        thinking: "",
-        hasStarted: true,
-      };
-    }
-    streamingMessageRef.current.thinking += text;
-    if (onThinkingRef.current) {
-      onThinkingRef.current(text);
-    }
-  }, []);
+  const handleThinking = useCallback(
+    (text: string) => {
+      if (!streamingMessageRef.current) {
+        const pendingToolCalls = flushPendingToolCalls();
+        const isContinuation = isContinuationAfterToolGroup();
+        const id = addMessageRef.current({
+          role: "assistant",
+          content: "",
+          isStreaming: true,
+          isContinuation,
+          toolCalls: pendingToolCalls && pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
+        });
+        streamingMessageRef.current = {
+          id,
+          content: "",
+          thinking: "",
+          hasStarted: true,
+        };
+      }
+      streamingMessageRef.current.thinking += text;
+      // Append thinking content to the message via context
+      appendToThinkingRef.current(streamingMessageRef.current.id, text);
+    },
+    [flushPendingToolCalls, isContinuationAfterToolGroup]
+  );
 
   /**
    * Handle text streaming from AgentLoop
@@ -256,10 +325,14 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
       if (!streaming) {
         // Start a new streaming message if we receive text without a message
+        const pendingToolCalls = flushPendingToolCalls();
+        const isContinuation = isContinuationAfterToolGroup();
         const id = addMessageRef.current({
           role: "assistant",
           content: text,
           isStreaming: true,
+          isContinuation,
+          toolCalls: pendingToolCalls && pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
         });
         streamingMessageRef.current = {
           id,
@@ -288,7 +361,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         }
       }
     },
-    [enableMessageSplitting]
+    [enableMessageSplitting, flushPendingToolCalls, isContinuationAfterToolGroup]
   ); // Depends on enableMessageSplitting flag
 
   /**
@@ -311,6 +384,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       commitPendingMessageRef.current();
       streamingMessageRef.current = null;
     }
+    pendingToolCallsRef.current.clear();
   }, []); // Empty deps = stable callback
 
   /**
@@ -327,6 +401,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       updateMessageRef.current(streaming.id, { isStreaming: false, content });
       commitPendingMessageRef.current();
       streamingMessageRef.current = null;
+      pendingToolCallsRef.current.clear();
     } else {
       addMessageRef.current({
         role: "assistant",
@@ -334,17 +409,111 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         isStreaming: false,
       });
     }
+    pendingToolCallsRef.current.clear();
 
     // Log error for debugging (could also emit to a context/store if needed)
     console.error("[AgentAdapter] AgentLoop error:", error.message);
   }, []); // Empty deps = stable callback
 
   /**
+   * Commit the current streaming message before inserting tool rows.
+   * Keeps tool_group messages inline between assistant segments.
+   */
+  const finalizeStreamingMessage = useCallback(() => {
+    const streaming = streamingMessageRef.current;
+    if (!streaming) {
+      return;
+    }
+
+    const hasContent = streaming.content.trim().length > 0;
+    const hasThinking = streaming.thinking.trim().length > 0;
+    if (hasContent || hasThinking) {
+      commitPendingMessageRef.current();
+    }
+    streamingMessageRef.current = null;
+  }, []);
+
+  /**
+   * Create or update a tool_group message for inline tool display.
+   */
+  const upsertToolGroup = useCallback(
+    (
+      callId: string,
+      name: string,
+      input: Record<string, unknown>,
+      status: "pending" | "running" | "completed" | "error",
+      result?: unknown,
+      error?: string
+    ) => {
+      const toolCallInfo: ToolCallInfo = {
+        id: callId,
+        name,
+        arguments: input,
+        status,
+        result,
+        error,
+      };
+
+      const existingGroupId = toolGroupMapRef.current.get(callId);
+      if (!existingGroupId) {
+        finalizeStreamingMessage();
+        const groupId = addToolGroupRef.current([toolCallInfo]);
+        toolGroupMapRef.current.set(callId, groupId);
+        return;
+      }
+
+      updateToolGroupRef.current(existingGroupId, toolCallInfo);
+    },
+    [finalizeStreamingMessage]
+  );
+
+  /**
+   * Sync a tool call to the streaming assistant message's toolCalls array.
+   * If no message is streaming yet, stash the call for the next assistant message.
+   *
+   * Tool calls are persisted on assistant messages; UI rendering uses tool_group rows.
+   */
+  const syncToolCallToMessage = useCallback(
+    (
+      callId: string,
+      name: string,
+      input: Record<string, unknown>,
+      status: "pending" | "running" | "completed" | "error",
+      result?: unknown,
+      error?: string
+    ) => {
+      const toolCallInfo: ToolCallInfo = {
+        id: callId,
+        name,
+        arguments: input,
+        status,
+        result,
+        error,
+      };
+
+      if (!streamingMessageRef.current) {
+        upsertPendingToolCall(toolCallInfo);
+        return;
+      }
+
+      // Update existing message's toolCalls (merging handled by context)
+      updateMessageRef.current(streamingMessageRef.current.id, {
+        toolCalls: [toolCallInfo],
+      });
+    },
+    [upsertPendingToolCall]
+  );
+
+  /**
    * Handle tool start from AgentLoop
-   * Maps to: addExecution in ToolsContext
+   * Maps to: addExecution in ToolsContext + tool_group message
    */
   const handleToolStart = useCallback(
     (callId: string, name: string, input: Record<string, unknown>) => {
+      // Persist tool call info on assistant message and render inline tool row.
+      syncToolCallToMessage(callId, name, input, "running");
+      upsertToolGroup(callId, name, input, "running");
+
       const existingExecutionId = toolIdMapRef.current.get(callId);
 
       // If we already created a pending execution due to permissionRequired,
@@ -369,15 +538,15 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       toolIdMapRef.current.set(callId, executionId);
       registerCallIdRef.current(callId, executionId);
     },
-    [] // Empty deps = stable callback
+    [syncToolCallToMessage, upsertToolGroup]
   );
 
   /**
    * Handle tool end from AgentLoop
-   * Maps to: updateExecution in ToolsContext
+   * Maps to: updateExecution in ToolsContext + tool_group message update
    */
   const handleToolEnd = useCallback(
-    (callId: string, _name: string, result: ExecutionResult) => {
+    (callId: string, name: string, result: ExecutionResult) => {
       // Look up the execution ID from our map
       const executionId = toolIdMapRef.current.get(callId);
 
@@ -393,8 +562,19 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         // Clean up the map entry
         toolIdMapRef.current.delete(callId);
       }
+
+      const isSuccess = result.result.success;
+      upsertToolGroup(
+        callId,
+        name,
+        {}, // Args not available here; merge keeps previous arguments if present.
+        isSuccess ? "completed" : "error",
+        isSuccess ? result.result.output : undefined,
+        !isSuccess ? String(result.result.error) : undefined
+      );
+      toolGroupMapRef.current.delete(callId);
     },
-    [] // Empty deps = stable callback
+    [upsertToolGroup]
   );
 
   /**
@@ -403,6 +583,10 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
    */
   const handlePermissionRequired = useCallback(
     (callId: string, name: string, input: Record<string, unknown>) => {
+      // Persist tool call info and show inline pending tool row.
+      syncToolCallToMessage(callId, name, input, "pending");
+      upsertToolGroup(callId, name, input, "pending");
+
       // Add execution in pending state (awaiting approval)
       const executionId = addExecutionRef.current({
         toolName: name,
@@ -414,7 +598,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       toolIdMapRef.current.set(callId, executionId);
       registerCallIdRef.current(callId, executionId);
     },
-    [] // Empty deps = stable callback
+    [syncToolCallToMessage, upsertToolGroup]
   );
 
   /**
@@ -431,8 +615,10 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
           startedAt: new Date(),
         });
       }
+
+      upsertToolGroup(callId, _name, {}, "running");
     },
-    [] // Empty deps = stable callback
+    [upsertToolGroup]
   );
 
   /**
@@ -452,8 +638,11 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         // Clean up the map entry
         toolIdMapRef.current.delete(callId);
       }
+
+      upsertToolGroup(callId, _name, {}, "error", undefined, reason);
+      toolGroupMapRef.current.delete(callId);
     },
-    [] // Empty deps = stable callback
+    [upsertToolGroup]
   );
 
   /**
@@ -486,7 +675,9 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
       // Reset state only when connecting to a NEW loop
       streamingMessageRef.current = null;
+      pendingToolCallsRef.current.clear();
       toolIdMapRef.current.clear();
+      toolGroupMapRef.current.clear();
 
       // Subscribe to AgentLoop events
       agentLoop.on("text", handleText);
@@ -540,7 +731,9 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
       // Reset state
       streamingMessageRef.current = null;
+      pendingToolCallsRef.current.clear();
       toolIdMapRef.current.clear();
+      toolGroupMapRef.current.clear();
 
       // Optionally clear contexts (using refs for stability)
       if (clearOnDisconnect) {
@@ -570,14 +763,6 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     };
   }, [disconnect]);
 
-  /**
-   * Set the callback for thinking events.
-   * Call this to receive thinking content from AgentLoop.
-   */
-  const setOnThinking = useCallback((callback: ((text: string) => void) | null) => {
-    onThinkingRef.current = callback;
-  }, []);
-
   // Memoize return value to ensure stable object reference across renders.
   // This prevents useEffect re-runs in consumers that depend on the adapter object,
   // which was causing disconnect/reconnect cycles during streaming.
@@ -586,9 +771,8 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       connect,
       disconnect,
       isConnected: isConnectedRef.current,
-      setOnThinking,
     }),
-    [connect, disconnect, setOnThinking]
+    [connect, disconnect]
   );
 }
 

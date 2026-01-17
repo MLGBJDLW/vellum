@@ -186,6 +186,11 @@ function TextInputComponent({
   // Cursor position within the value
   const [cursorPosition, setCursorPosition] = useState(value.length);
 
+  // Undo/Redo stacks for Ctrl+Z support
+  const [undoStack, setUndoStack] = useState<Array<{ value: string; cursor: number }>>([]);
+  const [redoStack, setRedoStack] = useState<Array<{ value: string; cursor: number }>>([]);
+  const lastValueRef = useRef(value);
+
   // Sync cursor position when value changes externally
   useEffect(() => {
     if (cursorPosition > value.length) {
@@ -202,6 +207,29 @@ function TextInputComponent({
   useEffect(() => {
     cursorPositionRef.current = cursorPosition;
   }, [cursorPosition]);
+
+  // Track value changes for undo stack (debounced to group rapid typing)
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (value !== lastValueRef.current) {
+      // Debounce undo snapshots - group rapid typing into single undo entry
+      if (undoTimerRef.current) {
+        clearTimeout(undoTimerRef.current);
+      }
+      const prevValue = lastValueRef.current;
+      const prevCursor = cursorPositionRef.current;
+      undoTimerRef.current = setTimeout(() => {
+        setUndoStack((prev) => [...prev.slice(-99), { value: prevValue, cursor: prevCursor }]);
+        setRedoStack([]); // Clear redo on new changes
+      }, 300);
+      lastValueRef.current = value;
+    }
+    return () => {
+      if (undoTimerRef.current) {
+        clearTimeout(undoTimerRef.current);
+      }
+    };
+  }, [value]);
 
   // Handle cursorToEnd prop - move cursor to end when requested
   useEffect(() => {
@@ -404,6 +432,114 @@ function TextInputComponent({
   }, [multiline, value, cursorPosition]);
 
   /**
+   * Calculate current cursor row (0-indexed)
+   */
+  const cursorRow = useMemo(() => {
+    const beforeCursor = value.slice(0, cursorPosition);
+    return (beforeCursor.match(/\n/g) || []).length;
+  }, [value, cursorPosition]);
+
+  /**
+   * Handle Home key (Ctrl+A) - move to current line start
+   */
+  const handleHome = useCallback(() => {
+    const lines = value.split("\n");
+    let pos = 0;
+    for (let i = 0; i < cursorRow; i++) {
+      const line = lines[i];
+      if (line !== undefined) {
+        pos += line.length + 1;
+      }
+    }
+    setCursorPosition(pos);
+  }, [value, cursorRow]);
+
+  /**
+   * Handle End key (Ctrl+E) - move to current line end
+   */
+  const handleEnd = useCallback(() => {
+    const lines = value.split("\n");
+    let pos = 0;
+    for (let i = 0; i <= cursorRow; i++) {
+      const line = lines[i];
+      if (line !== undefined) {
+        pos += line.length + (i < cursorRow ? 1 : 0);
+      }
+    }
+    setCursorPosition(pos);
+  }, [value, cursorRow]);
+
+  /**
+   * Handle Ctrl+K - kill (delete) from cursor to end of line
+   */
+  const handleKillToEnd = useCallback(() => {
+    if (disabled) return;
+    const lines = value.split("\n");
+    const currentLine = lines[cursorRow];
+    if (currentLine === undefined) return;
+    const lineStart = lines.slice(0, cursorRow).join("\n").length + (cursorRow > 0 ? 1 : 0);
+    const lineEnd = lineStart + currentLine.length;
+    const newValue = value.slice(0, cursorPosition) + value.slice(lineEnd);
+    onChange(newValue);
+  }, [disabled, value, cursorPosition, cursorRow, onChange]);
+
+  /**
+   * Handle Ctrl+U - kill (delete) from cursor to start of line
+   */
+  const handleKillToStart = useCallback(() => {
+    if (disabled) return;
+    const lines = value.split("\n");
+    const lineStart = lines.slice(0, cursorRow).join("\n").length + (cursorRow > 0 ? 1 : 0);
+    const newValue = value.slice(0, lineStart) + value.slice(cursorPosition);
+    onChange(newValue);
+    setCursorPosition(lineStart);
+  }, [disabled, value, cursorPosition, cursorRow, onChange]);
+
+  /**
+   * Handle Ctrl+W - delete word backward
+   */
+  const handleDeleteWordBackward = useCallback(() => {
+    if (disabled || cursorPosition === 0) return;
+
+    // Find the start of the previous word
+    let pos = cursorPosition - 1;
+    // Skip whitespace
+    while (pos > 0 && /\s/.test(value.charAt(pos))) pos--;
+    // Skip word characters
+    while (pos > 0 && !/\s/.test(value.charAt(pos - 1))) pos--;
+
+    const newValue = value.slice(0, pos) + value.slice(cursorPosition);
+    onChange(newValue);
+    setCursorPosition(pos);
+  }, [disabled, value, cursorPosition, onChange]);
+
+  /**
+   * Handle Ctrl+Z - undo
+   */
+  const handleUndo = useCallback(() => {
+    const prev = undoStack[undoStack.length - 1];
+    if (!prev) return;
+    setUndoStack((s) => s.slice(0, -1));
+    setRedoStack((s) => [...s, { value, cursor: cursorPosition }]);
+    onChange(prev.value);
+    setCursorPosition(prev.cursor);
+    lastValueRef.current = prev.value; // Prevent re-adding to undo stack
+  }, [undoStack, value, cursorPosition, onChange]);
+
+  /**
+   * Handle Ctrl+Shift+Z / Ctrl+Y - redo
+   */
+  const handleRedo = useCallback(() => {
+    const next = redoStack[redoStack.length - 1];
+    if (!next) return;
+    setRedoStack((s) => s.slice(0, -1));
+    setUndoStack((s) => [...s, { value, cursor: cursorPosition }]);
+    onChange(next.value);
+    setCursorPosition(next.cursor);
+    lastValueRef.current = next.value; // Prevent re-adding to undo stack
+  }, [redoStack, value, cursorPosition, onChange]);
+
+  /**
    * Handle submission
    */
   const handleSubmit = useCallback(() => {
@@ -429,12 +565,21 @@ function TextInputComponent({
 
   /**
    * Handle return/enter key based on mode
+   * - Shift+Enter: Always inserts newline (even in single-line mode for multiline contexts)
+   * - Enter (multiline): Inserts newline
+   * - Ctrl+Enter (multiline): Submits
+   * - Enter (single-line): Submits
    */
   const handleReturn = useCallback(
-    (ctrl: boolean) => {
+    (ctrl: boolean, shift: boolean) => {
       // Skip if Enter should be suppressed (e.g., autocomplete is active)
       // Check prop directly for synchronous behavior - state-based check was racy
       if (suppressEnter) {
+        return;
+      }
+      // Shift+Enter always inserts newline (multiline mode required)
+      if (shift && multiline) {
+        handleNewline();
         return;
       }
       if (multiline && !ctrl) {
@@ -460,10 +605,16 @@ function TextInputComponent({
    * Returns true if the key was handled.
    */
   const processKeyEvent = useCallback(
-    (_input: string, key: Key): boolean => {
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Key event handler with many key combinations
+    (input: string, key: Key): boolean => {
       // Navigation and editing keys
       if (key.backspace) {
-        handleBackspace();
+        // Ctrl+Backspace: delete word backward
+        if (key.ctrl) {
+          handleDeleteWordBackward();
+        } else {
+          handleBackspace();
+        }
         return true;
       }
       if (key.delete) {
@@ -487,7 +638,7 @@ function TextInputComponent({
         return true;
       }
       if (key.return) {
-        handleReturn(key.ctrl);
+        handleReturn(key.ctrl, key.shift);
         return true;
       }
       if (key.tab) {
@@ -497,6 +648,38 @@ function TextInputComponent({
       if (key.escape) {
         return true;
       }
+
+      // Emacs-style keybindings (Ctrl+key)
+      if (key.ctrl) {
+        switch (input.toLowerCase()) {
+          case "a": // Ctrl+A: Home (line start)
+            handleHome();
+            return true;
+          case "e": // Ctrl+E: End (line end)
+            handleEnd();
+            return true;
+          case "k": // Ctrl+K: Kill to end of line
+            handleKillToEnd();
+            return true;
+          case "u": // Ctrl+U: Kill to start of line
+            handleKillToStart();
+            return true;
+          case "w": // Ctrl+W: Delete word backward
+            handleDeleteWordBackward();
+            return true;
+          case "z": // Ctrl+Z: Undo, Ctrl+Shift+Z: Redo
+            if (key.shift) {
+              handleRedo();
+            } else {
+              handleUndo();
+            }
+            return true;
+          case "y": // Ctrl+Y: Redo (alternative)
+            handleRedo();
+            return true;
+        }
+      }
+
       return false;
     },
     [
@@ -508,6 +691,13 @@ function TextInputComponent({
       handleDownArrow,
       handleReturn,
       handleTab,
+      handleHome,
+      handleEnd,
+      handleKillToEnd,
+      handleKillToStart,
+      handleDeleteWordBackward,
+      handleUndo,
+      handleRedo,
     ]
   );
 

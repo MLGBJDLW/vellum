@@ -40,6 +40,7 @@ import {
   CommandExecutor,
   CommandRegistry,
   clearCommand,
+  condenseCommand,
   costCommand,
   costResetCommand,
   createBatchCommand,
@@ -58,12 +59,15 @@ import {
   metricsCommands,
   modelCommand,
   onboardCommand,
+  persistenceCommands,
   type ResumeSessionEventData,
   registerUserCommands,
+  setCondenseCommandLoop,
   setCostCommandsService,
   setHelpRegistry,
   setModeCommandsManager,
   setModelCommandConfig,
+  setPersistenceRef,
   setThemeContext,
   subscribeToThinkingState,
   themeSlashCommands,
@@ -103,7 +107,6 @@ import { StatusBar } from "./tui/components/StatusBar/StatusBar.js";
 import type { TrustMode } from "./tui/components/StatusBar/TrustModeIndicator.js";
 import { SessionPicker } from "./tui/components/session/SessionPicker.js";
 import type { SessionMetadata, SessionPreviewMessage } from "./tui/components/session/types.js";
-import { ThinkingBlock } from "./tui/components/ThinkingBlock.js";
 import { TipBanner } from "./tui/components/TipBanner.js";
 import type { TodoItemData } from "./tui/components/TodoItem.js";
 import { TodoPanel } from "./tui/components/TodoPanel.js";
@@ -115,6 +118,11 @@ import type { Message } from "./tui/context/MessagesContext.js";
 import { useMessages } from "./tui/context/MessagesContext.js";
 import { RootProvider } from "./tui/context/RootProvider.js";
 import { type ToolExecution, useTools } from "./tui/context/ToolsContext.js";
+import {
+  type PersistenceStatus,
+  usePersistence,
+  usePersistenceShortcuts,
+} from "./tui/hooks/index.js";
 import { useAlternateBuffer } from "./tui/hooks/useAlternateBuffer.js";
 import { useBacktrack } from "./tui/hooks/useBacktrack.js";
 import { useCopyMode } from "./tui/hooks/useCopyMode.js";
@@ -420,6 +428,9 @@ function createCommandRegistry(): CommandRegistry {
     registry.register(cmd);
   }
 
+  // T403: Register context management command
+  registry.register(condenseCommand);
+
   // T042: Register theme slash commands
   for (const cmd of themeSlashCommands) {
     registry.register(cmd);
@@ -427,6 +438,11 @@ function createCommandRegistry(): CommandRegistry {
 
   // T067: Register metrics commands
   for (const cmd of metricsCommands) {
+    registry.register(cmd);
+  }
+
+  // Register persistence commands
+  for (const cmd of persistenceCommands) {
     registry.register(cmd);
   }
 
@@ -785,23 +801,23 @@ function AppContent({
   // Destructure for stable references in useEffect dependency array.
   // Even though agentAdapter is now memoized, this makes the dependency explicit
   // and avoids re-running the effect if agentAdapter reference changes.
-  const { connect: adapterConnect, disconnect: adapterDisconnect, setOnThinking } = agentAdapter;
+  const { connect: adapterConnect, disconnect: adapterDisconnect } = agentAdapter;
 
   // Connect to AgentLoop when provided
   useEffect(() => {
     if (agentLoopProp) {
       adapterConnect(agentLoopProp);
-
-      // Register thinking callback to receive thinking content
-      setOnThinking((text: string) => {
-        setThinkingContent((prev) => prev + text);
-      });
+      // Wire up context management command (T403)
+      setCondenseCommandLoop(agentLoopProp);
+      // Thinking content is now handled directly in the agent-adapter
+      // and integrated into the streaming message's `thinking` field.
     }
     return () => {
       adapterDisconnect();
-      setOnThinking(null);
+      // Clear context management command reference
+      setCondenseCommandLoop(null);
     };
-  }, [agentLoopProp, adapterConnect, adapterDisconnect, setOnThinking]);
+  }, [agentLoopProp, adapterConnect, adapterDisconnect]);
 
   // ==========================================================================
   // Core Services - Tools, Credentials, Sessions
@@ -952,8 +968,7 @@ function AppContent({
     "memory"
   );
 
-  // Thinking state for ThinkingBlock
-  const [thinkingContent, setThinkingContent] = useState("");
+  // Warning ref for thinking mode (used for model capability warnings)
   const thinkingWarningRef = useRef<Set<string>>(new Set());
 
   // ==========================================================================
@@ -1184,16 +1199,64 @@ function AppContent({
   }, [storageReady, refreshSessions]);
 
   // ==========================================================================
+  // Persistence Hook Integration (T060)
+  // ==========================================================================
+
+  // Initialize persistence hook with advanced features
+  const persistence = usePersistence({
+    sessionId: activeSessionId,
+    storage: sessionStorage,
+    storageManager: storageManagerRef.current ?? undefined,
+    enableAdvancedPersistence: !!storageManagerRef.current,
+    autoSave: true,
+    saveDebounceMs: 2000,
+    autoLoad: true,
+    onError: (error) => {
+      console.error("[persistence] Error:", error.message);
+      notifyError(`Persistence error: ${error.message}`);
+    },
+    onCheckpointCreated: (checkpointId) => {
+      announce(`Checkpoint created: ${checkpointId.slice(0, 8)}`);
+    },
+    onRollbackComplete: (success) => {
+      if (success) {
+        announce("Rollback complete");
+      } else {
+        notifyError("Rollback failed");
+      }
+    },
+  });
+
+  // Set persistence ref for slash commands
+  useEffect(() => {
+    setPersistenceRef({
+      status: persistence.status,
+      unsavedCount: persistence.unsavedCount,
+      checkpoints: persistence.checkpoints,
+      isAdvancedEnabled: persistence.isAdvancedEnabled,
+      createCheckpoint: persistence.createCheckpoint,
+      rollbackToCheckpoint: persistence.rollbackToCheckpoint,
+      deleteCheckpoint: persistence.deleteCheckpoint,
+      getMessagesToLose: persistence.getMessagesToLose,
+      forceSave: persistence.forceSave,
+    });
+    return () => setPersistenceRef(null);
+  }, [persistence]);
+
+  // Initialize persistence keyboard shortcuts
+  usePersistenceShortcuts({
+    persistence,
+    enabled: true,
+    onSave: () => announce("Session saved"),
+    onCheckpointCreated: (id) => announce(`Checkpoint: ${id.slice(0, 8)}`),
+    onError: (error) => notifyError(error),
+  });
+
+  // ==========================================================================
   // FIX 4: Real Todo and Memory Data
   // ==========================================================================
 
   const { executions, pendingApproval, approveExecution, rejectExecution, approveAll } = useTools();
-
-  // Compute the currently running tool for status bar display
-  const currentRunningTool = useMemo(() => {
-    const runningExecution = executions.find((e) => e.status === "running");
-    return runningExecution?.toolName;
-  }, [executions]);
 
   const loadTodos = useCallback(async (): Promise<readonly TodoItemData[]> => {
     const todoFilePath = join(process.cwd(), ".vellum", "todos.json");
@@ -1338,19 +1401,6 @@ function AppContent({
   });
 
   const [thinkingModeEnabled, setThinkingModeEnabled] = useState(() => getThinkingState().enabled);
-  const [isCurrentlyThinking, setIsCurrentlyThinking] = useState(false);
-  const [thinkingCollapsed, setThinkingCollapsed] = useState(true);
-
-  // Auto-collapse thinking block after thinking completes
-  useEffect(() => {
-    if (!isCurrentlyThinking && thinkingContent.length > 0) {
-      // Delay auto-collapse to let user see final content
-      const timer = setTimeout(() => {
-        setThinkingCollapsed(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isCurrentlyThinking, thinkingContent.length]);
 
   // Subscribe to global thinking state changes (mode toggle via /think)
   useEffect(() => {
@@ -2472,8 +2522,8 @@ function AppContent({
       }
 
       setIsLoading(true);
-      setIsCurrentlyThinking(true);
-      setThinkingContent(""); // Clear previous thinking content at REQUEST START, not in finally
+      // Thinking content is now integrated into the streaming message
+      // via the agent-adapter's handleThinking function.
 
       // Use AgentLoop if available (T038)
       if (agentLoopProp) {
@@ -2499,8 +2549,6 @@ function AppContent({
           notifyError(errorMsg);
           addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
         } finally {
-          setIsCurrentlyThinking(false);
-          // Note: Don't clear thinkingContent here - let it persist until next request
           setIsLoading(false);
           cancellationRef.current = null;
         }
@@ -2523,15 +2571,12 @@ function AppContent({
       await new Promise<void>((resolve) => {
         const timeoutId = setTimeout(() => {
           if (!cancelled) {
-            setThinkingContent("Generating response...");
             setTimeout(() => {
               if (!cancelled) {
                 addMessage({ role: "assistant", content: `[Echo] ${processedText}` });
                 notifyTaskComplete("Response received");
                 announce("Response received");
               }
-              setIsCurrentlyThinking(false);
-              setThinkingContent("");
               resolve();
             }, 300);
           } else {
@@ -2544,8 +2589,6 @@ function AppContent({
           if (cancelled) {
             clearTimeout(timeoutId);
             clearInterval(checkInterval);
-            setIsCurrentlyThinking(false);
-            setThinkingContent("");
             resolve();
           }
         }, 50);
@@ -3073,7 +3116,6 @@ function AppContent({
       loadSessionPreviewMessages={loadSessionPreviewMessages}
       isLoading={isLoading}
       thinkingModeEnabled={thinkingModeEnabled}
-      isCurrentlyThinking={isCurrentlyThinking}
       memoryEntries={memoryEntries}
       messages={messages}
       pendingMessage={pendingMessage}
@@ -3081,7 +3123,6 @@ function AppContent({
       promptPlaceholder={promptPlaceholder}
       promptValue={promptValue}
       setPromptValue={setPromptValue}
-      setThinkingCollapsed={setThinkingCollapsed}
       sessions={sessions}
       suppressPromptEnter={suppressPromptEnter}
       shouldShowBanner={shouldShowBanner}
@@ -3102,13 +3143,10 @@ function AppContent({
           rejectExecution(e.id);
         })
       }
-      currentRunningTool={currentRunningTool}
       showSidebar={showSidebar}
       sidebarContent={sidebarContent}
       specPhase={specPhase}
       themeContext={themeContext}
-      thinkingCollapsed={thinkingCollapsed}
-      thinkingContent={thinkingContent}
       todoItems={todoItems}
       refreshTodos={refreshTodos}
       toolRegistry={toolRegistry}
@@ -3122,6 +3160,11 @@ function AppContent({
       workspace={workspaceName}
       branch={gitBranch}
       changedFiles={gitChangedFiles}
+      persistence={{
+        status: persistence.status,
+        unsavedCount: persistence.unsavedCount,
+        lastSavedAt: persistence.lastSavedAt,
+      }}
     />
   );
 }
@@ -3187,7 +3230,6 @@ interface AppContentViewProps {
   readonly initError?: Error;
   readonly isLoading: boolean;
   readonly thinkingModeEnabled: boolean;
-  readonly isCurrentlyThinking: boolean;
   readonly memoryEntries: MemoryPanelProps["entries"];
   readonly messages: readonly Message[];
   readonly pendingMessage: Message | null;
@@ -3195,7 +3237,6 @@ interface AppContentViewProps {
   readonly promptPlaceholder: string;
   readonly promptValue: string;
   readonly setPromptValue: (value: string) => void;
-  readonly setThinkingCollapsed: (value: boolean | ((prev: boolean) => boolean)) => void;
   readonly sessions: SessionMetadata[];
   readonly suppressPromptEnter: boolean;
   readonly shouldShowBanner: boolean;
@@ -3216,8 +3257,6 @@ interface AppContentViewProps {
   readonly sidebarContent: "memory" | "todo" | "tools" | "mcp";
   readonly specPhase: number;
   readonly themeContext: ThemeContextValue;
-  readonly thinkingCollapsed: boolean;
-  readonly thinkingContent: string;
   readonly todoItems: readonly TodoItemData[];
   readonly refreshTodos: () => void;
   readonly toolRegistry: ToolRegistry;
@@ -3241,14 +3280,18 @@ interface AppContentViewProps {
   readonly undoBacktrack: () => void;
   readonly redoBacktrack: () => void;
   readonly updateAvailable: { current: string; latest: string } | null;
-  /** Currently running tool name for status bar display */
-  readonly currentRunningTool?: string;
   /** Workspace name for header separator */
   readonly workspace: string;
   /** Git branch for header separator */
   readonly branch: string | null;
   /** Number of changed files for header separator */
   readonly changedFiles: number;
+  /** Persistence status for session save indicator */
+  readonly persistence?: {
+    status: PersistenceStatus;
+    unsavedCount: number;
+    lastSavedAt: Date | null;
+  };
 }
 
 function renderSidebarContent({
@@ -3259,6 +3302,7 @@ function renderSidebarContent({
   refreshTodos,
   memoryEntries,
   toolRegistry,
+  persistence,
 }: {
   readonly announce: (message: string) => void;
   readonly showSidebar: boolean;
@@ -3267,6 +3311,11 @@ function renderSidebarContent({
   readonly refreshTodos: () => void;
   readonly memoryEntries: MemoryPanelProps["entries"];
   readonly toolRegistry: ToolRegistry;
+  readonly persistence?: {
+    status: PersistenceStatus;
+    unsavedCount: number;
+    lastSavedAt: Date | null;
+  };
 }): React.ReactNode | undefined {
   if (!showSidebar) return undefined;
 
@@ -3295,7 +3344,7 @@ function renderSidebarContent({
   return (
     <Box flexDirection="column" height="100%">
       <Box flexGrow={1}>{panelContent}</Box>
-      <SystemStatusPanel compact={false} />
+      <SystemStatusPanel compact={false} persistence={persistence} />
     </Box>
   );
 }
@@ -3610,7 +3659,6 @@ function AppContentView({
   loadSessionPreviewMessages,
   isLoading,
   thinkingModeEnabled,
-  isCurrentlyThinking,
   memoryEntries,
   messages,
   pendingMessage,
@@ -3618,7 +3666,6 @@ function AppContentView({
   promptPlaceholder,
   promptValue,
   setPromptValue,
-  setThinkingCollapsed,
   sessions,
   suppressPromptEnter,
   shouldShowBanner,
@@ -3639,8 +3686,6 @@ function AppContentView({
   sidebarContent,
   specPhase,
   themeContext,
-  thinkingCollapsed,
-  thinkingContent,
   todoItems,
   refreshTodos,
   toolRegistry,
@@ -3651,10 +3696,10 @@ function AppContentView({
   undoBacktrack,
   redoBacktrack,
   updateAvailable,
-  currentRunningTool,
   workspace,
   branch,
   changedFiles,
+  persistence,
 }: AppContentViewProps): React.JSX.Element {
   const sidebar = renderSidebarContent({
     announce,
@@ -3664,6 +3709,7 @@ function AppContentView({
     refreshTodos,
     memoryEntries,
     toolRegistry,
+    persistence,
   });
 
   const footer = (
@@ -3671,7 +3717,6 @@ function AppContentView({
       mode={currentMode}
       agentName={agentName}
       modelName={currentModel}
-      currentTool={currentRunningTool}
       tokens={{
         current: totalTokens,
         max: contextWindow,
@@ -3695,6 +3740,7 @@ function AppContentView({
       trustMode={trustMode}
       thinking={{ active: thinkingModeEnabled }}
       showAllModes={showModeSelector}
+      persistence={persistence}
     />
   );
 
@@ -3810,20 +3856,11 @@ function AppContentView({
             changedFiles={changedFiles}
           >
             <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
-              {/* Show ThinkingBlock when content exists OR currently streaming */}
-              {(thinkingContent.length > 0 || isCurrentlyThinking) && (
-                <ThinkingBlock
-                  content={thinkingContent}
-                  isStreaming={isCurrentlyThinking}
-                  collapsed={thinkingCollapsed}
-                  onToggle={() => setThinkingCollapsed((prev) => !prev)}
-                  keyboardToggleEnabled={!interactivePrompt && !pendingOperation && !followupPrompt}
-                />
-              )}
-
+              {/* Thinking content is now integrated into messages via the `thinking` field */}
               <MessageList
                 messages={messages}
                 pendingMessage={pendingMessage}
+                isLoading={isLoading}
                 useVirtualizedList={true}
                 estimatedItemHeight={4}
                 isFocused={

@@ -49,6 +49,12 @@ import { getToolsForMode } from "../tool/mode-filter.js";
 import type { Result } from "../types/result.js";
 import type { ToolContext } from "../types/tool.js";
 import { CancellationToken } from "./cancellation.js";
+import {
+  type ContextIntegration,
+  type ContextManageResult,
+  type ContextManagerConfig,
+  createContextIntegrationFromLoopConfig,
+} from "./context-integration.js";
 import type { AgentLevel } from "./level.js";
 import { type CombinedLoopResult, detectLoop } from "./loop-detection.js";
 import type { ModeConfig } from "./modes.js";
@@ -146,6 +152,11 @@ export interface AgentLoopConfig {
   /** ModeManager for coding mode integration (T057) */
   modeManager?: import("./mode-manager.js").ModeManager;
   /**
+   * Context management configuration (T403).
+   * Enables automatic context window management with sliding window and compression.
+   */
+  contextManagement?: ContextManagerConfig["contextManagement"];
+  /**
    * Maximum iterations for the agentic loop (T058).
    * When the agent executes tools, it will automatically re-invoke the LLM
    * to continue reasoning until:
@@ -217,6 +228,8 @@ export interface AgentLoopEvents {
   subagentText: [delegationId: string, agent: string, chunk: string];
   /** Emitted when a subagent executes a tool (T059) */
   subagentTool: [delegationId: string, agent: string, toolName: string];
+  /** Emitted when context management modifies the message history (T403) */
+  contextManaged: [result: ContextManageResult];
   /** Emitted when user input is required (GAP 1 fix - ask_followup_question) */
   "userPrompt:required": [prompt: { question: string; suggestions?: string[] }];
   /** Emitted when user responds to a prompt (GAP 1 fix - ask_followup_question) */
@@ -336,6 +349,12 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** Track whether the current stream produced any tool calls */
   private streamHasToolCalls = false;
 
+  /** Accumulated text content from streaming (for pure text responses) */
+  private accumulatedText = "";
+
+  /** Accumulated reasoning content from streaming (for pure text responses) */
+  private accumulatedReasoning = "";
+
   /** Flag to signal completion was attempted (GAP 2 fix) */
   private completionAttempted = false;
 
@@ -344,6 +363,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
   /** Whether to continue after tool execution (T058) */
   private readonly continueAfterTools: boolean;
+
+  /** Context integration for automatic context management (T403) */
+  private contextIntegration?: ContextIntegration;
 
   constructor(config: AgentLoopConfig) {
     super();
@@ -444,6 +466,19 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         });
       });
     }
+
+    // Initialize Context Management integration if enabled (T403)
+    if (config.contextManagement?.enabled) {
+      this.contextIntegration = createContextIntegrationFromLoopConfig(
+        config.model,
+        config.contextManagement,
+        this.logger
+      );
+      this.logger?.debug("Context management integration initialized", {
+        model: config.model,
+        enabled: true,
+      });
+    }
   }
 
   /**
@@ -486,6 +521,64 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    */
   addMessage(message: SessionMessage): void {
     this.messages.push(message);
+  }
+
+  /**
+   * Manually compact/condense the context (T403).
+   *
+   * This can be triggered via /condense command to force context
+   * window optimization without waiting for automatic triggers.
+   *
+   * @returns Result of the context management operation, or null if not enabled
+   */
+  async compactContext(): Promise<ContextManageResult | null> {
+    if (!this.contextIntegration?.enabled) {
+      this.logger?.debug("Context compaction requested but context management is disabled");
+      return null;
+    }
+
+    this.logger?.debug("Manual context compaction requested", {
+      currentMessageCount: this.messages.length,
+    });
+
+    const result = await this.contextIntegration.beforeApiCall(this.messages);
+
+    if (result.modified) {
+      // Update internal messages with compacted version
+      this.messages = result.messages;
+      this.emit("contextManaged", result);
+
+      this.logger?.info("Context compacted successfully", {
+        originalCount: this.messages.length + (result.messages.length - this.messages.length),
+        newCount: result.messages.length,
+        state: result.state,
+        actions: result.actions,
+      });
+    } else {
+      this.logger?.debug("Context compaction: no changes needed", {
+        state: result.state,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Get the current context state (T403).
+   *
+   * @returns Current context state or null if context management is disabled
+   */
+  getContextState(): import("../context/types.js").ContextState | null {
+    return this.contextIntegration?.getState() ?? null;
+  }
+
+  /**
+   * Check if context management is enabled (T403).
+   *
+   * @returns true if context management is enabled and active
+   */
+  isContextManagementEnabled(): boolean {
+    return this.contextIntegration?.enabled ?? false;
   }
 
   /**
@@ -954,6 +1047,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.streamHasText = false;
     this.streamHasThinking = false;
     this.streamHasToolCalls = false;
+    this.accumulatedText = "";
+    this.accumulatedReasoning = "";
 
     // Check max iterations limit (T058)
     if (this.iterationCount >= this.maxIterations) {
@@ -1015,8 +1110,24 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       this.abortController = new AbortController();
       this.cancellation.onCancel(() => this.abortController?.abort());
 
+      // Apply context management before converting to provider format (T403)
+      let messagesToSend = this.messages;
+      if (this.contextIntegration?.enabled) {
+        const contextResult = await this.contextIntegration.beforeApiCall(this.messages);
+        if (contextResult.modified) {
+          messagesToSend = contextResult.messages;
+          this.emit("contextManaged", contextResult);
+          this.logger?.debug("Context management applied", {
+            originalCount: this.messages.length,
+            newCount: contextResult.messages.length,
+            state: contextResult.state,
+            actions: contextResult.actions,
+          });
+        }
+      }
+
       // Convert session messages to provider format
-      const providerMessages = toModelMessages(this.messages);
+      const providerMessages = toModelMessages(messagesToSend);
 
       // Get effective thinking config (dynamic if getter provided, static otherwise)
       const effectiveThinking = this.getEffectiveThinkingConfig();
@@ -1111,6 +1222,25 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         this.transitionTo("tool_executing");
         await this.executeToolCalls(pendingToolCalls);
       } else {
+        // Pure text response - add assistant message to history
+        const assistantParts: import("../session/index.js").SessionMessagePart[] = [];
+        if (this.accumulatedReasoning.trim()) {
+          assistantParts.push(SessionParts.reasoning(this.accumulatedReasoning));
+        }
+        if (this.accumulatedText.trim()) {
+          assistantParts.push(SessionParts.text(this.accumulatedText));
+        }
+        if (assistantParts.length > 0) {
+          const assistantMessage = createAssistantMessage(assistantParts, {
+            model: this.config.model,
+            provider: this.config.providerType,
+          });
+          this.messages.push(assistantMessage);
+        }
+        // Reset accumulators
+        this.accumulatedText = "";
+        this.accumulatedReasoning = "";
+
         this.transitionTo("idle");
         this.emit("complete");
       }
@@ -2054,6 +2184,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         if (textContent.trim().length > 0) {
           this.streamHasText = true;
         }
+        // Accumulate text for message history
+        this.accumulatedText += textContent;
         // Emit text delta
         this.emit("text", textContent);
         break;
@@ -2064,6 +2196,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         if (thinkingContent.trim().length > 0) {
           this.streamHasThinking = true;
         }
+        // Accumulate reasoning for message history
+        this.accumulatedReasoning += thinkingContent;
         // Emit thinking/reasoning delta
         this.emit("thinking", thinkingContent);
         break;

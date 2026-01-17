@@ -79,13 +79,14 @@ const sharedSpacing = {
 
 /**
  * Common animation definitions shared across all themes
+ * NOTE: Using ASCII-only characters for maximum terminal compatibility
  */
 const sharedAnimation = {
   spinner: {
-    dots: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+    dots: [".", "o", "O", "o"],
     line: ["-", "\\", "|", "/"],
-    arc: ["◜", "◠", "◝", "◞", "◡", "◟"],
-    bounce: ["⠁", "⠂", "⠄", "⠂"],
+    arc: ["(", ")", "(", ")"],
+    bounce: [".", "o", ".", "o"],
   },
   frameInterval: 80,
   cursorBlink: 530,
@@ -912,7 +913,7 @@ export type ThemeName = keyof typeof themes;
 /**
  * Default theme used when no preference is specified
  */
-export const defaultTheme = darkTheme;
+export const defaultTheme = parchmentTheme;
 
 /**
  * Get a theme by name

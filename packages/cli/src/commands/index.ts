@@ -583,3 +583,28 @@ export {
   thinkSlashCommands,
   toggleThinking,
 } from "./think.js";
+
+// =============================================================================
+// Condense Command (Context Management T403)
+// =============================================================================
+
+export {
+  condenseCommand,
+  getCondenseCommandLoop,
+  setCondenseCommandLoop,
+} from "./condense.js";
+
+// =============================================================================
+// Persistence Commands
+// =============================================================================
+
+export {
+  checkpointCommand,
+  checkpointsCommand,
+  getPersistenceRef,
+  type PersistenceCommandsRef,
+  persistenceCommands,
+  rollbackCommand,
+  saveCommand,
+  setPersistenceRef,
+} from "./persistence.js";

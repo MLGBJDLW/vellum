@@ -15,6 +15,10 @@ import type React from "react";
 import { useApp } from "../../context/AppContext.js";
 import { useMcp } from "../../context/McpContext.js";
 import { useTheme } from "../../theme/index.js";
+import {
+  PersistenceStatusIndicator,
+  type PersistenceStatusIndicatorProps,
+} from "../StatusBar/PersistenceStatusIndicator.js";
 
 // =============================================================================
 // Types
@@ -32,6 +36,11 @@ export interface SystemStatusPanelProps {
   readonly updateVersion?: string;
   /** Optional rate limit percentage (0-100) */
   readonly rateLimitPercent?: number;
+  /** Optional persistence status for memory indicator */
+  readonly persistence?: Pick<
+    PersistenceStatusIndicatorProps,
+    "status" | "unsavedCount" | "lastSavedAt"
+  >;
 }
 
 /** Status display tuple: [text, color] */
@@ -153,6 +162,7 @@ export function SystemStatusPanel({
   snapshotCount,
   updateVersion,
   rateLimitPercent,
+  persistence,
 }: SystemStatusPanelProps): React.JSX.Element {
   const { theme } = useTheme();
   const { hub, isInitialized, isInitializing, error: mcpError } = useMcp();
@@ -208,6 +218,14 @@ export function SystemStatusPanel({
           labelColor={labelColor}
           compact
         />
+        {persistence && (
+          <PersistenceStatusIndicator
+            status={persistence.status}
+            unsavedCount={persistence.unsavedCount}
+            lastSavedAt={persistence.lastSavedAt}
+            compact
+          />
+        )}
         {state.vimMode && <Text color={colors.accent}>VIM</Text>}
       </Box>
     );
@@ -224,6 +242,14 @@ export function SystemStatusPanel({
         <StatusItem label="Snap" value={snapStatus} color={snapColor} labelColor={labelColor} />
         <StatusItem label="Upd" value={updateStatus} color={updateColor} labelColor={labelColor} />
       </Box>
+      {/* Memory/Persistence status indicator (moved from footer) */}
+      {persistence && (
+        <PersistenceStatusIndicator
+          status={persistence.status}
+          unsavedCount={persistence.unsavedCount}
+          lastSavedAt={persistence.lastSavedAt}
+        />
+      )}
       {state.vimMode && <Text color={colors.accent}>[VIM]</Text>}
     </Box>
   );

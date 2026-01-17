@@ -24,7 +24,16 @@ import React, {
 /**
  * Role of a message sender
  */
-export type MessageRole = "user" | "assistant" | "system" | "tool";
+export type MessageRole = "user" | "assistant" | "system" | "tool" | "tool_group";
+
+/**
+ * Status of a tool call within a message.
+ * - pending: Tool call created but not started
+ * - running: Tool is currently executing (show spinner)
+ * - completed: Tool finished successfully (show checkmark)
+ * - error: Tool failed (show error icon)
+ */
+export type ToolCallStatus = "pending" | "running" | "completed" | "error";
 
 /**
  * Information about a tool call within a message
@@ -36,10 +45,12 @@ export interface ToolCallInfo {
   readonly name: string;
   /** Arguments passed to the tool */
   readonly arguments: Record<string, unknown>;
-  /** Result of the tool call, if completed */
+  /** Result of the tool call, if completed successfully */
   readonly result?: unknown;
+  /** Error message if the tool call failed */
+  readonly error?: string;
   /** Status of the tool call */
-  readonly status: "pending" | "running" | "completed" | "error";
+  readonly status: ToolCallStatus;
 }
 
 /**
@@ -76,6 +87,8 @@ export interface Message {
   readonly tokenUsage?: MessageTokenUsage;
   /** Whether this message is a continuation of a previous split message */
   readonly isContinuation?: boolean;
+  /** Thinking/reasoning content (for models with extended thinking) */
+  readonly thinking?: string;
 }
 
 /**
@@ -177,6 +190,32 @@ export interface SplitMessageAction {
 }
 
 /**
+ * Append thinking/reasoning content to an existing message (for streaming)
+ */
+export interface AppendToThinkingAction {
+  readonly type: "APPEND_TO_THINKING";
+  readonly id: string;
+  readonly thinking: string;
+}
+
+/**
+ * Add a new tool_group message (Gemini-style independent tool execution)
+ */
+export interface AddToolGroupAction {
+  readonly type: "ADD_TOOL_GROUP";
+  readonly toolCalls: readonly ToolCallInfo[];
+}
+
+/**
+ * Update an existing tool_group message with tool call status
+ */
+export interface UpdateToolGroupAction {
+  readonly type: "UPDATE_TOOL_GROUP";
+  readonly groupId: string;
+  readonly toolCall: ToolCallInfo;
+}
+
+/**
  * Discriminated union of all message actions
  */
 export type MessagesAction =
@@ -187,7 +226,10 @@ export type MessagesAction =
   | ClearMessagesAction
   | SetStreamingAction
   | CommitPendingMessageAction
-  | SplitMessageAction;
+  | SplitMessageAction
+  | AppendToThinkingAction
+  | AddToolGroupAction
+  | UpdateToolGroupAction;
 
 // =============================================================================
 // Helper Functions
@@ -204,6 +246,47 @@ function computeMessages(
     return [...historyMessages, pendingMessage];
   }
   return historyMessages;
+}
+
+/**
+ * Merge tool calls: Update existing calls by ID or add new ones.
+ * This allows updating tool status (running → completed/error) without losing other calls.
+ */
+function mergeToolCalls(
+  existing: readonly ToolCallInfo[] | undefined,
+  incoming: readonly ToolCallInfo[] | undefined
+): readonly ToolCallInfo[] | undefined {
+  if (!incoming || incoming.length === 0) {
+    return existing;
+  }
+  if (!existing || existing.length === 0) {
+    return incoming;
+  }
+
+  // Create a map of existing calls for efficient lookup
+  const callMap = new Map<string, ToolCallInfo>();
+  for (const call of existing) {
+    callMap.set(call.id, call);
+  }
+
+  // Merge incoming calls
+  for (const call of incoming) {
+    const existingCall = callMap.get(call.id);
+    if (existingCall) {
+      // Merge: keep existing args if incoming doesn't have them
+      callMap.set(call.id, {
+        ...existingCall,
+        ...call,
+        // Preserve arguments if not provided in incoming
+        arguments: Object.keys(call.arguments).length > 0 ? call.arguments : existingCall.arguments,
+      });
+    } else {
+      // Add new call
+      callMap.set(call.id, call);
+    }
+  }
+
+  return Array.from(callMap.values());
 }
 
 // =============================================================================
@@ -249,7 +332,16 @@ function messagesReducer(state: MessagesState, action: MessagesAction): Messages
     case "UPDATE_MESSAGE": {
       // Check if updating pending message
       if (state.pendingMessage?.id === action.id) {
-        const updatedPending = { ...state.pendingMessage, ...action.updates };
+        // Merge toolCalls instead of replacing
+        const mergedToolCalls = mergeToolCalls(
+          state.pendingMessage.toolCalls,
+          action.updates.toolCalls
+        );
+        const updatedPending = {
+          ...state.pendingMessage,
+          ...action.updates,
+          toolCalls: mergedToolCalls,
+        };
         return {
           ...state,
           pendingMessage: updatedPending,
@@ -267,9 +359,12 @@ function messagesReducer(state: MessagesState, action: MessagesAction): Messages
       const updatedHistory = [...state.historyMessages];
       const existingMessage = updatedHistory[messageIndex];
       if (existingMessage) {
+        // Merge toolCalls for history messages too
+        const mergedToolCalls = mergeToolCalls(existingMessage.toolCalls, action.updates.toolCalls);
         updatedHistory[messageIndex] = {
           ...existingMessage,
           ...action.updates,
+          toolCalls: mergedToolCalls,
         };
       }
 
@@ -392,6 +487,67 @@ function messagesReducer(state: MessagesState, action: MessagesAction): Messages
       };
     }
 
+    case "APPEND_TO_THINKING": {
+      // Appending thinking only makes sense for pending (streaming) message
+      if (state.pendingMessage?.id === action.id) {
+        const updatedPending = {
+          ...state.pendingMessage,
+          thinking: (state.pendingMessage.thinking ?? "") + action.thinking,
+        };
+        return {
+          ...state,
+          pendingMessage: updatedPending,
+          messages: computeMessages(state.historyMessages, updatedPending),
+        };
+      }
+      return state;
+    }
+
+    case "ADD_TOOL_GROUP": {
+      // Create a new tool_group message (Gemini-style independent tool execution)
+      const toolGroupMessage: Message = {
+        id: generateMessageId(),
+        role: "tool_group",
+        content: "", // tool_group doesn't need content
+        timestamp: new Date(),
+        toolCalls: action.toolCalls,
+        isStreaming: false,
+      };
+      const newHistory = [...state.historyMessages, toolGroupMessage];
+      return {
+        ...state,
+        historyMessages: newHistory,
+        messages: computeMessages(newHistory, state.pendingMessage),
+      };
+    }
+
+    case "UPDATE_TOOL_GROUP": {
+      // Find and update the tool_group message with the specified groupId
+      const groupIndex = state.historyMessages.findIndex(
+        (m) => m.id === action.groupId && m.role === "tool_group"
+      );
+      if (groupIndex === -1) {
+        return state;
+      }
+
+      const updatedHistory = [...state.historyMessages];
+      const existingGroup = updatedHistory[groupIndex];
+      if (existingGroup) {
+        // Merge the tool call update into existing toolCalls
+        const mergedToolCalls = mergeToolCalls(existingGroup.toolCalls, [action.toolCall]);
+        updatedHistory[groupIndex] = {
+          ...existingGroup,
+          toolCalls: mergedToolCalls,
+        };
+      }
+
+      return {
+        ...state,
+        historyMessages: updatedHistory,
+        messages: computeMessages(updatedHistory, state.pendingMessage),
+      };
+    }
+
     default:
       // Exhaustive check - TypeScript will error if a case is missing
       return state;
@@ -439,6 +595,8 @@ export interface MessagesContextValue {
   readonly updateMessage: (id: string, updates: Partial<Omit<Message, "id">>) => void;
   /** Append content to a message (for streaming) */
   readonly appendToMessage: (id: string, content: string) => void;
+  /** Append thinking/reasoning content to a message (for streaming) */
+  readonly appendToThinking: (id: string, thinking: string) => void;
   /** Replace the entire message list */
   readonly setMessages: (messages: readonly Message[]) => void;
   /** Clear all messages */
@@ -447,6 +605,10 @@ export interface MessagesContextValue {
   readonly commitPendingMessage: () => void;
   /** Split a long streaming message at a safe point (e.g., paragraph boundary) */
   readonly splitMessageAtSafePoint: (splitIndex: number) => void;
+  /** Add a new tool_group message (Gemini-style), returns the group ID */
+  readonly addToolGroup: (toolCalls: readonly ToolCallInfo[]) => string;
+  /** Update an existing tool_group message with a tool call update */
+  readonly updateToolGroup: (groupId: string, toolCall: ToolCallInfo) => void;
 }
 
 /**
@@ -597,6 +759,13 @@ export function MessagesProvider({
   }, []);
 
   /**
+   * Append thinking/reasoning content to an existing message (for streaming)
+   */
+  const appendToThinking = useCallback((id: string, thinking: string): void => {
+    dispatch({ type: "APPEND_TO_THINKING", id, thinking });
+  }, []);
+
+  /**
    * Clear all messages
    */
   const clearMessages = useCallback((): void => {
@@ -625,6 +794,33 @@ export function MessagesProvider({
   }, []);
 
   /**
+   * Add a new tool_group message (Gemini-style independent tool execution)
+   * @returns The generated group ID
+   */
+  const addToolGroup = useCallback((toolCalls: readonly ToolCallInfo[]): string => {
+    const id = generateMessageId();
+    // Dispatch with ID embedded in toolCalls (reducer will use generateMessageId for the message)
+    // Actually, we need the reducer to return the ID. For now, we generate it here and pass via action.
+    const toolGroupMessage: Message = {
+      id,
+      role: "tool_group",
+      content: "",
+      timestamp: new Date(),
+      toolCalls,
+      isStreaming: false,
+    };
+    dispatch({ type: "ADD_MESSAGE", message: toolGroupMessage });
+    return id;
+  }, []);
+
+  /**
+   * Update an existing tool_group message with a tool call update
+   */
+  const updateToolGroup = useCallback((groupId: string, toolCall: ToolCallInfo): void => {
+    dispatch({ type: "UPDATE_TOOL_GROUP", groupId, toolCall });
+  }, []);
+
+  /**
    * Memoized context value
    */
   const contextValue = useMemo<MessagesContextValue>(
@@ -637,20 +833,26 @@ export function MessagesProvider({
       addMessage,
       updateMessage,
       appendToMessage,
+      appendToThinking,
       setMessages,
       clearMessages,
       commitPendingMessage,
       splitMessageAtSafePoint,
+      addToolGroup,
+      updateToolGroup,
     }),
     [
       state,
       addMessage,
       updateMessage,
       appendToMessage,
+      appendToThinking,
       setMessages,
       clearMessages,
       commitPendingMessage,
       splitMessageAtSafePoint,
+      addToolGroup,
+      updateToolGroup,
     ]
   );
 

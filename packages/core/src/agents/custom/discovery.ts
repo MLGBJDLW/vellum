@@ -5,6 +5,7 @@
 // @see REQ-004, REQ-006, REQ-007
 
 import { EventEmitter } from "node:events";
+import { statSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -591,7 +592,7 @@ export class AgentDiscovery extends EventEmitter<AgentDiscoveryEvents> {
    */
   private directoryExists(dirPath: string): boolean {
     try {
-      const stat = require("node:fs").statSync(dirPath);
+      const stat = statSync(dirPath);
       return stat.isDirectory();
     } catch {
       return false;

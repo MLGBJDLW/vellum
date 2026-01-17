@@ -46,7 +46,6 @@ import {
   PermissionDialog,
   RootProvider,
   StreamingText,
-  ToolCall,
   ToolsPanel,
   useMessages,
   useToolApprovalController,
@@ -688,7 +687,11 @@ describe("Integration: Tool Result → Status Update", () => {
       const exec = executions[0];
       if (!exec) return <Text>No executions</Text>;
 
-      return <ToolCall execution={exec} />;
+      return (
+        <Text>
+          {exec.status} - {exec.toolName}
+        </Text>
+      );
     }
 
     const { lastFrame } = render(
@@ -703,10 +706,9 @@ describe("Integration: Tool Result → Status Update", () => {
     });
 
     const frame = lastFrame() ?? "";
-    // Running status shows spinner
-    const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    const hasSpinner = spinnerFrames.some((f) => frame.includes(f));
-    expect(hasSpinner || frame.includes("read_file")).toBe(true);
+    // Running status check
+    expect(frame).toContain("running");
+    expect(frame).toContain("read_file");
   });
 
   it("shows complete status with result", async () => {
@@ -728,7 +730,11 @@ describe("Integration: Tool Result → Status Update", () => {
       const exec = executions[0];
       if (!exec) return <Text>No executions</Text>;
 
-      return <ToolCall execution={exec} />;
+      return (
+        <Text>
+          {exec.status} - {exec.toolName}
+        </Text>
+      );
     }
 
     const { lastFrame } = render(
@@ -743,7 +749,7 @@ describe("Integration: Tool Result → Status Update", () => {
     });
 
     const frame = lastFrame() ?? "";
-    expect(frame).toContain(icons.check); // Complete icon
+    expect(frame).toContain("complete");
     expect(frame).toContain("read_file");
   });
 
@@ -766,7 +772,11 @@ describe("Integration: Tool Result → Status Update", () => {
       const exec = executions[0];
       if (!exec) return <Text>No executions</Text>;
 
-      return <ToolCall execution={exec} />;
+      return (
+        <Text>
+          {exec.status} - {exec.toolName}
+        </Text>
+      );
     }
 
     const { lastFrame } = render(
@@ -781,7 +791,7 @@ describe("Integration: Tool Result → Status Update", () => {
     });
 
     const frame = lastFrame() ?? "";
-    expect(frame).toContain(icons.cross); // Error icon
+    expect(frame).toContain("error");
     expect(frame).toContain("execute_command");
   });
 
@@ -798,7 +808,11 @@ describe("Integration: Tool Result → Status Update", () => {
       const exec = executions[0];
       if (!exec) return <Text>No executions</Text>;
 
-      return <ToolCall execution={exec} />;
+      return (
+        <Text>
+          {exec.status} - {exec.toolName}
+        </Text>
+      );
     }
 
     const { lastFrame } = render(
@@ -813,7 +827,7 @@ describe("Integration: Tool Result → Status Update", () => {
     });
 
     const frame = lastFrame() ?? "";
-    expect(frame).toContain(icons.cross); // Rejected icon
+    expect(frame).toContain("rejected");
     expect(frame).toContain("dangerous_tool");
   });
 
@@ -973,14 +987,20 @@ describe("Integration: Tool Result → Status Update", () => {
 // =============================================================================
 
 describe("Integration: Combined Message and Tool Flows", () => {
-  it("shows tool call within assistant message", async () => {
+  it("shows tool_group message with tool calls", async () => {
     function TestComponent() {
       const { messages, addMessage } = useMessages();
 
       useEffect(() => {
+        // Assistant message announcing tool usage
         addMessage({
           role: "assistant",
           content: "Let me read that file for you",
+        });
+        // Separate tool_group message for tool execution
+        addMessage({
+          role: "tool_group",
+          content: "",
           toolCalls: [
             {
               id: "tc-1",
@@ -1011,7 +1031,7 @@ describe("Integration: Combined Message and Tool Flows", () => {
     expect(frame).toContain("read_file");
   });
 
-  it("handles conversation with interleaved messages and tool results", async () => {
+  it("handles conversation with interleaved messages and tool_group", async () => {
     function TestComponent() {
       const { messages, addMessage } = useMessages();
 
@@ -1020,6 +1040,11 @@ describe("Integration: Combined Message and Tool Flows", () => {
         addMessage({
           role: "assistant",
           content: "Reading config.json...",
+        });
+        // Tool execution as separate tool_group message
+        addMessage({
+          role: "tool_group",
+          content: "",
           toolCalls: [
             {
               id: "tc-1",
@@ -1052,19 +1077,26 @@ describe("Integration: Combined Message and Tool Flows", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Read the config file");
     expect(frame).toContain("Reading config.json...");
+    expect(frame).toContain("read_file");
     expect(frame).toContain("debug");
     expect(frame).toContain("debug mode enabled");
   });
 
-  it("updates message after tool completion", async () => {
+  it("updates tool_group message after tool completion", async () => {
     function TestComponent() {
       const { messages, addMessage, updateMessage } = useMessages();
 
       useEffect(() => {
-        // Initial message with pending tool
-        const id = addMessage({
+        // Assistant announces processing
+        addMessage({
           role: "assistant",
           content: "Processing...",
+        });
+
+        // Tool_group with pending tool
+        const toolGroupId = addMessage({
+          role: "tool_group",
+          content: "",
           toolCalls: [
             {
               id: "tc-1",
@@ -1075,10 +1107,9 @@ describe("Integration: Combined Message and Tool Flows", () => {
           ],
         });
 
-        // Update with completed tool
+        // Update tool_group with completed tool
         setTimeout(() => {
-          updateMessage(id, {
-            content: "Analysis complete",
+          updateMessage(toolGroupId, {
             toolCalls: [
               {
                 id: "tc-1",
@@ -1088,6 +1119,11 @@ describe("Integration: Combined Message and Tool Flows", () => {
                 result: { score: 95 },
               },
             ],
+          });
+          // Add completion message
+          addMessage({
+            role: "assistant",
+            content: "Analysis complete",
           });
         }, 10);
       }, [addMessage, updateMessage]);
@@ -1107,6 +1143,7 @@ describe("Integration: Combined Message and Tool Flows", () => {
     });
 
     const frame = lastFrame() ?? "";
+    expect(frame).toContain("analyze");
     expect(frame).toContain("Analysis complete");
   });
 });

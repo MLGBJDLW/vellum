@@ -71,6 +71,7 @@ export {
   type MessagesState,
   type SetStreamingAction,
   type ToolCallInfo,
+  type ToolCallStatus,
   type UpdateMessageAction,
   useMessages,
 } from "./MessagesContext.js";

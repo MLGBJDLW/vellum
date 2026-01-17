@@ -246,23 +246,6 @@ export function MessageBubble({
             isStreaming={message.isStreaming}
           />
         </Box>
-
-        {/* Tool calls, if any */}
-        {message.toolCalls && message.toolCalls.length > 0 && !compact && (
-          <Box flexDirection="column" marginLeft={showAvatar ? 2 : 0} marginTop={1}>
-            {message.toolCalls.map((toolCall) => (
-              <Box key={toolCall.id}>
-                <Text>
-                  {getIcons().tool}{" "}
-                  <Text color={theme.colors.accent} bold>
-                    {toolCall.name}
-                  </Text>
-                  <Text color={mutedColor}> [{toolCall.status}]</Text>
-                </Text>
-              </Box>
-            ))}
-          </Box>
-        )}
       </Box>
     </Box>
   );

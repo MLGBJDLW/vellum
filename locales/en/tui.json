@@ -297,5 +297,23 @@
   },
   "code": {
     "copy": "[Copy]"
+  },
+  "persistence": {
+    "saving": "Saving...",
+    "saved": "Saved",
+    "unsaved": "Unsaved",
+    "saveError": "Save failed",
+    "checkpoint": {
+      "created": "Checkpoint created",
+      "createFailed": "Failed to create checkpoint",
+      "title": "Checkpoints",
+      "empty": "No checkpoints"
+    },
+    "rollback": {
+      "confirm": "Rollback to checkpoint?",
+      "warning": "You will lose {{count}} messages. This cannot be undone.",
+      "success": "Rolled back successfully",
+      "failed": "Rollback failed"
+    }
   }
 }

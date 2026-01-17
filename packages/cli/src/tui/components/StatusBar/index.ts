@@ -20,6 +20,11 @@ export {
   type HeaderBarProps,
 } from "./HeaderBar.js";
 export { ModelIndicator, type ModelIndicatorProps } from "./ModelIndicator.js";
+// Persistence Status Indicator
+export {
+  PersistenceStatusIndicator,
+  type PersistenceStatusIndicatorProps,
+} from "./PersistenceStatusIndicator.js";
 export {
   SandboxIndicator,
   type SandboxIndicatorProps,
@@ -35,10 +40,6 @@ export {
   type TokenStats,
 } from "./TokenBreakdown.js";
 export { TokenCounter, type TokenCounterProps } from "./TokenCounter.js";
-export {
-  ToolIndicator,
-  type ToolIndicatorProps,
-} from "./ToolIndicator.js";
 export {
   type TrustMode,
   TrustModeIndicator,
