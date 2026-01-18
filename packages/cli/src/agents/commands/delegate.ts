@@ -18,6 +18,8 @@ import {
 } from "@vellum/core";
 import type { Command } from "commander";
 
+import { ICONS } from "../../utils/icons.js";
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -194,7 +196,7 @@ export function registerDelegateCommand(program: Command): void {
 
         // Confirmation prompt (if enabled)
         if (delegateOptions.confirm) {
-          console.log("\n📋 Delegation Details:");
+          console.log(`\n${ICONS.workflow} Delegation Details:`);
           console.log(`   Agent: ${agent}`);
           console.log(`   Task: ${task}`);
           if (delegateOptions.files?.length) {
@@ -220,18 +222,18 @@ export function registerDelegateCommand(program: Command): void {
         const result: DelegateTaskResult = await executeDelegateTask(params, context);
 
         if (result.success) {
-          console.log("\n✅ Delegation successful!");
+          console.log(`\n${ICONS.success} Delegation successful!`);
           console.log(`   Task Packet ID: ${result.taskPacketId}`);
           if (result.agentId) {
             console.log(`   Agent ID: ${result.agentId}`);
           }
         } else {
-          console.error("\n❌ Delegation failed:");
+          console.error(`\n${ICONS.error} Delegation failed:`);
           console.error(`   ${result.error}`);
           process.exit(1);
         }
       } catch (error) {
-        console.error("\n❌ Error:", error instanceof Error ? error.message : error);
+        console.error(`\n${ICONS.error} Error:`, error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });

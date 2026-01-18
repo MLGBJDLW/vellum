@@ -254,6 +254,7 @@ function SidebarRegion({ children, width, borderColor }: SidebarRegionProps): Re
       flexShrink={1}
       flexGrow={0}
       width={width}
+      minHeight={0}
       borderStyle="single"
       borderColor={borderColor}
       borderLeft={true}
@@ -277,7 +278,14 @@ interface ContentRegionProps {
 
 function ContentRegion({ children }: ContentRegionProps): React.JSX.Element {
   return (
-    <Box flexDirection="column" flexGrow={1} flexShrink={1} paddingX={1} overflow="hidden">
+    <Box
+      flexDirection="column"
+      flexGrow={1}
+      flexShrink={1}
+      minHeight={0}
+      paddingX={1}
+      overflow="hidden"
+    >
       {children}
     </Box>
   );

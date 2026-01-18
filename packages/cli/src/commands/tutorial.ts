@@ -7,7 +7,6 @@
  */
 
 import chalk from "chalk";
-
 import {
   ALL_LESSONS,
   createTutorialStorage,
@@ -18,6 +17,7 @@ import {
   type TutorialStep,
   type TutorialSystem,
 } from "../onboarding/index.js";
+import { ICONS } from "../utils/icons.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, success } from "./types.js";
 
@@ -98,7 +98,7 @@ function formatStep(step: TutorialStep, stepIndex: number, totalSteps: number): 
 
   if (step.hint) {
     lines.push("");
-    lines.push(chalk.dim(`💡 Hint: ${step.hint}`));
+    lines.push(chalk.dim(`${ICONS.hint} ${step.hint}`));
   }
 
   if (step.action === "complete") {
@@ -218,7 +218,8 @@ async function handleNext(): Promise<CommandResult> {
     const stats = await system.getStats();
     if (stats.completionPercent === 100) {
       return success(
-        chalk.green("🎉 Congratulations! You've completed all tutorials!\n\n") + formatStats(stats)
+        chalk.green(`${ICONS.celebration} Congratulations! You've completed all tutorials!\n\n`) +
+          formatStats(stats)
       );
     }
 
@@ -233,7 +234,7 @@ async function handleNext(): Promise<CommandResult> {
   }
 
   const output = [
-    chalk.bold.green(`🎓 Starting: ${lesson.title}`),
+    chalk.bold.green(`[Tutorial] Starting: ${lesson.title}`),
     formatStep(step, 0, lesson.steps.length),
   ].join("\n");
 
@@ -268,7 +269,7 @@ async function handleContinue(): Promise<CommandResult> {
 
       return success(
         [
-          chalk.bold.green(`✅ Lesson Complete: ${lesson?.title ?? "Unknown"}`),
+          chalk.bold.green(`${ICONS.success} Lesson Complete: ${lesson?.title ?? "Unknown"}`),
           "",
           formatStats(stats),
           "",
@@ -309,7 +310,7 @@ async function handleSkip(): Promise<CommandResult> {
 
     return success(
       [
-        chalk.bold.yellow(`⏭️ Lesson Skipped: ${lesson?.title ?? "Unknown"}`),
+        chalk.bold.yellow(`${ICONS.skip} Lesson Skipped: ${lesson?.title ?? "Unknown"}`),
         "",
         formatStats(stats),
         "",
@@ -367,11 +368,11 @@ async function handleReset(lessonId?: string): Promise<CommandResult> {
     }
 
     await system.resetLesson(lessonId);
-    return success(chalk.yellow(`🔄 Reset progress for: ${lesson.title}`));
+    return success(chalk.yellow(`${ICONS.reset} Reset progress for: ${lesson.title}`));
   }
 
   await system.resetAll();
-  return success(chalk.yellow("🔄 All tutorial progress has been reset."));
+  return success(chalk.yellow(`${ICONS.reset} All tutorial progress has been reset.`));
 }
 
 // =============================================================================
@@ -383,7 +384,7 @@ async function handleReset(lessonId?: string): Promise<CommandResult> {
  */
 function getHelp(): string {
   return [
-    chalk.bold.blue("📚 Tutorial Commands"),
+    chalk.bold.blue("[Tutorial] Commands"),
     "",
     chalk.dim("Interactive tutorials to learn Vellum features."),
     "",

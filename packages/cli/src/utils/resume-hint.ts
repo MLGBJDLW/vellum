@@ -10,6 +10,8 @@
 
 import chalk from "chalk";
 
+import { ICONS } from "./icons.js";
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -60,13 +62,13 @@ export function getShortId(sessionId: string): string {
  * formatResumeHint('a1b2c3d4-e5f6-7890-abcd-ef1234567890')
  * // Returns:
  * // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * // 💡 要继续此会话，运行: vellum resume a1b2c3d4
+ * // Hint: To resume this session, run: vellum resume a1b2c3d4
  * // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * ```
  */
 export function formatResumeHint(sessionId: string): string {
   const shortId = getShortId(sessionId);
-  const message = `💡 要继续此会话，运行: vellum resume ${shortId}`;
+  const message = `${ICONS.hint} To resume this session, run: vellum resume ${shortId}`;
 
   return chalk.cyan(`${SEPARATOR}\n${message}\n${SEPARATOR}`);
 }

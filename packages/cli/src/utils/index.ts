@@ -18,7 +18,13 @@ export {
   getSupportedProviders,
   type ModelInfo,
 } from "@vellum/provider";
-
+export {
+  getFileIcon,
+  getModeIcon,
+  getPhaseIcon,
+  getProviderIcon,
+  ICONS,
+} from "./icons.js";
 export {
   formatResumeHint,
   getShortId,

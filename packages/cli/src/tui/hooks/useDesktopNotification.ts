@@ -9,6 +9,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ICONS } from "../../utils/icons.js";
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -106,11 +108,11 @@ const DEFAULT_APP_NAME = "Vellum";
 
 /** Icons for different notification types */
 const TYPE_ICONS: Record<NotificationType, string> = {
-  "task-complete": "✅",
-  "permission-request": "🔐",
-  error: "❌",
-  warning: "⚠️",
-  info: "ℹ️",
+  "task-complete": ICONS.success,
+  "permission-request": "[Auth]",
+  error: ICONS.error,
+  warning: ICONS.warning,
+  info: ICONS.info,
 };
 
 // =============================================================================

@@ -12,6 +12,7 @@
  */
 
 import type { McpHub, McpServer } from "@vellum/mcp";
+import { ICONS } from "../utils/icons.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, interactive, success } from "./types.js";
 
@@ -48,26 +49,26 @@ export function getMcpCommandsHub(): McpHub | null {
 // =============================================================================
 
 /**
- * Get emoji indicator for a server connection status.
+ * Get text indicator for a server connection status.
  */
-function getStatusEmoji(status: string): string {
+function getStatusIndicator(status: string): string {
   switch (status) {
     case "connected":
-      return "🟢";
+      return "[ON]";
     case "connecting":
-      return "🟡";
+      return "[...]";
     case "disconnected":
-      return "⚪";
+      return "[OFF]";
     case "disabled":
-      return "⚫";
+      return "[DIS]";
     case "failed":
-      return "🔴";
+      return ICONS.error;
     case "needs_auth":
-      return "🔐";
+      return "[Auth]";
     case "needs_client_registration":
-      return "📝";
+      return "[Reg]";
     default:
-      return "❓";
+      return "[?]";
   }
 }
 
@@ -75,20 +76,20 @@ function getStatusEmoji(status: string): string {
  * Format server info for list display.
  */
 function formatServerListItem(server: McpServer): string {
-  const emoji = getStatusEmoji(server.statusInfo.status);
+  const indicator = getStatusIndicator(server.statusInfo.status);
   const disabledTag = server.disabled ? " [disabled]" : "";
-  return `  ${emoji} ${server.name}${disabledTag}`;
+  return `  ${indicator} ${server.name}${disabledTag}`;
 }
 
 /**
  * Format detailed server status.
  */
 function formatServerStatus(server: McpServer): string {
-  const emoji = getStatusEmoji(server.statusInfo.status);
+  const indicator = getStatusIndicator(server.statusInfo.status);
   const toolCount = server.tools?.length ?? 0;
   const resourceCount = server.resources?.length ?? 0;
 
-  const lines = [`${emoji} ${server.name}`, `   Status: ${server.statusInfo.status}`];
+  const lines = [`${indicator} ${server.name}`, `   Status: ${server.statusInfo.status}`];
 
   if (server.statusInfo.status === "failed" && "error" in server.statusInfo) {
     lines.push(`   Error: ${server.statusInfo.error}`);
@@ -201,7 +202,7 @@ async function handleAdd(_ctx: CommandContext): Promise<CommandResult> {
   // Interactive flow: collect server name
   return interactive({
     inputType: "text",
-    message: "📡 Enter server name:",
+    message: "[MCP] Enter server name:",
     placeholder: "my-mcp-server",
     handler: async (serverName: string): Promise<CommandResult> => {
       if (!serverName.trim()) {
@@ -219,7 +220,7 @@ async function handleAdd(_ctx: CommandContext): Promise<CommandResult> {
       // Collect command
       return interactive({
         inputType: "text",
-        message: "📦 Enter command to run:",
+        message: `${ICONS.package} Enter command to run:`,
         placeholder: "npx -y @my-org/mcp-server",
         handler: async (command: string): Promise<CommandResult> => {
           if (!command.trim()) {
@@ -241,7 +242,7 @@ async function handleAdd(_ctx: CommandContext): Promise<CommandResult> {
           const configJson = JSON.stringify(config, null, 2);
 
           return success(
-            "✅ Server configuration ready!\n\n" +
+            `${ICONS.success} Server configuration ready!\n\n` +
               "Add this to your ~/.vellum/mcp.json:\n\n" +
               "```json\n" +
               `"mcpServers": ${configJson}\n` +
@@ -289,7 +290,7 @@ async function handleRemove(ctx: CommandContext): Promise<CommandResult> {
   // Confirm removal
   return interactive({
     inputType: "confirm",
-    message: `⚠️ Remove server "${serverName}"? This will disconnect it.`,
+    message: `${ICONS.warning} Remove server "${serverName}"? This will disconnect it.`,
     defaultValue: "n",
     handler: async (value: string): Promise<CommandResult> => {
       const confirmed = value.toLowerCase() === "y" || value.toLowerCase() === "yes";
@@ -342,13 +343,13 @@ async function handleTools(ctx: CommandContext): Promise<CommandResult> {
 
     const tools = server.tools ?? [];
     if (tools.length === 0) {
-      return success(`📡 ${serverName} - No tools available.`);
+      return success(`[MCP] ${serverName} - No tools available.`);
     }
 
     const lines = [
-      `🔧 Tools from ${serverName}`,
+      `${ICONS.tools} Tools from ${serverName}`,
       "",
-      ...tools.map((t) => `  • ${t.name}${t.description ? ` - ${t.description}` : ""}`),
+      ...tools.map((t) => `  - ${t.name}${t.description ? ` - ${t.description}` : ""}`),
       "",
       `Total: ${tools.length} tool(s)`,
     ];
@@ -360,7 +361,7 @@ async function handleTools(ctx: CommandContext): Promise<CommandResult> {
   const allTools = mcpHub.getAllTools();
 
   if (allTools.length === 0) {
-    return success("🔧 No tools available from connected MCP servers.");
+    return success(`${ICONS.tools} No tools available from connected MCP servers.`);
   }
 
   // Group by server
@@ -371,12 +372,12 @@ async function handleTools(ctx: CommandContext): Promise<CommandResult> {
     toolsByServer.set(tool.serverName, existing);
   }
 
-  const lines = ["🔧 Available MCP Tools", ""];
+  const lines = [`${ICONS.tools} Available MCP Tools`, ""];
 
   for (const [server, tools] of toolsByServer) {
-    lines.push(`📡 ${server}:`);
+    lines.push(`[MCP] ${server}:`);
     for (const tool of tools) {
-      lines.push(`  • ${tool.name}${tool.description ? ` - ${tool.description}` : ""}`);
+      lines.push(`  - ${tool.name}${tool.description ? ` - ${tool.description}` : ""}`);
     }
     lines.push("");
   }
@@ -391,7 +392,7 @@ async function handleTools(ctx: CommandContext): Promise<CommandResult> {
  */
 function showHelp(): CommandResult {
   const lines = [
-    "📡 MCP Server Management",
+    "[MCP] Server Management",
     "",
     "Subcommands:",
     "  list    - List configured MCP servers",

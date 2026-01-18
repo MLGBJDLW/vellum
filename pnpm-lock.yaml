@@ -84,6 +84,9 @@ importers:
       react:
         specifier: ^19.2.3
         version: 19.2.3
+      string-width:
+        specifier: ^8.1.0
+        version: 8.1.0
       table:
         specifier: ^6.9.0
         version: 6.9.0

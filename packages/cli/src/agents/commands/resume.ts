@@ -8,8 +8,8 @@
  */
 
 import type { Command } from "commander";
-
 import { getOrCreateOrchestrator, getOrchestrator } from "../../orchestrator-singleton.js";
+import { ICONS } from "../../utils/icons.js";
 
 import { createTaskPersistence, type TaskPersistence } from "../task-persistence.js";
 import {
@@ -67,13 +67,13 @@ function formatDate(date: Date): string {
 function formatStatus(status: string): string {
   switch (status) {
     case "paused":
-      return "⏸️  paused";
+      return "[PAUSE] paused";
     case "running":
-      return "🔄 interrupted";
+      return `${ICONS.interrupted} interrupted`;
     case "completed":
-      return "✅ completed";
+      return `${ICONS.success} completed`;
     case "failed":
-      return "❌ failed";
+      return `${ICONS.error} failed`;
     default:
       return status;
   }
@@ -88,12 +88,12 @@ function displayResumableChains(
   chains: Array<{ chainId: string; savedAt: Date; status: string }>
 ): void {
   if (chains.length === 0) {
-    console.log("\n📭 No resumable task chains found.");
+    console.log("\nNo resumable task chains found.");
     console.log("   Task chains become resumable when paused or interrupted.\n");
     return;
   }
 
-  console.log("\n📋 Resumable Task Chains:\n");
+  console.log(`\n${ICONS.workflow} Resumable Task Chains:\n`);
   console.log("   %-40s  %-20s  %s", "Chain ID", "Status", "Saved At");
   console.log(`   ${"-".repeat(80)}`);
 
@@ -160,12 +160,12 @@ function displayResumeOptions(
  */
 function displayResumeResult(result: ResumeResult): void {
   if (!result.resumed) {
-    console.error(`\n❌ Failed to resume chain: ${result.chainId}`);
+    console.error(`\n${ICONS.error} Failed to resume chain: ${result.chainId}`);
     console.error("   Chain may not exist or is not in a resumable state.\n");
     return;
   }
 
-  console.log(`\n✅ Successfully resumed chain: ${result.chainId}`);
+  console.log(`\n${ICONS.success} Successfully resumed chain: ${result.chainId}`);
   console.log(`   From Task:        ${result.fromTaskId || "(start)"}`);
   console.log(`   Tasks Remaining:  ${result.totalRemaining}`);
 
@@ -208,7 +208,7 @@ async function resumeChain(
   const canResume = await resumption.canResume(chainId);
 
   if (!canResume) {
-    console.error(`\n❌ Chain '${chainId}' cannot be resumed.`);
+    console.error(`\n${ICONS.error} Chain '${chainId}' cannot be resumed.`);
     console.error("   It may not exist or is not in a resumable state (paused/interrupted).\n");
     process.exit(1);
   }
@@ -229,7 +229,7 @@ async function resumeChain(
 
   // Validate options
   if (options.skipFailed && options.retryFailed) {
-    console.error("\n❌ Cannot use both --skip-failed and --retry-failed options.\n");
+    console.error(`\n${ICONS.error} Cannot use both --skip-failed and --retry-failed options.\n`);
     process.exit(1);
   }
 
@@ -237,7 +237,9 @@ async function resumeChain(
   if (options.from && resumeOptions) {
     const allTasks = [...resumeOptions.pendingTasks, ...resumeOptions.failedTasks];
     if (!allTasks.includes(options.from)) {
-      console.error(`\n❌ Task '${options.from}' not found in pending or failed tasks.\n`);
+      console.error(
+        `\n${ICONS.error} Task '${options.from}' not found in pending or failed tasks.\n`
+      );
       console.error("   Available tasks:");
       for (const task of allTasks.slice(0, 10)) {
         console.error(`     - ${task}`);
@@ -251,7 +253,7 @@ async function resumeChain(
   }
 
   // Execute resume
-  console.log("🔄 Resuming task chain...");
+  console.log(`${ICONS.running} Resuming task chain...`);
   const result = await resumption.resume(chainId, resumeParams);
 
   displayResumeResult(result);
@@ -326,7 +328,7 @@ export function registerResumeCommand(program: Command): void {
           await resumeChain(chainId, commandOptions, persistence, resumption);
         }
       } catch (error) {
-        console.error("\n❌ Error:", error instanceof Error ? error.message : error);
+        console.error(`\n${ICONS.error} Error:`, error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });

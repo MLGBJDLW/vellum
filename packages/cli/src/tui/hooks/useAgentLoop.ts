@@ -15,6 +15,8 @@ import {
 } from "@vellum/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ICONS } from "../../utils/icons.js";
+
 /**
  * Message type for the hook's message list.
  */
@@ -352,7 +354,7 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       const errorMessage: AgentMessage = {
         id: generateMessageId(),
         role: "assistant",
-        content: `⚠️ ${err.message}`,
+        content: `${ICONS.warning} ${err.message}`,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);

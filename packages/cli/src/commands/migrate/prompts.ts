@@ -18,6 +18,7 @@ import { dirname, join, relative } from "node:path";
 import { confirm } from "@inquirer/prompts";
 import chalk from "chalk";
 
+import { ICONS } from "../../utils/icons.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import type { CommandContext, CommandResult, SlashCommand } from "../types.js";
 import { error, pending, success } from "../types.js";
@@ -277,7 +278,7 @@ export async function executeMigratePrompts(
     }
 
     // Display migration plan
-    console.log(chalk.bold("\n📋 Migration Plan\n"));
+    console.log(chalk.bold(`\n${ICONS.workflow} Migration Plan\n`));
 
     for (const action of actions) {
       console.log(chalk.cyan(`  ${action.source}/`));
@@ -291,7 +292,7 @@ export async function executeMigratePrompts(
 
     // Dry run - stop here
     if (options.dryRun) {
-      console.log(chalk.yellow("\n⚠ Dry run mode - no changes made."));
+      console.log(chalk.yellow(`\n${ICONS.warning} Dry run mode - no changes made.`));
       console.log(chalk.gray("  Run without --dry-run to execute migration."));
       return {
         success: true,
@@ -323,7 +324,7 @@ export async function executeMigratePrompts(
     }
 
     // Execute migration
-    console.log(chalk.blue("\n🔄 Migrating files...\n"));
+    console.log(chalk.blue(`\n${ICONS.migrate} Migrating files...\n`));
 
     let totalMigrated = 0;
     let totalBacked = 0;
@@ -348,7 +349,7 @@ export async function executeMigratePrompts(
     }
 
     // Summary
-    console.log(chalk.green("\n✅ Migration complete!"));
+    console.log(chalk.green(`\n${ICONS.success} Migration complete!`));
     console.log(chalk.gray(`  Files migrated: ${totalMigrated}`));
     if (totalBacked > 0) {
       console.log(chalk.gray(`  Backups created: ${totalBacked}`));
@@ -367,7 +368,7 @@ export async function executeMigratePrompts(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`\n❌ Migration failed: ${message}`));
+    console.error(chalk.red(`\n${ICONS.error} Migration failed: ${message}`));
     return {
       success: false,
       actions: [],

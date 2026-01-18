@@ -25,6 +25,7 @@ import {
   type SkillTrigger,
 } from "@vellum/core";
 import chalk from "chalk";
+import { ICONS } from "../utils/icons.js";
 import { EXIT_CODES } from "./exit-codes.js";
 import type { CommandResult } from "./types.js";
 import { error, success } from "./types.js";
@@ -588,7 +589,7 @@ export async function handleSkillCreate(
     await ensureDir(path.join(skillDir, "scripts"));
     await ensureDir(path.join(skillDir, "references"));
 
-    console.log(chalk.green(`\n✅ Created skill: ${name}`));
+    console.log(chalk.green(`\n${ICONS.success} Created skill: ${name}`));
     console.log(chalk.gray(`   Path: ${skillDir}`));
     console.log(chalk.gray("\n   Next steps:"));
     console.log(chalk.gray(`   1. Edit ${manifestPath}`));
@@ -598,7 +599,7 @@ export async function handleSkillCreate(
     return { success: true, path: skillDir, exitCode: EXIT_CODES.SUCCESS };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`\n❌ Failed to create skill: ${message}`));
+    console.error(chalk.red(`\n${ICONS.error} Failed to create skill: ${message}`));
     return { success: false, error: message, exitCode: EXIT_CODES.ERROR };
   }
 }
@@ -690,15 +691,15 @@ function calculateValidationSummary(results: SkillValidationResult[]) {
 function formatValidationResultLines(results: SkillValidationResult[]): string[] {
   const lines: string[] = [];
   for (const result of results) {
-    const icon = result.valid ? chalk.green("✅") : chalk.red("❌");
+    const icon = result.valid ? chalk.green(ICONS.success) : chalk.red(ICONS.error);
     lines.push(`${icon} ${chalk.white(result.name)}`);
     lines.push(chalk.gray(`   ${result.path}`));
 
     for (const err of result.errors) {
-      lines.push(chalk.red(`   ✗ ${err}`));
+      lines.push(chalk.red(`   x ${err}`));
     }
     for (const warn of result.warnings) {
-      lines.push(chalk.yellow(`   ⚠ ${warn}`));
+      lines.push(chalk.yellow(`   ${ICONS.warning} ${warn}`));
     }
     lines.push("");
   }
@@ -721,8 +722,8 @@ function formatValidationSummaryLines(
   const allValid = summary.invalid === 0;
   lines.push(
     allValid
-      ? chalk.green("\n✅ All skills are valid!")
-      : chalk.red("\n❌ Some skills have errors.")
+      ? chalk.green(`\n${ICONS.success} All skills are valid!`)
+      : chalk.red(`\n${ICONS.error} Some skills have errors.`)
   );
   return lines;
 }
@@ -773,7 +774,7 @@ export async function handleSkillValidate(
         : error("INVALID_ARGUMENT", JSON.stringify(output, null, 2));
     }
 
-    const lines: string[] = [chalk.bold.cyan("\n🔍 Skill Validation Results\n")];
+    const lines: string[] = [chalk.bold.cyan(`\n[Skill] Validation Results\n`)];
 
     if (results.length === 0) {
       lines.push(chalk.yellow("No skills found to validate."));
@@ -1085,7 +1086,7 @@ function formatMigrationOutput(
 ): string {
   const lines: string[] = [];
   const modeLabel = dryRun ? " (dry run)" : "";
-  lines.push(chalk.bold.cyan(`\n🔄 Skill Migration from ${source}${modeLabel}\n`));
+  lines.push(chalk.bold.cyan(`\n${ICONS.migrate} Skill Migration from ${source}${modeLabel}\n`));
 
   if (migrated.length === 0 && errors.length === 0) {
     lines.push(chalk.yellow(`No ${source} skills found to migrate.`));
@@ -1097,19 +1098,19 @@ function formatMigrationOutput(
   }
 
   if (migrated.length > 0) {
-    lines.push(chalk.green("✅ Migrated Skills:"));
+    lines.push(chalk.green(`${ICONS.success} Migrated Skills:`));
     for (const m of migrated) {
-      lines.push(chalk.white(`  • ${m.name}`));
+      lines.push(chalk.white(`  ${ICONS.bullet} ${m.name}`));
       lines.push(chalk.gray(`    ${m.originalPath}`));
-      lines.push(chalk.gray(`    → ${m.targetPath}`));
+      lines.push(chalk.gray(`    -> ${m.targetPath}`));
     }
     lines.push("");
   }
 
   if (errors.length > 0) {
-    lines.push(chalk.red("❌ Failed:"));
+    lines.push(chalk.red(`${ICONS.error} Failed:`));
     for (const e of errors) {
-      lines.push(chalk.red(`  • ${e.path}`));
+      lines.push(chalk.red(`  ${ICONS.bullet} ${e.path}`));
       lines.push(chalk.red(`    ${e.error}`));
     }
     lines.push("");
@@ -1128,10 +1129,12 @@ function formatMigrationOutput(
   );
 
   if (dryRun) {
-    lines.push(chalk.yellow("\n⚠️  Dry run - no files were modified."));
+    lines.push(chalk.yellow(`\n${ICONS.warning} Dry run - no files were modified.`));
     lines.push(chalk.gray("Remove --dry-run to perform actual migration."));
   } else if (summary.migrated > 0) {
-    lines.push(chalk.green(`\n✅ Successfully migrated ${summary.migrated} skill(s)!`));
+    lines.push(
+      chalk.green(`\n${ICONS.success} Successfully migrated ${summary.migrated} skill(s)!`)
+    );
     lines.push(chalk.gray(`Target location: ${targetBasePath}`));
   }
 

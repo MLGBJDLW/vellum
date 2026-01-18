@@ -16,6 +16,7 @@ import { extname, join, relative } from "node:path";
 
 import chalk from "chalk";
 
+import { ICONS } from "../../utils/icons.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import type { CommandContext, CommandResult, SlashCommand } from "../types.js";
 import { error, success } from "../types.js";
@@ -476,7 +477,7 @@ export async function executePromptValidate(
   } else {
     // Display issues in file:line format
     if (unfixedIssues.length > 0 || !options.fix) {
-      console.log(chalk.bold("\n📋 Validation Results\n"));
+      console.log(chalk.bold(`\n${ICONS.workflow} Validation Results\n`));
 
       for (const issue of allIssues) {
         if (options.fix && issue.fixable) continue;
@@ -484,17 +485,17 @@ export async function executePromptValidate(
         const location = issue.line ? `:${issue.line}` : "";
         const prefix =
           issue.severity === "error"
-            ? chalk.red("✖")
+            ? chalk.red("x")
             : issue.severity === "warning"
-              ? chalk.yellow("⚠")
-              : chalk.blue("ℹ");
+              ? chalk.yellow(ICONS.warning)
+              : chalk.blue(ICONS.info);
 
         console.log(`${prefix} ${issue.file}${location}: ${issue.message} (${issue.code})`);
       }
     }
 
     // Summary
-    console.log(chalk.bold("\n📊 Summary"));
+    console.log(chalk.bold("\nSummary"));
     console.log(chalk.gray(`  Files scanned: ${filesScanned}`));
     console.log(chalk.gray(`  Errors: ${errors.length}`));
     console.log(chalk.gray(`  Warnings: ${warnings.length}`));
@@ -504,11 +505,11 @@ export async function executePromptValidate(
     }
 
     if (hasErrors) {
-      console.log(chalk.red("\n❌ Validation failed"));
+      console.log(chalk.red(`\n${ICONS.error} Validation failed`));
     } else if (warnings.length > 0) {
-      console.log(chalk.yellow("\n⚠ Validation passed with warnings"));
+      console.log(chalk.yellow(`\n${ICONS.warning} Validation passed with warnings`));
     } else {
-      console.log(chalk.green("\n✅ Validation passed"));
+      console.log(chalk.green(`\n${ICONS.success} Validation passed`));
     }
   }
 

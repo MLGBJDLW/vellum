@@ -22,6 +22,7 @@ import {
 } from "@vellum/core";
 import chalk from "chalk";
 
+import { ICONS } from "../utils/icons.js";
 import { EXIT_CODES } from "./exit-codes.js";
 
 // =============================================================================
@@ -225,7 +226,9 @@ export async function executeUpdateCommand(
     console.log(chalk.green(`✓ Successfully updated to v${targetVersion}`));
 
     if (updateResult.requiresRestart) {
-      console.log(chalk.yellow("\n⚠ Please restart your terminal to use the new version."));
+      console.log(
+        chalk.yellow(`\n${ICONS.warning} Please restart your terminal to use the new version.`)
+      );
     }
   }
 

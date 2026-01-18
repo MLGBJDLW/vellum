@@ -16,6 +16,7 @@ import {
   type CodingMode,
   type ModeManager,
 } from "@vellum/core";
+import { getModeIcon } from "../utils/icons.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, interactive, success } from "./types.js";
 
@@ -60,27 +61,20 @@ function getModeDescription(mode: CodingMode): string {
 }
 
 /**
- * Get emoji indicator for a coding mode.
+ * Get text-based icon indicator for a coding mode.
  */
-function getModeEmoji(mode: CodingMode): string {
-  switch (mode) {
-    case "vibe":
-      return "⚡";
-    case "plan":
-      return "📋";
-    case "spec":
-      return "📐";
-  }
+function getModeIndicator(mode: CodingMode): string {
+  return getModeIcon(mode);
 }
 
 /**
  * Format mode information for display.
  */
 function formatModeInfo(mode: CodingMode, isCurrent: boolean): string {
-  const emoji = getModeEmoji(mode);
+  const icon = getModeIndicator(mode);
   const desc = getModeDescription(mode);
   const marker = isCurrent ? " (current)" : "";
-  return `  ${emoji} ${mode}${marker} - ${desc}`;
+  return `  ${icon} ${mode}${marker} - ${desc}`;
 }
 
 // =============================================================================
@@ -132,7 +126,7 @@ export const modeCommand: SlashCommand = {
     if (!modeManager) {
       // No manager available - show static info
       const lines = [
-        "🎯 Coding Modes",
+        "Coding Modes",
         "",
         "Available modes:",
         ...CODING_MODES.map((m) => formatModeInfo(m, m === "vibe")),
@@ -146,9 +140,9 @@ export const modeCommand: SlashCommand = {
 
     const currentMode = modeManager.getCurrentMode();
     const lines = [
-      "🎯 Coding Modes",
+      "Coding Modes",
       "",
-      `Current mode: ${getModeEmoji(currentMode)} ${currentMode}`,
+      `Current mode: ${getModeIndicator(currentMode)} ${currentMode}`,
       "",
       "Available modes:",
       ...CODING_MODES.map((m) => formatModeInfo(m, m === currentMode)),
@@ -184,21 +178,21 @@ async function switchToMode(mode: string, _ctx: CommandContext): Promise<Command
   // If no manager, return a message about it
   if (!modeManager) {
     return success(
-      `Mode system not initialized. Would switch to ${getModeEmoji(targetMode)} ${targetMode}.`
+      `Mode system not initialized. Would switch to ${getModeIndicator(targetMode)} ${targetMode}.`
     );
   }
 
   // Check if already in this mode
   const currentMode = modeManager.getCurrentMode();
   if (currentMode === targetMode) {
-    return success(`Already in ${getModeEmoji(targetMode)} ${targetMode} mode.`);
+    return success(`Already in ${getModeIndicator(targetMode)} ${targetMode} mode.`);
   }
 
   // Spec mode requires confirmation
   if (targetMode === "spec") {
     return interactive({
       inputType: "confirm",
-      message: `⚠️ Switch to spec mode? This enables a 6-phase structured workflow.`,
+      message: `[WARN] Switch to spec mode? This enables a 6-phase structured workflow.`,
       defaultValue: "n",
       handler: async (value: string): Promise<CommandResult> => {
         const confirmed = value.toLowerCase() === "y" || value.toLowerCase() === "yes";
@@ -231,8 +225,8 @@ async function executeSwitch(targetMode: CodingMode): Promise<CommandResult> {
   });
 
   if (result.success) {
-    const emoji = getModeEmoji(targetMode);
-    return success(`${emoji} Switched to ${targetMode} mode.`, {
+    const icon = getModeIndicator(targetMode);
+    return success(`${icon} Switched to ${targetMode} mode.`, {
       previousMode: result.previousMode,
       currentMode: result.currentMode,
     });

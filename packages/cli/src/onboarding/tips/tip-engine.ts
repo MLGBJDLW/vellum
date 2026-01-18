@@ -6,6 +6,7 @@
  * @module cli/onboarding/tips/tip-engine
  */
 
+import { ICONS } from "../../utils/icons.js";
 import type { Tip, TipContext, TipState } from "../tutorial/types.js";
 
 // =============================================================================
@@ -28,7 +29,7 @@ export const BUILTIN_TIPS: Tip[] = [
     },
     priority: 10,
     dismissable: true,
-    icon: "💡",
+    icon: ICONS.tips.hint,
   },
   {
     id: "tip-shortcuts-clear",
@@ -41,7 +42,7 @@ export const BUILTIN_TIPS: Tip[] = [
     },
     priority: 5,
     dismissable: true,
-    icon: "🧹",
+    icon: "[Clear]",
   },
   {
     id: "tip-shortcuts-mode",
@@ -55,7 +56,7 @@ export const BUILTIN_TIPS: Tip[] = [
     priority: 8,
     dismissable: true,
     relatedLessonId: "modes",
-    icon: "⚡",
+    icon: ICONS.tips.vibe,
   },
 
   // Features
@@ -70,7 +71,7 @@ export const BUILTIN_TIPS: Tip[] = [
     },
     priority: 7,
     dismissable: true,
-    icon: "📝",
+    icon: ICONS.tips.edit,
   },
   {
     id: "tip-feature-history",
@@ -83,7 +84,7 @@ export const BUILTIN_TIPS: Tip[] = [
     },
     priority: 6,
     dismissable: true,
-    icon: "📜",
+    icon: "[Hist]",
   },
   {
     id: "tip-feature-tools",
@@ -97,7 +98,7 @@ export const BUILTIN_TIPS: Tip[] = [
     priority: 9,
     dismissable: true,
     relatedLessonId: "tools",
-    icon: "🔧",
+    icon: ICONS.tips.tools,
   },
 
   // Best Practices
@@ -112,7 +113,7 @@ export const BUILTIN_TIPS: Tip[] = [
     },
     priority: 10,
     dismissable: true,
-    icon: "🎯",
+    icon: ICONS.tips.target,
   },
   {
     id: "tip-practice-context",
@@ -125,7 +126,7 @@ export const BUILTIN_TIPS: Tip[] = [
     },
     priority: 8,
     dismissable: true,
-    icon: "📋",
+    icon: ICONS.tips.plan,
   },
   {
     id: "tip-practice-review",
@@ -139,7 +140,7 @@ export const BUILTIN_TIPS: Tip[] = [
     priority: 7,
     dismissable: true,
     relatedLessonId: "modes",
-    icon: "👀",
+    icon: "[Review]",
   },
 
   // Error Tips
@@ -154,7 +155,7 @@ export const BUILTIN_TIPS: Tip[] = [
     },
     priority: 15,
     dismissable: true,
-    icon: "🔍",
+    icon: ICONS.tips.search,
   },
   {
     id: "tip-error-debug-mode",
@@ -168,7 +169,7 @@ export const BUILTIN_TIPS: Tip[] = [
     priority: 12,
     dismissable: true,
     relatedLessonId: "modes",
-    icon: "🐛",
+    icon: "[Debug]",
   },
 
   // Performance
@@ -183,7 +184,7 @@ export const BUILTIN_TIPS: Tip[] = [
     },
     priority: 6,
     dismissable: true,
-    icon: "🚀",
+    icon: ICONS.tips.rocket,
   },
 ];
 

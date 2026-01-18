@@ -19,6 +19,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import chalk from "chalk";
 
+import { ICONS } from "../utils/icons.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, success } from "./types.js";
 
@@ -102,14 +103,14 @@ function getSystemStatus(): SystemStatus {
 function formatBriefStatus(status: SystemStatus): string {
   const lines: string[] = [];
 
-  lines.push(chalk.bold.blue("📊 Status Summary"));
+  lines.push(chalk.bold.blue("Status Summary"));
   lines.push("");
-  lines.push(`📁 ${chalk.dim("CWD:")} ${status.cwd}`);
-  lines.push(`${status.isGitRepo ? "✅" : "❌"} Git Repository`);
-  lines.push(`${status.hasSpec ? "✅" : "❌"} Spec Workflow`);
+  lines.push(`${ICONS.cwd} ${chalk.dim("CWD:")} ${status.cwd}`);
+  lines.push(`${status.isGitRepo ? ICONS.success : ICONS.error} Git Repository`);
+  lines.push(`${status.hasSpec ? ICONS.success : ICONS.error} Spec Workflow`);
 
   if (status.currentMode) {
-    lines.push(`🎯 Mode: ${status.currentMode}`);
+    lines.push(`Mode: ${status.currentMode}`);
   }
 
   return lines.join("\n");
@@ -121,14 +122,18 @@ function formatBriefStatus(status: SystemStatus): string {
 function formatFullStatus(status: SystemStatus): string {
   const lines: string[] = [];
 
-  lines.push(chalk.bold.blue("📊 System Status (Full)"));
+  lines.push(chalk.bold.blue("System Status (Full)"));
   lines.push("");
 
   // Environment
   lines.push(chalk.bold("Environment:"));
-  lines.push(`  📁 Working Directory: ${status.cwd}`);
-  lines.push(`  🔧 Git Repository: ${status.isGitRepo ? chalk.green("Yes") : chalk.yellow("No")}`);
-  lines.push(`  📐 Spec Workflow: ${status.hasSpec ? chalk.green("Yes") : chalk.yellow("No")}`);
+  lines.push(`  ${ICONS.cwd} Working Directory: ${status.cwd}`);
+  lines.push(
+    `  ${ICONS.git} Git Repository: ${status.isGitRepo ? chalk.green("Yes") : chalk.yellow("No")}`
+  );
+  lines.push(
+    `  ${ICONS.mode.spec} Spec Workflow: ${status.hasSpec ? chalk.green("Yes") : chalk.yellow("No")}`
+  );
   lines.push("");
 
   // Spec details if exists

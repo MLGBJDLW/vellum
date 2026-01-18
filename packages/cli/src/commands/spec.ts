@@ -28,6 +28,7 @@ import {
 } from "@vellum/core";
 import chalk from "chalk";
 
+import { ICONS } from "../utils/icons.js";
 import { EXIT_CODES } from "./exit-codes.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, pending, success } from "./types.js";
@@ -85,12 +86,12 @@ const DEFAULT_SPEC_BASE = ".ouroboros/specs";
  * Phase display names for formatting
  */
 const PHASE_DISPLAY_NAMES: Record<SpecPhase, string> = {
-  research: "📚 Research",
-  requirements: "📋 Requirements",
-  design: "🏗️ Design",
-  tasks: "📝 Tasks",
-  implementation: "⚙️ Implementation",
-  validation: "✅ Validation",
+  research: `${ICONS.phase.research} Research`,
+  requirements: `${ICONS.phase.requirements} Requirements`,
+  design: `${ICONS.phase.design} Design`,
+  tasks: `${ICONS.phase.tasks} Tasks`,
+  implementation: `${ICONS.phase.implementation} Implementation`,
+  validation: `${ICONS.phase.validation} Validation`,
 };
 
 // =============================================================================
@@ -123,18 +124,18 @@ function ensureSpecDir(specDir: string): void {
  * Format phase status for display
  */
 function formatPhaseStatus(phase: SpecPhase, status: string): string {
-  const emoji =
+  const indicator =
     status === "completed"
-      ? "✅"
+      ? ICONS.success
       : status === "running"
-        ? "🔄"
+        ? ICONS.running
         : status === "failed"
-          ? "❌"
+          ? ICONS.error
           : status === "skipped"
-            ? "⏭️"
-            : "⏳";
+            ? ICONS.skip
+            : ICONS.pending;
 
-  return `${emoji} ${PHASE_DISPLAY_NAMES[phase]}: ${status}`;
+  return `${indicator} ${PHASE_DISPLAY_NAMES[phase]}: ${status}`;
 }
 
 /**
@@ -144,7 +145,7 @@ function formatStatus(status: SpecWorkflowStatus): string {
   const lines: string[] = [];
   const currentPhase = status.state.currentPhase as SpecPhase;
 
-  lines.push(chalk.bold.blue("📐 Spec Workflow Status"));
+  lines.push(chalk.bold.blue(`${ICONS.mode.spec} Spec Workflow Status`));
   lines.push("");
   lines.push(`Workflow: ${status.state.name}`);
   lines.push(
@@ -170,9 +171,9 @@ function formatResult(result: WorkflowResult): string {
   const lines: string[] = [];
 
   if (result.success) {
-    lines.push(chalk.green.bold("✅ Spec workflow completed successfully!"));
+    lines.push(chalk.green.bold(`${ICONS.success} Spec workflow completed successfully!`));
   } else {
-    lines.push(chalk.red.bold("❌ Spec workflow failed"));
+    lines.push(chalk.red.bold(`${ICONS.error} Spec workflow failed`));
     if (result.error) {
       lines.push(chalk.red(`Error: ${result.error}`));
     }
@@ -203,7 +204,7 @@ async function executeSpecStart(description: string, options: SpecOptions): Prom
   const slug = generateSlug(description);
   const specDir = options.specDir ?? resolve(join(process.cwd(), DEFAULT_SPEC_BASE, slug));
 
-  console.log(chalk.bold.blue("\n📐 Starting Spec Workflow\n"));
+  console.log(chalk.bold.blue(`\n${ICONS.mode.spec} Starting Spec Workflow\n`));
   console.log(`Description: ${description}`);
   console.log(`Directory: ${specDir}`);
   if (options.from) {
@@ -238,7 +239,7 @@ async function executeSpecStart(description: string, options: SpecOptions): Prom
     });
 
     engine.on("checkpoint:saved", (checkpointId: string) => {
-      console.log(chalk.gray(`  💾 Checkpoint saved: ${checkpointId}`));
+      console.log(chalk.gray(`  ${ICONS.checkpoint} Checkpoint saved: ${checkpointId}`));
     });
 
     const result = await engine.start(slug, description);
@@ -253,7 +254,7 @@ async function executeSpecStart(description: string, options: SpecOptions): Prom
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`\n❌ Failed to start spec workflow: ${message}`));
+    console.error(chalk.red(`\n${ICONS.error} Failed to start spec workflow: ${message}`));
     return {
       success: false,
       specDir,
@@ -269,7 +270,7 @@ async function executeSpecStart(description: string, options: SpecOptions): Prom
 async function executeSpecContinue(options: SpecOptions): Promise<SpecResult> {
   const specDir = options.specDir ?? resolve(join(process.cwd(), DEFAULT_SPEC_BASE));
 
-  console.log(chalk.bold.blue("\n📐 Resuming Spec Workflow\n"));
+  console.log(chalk.bold.blue(`\n${ICONS.mode.spec} Resuming Spec Workflow\n`));
   console.log(`Directory: ${specDir}`);
   console.log("");
 
@@ -316,7 +317,7 @@ async function executeSpecContinue(options: SpecOptions): Promise<SpecResult> {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`\n❌ Failed to resume spec workflow: ${message}`));
+    console.error(chalk.red(`\n${ICONS.error} Failed to resume spec workflow: ${message}`));
     return {
       success: false,
       specDir,
@@ -359,7 +360,7 @@ async function executeSpecStatus(options: SpecOptions): Promise<SpecResult> {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`\n❌ Failed to get spec status: ${message}`));
+    console.error(chalk.red(`\n${ICONS.error} Failed to get spec status: ${message}`));
     return {
       success: false,
       specDir,
@@ -413,7 +414,7 @@ export async function executeSpec(options: SpecOptions = {}): Promise<SpecResult
   }
 
   // No subcommand specified - show help
-  console.log(chalk.bold.blue("\n📐 Spec Workflow Commands\n"));
+  console.log(chalk.bold.blue(`\n${ICONS.mode.spec} Spec Workflow Commands\n`));
   console.log('  vellum spec "description"  Start a new spec workflow');
   console.log("  vellum spec --continue     Resume from checkpoint");
   console.log("  vellum spec --status       Show workflow status");

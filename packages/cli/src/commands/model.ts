@@ -88,25 +88,6 @@ function formatPrice(pricePer1M: number): string {
 }
 
 /**
- * Get provider emoji.
- */
-function getProviderEmoji(provider: string): string {
-  const emojis: Record<string, string> = {
-    anthropic: "🔮",
-    openai: "🤖",
-    google: "🔷",
-    copilot: "🐙",
-    deepseek: "🌊",
-    groq: "⚡",
-    xai: "🅧",
-    qwen: "🌙",
-    ollama: "🦙",
-    lmstudio: "🎛️",
-  };
-  return emojis[provider.toLowerCase()] ?? "📦";
-}
-
-/**
  * Format model info for display.
  */
 function formatModelInfo(_provider: string, model: ModelInfo, isCurrent: boolean): string {
@@ -150,13 +131,25 @@ export const modelCommand: SlashCommand = {
   // Dynamic subcommands: list all providers for autocomplete
   subcommands: getSupportedProviders().map((provider) => ({
     name: provider,
-    description: `${getProviderEmoji(provider)} ${provider} models`,
+    description: `${provider} models`,
   })),
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
-    const requestedModel = ctx.parsedArgs.positional[0] as string | undefined;
+    const positional = ctx.parsedArgs.positional as (string | undefined)[];
 
-    // If a model is specified, try to switch
+    let requestedModel: string | undefined;
+
+    if (positional[0] && positional[1]) {
+      // Two args: provider and model from autocomplete flow
+      requestedModel = `${positional[0]}/${positional[1]}`;
+    } else if (positional[0]?.includes("/")) {
+      // Single arg with / separator (backwards compatible)
+      requestedModel = positional[0];
+    } else if (positional[0]) {
+      // Provider only - show available models for that provider
+      return showProviderModels(positional[0]);
+    }
+
     if (requestedModel) {
       return switchToModel(requestedModel);
     }
@@ -171,16 +164,15 @@ export const modelCommand: SlashCommand = {
  */
 function showModelInfo(): CommandResult {
   const providers = getSupportedProviders();
-  const lines: string[] = ["🤖 AI Models", ""];
+  const lines: string[] = ["AI Models", ""];
 
   // Show current model if configured
   if (currentConfig) {
     const info = getModelInfo(currentConfig.provider, currentConfig.model);
-    const emoji = getProviderEmoji(currentConfig.provider);
-    lines.push(`Current: ${emoji} ${currentConfig.provider}/${info.name}`);
+    lines.push(`Current: ${currentConfig.provider}/${info.name}`);
     lines.push(
-      `  Context: ${formatContextWindow(info.contextWindow)} • ` +
-        `Input: ${formatPrice(info.inputPrice ?? 0)} • ` +
+      `  Context: ${formatContextWindow(info.contextWindow)} | ` +
+        `Input: ${formatPrice(info.inputPrice ?? 0)} | ` +
         `Output: ${formatPrice(info.outputPrice ?? 0)}`
     );
     lines.push("");
@@ -194,12 +186,11 @@ function showModelInfo(): CommandResult {
 
   // List all providers and their models
   for (const provider of providers) {
-    const emoji = getProviderEmoji(provider);
     const models = getProviderModels(provider);
 
     if (models.length === 0) continue;
 
-    lines.push(`  ${emoji} ${provider}`);
+    lines.push(`  ${provider}`);
 
     for (const model of models) {
       const isCurrent = currentConfig?.provider === provider && currentConfig?.model === model.id;
@@ -209,6 +200,40 @@ function showModelInfo(): CommandResult {
   }
 
   lines.push("Usage: /model <provider>/<model-id>");
+
+  return success(lines.join("\n"));
+}
+
+/**
+ * Show available models for a specific provider.
+ */
+function showProviderModels(provider: string): CommandResult {
+  const providers = getSupportedProviders();
+  const normalizedProvider = provider.toLowerCase();
+
+  if (!providers.includes(normalizedProvider)) {
+    return error("INVALID_ARGUMENT", `Unknown provider: ${provider}`, [
+      `Valid providers: ${providers.join(", ")}`,
+    ]);
+  }
+
+  const models = getProviderModels(normalizedProvider);
+
+  if (models.length === 0) {
+    return error("INVALID_ARGUMENT", `No models available for ${provider}`);
+  }
+
+  const lines: string[] = [`${provider} Models`, ""];
+
+  for (const model of models) {
+    const isCurrent =
+      currentConfig?.provider === normalizedProvider && currentConfig?.model === model.id;
+    lines.push(formatModelInfo(normalizedProvider, model, isCurrent));
+  }
+
+  lines.push("");
+  lines.push(`Usage: /model ${provider}/<model-id>`);
+  lines.push(`Example: /model ${provider}/${models[0]?.id ?? "model-id"}`);
 
   return success(lines.join("\n"));
 }
@@ -245,26 +270,25 @@ function switchToModel(modelSpec: string): CommandResult {
 
   // Get model info (validates model exists or returns default)
   const info = getModelInfo(provider, modelId);
-  const emoji = getProviderEmoji(provider);
 
   // Check if already using this model
   if (currentConfig?.provider === provider.toLowerCase() && currentConfig?.model === modelId) {
-    return success(`Already using ${emoji} ${info.name}`);
+    return success(`Already using ${info.name}`);
   }
 
   // Update via callback if available
   if (onModelChange) {
     onModelChange(provider.toLowerCase(), modelId);
     return success(
-      `Switched to ${emoji} ${info.name}\n` +
-        `  Context: ${formatContextWindow(info.contextWindow)} • ` +
-        `Input: ${formatPrice(info.inputPrice ?? 0)} • ` +
+      `Switched to ${info.name}\n` +
+        `  Context: ${formatContextWindow(info.contextWindow)} | ` +
+        `Input: ${formatPrice(info.inputPrice ?? 0)} | ` +
         `Output: ${formatPrice(info.outputPrice ?? 0)}`
     );
   }
 
   // No callback - just report what would happen
-  return success(`Would switch to ${emoji} ${info.name}\\n(Model system not fully initialized)`);
+  return success(`Would switch to ${info.name}\n(Model system not fully initialized)`);
 }
 
 // =============================================================================

@@ -11,6 +11,7 @@
  */
 
 import type { SessionCheckpoint } from "@vellum/core";
+import { ICONS } from "../utils/icons.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, success } from "./types.js";
 
@@ -166,7 +167,7 @@ export const checkpointCommand: SlashCommand = {
       }
 
       return success(
-        `✅ Checkpoint created: ${checkpointId.slice(0, 8)}${description ? ` - "${description}"` : ""}`
+        `${ICONS.success} Checkpoint created: ${checkpointId.slice(0, 8)}${description ? ` - "${description}"` : ""}`
       );
     } catch (err) {
       return error(
@@ -286,7 +287,7 @@ export const rollbackCommand: SlashCommand = {
       }
 
       return success(
-        `✅ Rolled back to checkpoint ${checkpoint.id.slice(0, 8)}\n` +
+        `${ICONS.success} Rolled back to checkpoint ${checkpoint.id.slice(0, 8)}\n` +
           `   Removed ${messagesToLose} message${messagesToLose === 1 ? "" : "s"}.`
       );
     } catch (err) {

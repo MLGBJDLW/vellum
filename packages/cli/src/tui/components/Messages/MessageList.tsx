@@ -20,6 +20,7 @@
 import { getIcons } from "@vellum/shared";
 import { Box, type Key, Static, Text, useInput } from "ink";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import stringWidth from "string-width";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
 import { useTUITranslation } from "../../i18n/index.js";
@@ -38,6 +39,19 @@ import { MarkdownRenderer } from "./MarkdownRenderer.js";
 
 /** ASCII text spinner animation frames for running tools (no Unicode/emoji) */
 const SPINNER_FRAMES = ["-", "\\", "|", "/"] as const;
+
+/**
+ * Threshold for auto-switching from Static to windowed mode.
+ * When historyMessages exceeds this count, windowed mode is enabled automatically
+ * to prevent infinite content growth and memory issues.
+ */
+const AUTO_WINDOWED_THRESHOLD = 50;
+
+/**
+ * Default maxHeight when auto-windowed mode is triggered.
+ * Shows this many most recent messages in windowed view.
+ */
+const DEFAULT_MAX_HEIGHT_WHEN_EXCEEDED = 30;
 
 // =============================================================================
 // Types
@@ -134,7 +148,12 @@ function getRoleLabel(role: Message["role"]): string {
 }
 
 /**
- * Estimate wrapped line count for a text block using a target width.
+ * Estimate the number of lines a text will occupy when wrapped.
+ * Uses string-width for accurate CJK/Emoji/ANSI handling.
+ *
+ * @param text - The text to measure
+ * @param width - The available terminal width
+ * @returns Estimated number of lines after wrapping
  */
 function estimateWrappedLineCount(text: string, width: number): number {
   const safeWidth = Math.max(1, width);
@@ -145,12 +164,14 @@ function estimateWrappedLineCount(text: string, width: number): number {
   let total = 0;
   const lines = text.split("\n");
   for (const line of lines) {
-    const lineLength = line.length;
-    if (lineLength === 0) {
+    // Use string-width for accurate display width calculation
+    // This correctly handles CJK characters (2 cells), Emoji, and ANSI escape codes
+    const lineWidth = stringWidth(line);
+    if (lineWidth === 0) {
       total += 1;
       continue;
     }
-    total += Math.max(1, Math.ceil(lineLength / safeWidth));
+    total += Math.max(1, Math.ceil(lineWidth / safeWidth));
   }
   return total;
 }
@@ -523,10 +544,29 @@ const MessageList = memo(function MessageList({
   // Normalize maxHeight - treat 0, undefined, null as "no max height"
   const effectiveMaxHeight = maxHeight && maxHeight > 0 ? maxHeight : undefined;
 
+  // Auto-enable windowed mode for long conversations to prevent infinite content growth
+  // This triggers when message count exceeds threshold, even if maxHeight wasn't explicitly set
+  const shouldAutoWindow =
+    historyMessages !== undefined && historyMessages.length > AUTO_WINDOWED_THRESHOLD;
+  const computedMaxHeight =
+    effectiveMaxHeight ?? (shouldAutoWindow ? DEFAULT_MAX_HEIGHT_WHEN_EXCEEDED : undefined);
+
   // Determine if we're using optimized Static rendering
   // If historyMessages is provided, use the split architecture
-  // NOTE: Static rendering does not support windowed scrolling; fall back when maxHeight is set.
-  const useStaticRendering = historyMessages !== undefined && !effectiveMaxHeight && !hasToolGroups;
+  // NOTE: Static rendering does not support windowed scrolling; fall back when maxHeight is set
+  //       OR when auto-windowed mode is triggered due to long conversations.
+  const useStaticRendering = historyMessages !== undefined && !computedMaxHeight && !hasToolGroups;
+
+  // Debug: log rendering mode changes (only in development)
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development" && process.env.DEBUG_TUI) {
+      console.error(
+        `[MessageList] Mode: ${useStaticRendering ? "Static" : "Windowed"}, ` +
+          `Messages: ${messages.length}, MaxHeight: ${computedMaxHeight ?? "none"}, ` +
+          `AutoWindow: ${shouldAutoWindow}`
+      );
+    }
+  }, [useStaticRendering, messages.length, computedMaxHeight, shouldAutoWindow]);
 
   // Current scroll position (index of the first visible message in windowed mode)
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -539,20 +579,20 @@ const MessageList = memo(function MessageList({
 
   // Whether we're currently at the bottom of the list
   const isAtBottom = useMemo(() => {
-    if (!effectiveMaxHeight || messages.length <= effectiveMaxHeight) {
+    if (!computedMaxHeight || messages.length <= computedMaxHeight) {
       return true;
     }
-    return scrollOffset >= messages.length - effectiveMaxHeight;
-  }, [scrollOffset, messages.length, effectiveMaxHeight]);
+    return scrollOffset >= messages.length - computedMaxHeight;
+  }, [scrollOffset, messages.length, computedMaxHeight]);
 
-  // Calculate visible messages for windowed display (legacy mode only)
+  // Calculate visible messages for windowed display (legacy mode and auto-windowed mode)
   const visibleMessages = useMemo(() => {
-    if (!effectiveMaxHeight || messages.length <= effectiveMaxHeight) {
+    if (!computedMaxHeight || messages.length <= computedMaxHeight) {
       return messages;
     }
-    const start = Math.max(0, Math.min(scrollOffset, messages.length - effectiveMaxHeight));
-    return messages.slice(start, start + effectiveMaxHeight);
-  }, [messages, effectiveMaxHeight, scrollOffset]);
+    const start = Math.max(0, Math.min(scrollOffset, messages.length - computedMaxHeight));
+    return messages.slice(start, start + computedMaxHeight);
+  }, [messages, computedMaxHeight, scrollOffset]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -561,11 +601,11 @@ const MessageList = memo(function MessageList({
 
     if (messageCountChanged && autoScroll && !userScrolledUp) {
       // New message arrived and auto-scroll is enabled
-      if (effectiveMaxHeight && messages.length > effectiveMaxHeight) {
-        setScrollOffset(messages.length - effectiveMaxHeight);
+      if (computedMaxHeight && messages.length > computedMaxHeight) {
+        setScrollOffset(messages.length - computedMaxHeight);
       }
     }
-  }, [messages.length, autoScroll, userScrolledUp, effectiveMaxHeight]);
+  }, [messages.length, autoScroll, userScrolledUp, computedMaxHeight]);
 
   // Notify parent of scroll position changes
   useEffect(() => {
@@ -574,11 +614,11 @@ const MessageList = memo(function MessageList({
 
   // Scroll to bottom helper
   const scrollToBottom = useCallback(() => {
-    if (effectiveMaxHeight && messages.length > effectiveMaxHeight) {
-      setScrollOffset(messages.length - effectiveMaxHeight);
+    if (computedMaxHeight && messages.length > computedMaxHeight) {
+      setScrollOffset(messages.length - computedMaxHeight);
     }
     setUserScrolledUp(false);
-  }, [messages.length, effectiveMaxHeight]);
+  }, [messages.length, computedMaxHeight]);
 
   // Scroll up helper
   const scrollUp = useCallback((amount = 1) => {
@@ -589,9 +629,9 @@ const MessageList = memo(function MessageList({
   // Scroll down helper
   const scrollDown = useCallback(
     (amount = 1) => {
-      if (!effectiveMaxHeight || messages.length <= effectiveMaxHeight) return;
+      if (!computedMaxHeight || messages.length <= computedMaxHeight) return;
 
-      const maxOffset = messages.length - effectiveMaxHeight;
+      const maxOffset = messages.length - computedMaxHeight;
       setScrollOffset((prev) => {
         const newOffset = Math.min(maxOffset, prev + amount);
         // If we've scrolled to the bottom, re-enable auto-scroll
@@ -601,7 +641,7 @@ const MessageList = memo(function MessageList({
         return newOffset;
       });
     },
-    [messages.length, effectiveMaxHeight]
+    [messages.length, computedMaxHeight]
   );
 
   // Helper: Handle virtualized list keyboard navigation
@@ -686,17 +726,17 @@ const MessageList = memo(function MessageList({
   // Helper: Handle direct (non-virtualized) keyboard navigation
   const handleDirectNavigation = useCallback(
     (key: Key): boolean => {
-      if (!effectiveMaxHeight || messages.length <= effectiveMaxHeight) {
+      if (!computedMaxHeight || messages.length <= computedMaxHeight) {
         return false;
       }
 
       if (key.pageUp) {
-        scrollUp(Math.floor(effectiveMaxHeight / 2));
+        scrollUp(Math.floor(computedMaxHeight / 2));
         return true;
       }
 
       if (key.pageDown) {
-        scrollDown(Math.floor(effectiveMaxHeight / 2));
+        scrollDown(Math.floor(computedMaxHeight / 2));
         return true;
       }
 
@@ -723,7 +763,7 @@ const MessageList = memo(function MessageList({
 
       return false;
     },
-    [effectiveMaxHeight, messages.length, scrollUp, scrollDown, scrollToBottom]
+    [computedMaxHeight, messages.length, scrollUp, scrollDown, scrollToBottom]
   );
 
   // Handle keyboard input for scrolling
@@ -919,8 +959,8 @@ const MessageList = memo(function MessageList({
   }
 
   // Calculate scroll indicator
-  const showScrollUp = effectiveMaxHeight && scrollOffset > 0;
-  const showScrollDown = effectiveMaxHeight && messages.length > effectiveMaxHeight && !isAtBottom;
+  const showScrollUp = computedMaxHeight && scrollOffset > 0;
+  const showScrollDown = computedMaxHeight && messages.length > computedMaxHeight && !isAtBottom;
 
   // ==========================================================================
   // Virtualized Rendering (for optimal performance with large lists)
@@ -930,7 +970,7 @@ const MessageList = memo(function MessageList({
 
   if (useVirtualizedList) {
     return (
-      <Box flexDirection="column" flexGrow={1} minHeight={0} height={effectiveMaxHeight}>
+      <Box flexDirection="column" flexGrow={1} minHeight={0} height={computedMaxHeight}>
         <VirtualizedList
           ref={virtualizedListRef}
           data={allMessages}
@@ -1019,7 +1059,7 @@ const MessageList = memo(function MessageList({
         {showScrollDown && (
           <Box justifyContent="center" borderTop borderColor={borderColor}>
             <Text color={mutedColor}>
-              ↓ {messages.length - scrollOffset - (effectiveMaxHeight ?? 0)} more below ↓
+              ↓ {messages.length - scrollOffset - (computedMaxHeight ?? 0)} more below ↓
             </Text>
           </Box>
         )}
@@ -1086,7 +1126,7 @@ const MessageList = memo(function MessageList({
       {showScrollDown && (
         <Box justifyContent="center" borderTop borderColor={borderColor}>
           <Text color={mutedColor}>
-            ↓ {messages.length - scrollOffset - (effectiveMaxHeight ?? 0)} more below ↓
+            ↓ {messages.length - scrollOffset - (computedMaxHeight ?? 0)} more below ↓
           </Text>
         </Box>
       )}

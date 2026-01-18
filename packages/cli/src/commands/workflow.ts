@@ -12,6 +12,7 @@
  */
 
 import { createWorkflowLoader, type Workflow, type WorkflowLoader } from "@vellum/core";
+import { ICONS } from "../utils/icons.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, pending, success } from "./types.js";
 
@@ -87,12 +88,12 @@ steps:
 Then run: /workflow deploy`;
   }
 
-  const lines = ["📋 Available Workflows:\n"];
+  const lines = [`${ICONS.workflow} Available Workflows:\n`];
 
   for (const wf of workflows) {
     const stepCount = wf.steps.length;
     const source = wf.source === "project" ? "[project]" : "[user]";
-    lines.push(`  • ${wf.id} - ${wf.name || wf.description || "No description"}`);
+    lines.push(`  ${ICONS.bullet} ${wf.id} - ${wf.name || wf.description || "No description"}`);
     lines.push(`    ${stepCount} step${stepCount !== 1 ? "s" : ""} ${source}\n`);
   }
 
@@ -214,7 +215,7 @@ async function executeWorkflow(ctx: CommandContext): Promise<CommandResult> {
 
     // Return pending result to inject instructions into context
     return pending({
-      message: `📋 Loading workflow: ${workflow.name || workflow.id}`,
+      message: `${ICONS.workflow} Loading workflow: ${workflow.name || workflow.id}`,
       promise: Promise.resolve(success(instructions)),
     });
   } catch (err) {

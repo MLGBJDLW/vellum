@@ -22,7 +22,6 @@
   "dependencies": {
     "@inquirer/prompts": "^7.2.1",
     "@vellum/core": "workspace:*",
-    "zod": "^4.3.5",
     "@vellum/lsp": "workspace:*",
     "@vellum/mcp": "workspace:*",
     "@vellum/plugin": "workspace:*",
@@ -36,7 +35,9 @@
     "ink-text-input": "^6.0.0",
     "ora": "^8.1.1",
     "react": "^19.2.3",
-    "table": "^6.9.0"
+    "string-width": "^8.1.0",
+    "table": "^6.9.0",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

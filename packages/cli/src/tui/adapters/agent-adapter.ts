@@ -9,6 +9,7 @@
 
 import type { AgentLoop, ExecutionResult } from "@vellum/core";
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { ICONS } from "../../utils/icons.js";
 import type { ToolCallInfo } from "../context/MessagesContext.js";
 import { useMessages } from "../context/MessagesContext.js";
 import { useTools } from "../context/ToolsContext.js";
@@ -396,7 +397,9 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
 
     if (streaming) {
       const content =
-        streaming.content.trim().length > 0 ? streaming.content : `⚠️ ${error.message}`;
+        streaming.content.trim().length > 0
+          ? streaming.content
+          : `${ICONS.warning} ${error.message}`;
       // Mark the message as no longer streaming and surface the error
       updateMessageRef.current(streaming.id, { isStreaming: false, content });
       commitPendingMessageRef.current();
@@ -405,7 +408,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     } else {
       addMessageRef.current({
         role: "assistant",
-        content: `⚠️ ${error.message}`,
+        content: `${ICONS.warning} ${error.message}`,
         isStreaming: false,
       });
     }
