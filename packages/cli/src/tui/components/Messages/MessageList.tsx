@@ -20,11 +20,13 @@
 import { getIcons } from "@vellum/shared";
 import { Box, type Key, Static, Text, useInput } from "ink";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import stringWidth from "string-width";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
+import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
+import { type ModeControllerConfig, useModeController } from "../../hooks/useModeController.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { estimateMessageHeight } from "../../utils/heightEstimator.js";
 import { MaxSizedBox } from "../common/MaxSizedBox.js";
 import {
   SCROLL_TO_ITEM_END,
@@ -40,18 +42,8 @@ import { MarkdownRenderer } from "./MarkdownRenderer.js";
 /** ASCII text spinner animation frames for running tools (no Unicode/emoji) */
 const SPINNER_FRAMES = ["-", "\\", "|", "/"] as const;
 
-/**
- * Threshold for auto-switching from Static to windowed mode.
- * When historyMessages exceeds this count, windowed mode is enabled automatically
- * to prevent infinite content growth and memory issues.
- */
-const AUTO_WINDOWED_THRESHOLD = 50;
-
-/**
- * Default maxHeight when auto-windowed mode is triggered.
- * Shows this many most recent messages in windowed view.
- */
-const DEFAULT_MAX_HEIGHT_WHEN_EXCEEDED = 30;
+/** Enable debug logging for TUI mode decisions */
+const DEBUG_TUI = process.env.NODE_ENV === "development" && process.env.DEBUG_TUI;
 
 // =============================================================================
 // Types
@@ -94,6 +86,23 @@ export interface MessageListProps {
    * @default true (active when not specified for backward compatibility)
    */
   readonly isFocused?: boolean;
+  /**
+   * Render mode configuration override.
+   * Controls thresholds for switching between static/windowed/virtualized modes.
+   */
+  readonly modeConfig?: ModeControllerConfig;
+  /**
+   * Whether to enable adaptive mode switching based on content height.
+   * When false, falls back to legacy behavior.
+   * @default true
+   */
+  readonly adaptive?: boolean;
+  /**
+   * Whether to use the alternate terminal buffer.
+   * Required for adaptive mode viewport calculation.
+   * @default false
+   */
+  readonly useAltBuffer?: boolean;
 }
 
 // =============================================================================
@@ -148,64 +157,15 @@ function getRoleLabel(role: Message["role"]): string {
 }
 
 /**
- * Estimate the number of lines a text will occupy when wrapped.
- * Uses string-width for accurate CJK/Emoji/ANSI handling.
- *
- * @param text - The text to measure
- * @param width - The available terminal width
- * @returns Estimated number of lines after wrapping
+ * Legacy estimateMessageHeight wrapper for virtualization.
+ * Uses the extracted heightEstimator utility internally.
  */
-function estimateWrappedLineCount(text: string, width: number): number {
-  const safeWidth = Math.max(1, width);
-  if (!text) {
-    return 1;
-  }
-
-  let total = 0;
-  const lines = text.split("\n");
-  for (const line of lines) {
-    // Use string-width for accurate display width calculation
-    // This correctly handles CJK characters (2 cells), Emoji, and ANSI escape codes
-    const lineWidth = stringWidth(line);
-    if (lineWidth === 0) {
-      total += 1;
-      continue;
-    }
-    total += Math.max(1, Math.ceil(lineWidth / safeWidth));
-  }
-  return total;
-}
-
-/**
- * Estimate a message height in lines to keep virtualized scrolling accurate.
- */
-function estimateMessageHeight(message: Message, width: number, includeToolCalls: boolean): number {
-  const headerLines = 1;
-  const marginLines = 1;
-  const contentWidth = Math.max(10, width - 4);
-  const thinkingWidth = Math.max(10, width - 6);
-
-  if (message.role === "tool_group") {
-    const toolLines = message.toolCalls?.length ?? 0;
-    return Math.max(1, toolLines) + marginLines;
-  }
-
-  const content = message.content || (message.isStreaming ? "" : "(empty)");
-  let lines = headerLines;
-
-  lines += estimateWrappedLineCount(content, contentWidth);
-
-  if (message.thinking && message.thinking.length > 0) {
-    lines += 1; // "Thinking..." label
-    lines += estimateWrappedLineCount(message.thinking, thinkingWidth);
-  }
-
-  if (includeToolCalls && message.toolCalls && message.toolCalls.length > 0) {
-    lines += 1; // margin before tool calls
-    lines += message.toolCalls.length;
-  }
-
-  return lines + marginLines;
+function estimateMessageHeightLegacy(
+  message: Message,
+  width: number,
+  includeToolCalls: boolean
+): number {
+  return estimateMessageHeight(message, { width, includeToolCalls });
 }
 
 // =============================================================================
@@ -504,8 +464,29 @@ const MessageList = memo(function MessageList({
   useVirtualizedList = false,
   estimatedItemHeight = 4,
   isFocused,
+  modeConfig,
+  adaptive = true,
+  useAltBuffer = false,
 }: MessageListProps) {
   const { theme } = useTheme();
+
+  // Get viewport dimensions for adaptive rendering
+  const { availableHeight, width } = useAlternateBuffer({
+    withViewport: true,
+    enabled: useAltBuffer,
+  });
+
+  // Calculate total estimated content height for mode decisions
+  const totalContentHeight = useMemo(() => {
+    return messages.reduce((sum, msg) => sum + estimateMessageHeight(msg, { width }), 0);
+  }, [messages, width]);
+
+  // Mode controller for adaptive rendering decisions
+  const { mode, windowSize, modeReason, staticThreshold, virtualThreshold } = useModeController({
+    availableHeight,
+    totalContentHeight,
+    config: modeConfig,
+  });
 
   const toolGroupCallIds = useMemo(() => {
     const ids = new Set<string>();
@@ -544,29 +525,67 @@ const MessageList = memo(function MessageList({
   // Normalize maxHeight - treat 0, undefined, null as "no max height"
   const effectiveMaxHeight = maxHeight && maxHeight > 0 ? maxHeight : undefined;
 
-  // Auto-enable windowed mode for long conversations to prevent infinite content growth
-  // This triggers when message count exceeds threshold, even if maxHeight wasn't explicitly set
-  const shouldAutoWindow =
-    historyMessages !== undefined && historyMessages.length > AUTO_WINDOWED_THRESHOLD;
-  const computedMaxHeight =
-    effectiveMaxHeight ?? (shouldAutoWindow ? DEFAULT_MAX_HEIGHT_WHEN_EXCEEDED : undefined);
+  // Compute max height based on adaptive mode or explicit prop
+  // When adaptive=true, use windowSize from mode controller for windowed/virtualized modes
+  // When adaptive=false, fall back to legacy maxHeight behavior
+  const computedMaxHeight = useMemo(() => {
+    if (effectiveMaxHeight !== undefined) {
+      // Explicit maxHeight prop takes precedence
+      return effectiveMaxHeight;
+    }
+    if (adaptive && mode !== "static") {
+      // Adaptive mode: use computed windowSize
+      return windowSize;
+    }
+    return undefined;
+  }, [effectiveMaxHeight, adaptive, mode, windowSize]);
 
   // Determine if we're using optimized Static rendering
-  // If historyMessages is provided, use the split architecture
+  // Static mode when: adaptive mode says static OR adaptive is disabled AND no explicit maxHeight
   // NOTE: Static rendering does not support windowed scrolling; fall back when maxHeight is set
-  //       OR when auto-windowed mode is triggered due to long conversations.
-  const useStaticRendering = historyMessages !== undefined && !computedMaxHeight && !hasToolGroups;
+  //       OR when tool groups are present (requires dynamic rendering).
+  const useStaticRendering =
+    historyMessages !== undefined &&
+    !computedMaxHeight &&
+    !hasToolGroups &&
+    (mode === "static" || !adaptive);
+
+  // Determine if virtualized rendering should be used
+  // Either explicitly requested OR adaptive mode recommends it
+  const useVirtualizedListInternal = useVirtualizedList || (adaptive && mode === "virtualized");
 
   // Debug: log rendering mode changes (only in development)
   useEffect(() => {
-    if (process.env.NODE_ENV === "development" && process.env.DEBUG_TUI) {
-      console.error(
-        `[MessageList] Mode: ${useStaticRendering ? "Static" : "Windowed"}, ` +
-          `Messages: ${messages.length}, MaxHeight: ${computedMaxHeight ?? "none"}, ` +
-          `AutoWindow: ${shouldAutoWindow}`
-      );
+    if (DEBUG_TUI) {
+      console.error("[MessageList]", {
+        mode,
+        modeReason,
+        totalContentHeight,
+        availableHeight,
+        windowSize,
+        staticThreshold,
+        virtualThreshold,
+        computedMaxHeight,
+        useStaticRendering,
+        useVirtualizedListInternal,
+        messageCount: messages.length,
+        adaptive,
+      });
     }
-  }, [useStaticRendering, messages.length, computedMaxHeight, shouldAutoWindow]);
+  }, [
+    mode,
+    modeReason,
+    totalContentHeight,
+    availableHeight,
+    windowSize,
+    staticThreshold,
+    virtualThreshold,
+    computedMaxHeight,
+    useStaticRendering,
+    useVirtualizedListInternal,
+    messages.length,
+    adaptive,
+  ]);
 
   // Current scroll position (index of the first visible message in windowed mode)
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -771,7 +790,7 @@ const MessageList = memo(function MessageList({
   useInput(
     useCallback(
       (_char, key) => {
-        if (useVirtualizedList) {
+        if (useVirtualizedListInternal) {
           const list = virtualizedListRef.current;
           if (list) {
             handleVirtualizedNavigation(key, list);
@@ -780,7 +799,7 @@ const MessageList = memo(function MessageList({
           handleDirectNavigation(key);
         }
       },
-      [useVirtualizedList, handleVirtualizedNavigation, handleDirectNavigation]
+      [useVirtualizedListInternal, handleVirtualizedNavigation, handleDirectNavigation]
     ),
     { isActive: isFocused !== false }
   );
@@ -898,7 +917,7 @@ const MessageList = memo(function MessageList({
       const includeToolCalls = shouldRenderInlineToolCalls(message);
       return Math.max(
         baseEstimate,
-        estimateMessageHeight(message, estimatedContentWidth, includeToolCalls)
+        estimateMessageHeightLegacy(message, estimatedContentWidth, includeToolCalls)
       );
     };
   }, [estimatedItemHeight, allMessages, estimatedContentWidth, shouldRenderInlineToolCalls]);
@@ -929,7 +948,7 @@ const MessageList = memo(function MessageList({
 
     // Skip scroll if user manually scrolled up (but not if we just reset it above)
     if (
-      !useVirtualizedList ||
+      !useVirtualizedListInternal ||
       !autoScroll ||
       (userScrolledUp && !newPendingMessageStarted) ||
       !shouldScroll
@@ -938,7 +957,7 @@ const MessageList = memo(function MessageList({
     }
     virtualizedListRef.current?.scrollToEnd();
   }, [
-    useVirtualizedList,
+    useVirtualizedListInternal,
     autoScroll,
     userScrolledUp,
     allMessages,
@@ -965,10 +984,11 @@ const MessageList = memo(function MessageList({
   // ==========================================================================
   // Virtualized Rendering (for optimal performance with large lists)
   // ==========================================================================
-  // When useVirtualizedList is enabled, we use VirtualizedList which only
-  // renders visible items. This is ideal for very long conversations.
+  // When useVirtualizedListInternal is enabled (explicitly or via adaptive mode),
+  // we use VirtualizedList which only renders visible items.
+  // This is ideal for very long conversations.
 
-  if (useVirtualizedList) {
+  if (useVirtualizedListInternal) {
     return (
       <Box flexDirection="column" flexGrow={1} minHeight={0} height={computedMaxHeight}>
         <VirtualizedList

@@ -32,5 +32,10 @@ export {
 } from "./detectTerminal.js";
 
 export { findLastSafeSplitPoint } from "./findLastSafeSplitPoint.js";
-
+// Height estimation utilities (T002)
+export {
+  estimateMessageHeight,
+  estimateWrappedLineCount,
+  type HeightEstimatorOptions,
+} from "./heightEstimator.js";
 export { isSyncUpdateSupported, syncUpdate } from "./synchronized-update.js";

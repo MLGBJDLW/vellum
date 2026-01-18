@@ -28,6 +28,14 @@ export interface UseAlternateBufferOptions {
   readonly constrainHeight?: boolean;
   /** Maximum height when constrainHeight is true (default: terminal rows) */
   readonly maxHeight?: number;
+  /** Enable viewport calculation for availableHeight (default: false) */
+  readonly withViewport?: boolean;
+  /** Lines reserved for input area (default: 3) */
+  readonly inputReserve?: number;
+  /** Lines reserved for status bar (default: 1) */
+  readonly statusReserve?: number;
+  /** Debounce delay for resize events in ms (default: 100) */
+  readonly resizeDebounce?: number;
 }
 
 /**
@@ -44,6 +52,12 @@ export interface UseAlternateBufferReturn {
   readonly toggle: () => void;
   /** Current effective height (constrained or terminal height) */
   readonly height: number;
+  /** Current terminal width */
+  readonly width: number;
+  /** Available height for content (height - inputReserve - statusReserve) */
+  readonly availableHeight: number;
+  /** Whether resize is currently being debounced */
+  readonly isResizing: boolean;
 }
 
 // =============================================================================
@@ -174,13 +188,26 @@ function exitAlternateBuffer(): void {
 export function useAlternateBuffer(
   options: UseAlternateBufferOptions = {}
 ): UseAlternateBufferReturn {
-  const { enabled = true, constrainHeight = false, maxHeight } = options;
+  const {
+    enabled = true,
+    constrainHeight = false,
+    maxHeight,
+    withViewport = false,
+    inputReserve = 3,
+    statusReserve = 1,
+    resizeDebounce = 100,
+  } = options;
 
   // Track whether we're currently in alternate buffer mode
   const [isAlternate, setIsAlternate] = useState(false);
 
   // Track terminal dimensions
   const [terminalHeight, setTerminalHeight] = useState(getTerminalHeight);
+  const [terminalWidth, setTerminalWidth] = useState(getTerminalWidth);
+
+  // Track resize debounce state
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ref to track if we've already cleaned up (prevent double cleanup)
   const cleanedUpRef = useRef(false);
@@ -228,18 +255,41 @@ export function useAlternateBuffer(
     ? Math.min(terminalHeight, maxHeight ?? terminalHeight)
     : terminalHeight;
 
-  // Handle terminal resize events
+  /**
+   * Calculate available height for content (when withViewport is enabled).
+   */
+  const availableHeight = withViewport
+    ? Math.max(1, height - inputReserve - statusReserve)
+    : height;
+
+  // Handle terminal resize events with debounce
   useEffect(() => {
     const handleResize = (): void => {
-      setTerminalHeight(getTerminalHeight());
+      if (resizeDebounce > 0) {
+        setIsResizing(true);
+        if (resizeTimerRef.current) {
+          clearTimeout(resizeTimerRef.current);
+        }
+        resizeTimerRef.current = setTimeout(() => {
+          setTerminalHeight(getTerminalHeight());
+          setTerminalWidth(getTerminalWidth());
+          setIsResizing(false);
+        }, resizeDebounce);
+      } else {
+        setTerminalHeight(getTerminalHeight());
+        setTerminalWidth(getTerminalWidth());
+      }
     };
 
     process.stdout.on("resize", handleResize);
 
     return () => {
       process.stdout.off("resize", handleResize);
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current);
+      }
     };
-  }, []);
+  }, [resizeDebounce]);
 
   // Auto-enable alternate buffer when hook mounts (if enabled option is true)
   useEffect(() => {
@@ -288,6 +338,9 @@ export function useAlternateBuffer(
     disable,
     toggle,
     height,
+    width: terminalWidth,
+    availableHeight,
+    isResizing,
   };
 }
 
