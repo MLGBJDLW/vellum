@@ -26,6 +26,10 @@ export {
   type MaxSizedBoxState,
   useMaxSizedBox,
 } from "./MaxSizedBox.js";
+// NewMessagesBadge (Phase 3 - World-Class TUI)
+export { NewMessagesBadge, type NewMessagesBadgeProps } from "./NewMessagesBadge.js";
+// ScrollIndicator (Phase 3 - World-Class TUI)
+export { ScrollIndicator, type ScrollIndicatorProps } from "./ScrollIndicator.js";
 // Spinner (Chain 21)
 export {
   LoadingIndicator,

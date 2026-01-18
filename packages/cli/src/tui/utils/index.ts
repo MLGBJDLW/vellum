@@ -39,3 +39,10 @@ export {
   type HeightEstimatorOptions,
 } from "./heightEstimator.js";
 export { isSyncUpdateSupported, syncUpdate } from "./synchronized-update.js";
+// Text sanitization utilities (Phase 1 - World-Class TUI)
+export {
+  type SanitizeOptions,
+  sanitize,
+  sanitizeAnsi,
+  sanitizeText,
+} from "./textSanitizer.js";

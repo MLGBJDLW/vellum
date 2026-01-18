@@ -76,6 +76,24 @@ export {
   type UseInputHistoryReturn,
   useInputHistory,
 } from "./useInputHistory.js";
+// Keyboard scroll hook for scroll navigation
+export {
+  formatScrollShortcuts,
+  getScrollShortcutsNoVim,
+  type KeyboardScrollShortcut,
+  type UseKeyboardScrollOptions,
+  type UseKeyboardScrollReturn,
+  useKeyboardScroll,
+} from "./useKeyboardScroll.js";
+// Line buffer hook for pre-wrapped message lines (scroll optimization)
+export {
+  type LineBufferEntry,
+  type LineBufferState,
+  type UseLineBufferOptions,
+  useLineBuffer,
+  wrapLine,
+  wrapText,
+} from "./useLineBuffer.js";
 // @ Mention autocomplete hooks (Phase: TUI Context Mentions)
 export {
   type MentionAutocompleteState,
@@ -124,6 +142,18 @@ export {
   type UseScreenReaderReturn,
   useScreenReader,
 } from "./useScreenReader.js";
+// Scroll controller hook for follow/manual scroll modes
+export {
+  getScrollPercentage,
+  isAtBottom,
+  isAtTop,
+  isScrollable,
+  type ScrollMode,
+  type UseScrollControllerOptions,
+  useScrollController,
+  type ViewportScrollActions,
+  type ViewportScrollState,
+} from "./useScrollController.js";
 // State and ref hook for stable callbacks (Gemini CLI pattern)
 export { useStateAndRef } from "./useStateAndRef.js";
 export {

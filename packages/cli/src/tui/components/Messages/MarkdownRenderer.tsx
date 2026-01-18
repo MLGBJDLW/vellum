@@ -12,6 +12,7 @@ import type React from "react";
 import { useMemo } from "react";
 import { useAnimation } from "../../context/AnimationContext.js";
 import { useTheme } from "../../theme/index.js";
+import { sanitize } from "../../utils/textSanitizer.js";
 import { DiffView } from "./DiffView.js";
 
 // =============================================================================
@@ -380,8 +381,11 @@ export function MarkdownRenderer({
   const codeBgColor = theme.semantic.background.code;
   const linkColor = theme.colors.info;
 
+  // Sanitize content before parsing (normalize line endings, strip dangerous ANSI)
+  const sanitizedContent = useMemo(() => sanitize(content), [content]);
+
   // Parse markdown content
-  const nodes = useMemo(() => parseMarkdown(content), [content]);
+  const nodes = useMemo(() => parseMarkdown(sanitizedContent), [sanitizedContent]);
 
   const cursorVisible = useMemo(() => {
     if (!isStreaming || !cursorBlink) return true;

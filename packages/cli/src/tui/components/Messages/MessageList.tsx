@@ -23,11 +23,15 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
 import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
+import { useKeyboardScroll } from "../../hooks/useKeyboardScroll.js";
 import { type ModeControllerConfig, useModeController } from "../../hooks/useModeController.js";
+import { useScrollController } from "../../hooks/useScrollController.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { estimateMessageHeight } from "../../utils/heightEstimator.js";
 import { MaxSizedBox } from "../common/MaxSizedBox.js";
+import { NewMessagesBadge } from "../common/NewMessagesBadge.js";
+import { ScrollIndicator } from "../common/ScrollIndicator.js";
 import {
   SCROLL_TO_ITEM_END,
   VirtualizedList,
@@ -103,6 +107,12 @@ export interface MessageListProps {
    * @default false
    */
   readonly useAltBuffer?: boolean;
+  /**
+   * Enable new scroll controller with follow/manual modes.
+   * When enabled, adds ScrollIndicator and NewMessagesBadge.
+   * @default false
+   */
+  readonly enableScroll?: boolean;
 }
 
 // =============================================================================
@@ -467,6 +477,7 @@ const MessageList = memo(function MessageList({
   modeConfig,
   adaptive = true,
   useAltBuffer = false,
+  enableScroll = false,
 }: MessageListProps) {
   const { theme } = useTheme();
 
@@ -553,6 +564,56 @@ const MessageList = memo(function MessageList({
   // Determine if virtualized rendering should be used
   // Either explicitly requested OR adaptive mode recommends it
   const useVirtualizedListInternal = useVirtualizedList || (adaptive && mode === "virtualized");
+
+  // ==========================================================================
+  // New Scroll Controller (enableScroll=true)
+  // ==========================================================================
+  // When enableScroll is true, use the new follow/manual scroll system with
+  // ScrollIndicator and NewMessagesBadge components.
+
+  // Track previous message count for new message notification
+  const prevMessageLengthRef = useRef(messages.length);
+
+  // Scroll controller for follow/manual modes
+  const [scrollState, scrollActions] = useScrollController({
+    viewportHeight: computedMaxHeight ?? availableHeight ?? 20,
+    initialTotalHeight: totalContentHeight,
+    scrollStep: 3,
+    autoFollowOnBottom: true,
+  });
+
+  // Update scroll controller when content height changes
+  useEffect(() => {
+    if (!enableScroll) return;
+    scrollActions.setTotalHeight(totalContentHeight);
+  }, [enableScroll, totalContentHeight, scrollActions]);
+
+  // Update scroll controller when viewport height changes
+  useEffect(() => {
+    if (!enableScroll) return;
+    const viewportH = computedMaxHeight ?? availableHeight ?? 20;
+    scrollActions.setViewportHeight(viewportH);
+  }, [enableScroll, computedMaxHeight, availableHeight, scrollActions]);
+
+  // Notify new messages when in manual mode
+  useEffect(() => {
+    if (!enableScroll) return;
+    const newLength = messages.length;
+    const prevLength = prevMessageLengthRef.current;
+    prevMessageLengthRef.current = newLength;
+
+    if (newLength > prevLength && scrollState.mode === "manual") {
+      scrollActions.notifyNewMessage();
+    }
+  }, [enableScroll, messages.length, scrollState.mode, scrollActions]);
+
+  // Keyboard scroll handling (only when enableScroll is active and focused)
+  useKeyboardScroll({
+    state: scrollState,
+    actions: scrollActions,
+    enabled: enableScroll && isFocused !== false,
+    vimKeys: true,
+  });
 
   // Debug: log rendering mode changes (only in development)
   useEffect(() => {
@@ -991,24 +1052,44 @@ const MessageList = memo(function MessageList({
   if (useVirtualizedListInternal) {
     return (
       <Box flexDirection="column" flexGrow={1} minHeight={0} height={computedMaxHeight}>
-        <VirtualizedList
-          ref={virtualizedListRef}
-          data={allMessages}
-          renderItem={renderMessageItem}
-          keyExtractor={keyExtractor}
-          estimatedItemHeight={estimatedItemHeightForVirtualization}
-          initialScrollIndex={SCROLL_TO_ITEM_END}
-          initialScrollOffsetInIndex={SCROLL_TO_ITEM_END}
-          onStickingToBottomChange={handleStickingChange}
-          scrollbarThumbColor={theme.semantic.text.muted}
-          alignToBottom
-        />
+        <Box flexDirection="row" flexGrow={1}>
+          <Box flexDirection="column" flexGrow={1}>
+            <VirtualizedList
+              ref={virtualizedListRef}
+              data={allMessages}
+              renderItem={renderMessageItem}
+              keyExtractor={keyExtractor}
+              estimatedItemHeight={estimatedItemHeightForVirtualization}
+              initialScrollIndex={SCROLL_TO_ITEM_END}
+              initialScrollOffsetInIndex={SCROLL_TO_ITEM_END}
+              onStickingToBottomChange={handleStickingChange}
+              scrollbarThumbColor={theme.semantic.text.muted}
+              alignToBottom
+            />
+          </Box>
+          {/* ScrollIndicator (right side) - only when enableScroll is true */}
+          {enableScroll && (
+            <ScrollIndicator
+              totalHeight={scrollState.totalHeight}
+              offsetFromBottom={scrollState.offsetFromBottom}
+              viewportHeight={scrollState.viewportHeight}
+            />
+          )}
+        </Box>
 
         {/* Thinking indicator - shows while agent is processing before first token */}
         {showThinkingIndicator && <ThinkingIndicator />}
 
-        {/* Auto-scroll status indicator */}
-        {userScrolledUp && autoScroll && (
+        {/* NewMessagesBadge - only when enableScroll and in manual mode with unread */}
+        {enableScroll && scrollState.mode === "manual" && scrollState.newMessageCount > 0 && (
+          <NewMessagesBadge
+            count={scrollState.newMessageCount}
+            onScrollToBottom={scrollActions.scrollToBottom}
+          />
+        )}
+
+        {/* Auto-scroll status indicator (legacy) */}
+        {!enableScroll && userScrolledUp && autoScroll && (
           <Box justifyContent="center">
             <Text color={mutedColor} italic>
               Auto-scroll paused (scroll to bottom to resume)
@@ -1031,52 +1112,72 @@ const MessageList = memo(function MessageList({
         {/* Spacer pushes messages toward Input at bottom */}
         <Box flexGrow={1} />
 
-        {/* Scroll up indicator */}
-        {showScrollUp && (
+        {/* Scroll up indicator (legacy) */}
+        {!enableScroll && showScrollUp && (
           <Box justifyContent="center" borderBottom borderColor={borderColor}>
             <Text color={mutedColor}>↑ {scrollOffset} more above ↑</Text>
           </Box>
         )}
 
-        {/* History messages - rendered in <Static>, NEVER re-render */}
-        <Static items={historyMessages as Message[]}>
-          {(message: Message) => (
-            <Box key={message.id} paddingX={1}>
-              <MessageItem
-                message={message}
-                roleColor={roleColors[message.role]}
-                mutedColor={mutedColor}
-                accentColor={accentColor}
-                thinkingColor={thinkingColor}
-                successColor={successColor}
-                errorColor={errorColor}
-                showToolCalls={shouldRenderInlineToolCalls(message)}
-              />
-            </Box>
-          )}
-        </Static>
+        <Box flexDirection="row">
+          <Box flexDirection="column" flexGrow={1}>
+            {/* History messages - rendered in <Static>, NEVER re-render */}
+            <Static items={historyMessages as Message[]}>
+              {(message: Message) => (
+                <Box key={message.id} paddingX={1}>
+                  <MessageItem
+                    message={message}
+                    roleColor={roleColors[message.role]}
+                    mutedColor={mutedColor}
+                    accentColor={accentColor}
+                    thinkingColor={thinkingColor}
+                    successColor={successColor}
+                    errorColor={errorColor}
+                    showToolCalls={shouldRenderInlineToolCalls(message)}
+                  />
+                </Box>
+              )}
+            </Static>
 
-        {/* Pending message - this is the ONLY thing that re-renders during streaming */}
-        {pendingMessage && (
-          <Box paddingX={1}>
-            <MessageItem
-              message={pendingMessage}
-              roleColor={roleColors[pendingMessage.role]}
-              mutedColor={mutedColor}
-              accentColor={accentColor}
-              thinkingColor={thinkingColor}
-              successColor={successColor}
-              errorColor={errorColor}
-              showToolCalls={shouldRenderInlineToolCalls(pendingMessage)}
-            />
+            {/* Pending message - this is the ONLY thing that re-renders during streaming */}
+            {pendingMessage && (
+              <Box paddingX={1}>
+                <MessageItem
+                  message={pendingMessage}
+                  roleColor={roleColors[pendingMessage.role]}
+                  mutedColor={mutedColor}
+                  accentColor={accentColor}
+                  thinkingColor={thinkingColor}
+                  successColor={successColor}
+                  errorColor={errorColor}
+                  showToolCalls={shouldRenderInlineToolCalls(pendingMessage)}
+                />
+              </Box>
+            )}
           </Box>
-        )}
+          {/* ScrollIndicator (right side) - only when enableScroll is true */}
+          {enableScroll && (
+            <ScrollIndicator
+              totalHeight={scrollState.totalHeight}
+              offsetFromBottom={scrollState.offsetFromBottom}
+              viewportHeight={scrollState.viewportHeight}
+            />
+          )}
+        </Box>
 
         {/* Thinking indicator - shows while agent is processing before first token */}
         {showThinkingIndicator && <ThinkingIndicator />}
 
-        {/* Scroll down indicator */}
-        {showScrollDown && (
+        {/* NewMessagesBadge - only when enableScroll and in manual mode with unread */}
+        {enableScroll && scrollState.mode === "manual" && scrollState.newMessageCount > 0 && (
+          <NewMessagesBadge
+            count={scrollState.newMessageCount}
+            onScrollToBottom={scrollActions.scrollToBottom}
+          />
+        )}
+
+        {/* Scroll down indicator (legacy) */}
+        {!enableScroll && showScrollDown && (
           <Box justifyContent="center" borderTop borderColor={borderColor}>
             <Text color={mutedColor}>
               ↓ {messages.length - scrollOffset - (computedMaxHeight ?? 0)} more below ↓
@@ -1084,8 +1185,8 @@ const MessageList = memo(function MessageList({
           </Box>
         )}
 
-        {/* Auto-scroll status indicator when disabled by user scroll */}
-        {userScrolledUp && autoScroll && (
+        {/* Auto-scroll status indicator when disabled by user scroll (legacy) */}
+        {!enableScroll && userScrolledUp && autoScroll && (
           <Box justifyContent="center">
             <Text color={mutedColor} italic>
               Auto-scroll paused (scroll to bottom to resume)
@@ -1104,46 +1205,64 @@ const MessageList = memo(function MessageList({
       {/* Spacer pushes messages toward Input at bottom */}
       <Box flexGrow={1} />
 
-      {/* Scroll up indicator */}
-      {showScrollUp && (
+      {/* Scroll up indicator (legacy) */}
+      {!enableScroll && showScrollUp && (
         <Box justifyContent="center" borderBottom borderColor={borderColor}>
           <Text color={mutedColor}>↑ {scrollOffset} more above ↑</Text>
         </Box>
       )}
 
-      {/* Messages */}
-      <Box flexDirection="column" paddingX={1}>
-        {visibleMessages.map((message) =>
-          message.role === "tool_group" ? (
-            <ToolGroupItem
-              key={message.id}
-              message={message as Message & { role: "tool_group" }}
-              accentColor={accentColor}
-              mutedColor={mutedColor}
-              successColor={successColor}
-              errorColor={errorColor}
-            />
-          ) : (
-            <MessageItem
-              key={message.id}
-              message={message}
-              roleColor={roleColors[message.role]}
-              mutedColor={mutedColor}
-              accentColor={accentColor}
-              thinkingColor={thinkingColor}
-              successColor={successColor}
-              errorColor={errorColor}
-              showToolCalls={shouldRenderInlineToolCalls(message)}
-            />
-          )
+      <Box flexDirection="row">
+        {/* Messages */}
+        <Box flexDirection="column" paddingX={1} flexGrow={1}>
+          {visibleMessages.map((message) =>
+            message.role === "tool_group" ? (
+              <ToolGroupItem
+                key={message.id}
+                message={message as Message & { role: "tool_group" }}
+                accentColor={accentColor}
+                mutedColor={mutedColor}
+                successColor={successColor}
+                errorColor={errorColor}
+              />
+            ) : (
+              <MessageItem
+                key={message.id}
+                message={message}
+                roleColor={roleColors[message.role]}
+                mutedColor={mutedColor}
+                accentColor={accentColor}
+                thinkingColor={thinkingColor}
+                successColor={successColor}
+                errorColor={errorColor}
+                showToolCalls={shouldRenderInlineToolCalls(message)}
+              />
+            )
+          )}
+        </Box>
+        {/* ScrollIndicator (right side) - only when enableScroll is true */}
+        {enableScroll && (
+          <ScrollIndicator
+            totalHeight={scrollState.totalHeight}
+            offsetFromBottom={scrollState.offsetFromBottom}
+            viewportHeight={scrollState.viewportHeight}
+          />
         )}
       </Box>
 
       {/* Thinking indicator - shows while agent is processing before first token */}
       {showThinkingIndicator && <ThinkingIndicator />}
 
-      {/* Scroll down indicator */}
-      {showScrollDown && (
+      {/* NewMessagesBadge - only when enableScroll and in manual mode with unread */}
+      {enableScroll && scrollState.mode === "manual" && scrollState.newMessageCount > 0 && (
+        <NewMessagesBadge
+          count={scrollState.newMessageCount}
+          onScrollToBottom={scrollActions.scrollToBottom}
+        />
+      )}
+
+      {/* Scroll down indicator (legacy) */}
+      {!enableScroll && showScrollDown && (
         <Box justifyContent="center" borderTop borderColor={borderColor}>
           <Text color={mutedColor}>
             ↓ {messages.length - scrollOffset - (computedMaxHeight ?? 0)} more below ↓
@@ -1151,8 +1270,8 @@ const MessageList = memo(function MessageList({
         </Box>
       )}
 
-      {/* Auto-scroll status indicator when disabled by user scroll */}
-      {userScrolledUp && autoScroll && (
+      {/* Auto-scroll status indicator when disabled by user scroll (legacy) */}
+      {!enableScroll && userScrolledUp && autoScroll && (
         <Box justifyContent="center">
           <Text color={mutedColor} italic>
             Auto-scroll paused (scroll to bottom to resume)

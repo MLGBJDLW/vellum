@@ -12,6 +12,7 @@
 import { Text } from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAnimation } from "../../context/AnimationContext.js";
+import { sanitize } from "../../utils/textSanitizer.js";
 
 // =============================================================================
 // Types
@@ -194,11 +195,16 @@ export function StreamingText({
     prevIsStreamingRef.current = isStreaming;
   }, [isStreaming, onComplete]);
 
+  // Sanitize content (normalize line endings, strip dangerous ANSI)
+  const sanitizedContent = useMemo(() => sanitize(content), [content]);
+
   // Determine what text to display
-  const displayText = typewriterEffect ? content.slice(0, displayedLength) : content;
+  const displayText = typewriterEffect
+    ? sanitizedContent.slice(0, displayedLength)
+    : sanitizedContent;
 
   // Determine cursor to display (show cursor while typewriter is still catching up)
-  const showCursor = isStreaming || (typewriterEffect && displayedLength < content.length);
+  const showCursor = isStreaming || (typewriterEffect && displayedLength < sanitizedContent.length);
   const cursor = showCursor && cursorVisible ? cursorChar : "";
 
   return (
