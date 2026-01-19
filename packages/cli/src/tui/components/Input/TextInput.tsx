@@ -13,6 +13,7 @@ import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useStat
 import { useAnimation } from "../../context/AnimationContext.js";
 import { usePasteHandler } from "../../context/BracketedPasteContext.js";
 import { useTheme } from "../../theme/index.js";
+import { HighlightedText } from "./HighlightedText.js";
 
 // =============================================================================
 // Types
@@ -50,6 +51,8 @@ export interface TextInputProps {
   readonly onCursorMoved?: () => void;
   /** Whether to show border in single-line mode (default: true) */
   readonly showBorder?: boolean;
+  /** Enable syntax highlighting for @mentions, /commands, URLs, and `code` (default: false) */
+  readonly enableHighlight?: boolean;
 }
 
 // =============================================================================
@@ -156,6 +159,7 @@ function TextInputComponent({
   cursorToEnd = false,
   onCursorMoved,
   showBorder = true,
+  enableHighlight = false,
 }: TextInputProps) {
   const { theme } = useTheme();
   const { pauseAnimations, resumeAnimations, isVSCode } = useAnimation();
@@ -812,13 +816,29 @@ function TextInputComponent({
     });
   }, [lines]);
 
+  // Input highlighting (disabled when masking)
+  const shouldHighlight = enableHighlight && !mask;
+
   /**
-   * Render a line with cursor indicator
+   * Render a line with cursor indicator (and optional highlighting)
    */
   const renderLineWithCursor = (line: string, lineStartPosition: number) => {
     const lineEndPosition = lineStartPosition + line.length;
     const cursorInLine = cursorPosition >= lineStartPosition && cursorPosition <= lineEndPosition;
 
+    // Use HighlightedText when highlighting is enabled
+    if (shouldHighlight) {
+      return (
+        <HighlightedText
+          text={line || " "}
+          cursorPosition={cursorPosition}
+          showCursor={cursorInLine && focused}
+          lineStartPosition={lineStartPosition}
+        />
+      );
+    }
+
+    // Default rendering without highlighting
     if (!cursorInLine || !focused) {
       return <Text>{line || " "}</Text>;
     }
@@ -840,9 +860,21 @@ function TextInputComponent({
   // Border color based on focus state
   const borderColor = focused ? theme.semantic.border.focus : theme.semantic.border.default;
 
+  // Calculate visual line count considering terminal width wrapping
+  const terminalWidth = process.stdout.columns || 80;
+  const contentWidth = Math.max(1, terminalWidth - 4); // Account for border (2) + paddingX (1 each side)
+
+  // Sum visual lines for each logical line (accounts for wrapping)
+  const visualLineCount = lineData.reduce((total, { line }) => {
+    if (!line) return total + 1;
+    // Unicode-aware length for proper CJK/emoji handling
+    const lineLength = [...line].length;
+    const wrappedLines = Math.ceil(lineLength / contentWidth) || 1;
+    return total + wrappedLines;
+  }, 0);
+
   // Calculate padding lines needed to meet minHeight
-  const currentLineCount = lineData.length;
-  const paddingLinesNeeded = Math.max(0, effectiveMinHeight - currentLineCount);
+  const paddingLinesNeeded = Math.max(0, effectiveMinHeight - visualLineCount);
 
   // Render placeholder
   if (showPlaceholder) {
@@ -926,7 +958,8 @@ export const TextInput = memo(TextInputComponent, (prevProps, nextProps) => {
     prevProps.multiline === nextProps.multiline &&
     prevProps.maxLength === nextProps.maxLength &&
     prevProps.minHeight === nextProps.minHeight &&
-    prevProps.showBorder === nextProps.showBorder
+    prevProps.showBorder === nextProps.showBorder &&
+    prevProps.enableHighlight === nextProps.enableHighlight
   );
 });
 

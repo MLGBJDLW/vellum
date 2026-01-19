@@ -10,6 +10,7 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { useTheme } from "../../theme/index.js";
+import { truncateToDisplayWidth } from "../../utils/index.js";
 import type { SessionItemProps } from "./types.js";
 
 // =============================================================================
@@ -41,13 +42,11 @@ function formatTimestamp(date: Date): string {
 }
 
 /**
- * Truncate text to a maximum length with ellipsis.
+ * Truncate text to a maximum display width with ellipsis.
+ * Uses string-width for accurate CJK/Emoji handling.
  */
 function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength - 1)}…`;
+  return truncateToDisplayWidth(text, maxLength);
 }
 
 // =============================================================================

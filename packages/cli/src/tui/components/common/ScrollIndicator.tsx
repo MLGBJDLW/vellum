@@ -3,6 +3,7 @@
  *
  * Minimal ASCII scrollbar for terminal UIs.
  * Displays a vertical track with a proportionally-sized thumb.
+ * Supports animated colors via useAnimatedScrollbar hook.
  *
  * @module tui/components/common/ScrollIndicator
  */
@@ -28,6 +29,10 @@ export interface ScrollIndicatorProps {
   readonly viewportHeight: number;
   /** Whether to show (default: auto based on content > viewport) */
   readonly show?: boolean;
+  /** Animated thumb color (from useAnimatedScrollbar) */
+  readonly thumbColor?: string;
+  /** Animated track color (from useAnimatedScrollbar) */
+  readonly trackColor?: string;
 }
 
 // =============================================================================
@@ -53,8 +58,12 @@ const MIN_THUMB_SIZE = 1;
  * Renders a minimal ASCII scrollbar. Thumb size is proportional
  * to viewport/content ratio. Returns null when not scrollable.
  *
+ * Supports animated colors via optional thumbColor/trackColor props
+ * from useAnimatedScrollbar hook.
+ *
  * @example
  * ```tsx
+ * // Basic usage
  * <Box flexDirection="row">
  *   <Box flexGrow={1}>{content}</Box>
  *   <ScrollIndicator
@@ -63,6 +72,16 @@ const MIN_THUMB_SIZE = 1;
  *     viewportHeight={20}
  *   />
  * </Box>
+ *
+ * // With animated colors
+ * const { scrollbarColor, trackColor } = useAnimatedScrollbar(isFocused, scrollBy);
+ * <ScrollIndicator
+ *   totalHeight={100}
+ *   offsetFromBottom={25}
+ *   viewportHeight={20}
+ *   thumbColor={scrollbarColor}
+ *   trackColor={trackColor}
+ * />
  * ```
  */
 export function ScrollIndicator({
@@ -70,6 +89,8 @@ export function ScrollIndicator({
   offsetFromBottom,
   viewportHeight,
   show,
+  thumbColor: animatedThumbColor,
+  trackColor: animatedTrackColor,
 }: ScrollIndicatorProps): React.ReactElement | null {
   const { theme } = useTheme();
 
@@ -115,8 +136,10 @@ export function ScrollIndicator({
   }
 
   const { thumbSize, thumbPosition, trackHeight } = metrics;
-  const trackColor = theme.semantic.border.muted;
-  const thumbColor = theme.semantic.text.muted;
+
+  // Use animated colors if provided, otherwise fall back to theme
+  const trackColor = animatedTrackColor ?? theme.semantic.border.muted;
+  const thumbColor = animatedThumbColor ?? theme.semantic.text.muted;
 
   // Build scrollbar lines
   const lines: React.ReactNode[] = [];

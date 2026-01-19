@@ -121,6 +121,22 @@ describe("stream normalization", () => {
       expect(result).toEqual({ type: "reasoning", content: "Processing..." });
     });
 
+    it("should normalize reasoning_details array", () => {
+      const result = normalizeReasoningDelta({
+        type: "reasoning_details",
+        reasoning_details: [{ text: "Step 1" }, { text: "Step 2" }],
+      });
+      expect(result).toEqual({ type: "reasoning", content: "Step 1\nStep 2" });
+    });
+
+    it("should skip empty reasoning_details entries", () => {
+      const result = normalizeReasoningDelta({
+        type: "reasoning_details",
+        reasoning_details: [{ text: "" }, {}, { text: "Step" }],
+      });
+      expect(result).toEqual({ type: "reasoning", content: "Step" });
+    });
+
     it("should return undefined for empty reasoning", () => {
       const result = normalizeReasoningDelta({
         type: "thinking_delta",

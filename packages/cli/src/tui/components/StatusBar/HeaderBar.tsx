@@ -15,8 +15,8 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
+import { useTerminalDimensions } from "../../hooks/useTerminalSize.js";
 import { useTheme } from "../../theme/index.js";
-import { useTerminalSize } from "../Layout.js";
 import { GitIndicator } from "./GitIndicator.js";
 import { WorkspaceIndicator } from "./WorkspaceIndicator.js";
 
@@ -69,7 +69,7 @@ export interface HeaderBarProps {
  */
 export function HeaderBar({ snapshotCount, sandboxActive }: HeaderBarProps): React.JSX.Element {
   const { theme } = useTheme();
-  const { columns } = useTerminalSize();
+  const { width: columns } = useTerminalDimensions();
 
   // Responsive width calculations
   const isCompact = columns < COMPACT_THRESHOLD;

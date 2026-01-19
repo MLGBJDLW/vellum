@@ -154,6 +154,7 @@ export function wrapText(text: string, width: number): string[] {
  * @param message - Message to extract content from
  * @returns Combined text content (content + thinking + tool info)
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Message content extraction with multiple optional fields
 function extractMessageContent(message: Message): string {
   const parts: string[] = [];
 

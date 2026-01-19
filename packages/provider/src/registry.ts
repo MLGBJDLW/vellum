@@ -14,6 +14,7 @@ import { DeepSeekProvider } from "./deepseek.js";
 import { GoogleProvider } from "./google.js";
 import { GroqProvider } from "./groq.js";
 import { LMStudioProvider, OllamaProvider } from "./local.js";
+import { MiniMaxProvider } from "./minimax.js";
 import { MistralProvider } from "./mistral.js";
 import { MoonshotProvider } from "./moonshot.js";
 import { OpenAIProvider } from "./openai.js";
@@ -142,6 +143,8 @@ function createProviderInstance(type: ProviderType): Provider {
       return new ZhipuProvider();
     case "moonshot":
       return new MoonshotProvider();
+    case "minimax":
+      return new MiniMaxProvider();
     case "mistral":
       return new MistralProvider();
     case "yi":

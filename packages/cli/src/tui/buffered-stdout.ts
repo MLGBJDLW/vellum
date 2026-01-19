@@ -68,6 +68,26 @@ function atomicWrite(s: string): void {
 export class BufferedStdout extends Writable {
   private buf = "";
   private scheduled = false;
+  private readonly onResize: () => void;
+
+  constructor() {
+    super();
+
+    // Forward terminal resize events so Ink can re-render on window size changes.
+    this.onResize = () => {
+      this.emit("resize");
+    };
+    process.stdout.on("resize", this.onResize);
+  }
+
+  /**
+   * Cleanup any listeners. Safe to call multiple times.
+   */
+  dispose(): void {
+    process.stdout.off("resize", this.onResize);
+    // Best-effort flush to avoid losing a last frame.
+    this.flush();
+  }
 
   /**
    * Writable _write implementation - buffers chunks and schedules flush.
@@ -123,6 +143,22 @@ export class BufferedStdout extends Writable {
   get isTTY(): boolean {
     return process.stdout.isTTY ?? false;
   }
+
+  // Preserve Ink color capability detection.
+  // Node's stdout provides these methods; delegate when available.
+  hasColors(count?: number): boolean {
+    const stdoutWithHasColors = process.stdout as unknown as {
+      hasColors?: (count?: number) => boolean;
+    };
+    return stdoutWithHasColors.hasColors?.(count) ?? false;
+  }
+
+  getColorDepth(env?: NodeJS.ProcessEnv): number {
+    const stdoutWithGetColorDepth = process.stdout as unknown as {
+      getColorDepth?: (env?: NodeJS.ProcessEnv) => number;
+    };
+    return stdoutWithGetColorDepth.getColorDepth?.(env) ?? 1;
+  }
 }
 
 // =============================================================================
@@ -149,7 +185,7 @@ export class BufferedStdout extends Writable {
  */
 export function createCompatStdout(): NodeJS.WriteStream {
   // Only use buffered output on Windows + VS Code where flickering is most severe
-  if (process.platform === "win32" && isVsCodeTerminal()) {
+  if (process.platform === "win32" && isVsCodeTerminal() && (process.stdout.isTTY ?? false)) {
     // Type assertion: BufferedStdout implements write semantics needed by Ink
     // Full WriteStream interface (clearLine, cursorTo, etc.) not required for rendering
     return new BufferedStdout() as unknown as NodeJS.WriteStream;

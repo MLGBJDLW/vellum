@@ -615,6 +615,13 @@ export class OpenAIProvider {
       request.tools = this.convertTools(params.tools);
     }
 
+    const extraBody = this.buildExtraBody(params);
+    if (extraBody && Object.keys(extraBody).length > 0) {
+      (
+        request as ChatCompletionCreateParamsNonStreaming & { extra_body?: Record<string, unknown> }
+      ).extra_body = extraBody;
+    }
+
     const reasoningEffort = this.resolveReasoningEffort(params);
     if (reasoningEffort) {
       (
@@ -623,6 +630,10 @@ export class OpenAIProvider {
     }
 
     return request;
+  }
+
+  protected buildExtraBody(params: CompletionParams): Record<string, unknown> | undefined {
+    return params.extraBody;
   }
 
   /**
@@ -666,6 +677,13 @@ export class OpenAIProvider {
     }
     if (params.tools && params.tools.length > 0) {
       request.tools = this.convertTools(params.tools);
+    }
+
+    const extraBody = this.buildExtraBody(params);
+    if (extraBody && Object.keys(extraBody).length > 0) {
+      (
+        request as ChatCompletionCreateParamsStreaming & { extra_body?: Record<string, unknown> }
+      ).extra_body = extraBody;
     }
 
     const reasoningEffort = this.resolveReasoningEffort(params);
@@ -712,14 +730,20 @@ export class OpenAIProvider {
     const toolCalls: ToolCall[] = [];
 
     // Extract reasoning content for models that support it
-    // This includes O-series (o1, o3) and DeepSeek Reasoner models
+    // This includes O-series (o1, o3) and compatible providers
     if (isOSeries || this.supportsReasoningContent()) {
       // Models may return reasoning in a separate field
       const messageWithReasoning = message as typeof message & {
         reasoning_content?: string;
+        reasoning_details?: Array<{ text?: string }>;
       };
       if (messageWithReasoning.reasoning_content) {
         thinking = messageWithReasoning.reasoning_content;
+      } else if (messageWithReasoning.reasoning_details) {
+        thinking = messageWithReasoning.reasoning_details
+          .map((detail) => detail.text?.trim())
+          .filter((detail): detail is string => Boolean(detail && detail.length > 0))
+          .join("\n");
       }
     }
 
@@ -793,15 +817,30 @@ export class OpenAIProvider {
       if (choice) {
         const delta = choice.delta;
 
-        // Handle reasoning content (for O-series and compatible models like DeepSeek Reasoner)
+        // Handle reasoning content (for O-series and compatible providers)
         // DeepSeek streams reasoning in delta.reasoning_content
-        const deltaWithReasoning = delta as typeof delta & { reasoning_content?: string };
+        const deltaWithReasoning = delta as typeof delta & {
+          reasoning_content?: string;
+          reasoning_details?: Array<{ text?: string }>;
+        };
         if (deltaWithReasoning.reasoning_content) {
           const reasoningEvent: StreamReasoningEvent = {
             type: "reasoning",
             content: deltaWithReasoning.reasoning_content,
           };
           yield reasoningEvent;
+        } else if (deltaWithReasoning.reasoning_details) {
+          const reasoningText = deltaWithReasoning.reasoning_details
+            .map((detail) => detail.text?.trim())
+            .filter((detail): detail is string => Boolean(detail && detail.length > 0))
+            .join("\n");
+          if (reasoningText.length > 0) {
+            const reasoningEvent: StreamReasoningEvent = {
+              type: "reasoning",
+              content: reasoningText,
+            };
+            yield reasoningEvent;
+          }
         }
 
         // Handle text content

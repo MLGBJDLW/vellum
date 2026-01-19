@@ -19,7 +19,7 @@
 
 import { OpenAIProvider } from "./openai.js";
 import type { TransformConfig } from "./transforms/types.js";
-import type { ModelInfo, ProviderOptions, ProviderType } from "./types.js";
+import type { CompletionParams, ModelInfo, ProviderOptions, ProviderType } from "./types.js";
 
 // =============================================================================
 // OpenAICompatibleProvider Abstract Base Class
@@ -137,5 +137,9 @@ export abstract class OpenAICompatibleProvider extends OpenAIProvider {
    */
   protected override getProviderTypeForModelInfo(): string {
     return this.providerName;
+  }
+
+  protected override buildExtraBody(params: CompletionParams): Record<string, unknown> | undefined {
+    return params.extraBody;
   }
 }

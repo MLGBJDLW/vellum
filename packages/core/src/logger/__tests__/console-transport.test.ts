@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ConsoleTransport } from "../transports/console.js";
+import { ConsoleTransport, isTuiModeActive, setTuiModeActive } from "../transports/console.js";
 import type { LogEntry } from "../types.js";
 
 describe("ConsoleTransport", () => {
@@ -133,6 +133,53 @@ describe("ConsoleTransport", () => {
       transport.log(mockEntry);
 
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining("\x1b[32m"));
+    });
+  });
+
+  describe("TUI mode suppression", () => {
+    afterEach(() => {
+      // Reset TUI mode after each test
+      setTuiModeActive(false);
+    });
+
+    it("suppresses output when TUI mode is active", () => {
+      const transport = new ConsoleTransport({ colors: false });
+
+      // Enable TUI mode
+      setTuiModeActive(true);
+      expect(isTuiModeActive()).toBe(true);
+
+      transport.log(mockEntry);
+
+      // Console should NOT be called when TUI is active
+      expect(console.log).not.toHaveBeenCalled();
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it("outputs normally when TUI mode is disabled", () => {
+      const transport = new ConsoleTransport({ colors: false });
+
+      // Ensure TUI mode is off
+      setTuiModeActive(false);
+      expect(isTuiModeActive()).toBe(false);
+
+      transport.log(mockEntry);
+
+      // Console SHOULD be called when TUI is disabled
+      expect(console.log).toHaveBeenCalled();
+    });
+
+    it("re-enables output after TUI mode is turned off", () => {
+      const transport = new ConsoleTransport({ colors: false });
+
+      // Enable then disable TUI mode
+      setTuiModeActive(true);
+      transport.log(mockEntry);
+      expect(console.log).not.toHaveBeenCalled();
+
+      setTuiModeActive(false);
+      transport.log(mockEntry);
+      expect(console.log).toHaveBeenCalledTimes(1);
     });
   });
 });

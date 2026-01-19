@@ -85,7 +85,11 @@ export class ServerInstaller extends EventEmitter {
 
   private run(command: string, args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      const proc = spawn(command, args, { stdio: "inherit" });
+      const proc = spawn(command, args, {
+        stdio: "inherit",
+        cwd: process.cwd(),
+        shell: process.platform === "win32",
+      });
 
       const timeout = setTimeout(() => {
         proc.kill();

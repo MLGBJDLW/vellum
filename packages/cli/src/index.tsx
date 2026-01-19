@@ -39,8 +39,14 @@ import {
 import { getEffectiveThinkingConfig } from "./commands/think.js";
 import type { CommandResult } from "./commands/types.js";
 import { getOrCreateOrchestrator } from "./orchestrator-singleton.js";
-import { createCompatStdout } from "./tui/buffered-stdout.js";
+import { executeShutdownCleanup, getShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
+import { BufferedStdout, createCompatStdout } from "./tui/buffered-stdout.js";
 import { initI18n } from "./tui/i18n/index.js";
+import {
+  getAlternateBufferSetting,
+  getDefaultAlternateBufferEnabled,
+} from "./tui/i18n/settings-integration.js";
+import { isConptyTerminal } from "./tui/utils/detectTerminal.js";
 import { version } from "./version.js";
 
 // ============================================
@@ -62,8 +68,47 @@ function getResultMessage(result: CommandResult): string {
       return result.operation.message;
   }
 }
+// ============================================
+// T-VIRTUAL-SCROLL: Working Stdio Proxy for Ink
+// ============================================
 
-import { executeShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
+/**
+ * Creates working stdio proxies for Ink rendering.
+ *
+ * This fixes an issue where Ink's stdout/stderr writes can get intercepted
+ * or cause issues in VS Code terminal. By proxying through the original
+ * write functions bound to process.stdout/stderr, we ensure atomic writes.
+ *
+ * Pattern adapted from Gemini CLI's terminal handling.
+ */
+function createWorkingStdio(): {
+  stdout: typeof process.stdout;
+  stderr: typeof process.stderr;
+} {
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const originalErrWrite = process.stderr.write.bind(process.stderr);
+
+  const inkStdout = new Proxy(process.stdout, {
+    get(target, prop, receiver) {
+      if (prop === "write") return originalWrite;
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+
+  const inkStderr = new Proxy(process.stderr, {
+    get(target, prop, receiver) {
+      if (prop === "write") return originalErrWrite;
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+
+  return {
+    stdout: inkStdout as typeof process.stdout,
+    stderr: inkStderr as typeof process.stderr,
+  };
+}
 
 // ============================================
 // Graceful Shutdown Setup (T030)
@@ -286,18 +331,66 @@ program
     const isScreenReaderActive = Boolean(
       process.env.ACCESSIBILITY === "true" || process.env.SCREEN_READER === "true"
     );
+    // T-VIRTUAL-SCROLL: Enable debug mode for static output testing
+    // Set VELLUM_STATIC_OUTPUT=1 to enable non-replacing output (each update renders separately)
+    const isStaticOutputMode = Boolean(process.env.VELLUM_STATIC_OUTPUT === "1");
+
+    // T-VIRTUAL-SCROLL: Get working stdio proxies for Ink
+    // Always use proxied stdio to ensure proper write handling in VS Code terminal
+    const { stdout: inkStdoutProxy, stderr: inkStderr } = createWorkingStdio();
+
+    // Synchronized Output (DEC 2026): Only enable on Windows + VS Code terminal
+    // by reusing the existing detection in createCompatStdout().
+    const compatStdout = createCompatStdout();
+    const useBufferedStdout = compatStdout instanceof BufferedStdout;
+
+    // Preserve existing behavior everywhere else (proxy stdout).
+    const inkStdout: NodeJS.WriteStream = useBufferedStdout ? compatStdout : inkStdoutProxy;
+
+    if (useBufferedStdout) {
+      // Compose with existing shutdown cleanup so we don't lose agent cleanup.
+      const previousCleanup = getShutdownCleanup();
+      setShutdownCleanup(() => {
+        previousCleanup?.();
+        (compatStdout as BufferedStdout).dispose();
+      });
+    }
+
+    // Build Ink render options
+    // Key changes from Gemini CLI analysis:
+    // - Always use stdio proxy (prevents write interception issues)
+    // - patchConsole: false (prevent Ink from hijacking console)
+    // - exitOnCtrlC: false (let app handle Ctrl+C for proper cleanup)
+    // - incrementalRendering linked to alternateBuffer state
+    // - Removed maxFps: 20 (let Ink manage frame rate naturally)
+    const userAltBufferSetting = getAlternateBufferSetting();
+    const defaultAltBuffer = getDefaultAlternateBufferEnabled();
+    const resolvedAltBuffer = userAltBufferSetting ?? defaultAltBuffer;
+    const isConpty = isConptyTerminal();
+    const allowAlternateBuffer = !isConpty || userAltBufferSetting === true;
+    const useAlternateBuffer =
+      !isScreenReaderActive && !isStaticOutputMode && resolvedAltBuffer && allowAlternateBuffer;
+    const incrementalRendering = !isStaticOutputMode;
     const inkRenderOptions = isVSCodeTerminal
       ? {
-          stdout: createCompatStdout(),
-          stderr: process.stderr,
+          stdout: inkStdout,
+          stderr: inkStderr,
           stdin: process.stdin,
-          incrementalRendering: true,
-          maxFps: 20,
-          exitOnCtrlC: true,
-          alternateBuffer: !isScreenReaderActive,
+          patchConsole: useAlternateBuffer,
+          exitOnCtrlC: false,
+          alternateBuffer: useAlternateBuffer,
+          incrementalRendering,
+          debug: isStaticOutputMode,
         }
       : {
-          alternateBuffer: !isScreenReaderActive,
+          stdout: inkStdout,
+          stderr: inkStderr,
+          stdin: process.stdin,
+          patchConsole: useAlternateBuffer,
+          exitOnCtrlC: false,
+          alternateBuffer: useAlternateBuffer,
+          incrementalRendering,
+          debug: isStaticOutputMode,
         };
 
     render(

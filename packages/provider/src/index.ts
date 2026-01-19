@@ -17,6 +17,7 @@ export type { GoogleProviderOptions } from "./google.js";
 export { GoogleProvider } from "./google.js";
 export { GroqProvider } from "./groq.js";
 export { LMStudioProvider, LocalProvider, OllamaProvider } from "./local.js";
+export { MiniMaxProvider } from "./minimax.js";
 export { MistralProvider } from "./mistral.js";
 export { MoonshotProvider } from "./moonshot.js";
 export type { OpenAIProviderOptions } from "./openai.js";

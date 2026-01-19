@@ -382,6 +382,8 @@ async function executeCommandAction(
     const child = spawn(action.command, args, {
       signal,
       stdio: ["pipe", "pipe", "pipe"],
+      cwd: process.cwd(),
+      shell: process.platform === "win32",
       env: {
         ...process.env,
         HOOK_INPUT: JSON.stringify(input),
@@ -464,6 +466,8 @@ async function executeScriptAction(
     const child = spawn(command, args, {
       signal,
       stdio: ["pipe", "pipe", "pipe"],
+      cwd: process.cwd(),
+      shell: process.platform === "win32",
       env: {
         ...process.env,
         HOOK_INPUT: JSON.stringify(input),

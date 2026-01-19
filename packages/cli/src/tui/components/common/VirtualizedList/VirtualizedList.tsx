@@ -109,8 +109,8 @@ function VirtualizedListInner<T>(
     totalHeight,
     startIndex,
     endIndex,
-    topSpacerHeight,
-    bottomSpacerHeight,
+    // Note: spacer heights not used in Ink (no real scroll support)
+    // topSpacerHeight and bottomSpacerHeight are kept in hook for API compat
     itemRefCallback,
     containerRef,
     measuredContainerHeight,
@@ -122,30 +122,31 @@ function VirtualizedListInner<T>(
   });
 
   useEffect(() => {
-    if (measuredContainerHeight > 0 && measuredContainerHeight !== containerHeight) {
-      setContainerHeight(measuredContainerHeight);
+    if (measuredContainerHeight > 0) {
+      const rows = process.stdout.rows || 24;
+      const safeHeight = Math.min(measuredContainerHeight, rows);
+      if (safeHeight !== containerHeight) {
+        setContainerHeight(safeHeight);
+      }
     }
   }, [measuredContainerHeight, containerHeight]);
-
-  const extraTopSpacerHeight =
-    alignToBottom && measuredContainerHeight > totalHeight
-      ? measuredContainerHeight - totalHeight
-      : 0;
 
   // Batched scroll for smooth updates
   const { getScrollTop, setPendingScrollTop } = useBatchedScroll(scrollTop);
 
-  // Notify parent of scroll changes
-  const prevScrollTop = useMemo(() => ({ value: scrollTop }), [scrollTop]);
-  if (onScrollTopChange && prevScrollTop.value !== scrollTop) {
-    onScrollTopChange(scrollTop);
-  }
+  // Notify parent of scroll changes and dimension updates
+  useEffect(() => {
+    if (onScrollTopChange) {
+      onScrollTopChange(scrollTop);
+    }
+  }, [scrollTop, onScrollTopChange]);
 
   // Notify parent of sticking state changes
-  const prevSticking = useMemo(() => ({ value: isStickingToBottom }), [isStickingToBottom]);
-  if (onStickingToBottomChange && prevSticking.value !== isStickingToBottom) {
-    onStickingToBottomChange(isStickingToBottom);
-  }
+  useEffect(() => {
+    if (onStickingToBottomChange) {
+      onStickingToBottomChange(isStickingToBottom);
+    }
+  }, [isStickingToBottom, onStickingToBottomChange]);
 
   // Imperative handle for external control
   useImperativeHandle(
@@ -342,9 +343,19 @@ function VirtualizedListInner<T>(
     return items;
   }, [startIndex, endIndex, data, keyExtractor, renderItem, createItemRef]);
 
-  // Note: scrollbarThumbColor is reserved for future native scroll support
-  // Currently not used as Ink handles overflow internally
+  // Note: scrollbarThumbColor and scrollTop are reserved for future native scroll support
+  // Standard Ink doesn't support overflowY="scroll", only "hidden" or "visible"
+  // Gemini CLI uses a forked Ink (@jrichman/ink) with scroll support
   void scrollbarThumbColor;
+
+  // CRITICAL: Ink doesn't support real CSS scrolling.
+  // overflow="hidden" just clips content, it doesn't scroll.
+  // We must NOT use spacers - instead, render visible items directly at the top.
+  // The "scrolling" effect is achieved by changing which items are rendered (startIndex/endIndex).
+  //
+  // For alignToBottom: use justifyContent="flex-end" to push content to bottom
+  // when total content height is less than container height.
+  const shouldAlignToBottom = alignToBottom && totalHeight < measuredContainerHeight;
 
   return (
     <Box
@@ -352,20 +363,17 @@ function VirtualizedListInner<T>(
       overflowY="hidden"
       overflowX="hidden"
       width="100%"
+      height="100%"
       flexDirection="column"
       flexGrow={1}
       minHeight={0}
+      paddingRight={1}
+      justifyContent={shouldAlignToBottom ? "flex-end" : "flex-start"}
     >
       <Box flexShrink={0} width="100%" flexDirection="column">
-        {/* Top spacer for items above viewport */}
-        {extraTopSpacerHeight > 0 && <Box height={extraTopSpacerHeight} flexShrink={0} />}
-        {topSpacerHeight > 0 && <Box height={topSpacerHeight} flexShrink={0} />}
-
-        {/* Visible items */}
+        {/* Render visible items directly - no spacers needed in Ink */}
+        {/* In Ink, "scrolling" = changing which items we render */}
         {renderedItems}
-
-        {/* Bottom spacer for items below viewport */}
-        {bottomSpacerHeight > 0 && <Box height={bottomSpacerHeight} flexShrink={0} />}
       </Box>
     </Box>
   );

@@ -194,7 +194,9 @@ export const searchFilesTool = defineTool({
           if (
             searchError instanceof Error &&
             (searchError.message.includes("outside repository") ||
-              searchError.message.includes("exit code"))
+              searchError.message.includes("exit code") ||
+              searchError.message.includes("exited with code") ||
+              searchError.message.includes("not a git repository"))
           ) {
             result = await facade.searchWithBackend("javascript", searchOptions);
           } else {

@@ -1,6 +1,30 @@
 import type { LogEntry, LogLevel, LogTransport } from "../types.js";
 
 /**
+ * Global flag to disable console transport when TUI is active.
+ * Set this to true when entering TUI mode to prevent console.log from
+ * bypassing Ink and causing terminal overflow.
+ */
+let tuiModeActive = false;
+
+/**
+ * Enable or disable TUI mode for the console transport.
+ * When enabled, console output is suppressed to prevent terminal overflow.
+ * @param enabled - Whether TUI mode is active
+ */
+export function setTuiModeActive(enabled: boolean): void {
+  tuiModeActive = enabled;
+}
+
+/**
+ * Check if TUI mode is currently active.
+ * @returns True if TUI mode is active
+ */
+export function isTuiModeActive(): boolean {
+  return tuiModeActive;
+}
+
+/**
  * ANSI color codes for terminal output.
  */
 const COLORS = {
@@ -85,8 +109,15 @@ export class ConsoleTransport implements LogTransport {
 
   /**
    * Log an entry to the console with optional coloring.
+   * Suppressed when TUI mode is active to prevent terminal overflow.
    */
   log(entry: LogEntry): void {
+    // Guard: Suppress console output when TUI is active
+    // This prevents console.log from bypassing Ink and causing overflow
+    if (tuiModeActive) {
+      return;
+    }
+
     const timestamp = formatTimestamp(entry.timestamp);
     const level = entry.level.toUpperCase().padEnd(5);
     const message = entry.message;

@@ -13,6 +13,7 @@ import type React from "react";
 import { useMemo } from "react";
 import { useGitStatus } from "../../hooks/useGitStatus.js";
 import { useTheme } from "../../theme/index.js";
+import { truncateToDisplayWidth } from "../../utils/index.js";
 
 // =============================================================================
 // Types
@@ -61,11 +62,8 @@ export function GitIndicator({
 
   const displayBranch = useMemo(() => {
     if (!branch) return null;
-    if (branch.length <= maxWidth) {
-      return branch;
-    }
-    // Truncate with ellipsis
-    return `${branch.slice(0, maxWidth - 1)}…`;
+    // Truncate with ellipsis using string-width for CJK/Emoji handling
+    return truncateToDisplayWidth(branch, maxWidth);
   }, [branch, maxWidth]);
 
   // Don't render if not in a git repo or still loading

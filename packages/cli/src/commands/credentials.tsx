@@ -21,6 +21,7 @@ import {
 } from "@vellum/core";
 import { Box, render, Text, useApp, useInput } from "ink";
 import { useCallback, useEffect, useState } from "react";
+import { createCompatStdout } from "../tui/buffered-stdout.js";
 import { TextInput } from "../tui/components/Input/TextInput.js";
 import { BracketedPasteProvider } from "../tui/context/BracketedPasteContext.js";
 
@@ -579,7 +580,8 @@ export function renderCredentialsList(): void {
   render(
     <BracketedPasteProvider>
       <CredentialsApp action="list" />
-    </BracketedPasteProvider>
+    </BracketedPasteProvider>,
+    { stdout: createCompatStdout() }
   );
 }
 
@@ -587,7 +589,8 @@ export function renderCredentialsAdd(provider: string): void {
   render(
     <BracketedPasteProvider>
       <CredentialsApp action="add" provider={provider} />
-    </BracketedPasteProvider>
+    </BracketedPasteProvider>,
+    { stdout: createCompatStdout() }
   );
 }
 
@@ -595,7 +598,8 @@ export function renderCredentialsRemove(provider: string): void {
   render(
     <BracketedPasteProvider>
       <CredentialsApp action="remove" provider={provider} />
-    </BracketedPasteProvider>
+    </BracketedPasteProvider>,
+    { stdout: createCompatStdout() }
   );
 }
 

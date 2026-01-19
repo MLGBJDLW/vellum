@@ -196,6 +196,8 @@ export interface CompletionParams {
   presencePenalty?: number;
   /** Frequency penalty for token repetition */
   frequencyPenalty?: number;
+  /** Provider-specific extra body fields (OpenAI-compatible APIs) */
+  extraBody?: Record<string, unknown>;
 }
 
 // =============================================================================

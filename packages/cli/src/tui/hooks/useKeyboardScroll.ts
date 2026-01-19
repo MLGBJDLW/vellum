@@ -18,6 +18,7 @@
 import type { Key } from "ink";
 import { useInput } from "ink";
 import { useMemo } from "react";
+import { isEndKey, isHomeKey } from "../types/ink-extended.js";
 import type { ViewportScrollActions, ViewportScrollState } from "./useScrollController.js";
 
 // =============================================================================
@@ -128,6 +129,7 @@ export function useKeyboardScroll(options: UseKeyboardScrollOptions): UseKeyboar
    * Handle a keyboard input, returning true if handled
    */
   const handleKey = useMemo(() => {
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Keyboard handler needs many key combinations
     return (input: string, key: Key): boolean => {
       // Arrow up or vim 'k'
       if (key.upArrow || (vimKeys && input === "k")) {
@@ -156,13 +158,13 @@ export function useKeyboardScroll(options: UseKeyboardScrollOptions): UseKeyboar
       }
 
       // Home - jump to top
-      if (key.home || (key.ctrl && key.home)) {
+      if (isHomeKey(input)) {
         actions.jumpTo(maxOffset);
         return true;
       }
 
       // End - jump to bottom (follow mode)
-      if (key.end || (key.ctrl && key.end)) {
+      if (isEndKey(input)) {
         actions.scrollToBottom();
         return true;
       }

@@ -6,9 +6,16 @@
  * @module tui/components/common
  */
 
+// EnhancedLoadingIndicator (Enhanced loading with elapsed time & cancel hints)
+export {
+  EnhancedLoadingIndicator,
+  type EnhancedLoadingIndicatorProps,
+  formatDuration,
+  useDelayedVisibility,
+  useElapsedTime,
+} from "./EnhancedLoadingIndicator.js";
 // ErrorBoundary (Chain 20)
 export { ErrorBoundary, type ErrorBoundaryProps } from "./ErrorBoundary.js";
-
 // HotkeyHelpModal (Chain 24)
 export {
   DEFAULT_HOTKEYS,
@@ -16,7 +23,6 @@ export {
   HotkeyHelpModal,
   type HotkeyHelpModalProps,
 } from "./HotkeyHelpModal.js";
-
 // HotkeyHints (sidebar footer hints)
 export { type HotkeyHint, HotkeyHints, type HotkeyHintsProps } from "./HotkeyHints.js";
 // MaxSizedBox (Ported from Gemini CLI)
@@ -38,7 +44,18 @@ export {
   SPINNER_STYLES,
   Spinner,
   type SpinnerProps,
+  type SpinnerType,
 } from "./Spinner.js";
+// StreamingIndicator (Context-aware streaming phase indicator)
+export {
+  PHASE_ICONS,
+  PHASE_LABELS,
+  PHASE_SPINNER_STYLES,
+  StreamingIndicator,
+  type StreamingIndicatorProps,
+  type StreamingPhase,
+  useStreamingPhase,
+} from "./StreamingIndicator.js";
 
 // VirtualizedList (Ported from Gemini CLI)
 export {

@@ -13,6 +13,19 @@ export {
   EnhancedCommandInput,
   type EnhancedCommandInputProps,
 } from "./EnhancedCommandInput.js";
+export { HighlightedText, type HighlightedTextProps } from "./HighlightedText.js";
+// Input highlighting utilities
+export {
+  applyHighlightStyle,
+  findSegmentAtCursor,
+  getHighlightStyleDescription,
+  type HighlightResult,
+  type HighlightSegment,
+  type HighlightType,
+  highlightInput,
+  parseHighlights,
+  splitSegmentAtCursor,
+} from "./highlight.js";
 export {
   type FileSuggestion,
   MentionAutocomplete,

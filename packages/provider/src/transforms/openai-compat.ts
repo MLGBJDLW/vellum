@@ -148,6 +148,7 @@ const PROVIDER_CONFIGS: Partial<Record<string, Partial<OpenAICompatConfig>>> = {
   // Moonshot (月之暗面) - standard compatibility
   moonshot: {
     filterEmptyMessages: true,
+    handleReasoningContent: true,
   },
 
   // Yi (零一万物) - standard compatibility

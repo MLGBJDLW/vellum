@@ -12,6 +12,7 @@ import type { Key } from "ink";
 import { useInput } from "ink";
 import { useCallback, useMemo } from "react";
 import { useApp } from "../context/AppContext.js";
+import type { ExtendedKey } from "../types/ink-extended.js";
 
 // =============================================================================
 // Types
@@ -254,7 +255,7 @@ export function useHotkeys(
       key: string,
       modifiers: { ctrl?: boolean; shift?: boolean; alt?: boolean }
     ): HotkeyDefinition | null => {
-      const inkKey: Key = {
+      const inkKey = {
         ctrl: modifiers.ctrl ?? false,
         shift: modifiers.shift ?? false,
         meta: modifiers.alt ?? false,
@@ -271,7 +272,7 @@ export function useHotkeys(
         pageDown: key.toLowerCase() === "pagedown",
         home: key.toLowerCase() === "home",
         end: key.toLowerCase() === "end",
-      };
+      } as ExtendedKey;
 
       for (const hotkey of resolvedHotkeys) {
         if (matchesHotkey(key, inkKey, hotkey)) {

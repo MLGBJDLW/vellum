@@ -2,7 +2,7 @@
  * Unit tests for Chinese LLM providers
  *
  * Tests Zhipu JWT authentication generation and initialization/model listing
- * for Moonshot, Yi, Baichuan, and Mistral providers.
+ * for Moonshot, Yi, Baichuan, MiniMax, and Mistral providers.
  *
  * @module @vellum/provider/__tests__/chinese-providers
  */
@@ -10,8 +10,10 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { BaichuanProvider } from "../baichuan.js";
+import { MiniMaxProvider } from "../minimax.js";
 import { MistralProvider } from "../mistral.js";
 import { MoonshotProvider } from "../moonshot.js";
+import type { CompletionParams } from "../types.js";
 import { YiProvider } from "../yi.js";
 import { generateZhipuToken, ZhipuProvider } from "../zhipu.js";
 
@@ -209,6 +211,7 @@ describe("MoonshotProvider", () => {
       expect(models).toContain("moonshot-v1-8k");
       expect(models).toContain("moonshot-v1-32k");
       expect(models).toContain("moonshot-v1-128k");
+      expect(models).toContain("kimi-k2-thinking");
     });
   });
 
@@ -225,6 +228,9 @@ describe("MoonshotProvider", () => {
 
       const model128k = models.find((m) => m.id === "moonshot-v1-128k");
       expect(model128k?.contextWindow).toBe(128000);
+
+      const thinkingModel = models.find((m) => m.id === "kimi-k2-thinking");
+      expect(thinkingModel?.supportsReasoning).toBe(true);
     });
 
     it("should have all models with tools support but no vision", async () => {
@@ -251,6 +257,102 @@ describe("MoonshotProvider", () => {
       const provider = new MoonshotProvider();
       await provider.initialize({ apiKey: "sk-test123" });
       expect(provider.isInitialized()).toBe(true);
+    });
+  });
+});
+
+// =============================================================================
+// MiniMaxProvider Tests
+// =============================================================================
+
+describe("MiniMaxProvider", () => {
+  describe("constructor", () => {
+    it("should have correct default base URL", () => {
+      const provider = new MiniMaxProvider();
+      expect(provider.defaultBaseUrl).toBe("https://api.minimax.io/v1");
+    });
+
+    it("should have correct provider name", () => {
+      const provider = new MiniMaxProvider();
+      expect(provider.providerName).toBe("minimax");
+    });
+  });
+
+  describe("listModels", () => {
+    it("should return list of MiniMax models", () => {
+      const provider = new MiniMaxProvider();
+      const models = provider.listModels();
+
+      expect(models).toContain("MiniMax-M2");
+      expect(models).toContain("MiniMax-M2.1");
+      expect(models).toContain("MiniMax-Text-01");
+    });
+  });
+
+  describe("listModelsAsync", () => {
+    it("should return full model info", async () => {
+      const provider = new MiniMaxProvider();
+      const models = await provider.listModelsAsync();
+
+      const minimax = models.find((m) => m.id === "MiniMax-M2");
+      expect(minimax).toBeDefined();
+      expect(minimax?.provider).toBe("minimax");
+      expect(minimax?.supportsReasoning).toBe(true);
+    });
+  });
+
+  describe("getDefaultModel", () => {
+    it("should return MiniMax-M2 as default", () => {
+      const provider = new MiniMaxProvider();
+      expect(provider.getDefaultModel()).toBe("MiniMax-M2");
+    });
+  });
+
+  describe("buildExtraBody", () => {
+    it("should include reasoning_split when thinking is enabled", () => {
+      const provider = new MiniMaxProvider();
+      const extraBody = (
+        provider as unknown as {
+          buildExtraBody: (params: CompletionParams) => Record<string, unknown> | undefined;
+        }
+      ).buildExtraBody({
+        model: "MiniMax-M2",
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: { enabled: true },
+      });
+
+      expect(extraBody).toEqual({ reasoning_split: true });
+    });
+
+    it("should merge extraBody overrides", () => {
+      const provider = new MiniMaxProvider();
+      const extraBody = (
+        provider as unknown as {
+          buildExtraBody: (params: CompletionParams) => Record<string, unknown> | undefined;
+        }
+      ).buildExtraBody({
+        model: "MiniMax-M2",
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: { enabled: true },
+        extraBody: { trace_id: "abc" },
+      });
+
+      expect(extraBody).toEqual({ trace_id: "abc", reasoning_split: true });
+    });
+
+    it("should preserve extraBody when thinking is disabled", () => {
+      const provider = new MiniMaxProvider();
+      const extraBody = (
+        provider as unknown as {
+          buildExtraBody: (params: CompletionParams) => Record<string, unknown> | undefined;
+        }
+      ).buildExtraBody({
+        model: "MiniMax-Text-01",
+        messages: [{ role: "user", content: "Hello" }],
+        extraBody: { trace_id: "abc" },
+      });
+
+      expect(extraBody).toEqual({ trace_id: "abc" });
     });
   });
 });

@@ -29,6 +29,7 @@ import {
   SessionParts,
   StorageManager,
   setBatchToolRegistry,
+  setTuiModeActive,
   updateSessionMetadata,
 } from "@vellum/core";
 import { createId } from "@vellum/shared";
@@ -648,6 +649,40 @@ function AppContent({
       CursorManager.forceShow();
     };
   }, [screenReaderDetected, stdout]);
+
+  // ==========================================================================
+  // TUI Mode Console Suppression (Overflow Prevention)
+  // ==========================================================================
+  // Enable TUI mode to suppress console.log output from loggers.
+  // This prevents console output from bypassing Ink and causing terminal overflow.
+  useEffect(() => {
+    // Activate TUI mode to suppress console transport
+    setTuiModeActive(true);
+
+    // Setup exit handlers to restore console on exit
+    const restoreConsole = (): void => {
+      setTuiModeActive(false);
+    };
+
+    // Standard exit signals
+    process.on("exit", restoreConsole);
+    process.on("SIGINT", restoreConsole);
+    process.on("SIGTERM", restoreConsole);
+
+    // Exception handlers for complete coverage (T002 Hardening)
+    // These ensure TUI mode is disabled even on unexpected crashes
+    process.on("uncaughtException", restoreConsole);
+    process.on("unhandledRejection", restoreConsole);
+
+    return () => {
+      process.off("exit", restoreConsole);
+      process.off("SIGINT", restoreConsole);
+      process.off("SIGTERM", restoreConsole);
+      process.off("uncaughtException", restoreConsole);
+      process.off("unhandledRejection", restoreConsole);
+      setTuiModeActive(false);
+    };
+  }, []);
 
   // NOTE: Previous useInput and setInterval for cursor hiding removed.
   // CursorManager.lock() now handles cursor state centrally, preventing
@@ -1671,8 +1706,8 @@ function AppContent({
   }, [modeManager, openSpecConfirmation]);
 
   // Hotkeys hook for global keyboard shortcuts
-  const hotkeyDefinitions: HotkeyDefinition[] = useMemo(
-    () => [
+  const hotkeyDefinitions: HotkeyDefinition[] = useMemo(() => {
+    const hotkeys: HotkeyDefinition[] = [
       {
         key: "m",
         ctrl: true,
@@ -1857,8 +1892,11 @@ function AppContent({
         description: "Toggle copy mode",
         scope: "global",
       },
-      // Alternate buffer toggle for full-screen views (T043)
-      {
+    ];
+
+    // Alternate buffer toggle for full-screen views (T043)
+    if (alternateBufferEnabled) {
+      hotkeys.push({
         key: "f",
         ctrl: true,
         handler: () => {
@@ -1867,21 +1905,23 @@ function AppContent({
         },
         description: "Toggle fullscreen mode",
         scope: "global",
-      },
-    ],
-    [
-      backtrackState.canUndo,
-      backtrackState.canRedo,
-      undoBacktrack,
-      redoBacktrack,
-      announce,
-      vimEnabled,
-      vim,
-      copyMode,
-      alternateBuffer,
-      showModelSelector,
-    ]
-  );
+      });
+    }
+
+    return hotkeys;
+  }, [
+    backtrackState.canUndo,
+    backtrackState.canRedo,
+    undoBacktrack,
+    redoBacktrack,
+    announce,
+    vimEnabled,
+    vim,
+    copyMode,
+    alternateBuffer,
+    alternateBufferEnabled,
+    showModelSelector,
+  ]);
 
   useHotkeys(hotkeyDefinitions, {
     enabled:
@@ -2368,14 +2408,16 @@ function AppContent({
       return;
     }
 
-    // Ctrl+C - cancel operation (doesn't exit when operation is running)
+    // Ctrl+C - cancel operation when loading; otherwise exit
     if (key.ctrl && inputChar === "c") {
       if (isLoading && cancellationRef.current) {
         cancellationRef.current.cancel("user_ctrl_c");
         setIsLoading(false);
         addMessage({ role: "assistant", content: "[Operation cancelled by Ctrl+C]" });
+        return;
       }
-      // Note: If not loading, let the default Ctrl+C behavior (exit) happen
+
+      exit();
       return;
     }
   });
@@ -2388,6 +2430,20 @@ function AppContent({
       }
 
       if (!commandExecutor) {
+        const normalized = text.trim().toLowerCase();
+        const isExitCommand =
+          normalized === "/exit" ||
+          normalized === "/quit" ||
+          normalized === "/q" ||
+          normalized.startsWith("/exit ") ||
+          normalized.startsWith("/quit ") ||
+          normalized.startsWith("/q ");
+
+        if (isExitCommand) {
+          exit();
+          return true;
+        }
+
         addMessage({
           role: "assistant",
           content: "[x] Command system not ready yet. Please try again in a moment.",
@@ -2407,7 +2463,7 @@ function AppContent({
 
       return true; // Was a slash command
     },
-    [commandExecutor, addMessage, handleCommandResult]
+    [commandExecutor, addMessage, handleCommandResult, exit]
   );
 
   // Handle message submission (for CommandInput onMessage)
@@ -3072,6 +3128,7 @@ function AppContent({
     <AppContentView
       agentName={agentName}
       announce={announce}
+      alternateBufferEnabled={alternateBufferEnabled}
       activeApproval={activeApproval}
       activeRiskLevel={activeRiskLevel}
       activeSessionId={activeSessionId}
@@ -3176,6 +3233,7 @@ type ToolApprovalState = ReturnType<typeof useToolApprovalController>;
 interface AppContentViewProps {
   readonly agentName?: string;
   readonly announce: (message: string) => void;
+  readonly alternateBufferEnabled: boolean;
   readonly activeApproval: ToolApprovalState["activeApproval"];
   readonly activeRiskLevel: ToolApprovalState["activeRiskLevel"];
   readonly activeSessionId: string;
@@ -3615,6 +3673,7 @@ function AppHeader({
 function AppContentView({
   agentName,
   announce,
+  alternateBufferEnabled,
   activeApproval,
   activeRiskLevel,
   activeSessionId,
@@ -3855,14 +3914,20 @@ function AppContentView({
             branch={branch ?? undefined}
             changedFiles={changedFiles}
           >
-            <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
+            <Box flexDirection="column" flexGrow={1}>
               {/* Thinking content is now integrated into messages via the `thinking` field */}
+              {/* T-VIRTUAL-SCROLL: Pass historyMessages for Static rendering optimization */}
               <MessageList
                 messages={messages}
+                historyMessages={messages.filter((m) => !m.isStreaming)}
                 pendingMessage={pendingMessage}
                 isLoading={isLoading}
                 useVirtualizedList={true}
                 estimatedItemHeight={4}
+                scrollKeyMode={commandInputFocused ? "page" : "all"}
+                forceFollowOnInput={true}
+                useAltBuffer={alternateBufferEnabled}
+                enableScroll={!alternateBufferEnabled}
                 isFocused={
                   !showModeSelector &&
                   !showModelSelector &&

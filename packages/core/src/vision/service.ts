@@ -289,6 +289,7 @@ export class VisionService {
     try {
       await execAsync(`powershell -NoProfile -Command "${script.replace(/"/g, '\\"')}"`, {
         timeout: 30000,
+        cwd: this.tempDir,
       });
 
       const { data, metadata } = await readImageFile(tempFile);
@@ -343,7 +344,7 @@ export class VisionService {
     args.push(tempFile);
 
     try {
-      await execAsync(`screencapture ${args.join(" ")}`, { timeout: 30000 });
+      await execAsync(`screencapture ${args.join(" ")}`, { timeout: 30000, cwd: this.tempDir });
 
       const { data, metadata } = await readImageFile(tempFile);
 
@@ -389,7 +390,7 @@ export class VisionService {
     }
 
     try {
-      await execAsync(command, { timeout: 30000 });
+      await execAsync(command, { timeout: 30000, cwd: this.tempDir });
     } catch {
       // Fall back to gnome-screenshot
       const gsArgs: string[] = ["-f", tempFile];
@@ -400,7 +401,10 @@ export class VisionService {
         console.warn("Region capture not supported with gnome-screenshot, capturing full screen");
       }
 
-      await execAsync(`gnome-screenshot ${gsArgs.join(" ")}`, { timeout: 30000 });
+      await execAsync(`gnome-screenshot ${gsArgs.join(" ")}`, {
+        timeout: 30000,
+        cwd: this.tempDir,
+      });
     }
 
     try {

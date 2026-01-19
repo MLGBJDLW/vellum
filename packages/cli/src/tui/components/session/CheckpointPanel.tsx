@@ -13,6 +13,7 @@ import type React from "react";
 import { useCallback, useState } from "react";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { truncateToDisplayWidth } from "../../utils/index.js";
 
 // =============================================================================
 // Types
@@ -69,12 +70,10 @@ function formatDate(date: Date): string {
 
 /**
  * Truncate text with ellipsis.
+ * Uses string-width for accurate CJK/Emoji handling.
  */
 function truncate(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength - 1)}…`;
+  return truncateToDisplayWidth(text, maxLength);
 }
 
 // =============================================================================

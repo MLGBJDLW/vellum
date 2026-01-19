@@ -12,6 +12,7 @@ import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { isEndKey, isHomeKey } from "../types/ink-extended.js";
 import { HotkeyHints } from "./common/HotkeyHints.js";
 import { TodoItem, type TodoItemData } from "./TodoItem.js";
 
@@ -290,13 +291,13 @@ export function TodoPanel({
       }
 
       // Home
-      if (input === "g" || key.home) {
+      if (input === "g" || isHomeKey(input)) {
         navigateToIndex(0);
         return;
       }
 
       // End
-      if (input === "G" || key.end) {
+      if (input === "G" || isEndKey(input)) {
         navigateToIndex(filteredItems.length - 1);
         return;
       }

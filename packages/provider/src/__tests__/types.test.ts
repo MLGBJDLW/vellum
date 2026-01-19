@@ -201,6 +201,7 @@ describe("Type Inference Tests", () => {
         topP: 0.9,
         presencePenalty: 0.1,
         frequencyPenalty: 0.1,
+        extraBody: { reasoning_split: true },
       };
 
       expect(params.temperature).toBe(0.7);

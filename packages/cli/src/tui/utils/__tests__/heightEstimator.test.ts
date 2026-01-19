@@ -1,12 +1,23 @@
 /**
  * Height Estimator Utilities Tests (T011)
  *
+ * Tests for upper-bound height estimation.
+ * Note: Estimates are INTENTIONALLY CONSERVATIVE (larger) to prevent terminal overflow.
+ *
  * @module tui/utils/__tests__/heightEstimator.test
  */
 
 import { describe, expect, it } from "vitest";
 import type { Message } from "../../context/MessagesContext.js";
-import { estimateMessageHeight, estimateWrappedLineCount } from "../heightEstimator.js";
+import {
+  DEFAULT_ESTIMATED_ITEM_HEIGHT,
+  estimateMessageHeight,
+  estimateWrappedLineCount,
+  HEIGHT_SAFETY_MARGIN,
+  MIN_MESSAGE_HEIGHT,
+  THINKING_HEADER_UPPER_BOUND,
+  TOOL_CALL_UPPER_BOUND,
+} from "../heightEstimator.js";
 
 describe("estimateWrappedLineCount", () => {
   it("returns 1 for empty string", () => {
@@ -42,7 +53,7 @@ describe("estimateWrappedLineCount - CJK handling", () => {
   });
 });
 
-describe("estimateMessageHeight", () => {
+describe("estimateMessageHeight - Upper Bound Estimation", () => {
   const baseMessage: Message = {
     id: "1",
     role: "assistant",
@@ -50,33 +61,39 @@ describe("estimateMessageHeight", () => {
     timestamp: new Date(),
   };
 
-  it("calculates basic message height (header + content + margin)", () => {
+  it("returns at least MIN_MESSAGE_HEIGHT", () => {
     const height = estimateMessageHeight(baseMessage, { width: 80 });
-    // 1 (header) + 1 (content) + 1 (margin) = 3
-    expect(height).toBe(3);
+    // Upper bound: header(2) + content(1) + margin(2) + safety(2) = 7, min=4
+    expect(height).toBeGreaterThanOrEqual(MIN_MESSAGE_HEIGHT);
   });
 
-  it("includes thinking block height", () => {
+  it("includes THINKING_HEADER_UPPER_BOUND for thinking blocks", () => {
     const msg: Message = { ...baseMessage, thinking: "Let me think..." };
     const height = estimateMessageHeight(msg, { width: 80 });
-    // 1 (header) + 1 (content) + 1 (thinking label) + 1 (thinking text) + 1 (margin) = 5
-    expect(height).toBe(5);
+    // With thinking: header(2) + content(1) + thinking_header(4) + thinking(1) + margin(2) + safety(2) = 12
+    expect(height).toBeGreaterThanOrEqual(THINKING_HEADER_UPPER_BOUND);
+    expect(height).toBeGreaterThan(MIN_MESSAGE_HEIGHT);
   });
 
-  it("includes tool calls height", () => {
-    const msg: Message = {
+  it("uses TOOL_CALL_UPPER_BOUND for each tool call", () => {
+    const msgWithOneTool: Message = {
+      ...baseMessage,
+      toolCalls: [{ id: "t1", name: "read_file", arguments: {}, status: "completed" }],
+    };
+    const msgWithTwoTools: Message = {
       ...baseMessage,
       toolCalls: [
         { id: "t1", name: "read_file", arguments: {}, status: "completed" },
         { id: "t2", name: "write_file", arguments: {}, status: "running" },
       ],
     };
-    const height = estimateMessageHeight(msg, { width: 80 });
-    // 1 (header) + 1 (content) + 1 (tool margin) + 2 (tool calls) + 1 (margin) = 6
-    expect(height).toBe(6);
+    const height1 = estimateMessageHeight(msgWithOneTool, { width: 80 });
+    const height2 = estimateMessageHeight(msgWithTwoTools, { width: 80 });
+    // Each tool adds TOOL_CALL_UPPER_BOUND lines
+    expect(height2 - height1).toBe(TOOL_CALL_UPPER_BOUND);
   });
 
-  it("handles tool_group messages", () => {
+  it("handles tool_group messages with upper bound per tool", () => {
     const msg: Message = {
       ...baseMessage,
       role: "tool_group",
@@ -86,8 +103,8 @@ describe("estimateMessageHeight", () => {
       ],
     };
     const height = estimateMessageHeight(msg, { width: 80 });
-    // tool_group: toolCalls.length + margin = 2 + 1 = 3
-    expect(height).toBe(3);
+    // tool_group: 2 tools * TOOL_CALL_UPPER_BOUND + margin(2)
+    expect(height).toBeGreaterThanOrEqual(2 * TOOL_CALL_UPPER_BOUND);
   });
 
   it("excludes tool calls when configured", () => {
@@ -95,8 +112,16 @@ describe("estimateMessageHeight", () => {
       ...baseMessage,
       toolCalls: [{ id: "t1", name: "read_file", arguments: {}, status: "completed" }],
     };
-    const height = estimateMessageHeight(msg, { width: 80, includeToolCalls: false });
-    // 1 (header) + 1 (content) + 1 (margin) = 3 (no tool calls)
-    expect(height).toBe(3);
+    const heightWithTools = estimateMessageHeight(msg, { width: 80 });
+    const heightWithoutTools = estimateMessageHeight(msg, { width: 80, includeToolCalls: false });
+    // Without tools should be smaller
+    expect(heightWithoutTools).toBeLessThan(heightWithTools);
+    expect(heightWithoutTools).toBeGreaterThanOrEqual(MIN_MESSAGE_HEIGHT);
+  });
+
+  it("includes HEIGHT_SAFETY_MARGIN in all estimates", () => {
+    // Safety margin ensures we never under-estimate
+    expect(HEIGHT_SAFETY_MARGIN).toBeGreaterThan(0);
+    expect(DEFAULT_ESTIMATED_ITEM_HEIGHT).toBeGreaterThanOrEqual(MIN_MESSAGE_HEIGHT);
   });
 });

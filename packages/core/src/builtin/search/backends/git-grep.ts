@@ -114,7 +114,7 @@ export class GitGrepBackend implements SearchBackend {
     );
 
     try {
-      await this.executeSearch(args, tracker);
+      await this.executeSearch(args, tracker, basePath);
     } catch (error) {
       // Handle specific error cases
       if (error instanceof GitGrepError) {
@@ -250,9 +250,10 @@ export class GitGrepBackend implements SearchBackend {
   /**
    * Execute git grep and stream parse output.
    */
-  private executeSearch(args: string[], tracker: GitGrepStateTracker): Promise<void> {
+  private executeSearch(args: string[], tracker: GitGrepStateTracker, cwd: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const child: ChildProcess = spawn("git", args, {
+        cwd,
         stdio: ["pipe", "pipe", "pipe"],
         shell: process.platform === "win32",
       });

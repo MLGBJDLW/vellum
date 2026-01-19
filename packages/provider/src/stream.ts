@@ -39,10 +39,11 @@ export interface ProviderTextDelta {
  * Provider-specific reasoning/thinking event formats
  */
 export interface ProviderReasoningDelta {
-  type: "thinking_delta" | "reasoning_delta" | "thinking";
+  type: "thinking_delta" | "reasoning_delta" | "thinking" | "reasoning_details";
   text?: string;
   thinking?: string;
   delta?: { thinking?: string };
+  reasoning_details?: Array<{ text?: string }>;
 }
 
 /**
@@ -125,6 +126,11 @@ export function normalizeReasoningDelta(
     text = delta.thinking;
   } else if (delta.delta?.thinking !== undefined) {
     text = delta.delta.thinking;
+  } else if (delta.reasoning_details) {
+    text = delta.reasoning_details
+      .map((detail) => detail.text?.trim())
+      .filter((detail): detail is string => Boolean(detail && detail.length > 0))
+      .join("\n");
   }
 
   if (text !== undefined && text.length > 0) {

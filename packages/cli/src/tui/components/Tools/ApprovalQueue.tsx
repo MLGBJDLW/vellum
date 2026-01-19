@@ -15,6 +15,7 @@ import { useCallback, useState } from "react";
 import type { ToolExecution } from "../../context/ToolsContext.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { truncateToDisplayWidth } from "../../utils/index.js";
 
 // =============================================================================
 // Types
@@ -54,16 +55,14 @@ const NUMBER_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 /**
  * Truncate tool name to fit display.
+ * Uses string-width for accurate CJK/Emoji handling.
  *
  * @param name - Tool name to truncate
- * @param maxLength - Maximum length (default: 30)
+ * @param maxLength - Maximum display width (default: 30)
  * @returns Truncated name
  */
 function truncateToolName(name: string, maxLength = 30): string {
-  if (name.length <= maxLength) {
-    return name;
-  }
-  return `${name.slice(0, maxLength - 1)}…`;
+  return truncateToDisplayWidth(name, maxLength);
 }
 
 /**

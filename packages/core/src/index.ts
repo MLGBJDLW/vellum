@@ -789,6 +789,8 @@ export {
   type ConsoleTransportOptions,
   FileTransport,
   type FileTransportOptions,
+  // TUI mode control for console suppression
+  isTuiModeActive,
   JsonTransport,
   type JsonTransportOptions,
   LOG_LEVEL_PRIORITY,
@@ -797,6 +799,7 @@ export {
   type LoggerOptions,
   type LogLevel,
   type LogTransport,
+  setTuiModeActive,
 } from "./logger/index.js";
 // Note: AgentLoop is now exported from ./agent/index.js above
 // The ./loop.js re-export is deprecated but kept for backward compatibility

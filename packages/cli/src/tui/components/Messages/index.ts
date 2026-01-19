@@ -10,3 +10,9 @@ export { MarkdownRenderer, type MarkdownRendererProps } from "./MarkdownRenderer
 export { MessageBubble, type MessageBubbleProps } from "./MessageBubble.js";
 export { MessageList, type MessageListProps } from "./MessageList.js";
 export { StreamingText, type StreamingTextProps } from "./StreamingText.js";
+export {
+  CompactThinkingIndicator,
+  type CompactThinkingIndicatorProps,
+  ThinkingBlock,
+  type ThinkingBlockProps,
+} from "./ThinkingBlock.js";

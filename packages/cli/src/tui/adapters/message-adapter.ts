@@ -62,6 +62,20 @@ function extractTextContent(parts: readonly SessionMessagePart[]): string {
 }
 
 /**
+ * Extract reasoning content from session message parts
+ *
+ * @param parts - Array of session message parts
+ * @returns Combined reasoning content or undefined
+ */
+function extractReasoningContent(parts: readonly SessionMessagePart[]): string | undefined {
+  const reasoningParts = parts.filter((part) => part.type === "reasoning");
+  if (reasoningParts.length === 0) {
+    return undefined;
+  }
+  return reasoningParts.map((part) => part.text).join("");
+}
+
+/**
  * Extract tool calls from session message parts
  *
  * @param parts - Array of session message parts
@@ -115,6 +129,7 @@ function extractToolResults(parts: readonly SessionMessagePart[]): readonly Tool
  */
 export function toUIMessage(sessionMessage: SessionMessage): Message {
   const textContent = extractTextContent(sessionMessage.parts);
+  const reasoningContent = extractReasoningContent(sessionMessage.parts);
   const toolCalls = extractToolCalls(sessionMessage.parts);
   const toolResults = extractToolResults(sessionMessage.parts);
 
@@ -136,6 +151,7 @@ export function toUIMessage(sessionMessage: SessionMessage): Message {
     timestamp: new Date(sessionMessage.metadata.createdAt),
     isStreaming: false,
     toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
+    ...(reasoningContent ? { thinking: reasoningContent } : {}),
   };
 }
 
@@ -173,6 +189,13 @@ export function toUIMessages(sessionMessages: readonly SessionMessage[]): readon
  */
 export function toSessionMessage(uiMessage: Message): SessionMessage {
   const parts: SessionMessagePart[] = [];
+
+  if (uiMessage.thinking) {
+    parts.push({
+      type: "reasoning",
+      text: uiMessage.thinking,
+    });
+  }
 
   // Add text content if present
   if (uiMessage.content) {

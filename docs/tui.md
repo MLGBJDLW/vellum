@@ -6,6 +6,31 @@
 
 The Vellum TUI is a React-based terminal interface built with [Ink](https://github.com/vadimdemedes/ink). It provides a modular, themeable, and accessible interface for interacting with the AI agent.
 
+## Troubleshooting: Windows VS Code terminal flicker/tearing (Windows + VS Code 集成终端闪屏/撕裂)
+
+### Symptoms (症状)
+
+- On Windows, when running Vellum in VS Code’s Integrated Terminal (TTY), the screen may **flicker** or **tear** during rapid UI updates.
+
+### Fix (解决)
+
+- Vellum now enables **DEC 2026 Synchronized Output** (buffered stdout) by default in supported TTY terminals. In most cases, this removes flicker/tearing **without requiring any VS Code setting changes**.
+
+### PowerShell/ConPTY 默认策略
+
+- 在 PowerShell + ConPTY 环境下，Vellum **默认关闭** alternate buffer，以避免消息满屏时的清屏闪烁问题。
+- 如需强制开启，可在 `~/.vellum/settings.json` 中设置：
+  - `ui.alternateBuffer: true`
+
+### If the issue still happens (若仍有问题)
+
+- As a temporary workaround, you can disable ConPTY in VS Code:
+  - `terminal.integrated.windowsEnableConpty=false`
+
+### Trade-offs (副作用)
+
+- Disabling ConPTY can reduce ANSI/colour capabilities in the integrated terminal (e.g. truecolor / 256-color may degrade).
+
 ## Table of Contents
 
 - [Architecture](#architecture)

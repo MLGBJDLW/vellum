@@ -55,6 +55,13 @@ export class MoonshotProvider extends OpenAICompatibleProvider {
   }
 
   /**
+   * Enable reasoning content extraction for Kimi thinking models.
+   */
+  protected override supportsReasoningContent(): boolean {
+    return true;
+  }
+
+  /**
    * Get the default model for Moonshot
    *
    * @returns Default model ID

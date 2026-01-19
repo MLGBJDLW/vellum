@@ -89,6 +89,10 @@ export interface Message {
   readonly isContinuation?: boolean;
   /** Thinking/reasoning content (for models with extended thinking) */
   readonly thinking?: string;
+  /** Duration of thinking in milliseconds (for extended thinking models) */
+  readonly thinkingDuration?: number;
+  /** Whether thinking phase is complete (false during streaming) */
+  readonly isThinkingComplete?: boolean;
 }
 
 /**

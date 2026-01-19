@@ -13,6 +13,7 @@ import type React from "react";
 import { useMemo } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace.js";
 import { useTheme } from "../../theme/index.js";
+import { truncateToDisplayWidth } from "../../utils/index.js";
 
 // =============================================================================
 // Types
@@ -48,11 +49,8 @@ export function WorkspaceIndicator({ maxWidth = 20 }: WorkspaceIndicatorProps): 
   const icons = getIcons();
 
   const displayName = useMemo(() => {
-    if (name.length <= maxWidth) {
-      return name;
-    }
-    // Truncate with ellipsis
-    return `${name.slice(0, maxWidth - 1)}…`;
+    // Truncate with ellipsis using string-width for CJK/Emoji handling
+    return truncateToDisplayWidth(name, maxWidth);
   }, [name, maxWidth]);
 
   return (

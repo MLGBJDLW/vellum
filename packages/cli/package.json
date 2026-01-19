@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsup src/index.tsx --format esm",
     "dev": "tsx src/index.tsx --banner",
+    "dev:blessed": "tsx src/tui-blessed/test.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
@@ -30,9 +31,13 @@
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "gray-matter": "^4.0.3",
-    "ink": "^6.6.0",
+    "ink": "npm:@jrichman/ink@6.4.7",
     "ink-gradient": "^3.0.0",
+    "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",
+    "strip-ansi": "^7.1.0",
+    "wrap-ansi": "9.0.2",
+    "neo-blessed": "^0.1.23",
     "ora": "^8.1.1",
     "react": "^19.2.3",
     "string-width": "^8.1.0",
@@ -40,6 +45,7 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@types/blessed": "^0.1.25",
     "@types/node": "^22.10.1",
     "@types/react": "^19.0.0",
     "ink-testing-library": "^4.0.0",

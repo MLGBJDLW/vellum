@@ -10,7 +10,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
+import { isConptyTerminal } from "../utils/detectTerminal.js";
 import { isLocaleSupported, type LocaleCode } from "./language-config.js";
 
 /**
@@ -278,10 +278,21 @@ export function setBannerSeen(seen: boolean): void {
  * const altBufferEnabled = getAlternateBufferEnabled();
  * ```
  */
-export function getAlternateBufferEnabled(): boolean {
+export function getAlternateBufferSetting(): boolean | undefined {
   const settings = readSettings();
-  // Default to true if not set
-  return settings?.ui?.alternateBuffer ?? true;
+  return settings?.ui?.alternateBuffer;
+}
+
+export function getDefaultAlternateBufferEnabled(): boolean {
+  return !isConptyTerminal();
+}
+
+export function getAlternateBufferEnabled(): boolean {
+  const explicit = getAlternateBufferSetting();
+  if (typeof explicit === "boolean") {
+    return explicit;
+  }
+  return getDefaultAlternateBufferEnabled();
 }
 
 /**
@@ -318,7 +329,7 @@ export function setAlternateBufferEnabled(enabled: boolean): void {
 export function getUISettings(): UISettings {
   const settings = readSettings();
   return {
-    alternateBuffer: settings?.ui?.alternateBuffer ?? true,
+    alternateBuffer: settings?.ui?.alternateBuffer ?? getDefaultAlternateBufferEnabled(),
   };
 }
 

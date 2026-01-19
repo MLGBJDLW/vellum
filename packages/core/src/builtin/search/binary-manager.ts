@@ -77,6 +77,7 @@ async function extractVersion(binaryPath: string): Promise<string | null> {
     const child = spawn(binaryPath, ["--version"], {
       stdio: ["pipe", "pipe", "pipe"],
       timeout: 5000,
+      shell: process.platform === "win32",
     });
 
     let stdout = "";
@@ -131,6 +132,7 @@ async function detectBinaryInPath(binaryName: string): Promise<DetectionResult> 
     const child = spawn(findCommand, [binaryName], {
       stdio: ["pipe", "pipe", "pipe"],
       timeout: 5000,
+      shell: process.platform === "win32",
     });
 
     let stdout = "";

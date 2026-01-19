@@ -7,10 +7,13 @@
  * Uses global AnimationContext for centralized timing to prevent
  * flickering from multiple independent timers.
  *
+ * Supports both custom animation frames and ink-spinner types.
+ *
  * @module tui/components/common/Spinner
  */
 
 import { Text } from "ink";
+import InkSpinner from "ink-spinner";
 import type React from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import { useTheme } from "../../theme/index.js";
@@ -20,18 +23,108 @@ import { useTheme } from "../../theme/index.js";
 // =============================================================================
 
 /**
+ * Available ink-spinner type names.
+ * These are the built-in spinner types from cli-spinners.
+ */
+export type SpinnerType =
+  | "dots"
+  | "dots2"
+  | "dots3"
+  | "dots4"
+  | "dots5"
+  | "dots6"
+  | "dots7"
+  | "dots8"
+  | "dots9"
+  | "dots10"
+  | "dots11"
+  | "dots12"
+  | "line"
+  | "line2"
+  | "pipe"
+  | "simpleDots"
+  | "simpleDotsScrolling"
+  | "star"
+  | "star2"
+  | "flip"
+  | "hamburger"
+  | "growVertical"
+  | "growHorizontal"
+  | "balloon"
+  | "balloon2"
+  | "noise"
+  | "bounce"
+  | "boxBounce"
+  | "boxBounce2"
+  | "triangle"
+  | "arc"
+  | "circle"
+  | "squareCorners"
+  | "circleQuarters"
+  | "circleHalves"
+  | "squish"
+  | "toggle"
+  | "toggle2"
+  | "toggle3"
+  | "toggle4"
+  | "toggle5"
+  | "toggle6"
+  | "toggle7"
+  | "toggle8"
+  | "toggle9"
+  | "toggle10"
+  | "toggle11"
+  | "toggle12"
+  | "toggle13"
+  | "arrow"
+  | "arrow2"
+  | "arrow3"
+  | "bouncingBar"
+  | "bouncingBall"
+  | "smiley"
+  | "monkey"
+  | "hearts"
+  | "clock"
+  | "earth"
+  | "moon"
+  | "runner"
+  | "pong"
+  | "shark"
+  | "dqpb"
+  | "weather"
+  | "christmas"
+  | "grenade"
+  | "point"
+  | "layer"
+  | "betaWave";
+
+/**
  * Props for the Spinner component.
  */
 export interface SpinnerProps {
   /** Color of the spinner (default: from theme or "cyan") */
   readonly color?: string;
-  /** Animation frames (default: braille spinner) */
+  /**
+   * Animation frames (default: braille spinner)
+   * Ignored when `type` is specified.
+   */
   readonly frames?: readonly string[];
   /**
    * Animation interval in milliseconds
    * @deprecated No longer used - interval is controlled globally by AnimationContext
    */
   readonly interval?: number;
+  /**
+   * Use ink-spinner with specified type.
+   * When set, this takes precedence over `frames`.
+   * @example "dots", "line", "arc", "bounce"
+   */
+  readonly type?: SpinnerType;
+  /**
+   * Whether to use ink-spinner (default: false for backward compatibility).
+   * Set to true to use ink-spinner even without specifying a type.
+   */
+  readonly useInkSpinner?: boolean;
 }
 
 /**
@@ -92,10 +185,11 @@ const DEFAULT_INTERVAL_MS = 120;
  * - Adjustable speed
  * - Custom colors
  * - Multiple built-in styles
+ * - Support for ink-spinner types
  *
  * @example
  * ```tsx
- * // Basic usage
+ * // Basic usage (custom frames)
  * <Spinner />
  *
  * // Custom color
@@ -104,8 +198,11 @@ const DEFAULT_INTERVAL_MS = 120;
  * // Different style
  * <Spinner frames={SPINNER_STYLES.dots} />
  *
- * // Slower animation
- * <Spinner interval={150} />
+ * // Using ink-spinner type
+ * <Spinner type="dots" />
+ *
+ * // Using ink-spinner with explicit flag
+ * <Spinner useInkSpinner type="arc" color="green" />
  * ```
  */
 export function Spinner({
@@ -113,15 +210,26 @@ export function Spinner({
   frames = SPINNER_FRAMES,
   // interval prop kept for backward compatibility but no longer used
   interval: _interval = DEFAULT_INTERVAL_MS,
+  type,
+  useInkSpinner = false,
 }: SpinnerProps): React.JSX.Element {
   const { theme } = useTheme();
 
-  // Use global animation context instead of local timer
-  // This prevents flickering from multiple independent timers
+  // Use global animation context for custom frames
   const frameIndex = useAnimationFrame(frames);
 
   const spinnerColor = color ?? theme.colors.info;
 
+  // Use ink-spinner if type is specified or useInkSpinner is true
+  if (type || useInkSpinner) {
+    return (
+      <Text color={spinnerColor}>
+        <InkSpinner type={type ?? "dots"} />
+      </Text>
+    );
+  }
+
+  // Default: use custom frames with AnimationContext
   return <Text color={spinnerColor}>{frames[frameIndex]}</Text>;
 }
 

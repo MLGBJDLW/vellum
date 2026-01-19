@@ -78,6 +78,8 @@ export const MOONSHOT_MODELS: ModelInfo[] = [
     supportsPromptCache: false,
     inputPrice: 0.6,
     outputPrice: 2.5,
+    reasoningEfforts: ["low", "medium", "high"],
+    defaultReasoningEffort: "medium",
     deprecated: false,
     description: "Moonshot's Kimi K2 reasoning model",
   },

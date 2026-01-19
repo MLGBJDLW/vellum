@@ -621,7 +621,7 @@ export class GoogleProvider implements Provider {
         return undefined;
       }
 
-      return { thinkingBudget };
+      return { thinkingBudget, includeThoughts: true };
     }
 
     return undefined;

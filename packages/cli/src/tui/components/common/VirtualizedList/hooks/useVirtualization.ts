@@ -26,6 +26,12 @@ export interface UseVirtualizationProps {
 }
 
 /**
+ * Minimum viewport dimensions to prevent degenerate cases.
+ */
+export const MIN_VIEWPORT_HEIGHT = 8;
+export const MIN_VIEWPORT_WIDTH = 20;
+
+/**
  * Return type for the useVirtualization hook.
  */
 export interface UseVirtualizationReturn {
@@ -49,6 +55,8 @@ export interface UseVirtualizationReturn {
   readonly containerRef: React.RefObject<DOMElement | null>;
   /** Measured container height */
   readonly measuredContainerHeight: number;
+  /** True if the last item exceeds viewport height (needs clipping) */
+  readonly isOversize: boolean;
 }
 
 /**
@@ -86,9 +94,12 @@ function getEstimatedHeight(
 export function useVirtualization(props: UseVirtualizationProps): UseVirtualizationReturn {
   const { dataLength, estimatedItemHeight, scrollTop, containerHeight } = props;
 
+  // Apply minimum viewport clamping to prevent degenerate cases
+  const safeContainerHeight = Math.max(MIN_VIEWPORT_HEIGHT, containerHeight);
+
   // Container ref for measuring viewport
   const containerRef = useRef<DOMElement | null>(null);
-  const [measuredContainerHeight, setMeasuredContainerHeight] = useState(containerHeight);
+  const [measuredContainerHeight, setMeasuredContainerHeight] = useState(safeContainerHeight);
 
   // Item refs for measurement
   const itemRefs = useRef<Array<DOMElement | null>>([]);
@@ -135,12 +146,65 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
     });
   }, [dataLength, estimatedItemHeight]);
 
-  // Calculate visible range
-  const startIndex = Math.max(0, findLastIndex(offsets, (offset) => offset <= scrollTop) - 1);
+  // Calculate visible range with OVERFLOW GUARD
+  // This ensures we NEVER render more items than fit in the viewport
+  const rawStartIndex = Math.max(0, findLastIndex(offsets, (offset) => offset <= scrollTop) - 1);
 
-  const endIndexOffset = offsets.findIndex((offset) => offset > scrollTop + containerHeight);
-  const endIndex =
+  const endIndexOffset = offsets.findIndex((offset) => offset > scrollTop + safeContainerHeight);
+  const rawEndIndex =
     endIndexOffset === -1 ? dataLength - 1 : Math.min(dataLength - 1, endIndexOffset);
+
+  // FRAME HEIGHT GUARD: Calculate safe render range to prevent overflow
+  // Simplified version: no isOversize (ClippedMessage doesn't exist yet)
+  // Always show at least MIN_ITEMS_TO_SHOW to prevent content disappearing
+  const { startIndex, endIndex } = useMemo(() => {
+    // CRITICAL FIX: Always render at least one item if data exists
+    // Previous logic returned empty range causing blank screen
+    if (dataLength === 0) {
+      return { startIndex: 0, endIndex: -1 };
+    }
+
+    // Ensure we have valid indices even if raw calculation failed
+    const safeRawEndIndex = rawEndIndex < 0 ? dataLength - 1 : rawEndIndex;
+    const safeRawStartIndex = Math.min(rawStartIndex, safeRawEndIndex);
+
+    // Safety: ensure we have valid container height
+    const effectiveContainerHeight = Math.max(MIN_VIEWPORT_HEIGHT, safeContainerHeight);
+
+    // If raw range is small enough, just use it directly (don't over-optimize)
+    const rawCount = safeRawEndIndex - safeRawStartIndex + 1;
+    if (rawCount <= 3) {
+      return { startIndex: safeRawStartIndex, endIndex: safeRawEndIndex };
+    }
+
+    // For larger ranges, do soft trimming but always keep at least 2 items
+    let totalRenderedHeight = 0;
+    let safeStartIndex = safeRawEndIndex;
+    const MIN_ITEMS_TO_SHOW = 2;
+
+    for (let i = safeRawEndIndex; i >= safeRawStartIndex; i--) {
+      const itemHeight = heights[i] ?? getEstimatedHeight(estimatedItemHeight, i);
+      // Use actual height, not capped - let Ink handle overflow
+
+      const itemCount = safeRawEndIndex - safeStartIndex + 1;
+      if (
+        totalRenderedHeight + itemHeight > effectiveContainerHeight &&
+        itemCount >= MIN_ITEMS_TO_SHOW
+      ) {
+        // Would overflow AND we have minimum items - stop
+        break;
+      }
+
+      totalRenderedHeight += itemHeight;
+      safeStartIndex = i;
+    }
+
+    return { startIndex: safeStartIndex, endIndex: safeRawEndIndex };
+  }, [rawStartIndex, rawEndIndex, heights, safeContainerHeight, estimatedItemHeight, dataLength]);
+
+  // isOversize is kept for API compatibility but always false
+  // (ClippedMessage doesn't exist yet, so we can't handle oversize items)
+  const isOversize = false;
 
   // Calculate spacer heights
   const topSpacerHeight = offsets[startIndex] ?? 0;
@@ -192,5 +256,6 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
     itemRefCallback,
     containerRef,
     measuredContainerHeight,
+    isOversize,
   };
 }

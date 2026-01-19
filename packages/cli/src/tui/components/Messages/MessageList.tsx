@@ -23,21 +23,24 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
 import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
+import { useAnimatedScrollbar } from "../../hooks/useAnimatedScrollbar.js";
 import { useKeyboardScroll } from "../../hooks/useKeyboardScroll.js";
 import { type ModeControllerConfig, useModeController } from "../../hooks/useModeController.js";
 import { useScrollController } from "../../hooks/useScrollController.js";
-import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { isEndKey, isHomeKey } from "../../types/ink-extended.js";
 import { estimateMessageHeight } from "../../utils/heightEstimator.js";
 import { MaxSizedBox } from "../common/MaxSizedBox.js";
 import { NewMessagesBadge } from "../common/NewMessagesBadge.js";
 import { ScrollIndicator } from "../common/ScrollIndicator.js";
+import { StreamingIndicator } from "../common/StreamingIndicator.js";
 import {
   SCROLL_TO_ITEM_END,
   VirtualizedList,
   type VirtualizedListRef,
 } from "../common/VirtualizedList/index.js";
 import { MarkdownRenderer } from "./MarkdownRenderer.js";
+import { ThinkingBlock } from "./ThinkingBlock.js";
 
 // =============================================================================
 // Constants
@@ -90,6 +93,18 @@ export interface MessageListProps {
    * @default true (active when not specified for backward compatibility)
    */
   readonly isFocused?: boolean;
+  /**
+   * Which keys are allowed for scroll control.
+   * - "all": arrows, PageUp/PageDown, Home/End (default)
+   * - "page": only PageUp/PageDown to avoid stealing input navigation
+   */
+  readonly scrollKeyMode?: "all" | "page";
+  /**
+   * When true, any non-scroll key while manually scrolled jumps back to latest.
+   * This keeps auto-follow "sticky" unless the user is actively scrolling.
+   * @default true
+   */
+  readonly forceFollowOnInput?: boolean;
   /**
    * Render mode configuration override.
    * Controls thresholds for switching between static/windowed/virtualized modes.
@@ -253,16 +268,14 @@ const InlineToolCall = memo(function InlineToolCall({
  * ThinkingIndicator component.
  * Shows an animated spinner with "Thinking..." text while the agent is processing
  * and before any streaming content has arrived.
+ *
+ * Uses StreamingIndicator for consistent styling across all streaming phases.
  */
 const ThinkingIndicator = memo(function ThinkingIndicator() {
-  const { t } = useTUITranslation();
-  const frameIndex = useAnimationFrame(SPINNER_FRAMES);
-
+  // Use StreamingIndicator for consistent styling
   return (
     <Box marginBottom={1} paddingX={1}>
-      <Text color="cyan">
-        {SPINNER_FRAMES[frameIndex]} {t("messages.thinking")}
-      </Text>
+      <StreamingIndicator phase="thinking" showPhaseTime narrow />
     </Box>
   );
 });
@@ -338,7 +351,7 @@ const MessageItem = memo(function MessageItem({
   roleColor,
   mutedColor,
   accentColor,
-  thinkingColor,
+  thinkingColor: _thinkingColor, // ThinkingBlock handles its own theming
   successColor,
   errorColor,
   showToolCalls = true,
@@ -373,16 +386,14 @@ const MessageItem = memo(function MessageItem({
 
       {/* Thinking/reasoning content (if present) - displayed before main content */}
       {hasThinking && (
-        <Box marginLeft={2} marginTop={0} flexDirection="column">
-          <Text color={thinkingColor} dimColor italic>
-            {getIcons().thinking} Thinking...
-          </Text>
-          <Box marginLeft={2}>
-            <Text color={thinkingColor} dimColor>
-              {message.thinking}
-            </Text>
-          </Box>
-        </Box>
+        <ThinkingBlock
+          content={message.thinking ?? ""}
+          durationMs={message.thinkingDuration}
+          isStreaming={message.isStreaming && !message.isThinkingComplete}
+          initialCollapsed={!message.isStreaming}
+          persistenceId={`thinking-${message.id}`}
+          showCharCount
+        />
       )}
 
       {/* Message content */}
@@ -474,6 +485,8 @@ const MessageList = memo(function MessageList({
   useVirtualizedList = false,
   estimatedItemHeight = 4,
   isFocused,
+  scrollKeyMode = "all",
+  forceFollowOnInput = true,
   modeConfig,
   adaptive = true,
   useAltBuffer = false,
@@ -481,10 +494,20 @@ const MessageList = memo(function MessageList({
 }: MessageListProps) {
   const { theme } = useTheme();
 
+  // Determine if we should show the thinking indicator:
+  // - Agent is loading (processing/waiting)
+  // - AND no pending content has arrived yet
+  // NOTE: Hoisted here to avoid TDZ error with scrollViewportHeight calculation
+  const hasPendingContent = pendingMessage?.content && pendingMessage.content.length > 0;
+  const showThinkingIndicator = isLoading && !hasPendingContent;
+
   // Get viewport dimensions for adaptive rendering
+  // inputReserve: 5 = minHeight (3) + border (2) for multiline input
+  // Reduced from 7 to give more space to content viewport
   const { availableHeight, width } = useAlternateBuffer({
     withViewport: true,
     enabled: useAltBuffer,
+    inputReserve: 5,
   });
 
   // Calculate total estimated content height for mode decisions
@@ -511,7 +534,6 @@ const MessageList = memo(function MessageList({
     }
     return ids;
   }, [messages]);
-  const hasToolGroups = toolGroupCallIds.size > 0;
   const shouldRenderInlineToolCalls = useCallback(
     (message: Message) => {
       if (message.role !== "assistant") {
@@ -533,37 +555,65 @@ const MessageList = memo(function MessageList({
   // Ref for VirtualizedList imperative control
   const virtualizedListRef = useRef<VirtualizedListRef<Message>>(null);
 
+  // Guard against scroll controller <-> list feedback loops
+  const expectedScrollTopRef = useRef<number | null>(null);
+  const isApplyingControllerScrollRef = useRef(false);
+  const lastScrollMetricsRef = useRef({
+    scrollHeight: 0,
+    innerHeight: 0,
+    offsetFromBottom: 0,
+  });
+
   // Normalize maxHeight - treat 0, undefined, null as "no max height"
   const effectiveMaxHeight = maxHeight && maxHeight > 0 ? maxHeight : undefined;
 
+  // Determine if virtualized rendering should be used
+  // Either explicitly requested OR adaptive mode recommends it
+  const useVirtualizedListInternal = useVirtualizedList || (adaptive && mode === "virtualized");
+
   // Compute max height based on adaptive mode or explicit prop
-  // When adaptive=true, use windowSize from mode controller for windowed/virtualized modes
-  // When adaptive=false, fall back to legacy maxHeight behavior
+  // When adaptive=true, use windowSize from mode controller for windowed mode only.
+  // When virtualized, let the layout determine the height to avoid premature truncation.
   const computedMaxHeight = useMemo(() => {
     if (effectiveMaxHeight !== undefined) {
       // Explicit maxHeight prop takes precedence
       return effectiveMaxHeight;
     }
-    if (adaptive && mode !== "static") {
+    if (useVirtualizedListInternal) {
+      // In non-alternate-buffer mode, the root layout does not have a fixed height.
+      // VirtualizedList relies on a parent with a concrete height for height="100%" to work.
+      // If we leave this undefined, the list container can grow with content and push
+      // the input/footer out of view. Using the viewport-derived availableHeight keeps
+      // the message area clipped and preserves stick-to-bottom behavior.
+      return availableHeight;
+    }
+    if (!adaptive) {
+      return undefined;
+    }
+    if (mode !== "static") {
       // Adaptive mode: use computed windowSize
       return windowSize;
     }
     return undefined;
-  }, [effectiveMaxHeight, adaptive, mode, windowSize]);
+  }, [effectiveMaxHeight, useVirtualizedListInternal, availableHeight, adaptive, mode, windowSize]);
+
+  const thinkingIndicatorHeight = showThinkingIndicator ? 2 : 0;
+
+  // Scroll viewport height (reserve space for inline indicators when needed)
+  // Minimum of 8 lines to prevent degenerate rendering cases
+  const MIN_SCROLL_VIEWPORT = 8;
+  const scrollViewportHeight = useMemo(() => {
+    const base = computedMaxHeight ?? availableHeight ?? 20;
+    return Math.max(MIN_SCROLL_VIEWPORT, base - thinkingIndicatorHeight);
+  }, [computedMaxHeight, availableHeight, thinkingIndicatorHeight]);
 
   // Determine if we're using optimized Static rendering
   // Static mode when: adaptive mode says static OR adaptive is disabled AND no explicit maxHeight
-  // NOTE: Static rendering does not support windowed scrolling; fall back when maxHeight is set
-  //       OR when tool groups are present (requires dynamic rendering).
+  // NOTE: Static rendering does not support windowed scrolling; fall back when maxHeight is set.
+  // T-VIRTUAL-SCROLL: Removed hasToolGroups check - tool groups work fine with Static rendering
+  // as they are processed separately during message rendering.
   const useStaticRendering =
-    historyMessages !== undefined &&
-    !computedMaxHeight &&
-    !hasToolGroups &&
-    (mode === "static" || !adaptive);
-
-  // Determine if virtualized rendering should be used
-  // Either explicitly requested OR adaptive mode recommends it
-  const useVirtualizedListInternal = useVirtualizedList || (adaptive && mode === "virtualized");
+    historyMessages !== undefined && !computedMaxHeight && (mode === "static" || !adaptive);
 
   // ==========================================================================
   // New Scroll Controller (enableScroll=true)
@@ -576,11 +626,15 @@ const MessageList = memo(function MessageList({
 
   // Scroll controller for follow/manual modes
   const [scrollState, scrollActions] = useScrollController({
-    viewportHeight: computedMaxHeight ?? availableHeight ?? 20,
+    viewportHeight: scrollViewportHeight,
     initialTotalHeight: totalContentHeight,
     scrollStep: 3,
     autoFollowOnBottom: true,
   });
+
+  // Show badge when user has scrolled up and new messages arrived
+  const showNewMessagesBadge =
+    enableScroll && scrollState.mode === "manual" && scrollState.newMessageCount > 0;
 
   // Update scroll controller when content height changes
   useEffect(() => {
@@ -591,9 +645,8 @@ const MessageList = memo(function MessageList({
   // Update scroll controller when viewport height changes
   useEffect(() => {
     if (!enableScroll) return;
-    const viewportH = computedMaxHeight ?? availableHeight ?? 20;
-    scrollActions.setViewportHeight(viewportH);
-  }, [enableScroll, computedMaxHeight, availableHeight, scrollActions]);
+    scrollActions.setViewportHeight(scrollViewportHeight);
+  }, [enableScroll, scrollViewportHeight, scrollActions]);
 
   // Notify new messages when in manual mode
   useEffect(() => {
@@ -614,6 +667,18 @@ const MessageList = memo(function MessageList({
     enabled: enableScroll && isFocused !== false,
     vimKeys: true,
   });
+
+  // Animated scrollbar colors for visual feedback during scroll activity
+  // Provides fade-in/fade-out effect when scrolling occurs
+  const { scrollbarColor: animatedThumbColor, trackColor: animatedTrackColor } =
+    useAnimatedScrollbar(isFocused !== false, (delta) => {
+      // Use scrollUp/scrollDown since scrollBy doesn't exist on ViewportScrollActions
+      if (delta > 0) {
+        scrollActions.scrollDown(Math.abs(delta));
+      } else if (delta < 0) {
+        scrollActions.scrollUp(Math.abs(delta));
+      }
+    });
 
   // Debug: log rendering mode changes (only in development)
   useEffect(() => {
@@ -694,11 +759,16 @@ const MessageList = memo(function MessageList({
 
   // Scroll to bottom helper
   const scrollToBottom = useCallback(() => {
+    if (useVirtualizedListInternal) {
+      virtualizedListRef.current?.scrollToEnd();
+      setUserScrolledUp(false);
+      return;
+    }
     if (computedMaxHeight && messages.length > computedMaxHeight) {
       setScrollOffset(messages.length - computedMaxHeight);
     }
     setUserScrolledUp(false);
-  }, [messages.length, computedMaxHeight]);
+  }, [useVirtualizedListInternal, messages.length, computedMaxHeight]);
 
   // Scroll up helper
   const scrollUp = useCallback((amount = 1) => {
@@ -727,7 +797,7 @@ const MessageList = memo(function MessageList({
   // Helper: Handle virtualized list keyboard navigation
   const handleVirtualizedNavigation = useCallback(
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex keyboard navigation with many key combinations
-    (key: Key, list: VirtualizedListRef<Message>): boolean => {
+    (input: string, key: Key, list: VirtualizedListRef<Message>): boolean => {
       const scrollState = list.getScrollState();
       if (scrollState.scrollHeight <= scrollState.innerHeight) {
         return false;
@@ -735,6 +805,29 @@ const MessageList = memo(function MessageList({
 
       const pageSize = Math.max(1, Math.floor(scrollState.innerHeight / 2));
       const lineStep = 1;
+
+      if (scrollKeyMode === "page") {
+        if (key.pageUp) {
+          list.scrollBy(-pageSize);
+          setUserScrolledUp(true);
+          return true;
+        }
+
+        if (key.pageDown) {
+          const reachesBottom =
+            scrollState.scrollTop + pageSize >=
+            scrollState.scrollHeight - scrollState.innerHeight - 1;
+          if (reachesBottom) {
+            list.scrollToEnd();
+            setUserScrolledUp(false);
+          } else {
+            list.scrollBy(pageSize);
+          }
+          return true;
+        }
+
+        return false;
+      }
 
       if (key.pageUp) {
         list.scrollBy(-pageSize);
@@ -774,13 +867,13 @@ const MessageList = memo(function MessageList({
         return true;
       }
 
-      if (key.home) {
+      if (isHomeKey(input)) {
         list.scrollTo(0);
         setUserScrolledUp(true);
         return true;
       }
 
-      if (key.end) {
+      if (isEndKey(input)) {
         list.scrollToEnd();
         setUserScrolledUp(false);
         return true;
@@ -800,7 +893,64 @@ const MessageList = memo(function MessageList({
 
       return false;
     },
-    []
+    [scrollKeyMode]
+  );
+
+  // Helper: Handle page-only scroll mode for direct navigation
+  const handleDirectPageScroll = useCallback(
+    (key: Key, pageStep: number): boolean => {
+      if (key.pageUp) {
+        scrollUp(pageStep);
+        return true;
+      }
+      if (key.pageDown) {
+        scrollDown(pageStep);
+        return true;
+      }
+      return false;
+    },
+    [scrollUp, scrollDown]
+  );
+
+  // Helper: Handle arrow key navigation for direct mode
+  const handleDirectArrowScroll = useCallback(
+    (key: Key, pageStep: number): boolean => {
+      if (key.pageUp) {
+        scrollUp(pageStep);
+        return true;
+      }
+      if (key.pageDown) {
+        scrollDown(pageStep);
+        return true;
+      }
+      if (key.upArrow && !key.meta) {
+        scrollUp(1);
+        return true;
+      }
+      if (key.downArrow && !key.meta) {
+        scrollDown(1);
+        return true;
+      }
+      return false;
+    },
+    [scrollUp, scrollDown]
+  );
+
+  // Helper: Handle meta key combinations for direct navigation
+  const handleDirectMetaScroll = useCallback(
+    (key: Key): boolean => {
+      if (key.meta && key.upArrow) {
+        setScrollOffset(0);
+        setUserScrolledUp(true);
+        return true;
+      }
+      if (key.meta && key.downArrow) {
+        scrollToBottom();
+        return true;
+      }
+      return false;
+    },
+    [scrollToBottom]
   );
 
   // Helper: Handle direct (non-virtualized) keyboard navigation
@@ -810,57 +960,102 @@ const MessageList = memo(function MessageList({
         return false;
       }
 
-      if (key.pageUp) {
-        scrollUp(Math.floor(computedMaxHeight / 2));
-        return true;
+      const pageStep = Math.max(1, Math.floor(computedMaxHeight / 2));
+
+      // Page-only mode: only handle PageUp/PageDown
+      if (scrollKeyMode === "page") {
+        return handleDirectPageScroll(key, pageStep);
       }
 
-      if (key.pageDown) {
-        scrollDown(Math.floor(computedMaxHeight / 2));
+      // Full mode: handle arrows first, then meta combinations
+      if (handleDirectArrowScroll(key, pageStep)) {
         return true;
       }
-
-      if (key.upArrow) {
-        scrollUp(1);
-        return true;
-      }
-
-      if (key.downArrow) {
-        scrollDown(1);
-        return true;
-      }
-
-      if (key.meta && key.upArrow) {
-        setScrollOffset(0);
-        setUserScrolledUp(true);
-        return true;
-      }
-
-      if (key.meta && key.downArrow) {
-        scrollToBottom();
-        return true;
-      }
-
-      return false;
+      return handleDirectMetaScroll(key);
     },
-    [computedMaxHeight, messages.length, scrollUp, scrollDown, scrollToBottom]
+    [
+      computedMaxHeight,
+      messages.length,
+      scrollKeyMode,
+      handleDirectPageScroll,
+      handleDirectArrowScroll,
+      handleDirectMetaScroll,
+    ]
+  );
+
+  // Helper: Detect if key is a scroll navigation key
+  const isScrollNavigationKey = useCallback(
+    (char: string, key: Key): boolean => {
+      if (scrollKeyMode === "page") {
+        return key.pageUp || key.pageDown;
+      }
+      return (
+        key.pageUp ||
+        key.pageDown ||
+        key.upArrow ||
+        key.downArrow ||
+        isHomeKey(char) ||
+        isEndKey(char) ||
+        (key.meta && key.upArrow) ||
+        (key.meta && key.downArrow)
+      );
+    },
+    [scrollKeyMode]
+  );
+
+  // Helper: Handle input when using scroll controller with virtualized list
+  const handleScrollControllerInput = useCallback(
+    (char: string, key: Key): boolean => {
+      if (isScrollNavigationKey(char, key)) {
+        return true; // Key handled by scroll controller
+      }
+      if (forceFollowOnInput && scrollState.mode === "manual") {
+        scrollActions.scrollToBottom();
+      }
+      return true;
+    },
+    [isScrollNavigationKey, forceFollowOnInput, scrollState.mode, scrollActions]
   );
 
   // Handle keyboard input for scrolling
   // isActive defaults to true when isFocused is undefined (backward compatible)
   useInput(
     useCallback(
-      (_char, key) => {
+      (char, key) => {
+        // Handle scroll controller mode separately
+        if (enableScroll && useVirtualizedListInternal) {
+          handleScrollControllerInput(char, key);
+          return;
+        }
+
+        // Force follow on non-scroll input when user scrolled up
+        const isScrollKey = isScrollNavigationKey(char, key);
+        if (forceFollowOnInput && userScrolledUp && !isScrollKey) {
+          scrollToBottom();
+          return;
+        }
+
+        // Delegate to appropriate navigation handler
         if (useVirtualizedListInternal) {
           const list = virtualizedListRef.current;
           if (list) {
-            handleVirtualizedNavigation(key, list);
+            handleVirtualizedNavigation(char, key, list);
           }
         } else {
           handleDirectNavigation(key);
         }
       },
-      [useVirtualizedListInternal, handleVirtualizedNavigation, handleDirectNavigation]
+      [
+        enableScroll,
+        useVirtualizedListInternal,
+        handleScrollControllerInput,
+        isScrollNavigationKey,
+        forceFollowOnInput,
+        userScrolledUp,
+        scrollToBottom,
+        handleVirtualizedNavigation,
+        handleDirectNavigation,
+      ]
     ),
     { isActive: isFocused !== false }
   );
@@ -939,6 +1134,61 @@ const MessageList = memo(function MessageList({
     [onScrollChange]
   );
 
+  // Sync VirtualizedList scroll position into scroll controller (for ScrollIndicator)
+  const handleVirtualizedScrollTopChange = useCallback(
+    (nextScrollTop: number) => {
+      if (!enableScroll || !useVirtualizedListInternal) return;
+      const list = virtualizedListRef.current;
+      if (!list) return;
+
+      const expectedScrollTop = expectedScrollTopRef.current;
+      if (isApplyingControllerScrollRef.current && expectedScrollTop !== null) {
+        if (Math.abs(nextScrollTop - expectedScrollTop) <= 1) {
+          isApplyingControllerScrollRef.current = false;
+          expectedScrollTopRef.current = null;
+          return;
+        }
+      }
+
+      const { scrollHeight, innerHeight } = list.getScrollState();
+      const maxOffset = Math.max(0, scrollHeight - innerHeight);
+      const offsetFromBottom = Math.max(0, maxOffset - nextScrollTop);
+
+      const lastMetrics = lastScrollMetricsRef.current;
+      if (
+        scrollHeight === lastMetrics.scrollHeight &&
+        innerHeight === lastMetrics.innerHeight &&
+        Math.abs(offsetFromBottom - lastMetrics.offsetFromBottom) <= 1
+      ) {
+        return;
+      }
+
+      lastScrollMetricsRef.current = { scrollHeight, innerHeight, offsetFromBottom };
+
+      scrollActions.setTotalHeight(scrollHeight);
+      scrollActions.setViewportHeight(innerHeight);
+      scrollActions.jumpTo(offsetFromBottom);
+    },
+    [enableScroll, useVirtualizedListInternal, scrollActions]
+  );
+
+  // Apply scroll controller state to VirtualizedList (keyboard/manual scroll)
+  useEffect(() => {
+    if (!enableScroll || !useVirtualizedListInternal) return;
+    const list = virtualizedListRef.current;
+    if (!list) return;
+
+    const { scrollHeight, innerHeight, scrollTop } = list.getScrollState();
+    const maxOffset = Math.max(0, scrollHeight - innerHeight);
+    const targetScrollTop = Math.max(0, maxOffset - scrollState.offsetFromBottom);
+
+    if (Math.abs(scrollTop - targetScrollTop) > 1) {
+      isApplyingControllerScrollRef.current = true;
+      expectedScrollTopRef.current = targetScrollTop;
+      list.scrollTo(targetScrollTop);
+    }
+  }, [enableScroll, useVirtualizedListInternal, scrollState.offsetFromBottom]);
+
   const estimatedContentWidth = Math.max(20, (process.stdout.columns ?? 80) - 24);
 
   // IMPORTANT: pendingMessage is merged into allMessages to avoid Ink <Static>
@@ -951,19 +1201,14 @@ const MessageList = memo(function MessageList({
       return msgs;
     }
 
-    // Filter out any message with same ID as pendingMessage (avoid duplicates),
-    // then always append pendingMessage to ensure streaming content is visible.
-    // Previous approach checked `lastMessage?.id === pendingMessage.id` which
-    // skipped appending when IDs matched, causing streaming updates to be invisible.
-    const filtered = msgs.filter((m) => m.id !== pendingMessage.id);
-    return [...filtered, pendingMessage];
+    // Only append pendingMessage if its ID is not already in messages.
+    // This avoids creating new array references when content streams.
+    const existsInMessages = msgs.some((m) => m.id === pendingMessage.id);
+    if (existsInMessages) {
+      return msgs;
+    }
+    return [...msgs, pendingMessage];
   }, [messages, pendingMessage]);
-
-  // Determine if we should show the thinking indicator:
-  // - Agent is loading (processing/waiting)
-  // - AND no pending content has arrived yet
-  const hasPendingContent = pendingMessage?.content && pendingMessage.content.length > 0;
-  const showThinkingIndicator = isLoading && !hasPendingContent;
 
   const estimatedItemHeightForVirtualization = useMemo(() => {
     if (typeof estimatedItemHeight === "function") {
@@ -1050,10 +1295,15 @@ const MessageList = memo(function MessageList({
   // This is ideal for very long conversations.
 
   if (useVirtualizedListInternal) {
+    const listHeight =
+      computedMaxHeight !== undefined
+        ? Math.max(1, computedMaxHeight - thinkingIndicatorHeight)
+        : undefined;
+
     return (
       <Box flexDirection="column" flexGrow={1} minHeight={0} height={computedMaxHeight}>
-        <Box flexDirection="row" flexGrow={1}>
-          <Box flexDirection="column" flexGrow={1}>
+        <Box flexDirection="row" flexGrow={1} height={listHeight}>
+          <Box flexDirection="column" flexGrow={1} height={listHeight}>
             <VirtualizedList
               ref={virtualizedListRef}
               data={allMessages}
@@ -1062,8 +1312,9 @@ const MessageList = memo(function MessageList({
               estimatedItemHeight={estimatedItemHeightForVirtualization}
               initialScrollIndex={SCROLL_TO_ITEM_END}
               initialScrollOffsetInIndex={SCROLL_TO_ITEM_END}
+              onScrollTopChange={handleVirtualizedScrollTopChange}
               onStickingToBottomChange={handleStickingChange}
-              scrollbarThumbColor={theme.semantic.text.muted}
+              scrollbarThumbColor={animatedThumbColor}
               alignToBottom
             />
           </Box>
@@ -1073,6 +1324,8 @@ const MessageList = memo(function MessageList({
               totalHeight={scrollState.totalHeight}
               offsetFromBottom={scrollState.offsetFromBottom}
               viewportHeight={scrollState.viewportHeight}
+              thumbColor={animatedThumbColor}
+              trackColor={animatedTrackColor}
             />
           )}
         </Box>
@@ -1081,7 +1334,7 @@ const MessageList = memo(function MessageList({
         {showThinkingIndicator && <ThinkingIndicator />}
 
         {/* NewMessagesBadge - only when enableScroll and in manual mode with unread */}
-        {enableScroll && scrollState.mode === "manual" && scrollState.newMessageCount > 0 && (
+        {showNewMessagesBadge && (
           <NewMessagesBadge
             count={scrollState.newMessageCount}
             onScrollToBottom={scrollActions.scrollToBottom}
@@ -1109,8 +1362,9 @@ const MessageList = memo(function MessageList({
   if (useStaticRendering && historyMessages) {
     return (
       <Box flexDirection="column" flexGrow={1}>
-        {/* Spacer pushes messages toward Input at bottom */}
-        <Box flexGrow={1} />
+        {/* T-VIRTUAL-SCROLL: Removed spacer - Ink's Static component doesn't participate
+            in Flexbox layout, and the spacer can cause position issues. Messages flow
+            naturally from top to bottom with Static. */}
 
         {/* Scroll up indicator (legacy) */}
         {!enableScroll && showScrollUp && (
@@ -1161,6 +1415,8 @@ const MessageList = memo(function MessageList({
               totalHeight={scrollState.totalHeight}
               offsetFromBottom={scrollState.offsetFromBottom}
               viewportHeight={scrollState.viewportHeight}
+              thumbColor={animatedThumbColor}
+              trackColor={animatedTrackColor}
             />
           )}
         </Box>
@@ -1169,7 +1425,7 @@ const MessageList = memo(function MessageList({
         {showThinkingIndicator && <ThinkingIndicator />}
 
         {/* NewMessagesBadge - only when enableScroll and in manual mode with unread */}
-        {enableScroll && scrollState.mode === "manual" && scrollState.newMessageCount > 0 && (
+        {showNewMessagesBadge && (
           <NewMessagesBadge
             count={scrollState.newMessageCount}
             onScrollToBottom={scrollActions.scrollToBottom}
@@ -1246,6 +1502,8 @@ const MessageList = memo(function MessageList({
             totalHeight={scrollState.totalHeight}
             offsetFromBottom={scrollState.offsetFromBottom}
             viewportHeight={scrollState.viewportHeight}
+            thumbColor={animatedThumbColor}
+            trackColor={animatedTrackColor}
           />
         )}
       </Box>
@@ -1254,7 +1512,7 @@ const MessageList = memo(function MessageList({
       {showThinkingIndicator && <ThinkingIndicator />}
 
       {/* NewMessagesBadge - only when enableScroll and in manual mode with unread */}
-      {enableScroll && scrollState.mode === "manual" && scrollState.newMessageCount > 0 && (
+      {showNewMessagesBadge && (
         <NewMessagesBadge
           count={scrollState.newMessageCount}
           onScrollToBottom={scrollActions.scrollToBottom}

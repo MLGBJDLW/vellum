@@ -394,6 +394,34 @@ function detectCI(env: Record<string, string | undefined>): boolean {
   return CI_ENV_VARS.some((varName) => varName in env);
 }
 
+/**
+ * Detect PowerShell running on ConPTY-backed terminals.
+ * Used to disable alternate buffer by default due to clear/scroll issues.
+ */
+export function isConptyTerminal(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
+): boolean {
+  if (process.platform !== "win32") {
+    return false;
+  }
+
+  const termProgram = env.TERM_PROGRAM?.toLowerCase() ?? "";
+  return Boolean(
+    env.WT_SESSION || env.VSCODE_INJECTION || env.VSCODE_GIT_IPC_HANDLE || termProgram === "vscode"
+  );
+}
+
+export function isPowerShellConptyTerminal(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
+): boolean {
+  if (!isConptyTerminal(env)) {
+    return false;
+  }
+
+  const isPowerShell = Boolean(env.PSModulePath);
+  return isPowerShell;
+}
+
 // =============================================================================
 // Main Detection Function
 // =============================================================================
@@ -457,7 +485,7 @@ export function detectTerminal(options: DetectTerminalOptions = {}): TerminalCap
     sixel,
     kittyGraphics,
     iterm2Images,
-    alternateBuffer: isTTY && !isCI,
+    alternateBuffer: isTTY && !isCI && !isConptyTerminal(env),
     mouseSupport: isTTY && !isCI,
     bracketedPaste: isTTY,
     hyperlinks,

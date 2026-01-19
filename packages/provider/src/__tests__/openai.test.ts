@@ -318,7 +318,7 @@ describe("OpenAIProvider", () => {
           buildRequest: (
             params: CompletionParams,
             isOSeries: boolean
-          ) => { reasoning_effort?: string };
+          ) => { reasoning_effort?: string; extra_body?: Record<string, unknown> };
         }
       ).buildRequest(
         {
@@ -339,7 +339,7 @@ describe("OpenAIProvider", () => {
           buildRequest: (
             params: CompletionParams,
             isOSeries: boolean
-          ) => { reasoning_effort?: string };
+          ) => { reasoning_effort?: string; extra_body?: Record<string, unknown> };
         }
       ).buildRequest(
         {
@@ -351,6 +351,48 @@ describe("OpenAIProvider", () => {
       );
 
       expect(request.reasoning_effort).toBe("high");
+    });
+
+    it("should include extra_body when provided", () => {
+      const provider = new OpenAIProvider();
+      const request = (
+        provider as unknown as {
+          buildRequest: (
+            params: CompletionParams,
+            isOSeries: boolean
+          ) => { reasoning_effort?: string; extra_body?: Record<string, unknown> };
+        }
+      ).buildRequest(
+        {
+          model: "gpt-4o",
+          messages: [{ role: "user", content: "Hello" }],
+          extraBody: { reasoning_split: true },
+        },
+        false
+      );
+
+      expect(request.extra_body).toEqual({ reasoning_split: true });
+    });
+
+    it("should omit extra_body when empty", () => {
+      const provider = new OpenAIProvider();
+      const request = (
+        provider as unknown as {
+          buildRequest: (
+            params: CompletionParams,
+            isOSeries: boolean
+          ) => { extra_body?: Record<string, unknown> };
+        }
+      ).buildRequest(
+        {
+          model: "gpt-4o",
+          messages: [{ role: "user", content: "Hello" }],
+          extraBody: {},
+        },
+        false
+      );
+
+      expect(request.extra_body).toBeUndefined();
     });
   });
 });

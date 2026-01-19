@@ -99,6 +99,26 @@ const DISABLE_LINE_WRAPPING = "\x1b[?7l";
 const ENABLE_LINE_WRAPPING = "\x1b[?7h";
 
 // =============================================================================
+// Input Reserve Calculation
+// =============================================================================
+
+/**
+ * Calculate the lines to reserve for input area based on mode.
+ * Use this to get correct inputReserve value for useAlternateBuffer.
+ *
+ * @param multiline - Whether the input is multiline
+ * @param minHeight - Minimum height for multiline input (default: 5)
+ * @returns Number of lines to reserve for input
+ */
+export function calculateInputReserve(multiline: boolean, minHeight = 5): number {
+  const border = 2; // Top and bottom border
+  if (multiline) {
+    return minHeight + border; // 5 + 2 = 7 for default multiline
+  }
+  return 3; // Single line with border
+}
+
+// =============================================================================
 // Helper Functions
 // =============================================================================
 
@@ -134,18 +154,21 @@ function writeToStdout(data: string): void {
  * Enter the alternate screen buffer.
  */
 function enterAlternateBuffer(): void {
-  writeToStdout(ENTER_ALTERNATE_BUFFER);
-  writeToStdout(DISABLE_LINE_WRAPPING);
-  writeToStdout(CLEAR_SCREEN);
-  writeToStdout(CURSOR_HOME);
+  // No-op: Ink manages alternate buffer switching at render entry.
+  // Keeping this hook side-effect free avoids double buffer switching/clearing.
+  void ENTER_ALTERNATE_BUFFER;
+  void DISABLE_LINE_WRAPPING;
+  void CLEAR_SCREEN;
+  void CURSOR_HOME;
 }
 
 /**
  * Exit the alternate screen buffer.
  */
 function exitAlternateBuffer(): void {
-  writeToStdout(ENABLE_LINE_WRAPPING);
-  writeToStdout(EXIT_ALTERNATE_BUFFER);
+  // No-op: Ink manages alternate buffer switching at render entry.
+  void ENABLE_LINE_WRAPPING;
+  void EXIT_ALTERNATE_BUFFER;
 }
 
 // =============================================================================
@@ -193,7 +216,7 @@ export function useAlternateBuffer(
     constrainHeight = false,
     maxHeight,
     withViewport = false,
-    inputReserve = 3,
+    inputReserve = 7, // Default for multiline (minHeight 5 + border 2)
     statusReserve = 1,
     resizeDebounce = 100,
   } = options;
@@ -257,9 +280,11 @@ export function useAlternateBuffer(
 
   /**
    * Calculate available height for content (when withViewport is enabled).
+   * Ensure minimum of 8 lines to prevent degenerate rendering cases.
    */
+  const MIN_AVAILABLE_HEIGHT = 8;
   const availableHeight = withViewport
-    ? Math.max(1, height - inputReserve - statusReserve)
+    ? Math.max(MIN_AVAILABLE_HEIGHT, height - inputReserve - statusReserve)
     : height;
 
   // Handle terminal resize events with debounce

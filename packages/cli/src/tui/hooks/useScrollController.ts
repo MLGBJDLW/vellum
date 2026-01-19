@@ -125,6 +125,7 @@ function clampOffset(offset: number, totalHeight: number, viewportHeight: number
 /**
  * Reducer for scroll state management
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Reducer with many action cases is inherently complex
 function scrollReducer(state: InternalState, action: ScrollAction): InternalState {
   switch (action.type) {
     case "SCROLL_UP": {
@@ -180,6 +181,13 @@ function scrollReducer(state: InternalState, action: ScrollAction): InternalStat
 
       // If jumping to bottom with autoFollow, switch to follow mode
       if (newOffset === 0 && action.autoFollowOnBottom) {
+        if (
+          state.mode === "follow" &&
+          state.offsetFromBottom === 0 &&
+          state.newMessageCount === 0
+        ) {
+          return state;
+        }
         return {
           ...state,
           mode: "follow",
@@ -190,6 +198,10 @@ function scrollReducer(state: InternalState, action: ScrollAction): InternalStat
 
       // If jumping away from bottom, switch to manual
       const newMode = newOffset > 0 ? "manual" : state.mode;
+
+      if (newOffset === state.offsetFromBottom && newMode === state.mode) {
+        return state;
+      }
 
       return {
         ...state,
@@ -214,6 +226,9 @@ function scrollReducer(state: InternalState, action: ScrollAction): InternalStat
 
       // In follow mode, keep offset at 0
       if (state.mode === "follow") {
+        if (newTotalHeight === state.totalHeight && state.offsetFromBottom === 0) {
+          return state;
+        }
         return {
           ...state,
           totalHeight: newTotalHeight,
@@ -227,6 +242,10 @@ function scrollReducer(state: InternalState, action: ScrollAction): InternalStat
         newTotalHeight,
         state.viewportHeight
       );
+
+      if (newTotalHeight === state.totalHeight && clampedOffset === state.offsetFromBottom) {
+        return state;
+      }
 
       return {
         ...state,
@@ -244,6 +263,10 @@ function scrollReducer(state: InternalState, action: ScrollAction): InternalStat
         state.totalHeight,
         newViewportHeight
       );
+
+      if (newViewportHeight === state.viewportHeight && clampedOffset === state.offsetFromBottom) {
+        return state;
+      }
 
       return {
         ...state,

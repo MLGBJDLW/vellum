@@ -12,6 +12,7 @@ import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "../../theme/index.js";
+import { truncateToDisplayWidth } from "../../utils/index.js";
 import { SessionPreview } from "./SessionPreview.js";
 import type { SessionMetadata, SessionPickerProps, SessionPreviewMessage } from "./types.js";
 
@@ -57,12 +58,10 @@ function formatTimestamp(date: Date): string {
 
 /**
  * Truncate text with ellipsis.
+ * Uses string-width for accurate CJK/Emoji handling.
  */
 function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength - 1)}…`;
+  return truncateToDisplayWidth(text, maxLength);
 }
 
 /**

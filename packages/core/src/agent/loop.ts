@@ -1035,6 +1035,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    *
    * Integrates with Logger (T041) and TelemetryInstrumentor (T042).
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Main agent loop with many state transitions and error handling paths
   async run(): Promise<void> {
     // Check for cancellation before starting
     if (this.cancellation.isCancelled) {

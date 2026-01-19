@@ -11,6 +11,8 @@ export {
   useScrollAnchor,
 } from "./useScrollAnchor.js";
 export {
+  MIN_VIEWPORT_HEIGHT,
+  MIN_VIEWPORT_WIDTH,
   type UseVirtualizationProps,
   type UseVirtualizationReturn,
   useVirtualization,

@@ -11,6 +11,7 @@ import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
 import { useTheme } from "../../theme/index.js";
+import { truncateToDisplayWidth } from "../../utils/index.js";
 import type { SessionPreviewMessage, SessionPreviewProps } from "./types.js";
 
 // =============================================================================
@@ -76,12 +77,10 @@ function getRoleLabel(role: SessionPreviewMessage["role"]): string {
 
 /**
  * Truncate text with ellipsis.
+ * Uses string-width for accurate CJK/Emoji handling.
  */
 function truncateContent(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength - 1)}…`;
+  return truncateToDisplayWidth(text, maxLength);
 }
 
 // =============================================================================

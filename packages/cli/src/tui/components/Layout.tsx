@@ -14,7 +14,9 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useTerminalDimensions } from "../hooks/useTerminalSize.js";
+import { getAlternateBufferEnabled } from "../i18n/settings-integration.js";
 import { useTheme } from "../theme/index.js";
 
 // =============================================================================
@@ -65,32 +67,8 @@ export interface LayoutProps {
 // Hooks
 // =============================================================================
 
-/**
- * Hook to get terminal dimensions and listen for resize events.
- * Returns { columns, rows } with defaults for non-TTY environments.
- */
-function useTerminalSize(): { columns: number; rows: number } {
-  const [size, setSize] = useState({
-    columns: process.stdout.columns || 80,
-    rows: process.stdout.rows || 24,
-  });
-
-  useEffect(() => {
-    function updateSize() {
-      setSize({
-        columns: process.stdout.columns || 80,
-        rows: process.stdout.rows || 24,
-      });
-    }
-
-    process.stdout.on("resize", updateSize);
-    return () => {
-      process.stdout.off("resize", updateSize);
-    };
-  }, []);
-
-  return size;
-}
+// Terminal dimensions hook moved to hooks/useTerminalSize.ts
+// Uses useTerminalDimensions from that module for resize handling
 
 // =============================================================================
 // Sub-Components
@@ -120,7 +98,7 @@ function Separator({
   branch,
   changedFiles,
 }: SeparatorProps): React.JSX.Element {
-  const { columns } = useTerminalSize();
+  const { width: columns } = useTerminalDimensions();
   const char = style === "double" ? "═" : "─";
 
   // If no embedded info, render simple line
@@ -354,7 +332,7 @@ export function Layout({
   changedFiles,
 }: LayoutProps): React.JSX.Element {
   const { theme } = useTheme();
-  const { columns, rows } = useTerminalSize();
+  const { width: columns, height: rows } = useTerminalDimensions();
 
   // Determine if we should be in compact mode
   const isCompact = useMemo(() => {
@@ -401,8 +379,17 @@ export function Layout({
   const footerBorderColor = theme.semantic.border.focus;
   const sidebarBorderColor = theme.semantic.border.default;
 
+  // Only constrain height in alternate buffer mode (like Gemini CLI)
+  // This prevents content clipping when running in normal terminal mode
+  const isAlternateBuffer = getAlternateBufferEnabled();
+
   return (
-    <Box flexDirection="column" width="100%" height={rows}>
+    <Box
+      flexDirection="column"
+      width="100%"
+      height={isAlternateBuffer ? rows : undefined}
+      minHeight={isAlternateBuffer ? undefined : rows}
+    >
       {/* Header Region */}
       {header && (
         <HeaderRegion
@@ -435,6 +422,7 @@ export function Layout({
 }
 
 /**
- * Export hook for components that need terminal size.
+ * Re-export hook for components that need terminal size.
+ * @deprecated Import directly from hooks/useTerminalSize.js instead
  */
-export { useTerminalSize };
+export { useTerminalDimensions as useTerminalSize };

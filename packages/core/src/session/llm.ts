@@ -79,6 +79,8 @@ export const StreamConfigSchema = z.object({
   abortSignal: z.custom<AbortSignal>().optional(),
   /** Stream timeout in milliseconds */
   timeoutMs: z.number().positive().optional(),
+  /** Provider-specific extra body fields (OpenAI-compatible APIs) */
+  extraBody: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type StreamConfig = z.infer<typeof StreamConfigSchema>;
@@ -370,6 +372,7 @@ export namespace LLM {
       maxTokens,
       tools: validated.tools,
       thinking: resolvedThinking,
+      extraBody: validated.extraBody,
     };
 
     // Create abort-aware stream

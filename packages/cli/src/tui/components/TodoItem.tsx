@@ -11,6 +11,7 @@ import { Box, Text } from "ink";
 import type React from "react";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { truncateToDisplayWidth } from "../utils/index.js";
 
 // =============================================================================
 // Types
@@ -76,14 +77,12 @@ const STATUS_COLORS: Record<TodoStatus, string> = {
 // =============================================================================
 
 /**
- * Truncate text to a maximum length.
+ * Truncate text to a maximum display width.
+ * Uses string-width for accurate CJK/Emoji handling.
  */
 function truncate(text: string, maxLength: number): string {
   const singleLine = text.replace(/\n/g, " ").trim();
-  if (singleLine.length <= maxLength) {
-    return singleLine;
-  }
-  return `${singleLine.slice(0, maxLength - 1)}…`;
+  return truncateToDisplayWidth(singleLine, maxLength);
 }
 
 /**

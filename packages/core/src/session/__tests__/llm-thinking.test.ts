@@ -16,6 +16,7 @@ type CapturedParams = {
     enabled?: boolean;
     reasoningEffort?: string;
   };
+  extraBody?: Record<string, unknown>;
 };
 
 function createMockProvider(onParams: (params: CompletionParams) => void): LLMProvider {
@@ -93,6 +94,7 @@ describe("LLM.stream thinking gating", () => {
       model: "o3",
       messages: [{ role: "user", content: "Hi" }],
       thinking: { enabled: true, reasoningEffort: "high" },
+      extraBody: { trace_id: "abc" },
     });
 
     for await (const _ of stream) {
@@ -104,6 +106,7 @@ describe("LLM.stream thinking gating", () => {
     )?.thinking;
     expect(thinking?.enabled).toBe(true);
     expect(thinking?.reasoningEffort).toBe("high");
+    expect((captured as CapturedParams | null)?.extraBody).toEqual({ trace_id: "abc" });
   });
 
   it("should omit reasoning effort when model does not declare supported efforts", async () => {

@@ -17,6 +17,12 @@ export {
   type UseAlternateBufferReturn,
   useAlternateBuffer,
 } from "./useAlternateBuffer.js";
+// Animated scrollbar hook (ported from Gemini CLI)
+export {
+  type AnimatedScrollbarConfig,
+  type UseAnimatedScrollbarReturn,
+  useAnimatedScrollbar,
+} from "./useAnimatedScrollbar.js";
 export {
   type BacktrackState,
   type Branch,
@@ -30,6 +36,14 @@ export {
   type UseBracketedPasteOptions,
   useBracketedPaste,
 } from "./useBracketedPaste.js";
+// Collapsible state management hook
+export {
+  clearAllCollapsibleStates,
+  clearCollapsibleState,
+  type UseCollapsibleOptions,
+  type UseCollapsibleReturn,
+  useCollapsible,
+} from "./useCollapsible.js";
 export {
   type CopyModeState,
   type UseCopyModeReturn,
@@ -71,6 +85,13 @@ export {
   type UseHotkeysReturn,
   useHotkeys,
 } from "./useHotkeys.js";
+// Input highlighting hook for syntax highlighting in input fields
+export {
+  type UseInputHighlightOptions,
+  type UseInputHighlightReturn,
+  useInputHighlight,
+  useMultilineHighlight,
+} from "./useInputHighlight.js";
 export {
   type UseInputHistoryOptions,
   type UseInputHistoryReturn,
@@ -154,8 +175,30 @@ export {
   type ViewportScrollActions,
   type ViewportScrollState,
 } from "./useScrollController.js";
+// Scroll event batcher hook for jitter prevention
+export {
+  type BatchStrategy,
+  type ScrollEventBatcherConfig,
+  type UseScrollEventBatcherReturn,
+  useScrollEventBatcher,
+} from "./useScrollEventBatcher.js";
+// Smooth scroll animation hook
+export {
+  type EasingFunction,
+  easings,
+  type SmoothScrollConfig,
+  type UseSmoothScrollReturn,
+  useSmoothScroll,
+} from "./useSmoothScroll.js";
 // State and ref hook for stable callbacks (Gemini CLI pattern)
 export { useStateAndRef } from "./useStateAndRef.js";
+// Terminal size hook (responsive layouts)
+export {
+  type TerminalSize,
+  type UseTerminalSizeOptions,
+  useIsNarrowWidth,
+  useTerminalDimensions,
+} from "./useTerminalSize.js";
 export {
   type ToolApprovalViewModel,
   type UseToolApprovalControllerOptions,
