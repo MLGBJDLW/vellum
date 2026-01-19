@@ -11,7 +11,6 @@ export {
   AlwaysAllowManager,
   type AlwaysAllowManagerOptions,
 } from "./always-allow.js";
-
 // ============================================
 // Permission Ask Service (REQ-009)
 // ============================================
@@ -24,16 +23,20 @@ export {
   PermissionAskService,
   type PermissionAskServiceOptions,
 } from "./ask-service.js";
-
 // ============================================
 // Auto-Approval Limits (REQ-012)
 // ============================================
 export {
+  type AutoApprovalConfig,
   AutoApprovalLimitsHandler,
   type AutoApprovalLimitsHandlerOptions,
+  type AutoApprovalResult,
+  type AutoApprovalState,
   type AutoApprovalStats,
   createAutoApprovalLimitsHandler,
+  DEFAULT_AUTO_APPROVAL_COST_LIMIT,
   DEFAULT_AUTO_APPROVAL_LIMIT,
+  DEFAULT_AUTO_APPROVAL_REQUEST_LIMIT,
   type RecordApprovalOptions,
 } from "./auto-approval.js";
 // ============================================
@@ -98,6 +101,9 @@ export {
 // ============================================
 export {
   DEFAULT_PROTECTED_PATTERNS,
+  formatFileListWithProtection,
+  formatFileWithProtection,
+  PROTECTED_FILE_INDICATOR,
   ProtectedFilesManager,
 } from "./protected-files.js";
 // ============================================
@@ -121,6 +127,28 @@ export {
   type StoredPermissionData,
   StoredPermissionDataSchema,
 } from "./storage.js";
+// ============================================
+// Tool Group Permissions
+// ============================================
+export {
+  findToolGroupForTool,
+  getDefaultGroupsForMode,
+  getToolsInPermissionGroup,
+  isReadOnlyFilesystemTool,
+  isToolAllowedByGroups,
+  PERMISSION_TOOL_GROUP_NAMES,
+  PERMISSION_TOOL_GROUPS,
+  type PermissionToolGroupConfig,
+  PermissionToolGroupConfigSchema,
+  type PermissionToolGroupName,
+  PermissionToolGroupNameSchema,
+  PLAN_MODE_GROUPS,
+  READ_ONLY_FILESYSTEM_TOOLS,
+  SPEC_MODE_GROUPS,
+  type ToolGroupCheckResult,
+  type ToolGroupDefinition,
+  VIBE_MODE_GROUPS,
+} from "./tool-groups.js";
 // ============================================
 // Trust Manager
 // ============================================

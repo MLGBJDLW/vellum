@@ -23,6 +23,11 @@ import {
   type PermissionGrantedEvent,
 } from "./event-bus.js";
 import { SessionPermissionManager } from "./session-manager.js";
+import {
+  isToolAllowedByGroups,
+  type PermissionToolGroupConfig,
+  type ToolGroupCheckResult,
+} from "./tool-groups.js";
 import { TrustManager } from "./trust-manager.js";
 import {
   createPermissionInfo,
@@ -62,6 +67,8 @@ export interface DefaultPermissionCheckerOptions {
   askHandler?: PermissionAskHandler;
   /** Whether to emit events (default: true) */
   emitEvents?: boolean;
+  /** Tool group configurations for group-based permission checks */
+  toolGroups?: PermissionToolGroupConfig[];
 }
 
 /**
@@ -71,13 +78,23 @@ export interface PermissionResolutionResult {
   /** Final permission decision */
   decision: PermissionDecision;
   /** Source of the decision */
-  source: "config" | "session" | "user" | "danger" | "auto-limit" | "timeout" | "default";
+  source:
+    | "config"
+    | "session"
+    | "user"
+    | "danger"
+    | "auto-limit"
+    | "timeout"
+    | "default"
+    | "tool-group";
   /** Reason for the decision */
   reason: string;
   /** Whether this was from a cached decision */
   cached: boolean;
   /** Matched pattern if applicable */
   matchedPattern?: string;
+  /** Auto-approve hint from tool group config */
+  autoApprove?: boolean;
 }
 
 // Note: Tool kind mapping is handled via inferPermissionType based on tool name and params
@@ -123,6 +140,7 @@ export class DefaultPermissionChecker implements PermissionChecker {
   readonly #autoApprovalHandler: AutoApprovalLimitsHandler;
   readonly #eventBus: PermissionEventBus;
   readonly #emitEvents: boolean;
+  #toolGroups: PermissionToolGroupConfig[];
 
   /**
    * Creates a new DefaultPermissionChecker.
@@ -137,6 +155,7 @@ export class DefaultPermissionChecker implements PermissionChecker {
     this.#autoApprovalHandler = options.autoApprovalHandler ?? new AutoApprovalLimitsHandler();
     this.#eventBus = options.eventBus ?? new PermissionEventBus();
     this.#emitEvents = options.emitEvents ?? true;
+    this.#toolGroups = options.toolGroups ?? [];
 
     // Set initial ask handler if provided
     if (options.askHandler) {
@@ -193,6 +212,26 @@ export class DefaultPermissionChecker implements PermissionChecker {
           sessionId: context.sessionId,
         })
       );
+    }
+
+    // Step 0: Check tool group permissions (if configured)
+    const toolGroupResult = this.#checkToolGroups(toolName, params, permissionType);
+    if (toolGroupResult) {
+      if (toolGroupResult.decision === "deny") {
+        this.#emitDenied(toolName, permissionType, toolGroupResult.reason, true, context.sessionId);
+        return toolGroupResult;
+      }
+      // If tool group allows and has autoApprove, use that as the decision
+      if (toolGroupResult.autoApprove) {
+        this.#emitGrantedOrDenied(
+          toolName,
+          permissionType,
+          toolGroupResult,
+          context.sessionId,
+          pattern
+        );
+        return toolGroupResult;
+      }
     }
 
     // Step 1: Check for dangerous operations
@@ -280,9 +319,84 @@ export class DefaultPermissionChecker implements PermissionChecker {
     this.#autoApprovalHandler.reset();
   }
 
+  /**
+   * Set tool group configurations.
+   *
+   * @param groups - Array of tool group configurations
+   */
+  setToolGroups(groups: PermissionToolGroupConfig[]): void {
+    this.#toolGroups = groups;
+  }
+
+  /**
+   * Get current tool group configurations.
+   */
+  get toolGroups(): PermissionToolGroupConfig[] {
+    return this.#toolGroups;
+  }
+
   // ============================================
   // Private Methods
   // ============================================
+
+  /**
+   * Check tool group permissions.
+   *
+   * Returns null if no tool groups are configured or the tool is allowed.
+   * Returns a deny result if the tool is not allowed by group config.
+   * Returns an allow result if the tool group has autoApprove enabled.
+   */
+  #checkToolGroups(
+    toolName: string,
+    params: unknown,
+    _permissionType: PermissionType
+  ): PermissionResolutionResult | null {
+    // Skip if no tool groups configured
+    if (this.#toolGroups.length === 0) {
+      return null;
+    }
+
+    // Extract file path from params if present
+    let filePath: string | undefined;
+    if (params && typeof params === "object") {
+      const p = params as Record<string, unknown>;
+      if (typeof p.path === "string") {
+        filePath = p.path;
+      } else if (typeof p.filePath === "string") {
+        filePath = p.filePath;
+      }
+    }
+
+    // Check against tool groups
+    const result: ToolGroupCheckResult = isToolAllowedByGroups(
+      toolName,
+      filePath,
+      this.#toolGroups
+    );
+
+    if (!result.allowed) {
+      return {
+        decision: "deny",
+        source: "tool-group",
+        reason: result.reason ?? "Tool not allowed by group configuration",
+        cached: false,
+      };
+    }
+
+    // If allowed with autoApprove, return allow immediately
+    if (result.autoApprove) {
+      return {
+        decision: "allow",
+        source: "tool-group",
+        reason: "Auto-approved by tool group configuration",
+        cached: false,
+        autoApprove: true,
+      };
+    }
+
+    // Allowed but no autoApprove - continue to other checks
+    return null;
+  }
 
   /**
    * Infer permission type from tool name and params.
@@ -637,6 +751,8 @@ export class DefaultPermissionChecker implements PermissionChecker {
         return "auto";
       case "user":
         return "user-once"; // Could be user-always, but we lose that info
+      case "tool-group":
+        return "auto";
       default:
         return "auto";
     }

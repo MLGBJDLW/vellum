@@ -6,6 +6,20 @@
  * @module tui/components/common
  */
 
+// AutoApprovalStatus (Phase 35+ - Auto-Approval Limits)
+export {
+  type AutoApprovalSeverity,
+  AutoApprovalStatus,
+  type AutoApprovalStatusProps,
+} from "./AutoApprovalStatus.js";
+// CostWarning (Phase 35+ - Cost Limits)
+export {
+  CompactCostDisplay,
+  type CompactCostDisplayProps,
+  CostWarning,
+  type CostWarningProps,
+  type CostWarningSeverity,
+} from "./CostWarning.js";
 // EnhancedLoadingIndicator (Enhanced loading with elapsed time & cancel hints)
 export {
   EnhancedLoadingIndicator,
@@ -34,6 +48,13 @@ export {
 } from "./MaxSizedBox.js";
 // NewMessagesBadge (Phase 3 - World-Class TUI)
 export { NewMessagesBadge, type NewMessagesBadgeProps } from "./NewMessagesBadge.js";
+// ProtectedFileLegend (Protected file indicator in listings)
+export {
+  formatProtectedFileName,
+  PROTECTED_INDICATOR,
+  ProtectedFileLegend,
+  type ProtectedFileLegendProps,
+} from "./ProtectedFileLegend.js";
 // ScrollIndicator (Phase 3 - World-Class TUI)
 export { ScrollIndicator, type ScrollIndicatorProps } from "./ScrollIndicator.js";
 // Spinner (Chain 21)

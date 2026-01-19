@@ -3,6 +3,11 @@
 // ============================================
 
 import { z } from "zod";
+import {
+  getDefaultGroupsForMode,
+  type PermissionToolGroupConfig,
+  PermissionToolGroupConfigSchema,
+} from "../permission/tool-groups.js";
 import { MODE_TOOL_GROUPS, type ToolGroupEntry } from "../tool/mode-filter.js";
 import { type ModeConfig, ModeConfigSchema } from "./modes.js";
 import {
@@ -147,6 +152,8 @@ export interface CodingModeConfig extends ModeConfig {
   allowedGroups?: ToolGroupEntry[];
   /** Custom tools explicitly enabled beyond group defaults */
   enabledCustomTools?: string[];
+  /** Permission-based tool group configurations with fileRegex support */
+  toolGroups?: PermissionToolGroupConfig[];
 }
 
 // ============================================
@@ -204,6 +211,8 @@ export const CodingModeConfigSchema = ModeConfigSchema.extend({
   allowedGroups: z.array(z.unknown()).optional(),
   /** Custom tools explicitly enabled beyond group defaults */
   enabledCustomTools: z.array(z.string()).optional(),
+  /** Permission-based tool group configurations with fileRegex support */
+  toolGroups: z.array(PermissionToolGroupConfigSchema).optional(),
 });
 
 // ============================================
@@ -282,6 +291,7 @@ export const VIBE_MODE: CodingModeConfig = {
   checkpointsRequired: false,
   checkpointCount: 0,
   allowedGroups: [...MODE_TOOL_GROUPS.vibe],
+  toolGroups: getDefaultGroupsForMode("vibe"),
 } as const;
 
 /**
@@ -321,6 +331,7 @@ export const PLAN_MODE: CodingModeConfig = {
   checkpointsRequired: true,
   checkpointCount: 1,
   allowedGroups: [...MODE_TOOL_GROUPS.plan],
+  toolGroups: getDefaultGroupsForMode("plan"),
 } as const;
 
 /**
@@ -369,6 +380,7 @@ export const SPEC_MODE: CodingModeConfig = {
   checkpointsRequired: true,
   checkpointCount: 6,
   allowedGroups: [...MODE_TOOL_GROUPS.spec],
+  toolGroups: getDefaultGroupsForMode("spec"),
 } as const;
 
 // ============================================

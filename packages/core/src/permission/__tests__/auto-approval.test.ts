@@ -216,7 +216,7 @@ describe("AutoApprovalLimitsHandler", () => {
   describe("getStats", () => {
     it("should return complete stats for fresh handler", () => {
       const stats = handler.getStats();
-      expect(stats).toEqual({
+      expect(stats).toMatchObject({
         total: 0,
         limit: DEFAULT_AUTO_APPROVAL_LIMIT,
         remaining: DEFAULT_AUTO_APPROVAL_LIMIT,
@@ -231,7 +231,7 @@ describe("AutoApprovalLimitsHandler", () => {
       h.recordApproval();
 
       const stats = h.getStats();
-      expect(stats).toEqual({
+      expect(stats).toMatchObject({
         total: 3,
         limit: 10,
         remaining: 7,

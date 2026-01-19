@@ -84,6 +84,28 @@ export type HookStatus =
   | "cancelled";
 
 /**
+ * Auto-approval status state for tracking consecutive approvals.
+ */
+export interface AutoApprovalStatusState {
+  /** Number of consecutive auto-approved requests */
+  consecutiveRequests: number;
+  /** Request limit for auto-approvals */
+  requestLimit: number;
+  /** Cumulative cost of consecutive auto-approved operations in USD */
+  consecutiveCost: number;
+  /** Cost limit for auto-approvals in USD */
+  costLimit: number;
+  /** Percentage of request limit used (0-100) */
+  requestPercentUsed: number;
+  /** Percentage of cost limit used (0-100) */
+  costPercentUsed: number;
+  /** Whether any limit has been reached */
+  limitReached: boolean;
+  /** Which limit type was reached */
+  limitType?: "requests" | "cost";
+}
+
+/**
  * Return value of useAgentLoop hook.
  */
 export interface UseAgentLoopReturn {
@@ -107,6 +129,8 @@ export interface UseAgentLoopReturn {
   submitUserResponse: (response: string) => void;
   /** Current completion state for attempt_completion tool */
   completionState: CompletionState | null;
+  /** Current auto-approval status (Phase 35+) */
+  autoApprovalStatus: AutoApprovalStatusState | null;
   /** Run the agent with user input */
   run: (input: string) => Promise<void>;
   /** Cancel the current operation */
@@ -217,6 +241,48 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
 
   // Completion state for attempt_completion tool
   const [completionState, setCompletionState] = useState<CompletionState | null>(null);
+
+  // Auto-approval status state (Phase 35+)
+  const [autoApprovalStatus, setAutoApprovalStatus] = useState<AutoApprovalStatusState | null>(
+    () => {
+      // Initialize from current state if available
+      // Use type guard since method was added in Phase 35+
+      const loopWithStatus = loop as AgentLoop & {
+        getAutoApprovalStatus?: () => {
+          consecutiveRequests: number;
+          requestLimit: number;
+          consecutiveCost: number;
+          costLimit: number;
+          requestPercentUsed: number;
+          costPercentUsed: number;
+          requestLimitReached: boolean;
+          costLimitReached: boolean;
+        } | null;
+      };
+
+      if (typeof loopWithStatus.getAutoApprovalStatus !== "function") {
+        return null;
+      }
+      const status = loopWithStatus.getAutoApprovalStatus();
+      if (status) {
+        return {
+          consecutiveRequests: status.consecutiveRequests,
+          requestLimit: status.requestLimit,
+          consecutiveCost: status.consecutiveCost,
+          costLimit: status.costLimit,
+          requestPercentUsed: status.requestPercentUsed,
+          costPercentUsed: status.costPercentUsed,
+          limitReached: status.requestLimitReached || status.costLimitReached,
+          limitType: status.requestLimitReached
+            ? "requests"
+            : status.costLimitReached
+              ? "cost"
+              : undefined,
+        };
+      }
+      return null;
+    }
+  );
 
   // Track thinking start time for duration calculation
   const thinkingStartRef = useRef<number | null>(null);
@@ -477,6 +543,20 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       });
     };
 
+    // Auto-approval status handler (Phase 35+)
+    const handleAutoApprovalStatus = (status: {
+      consecutiveRequests: number;
+      requestLimit: number;
+      consecutiveCost: number;
+      costLimit: number;
+      requestPercentUsed: number;
+      costPercentUsed: number;
+      limitReached: boolean;
+      limitType?: "requests" | "cost";
+    }) => {
+      setAutoApprovalStatus(status);
+    };
+
     // Subscribe to events
     loop.on("stateChange", handleStateChange);
     loop.on("text", handleText);
@@ -500,6 +580,17 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     // User prompt and completion events
     loop.on("userPrompt:required", handleUserPromptRequired);
     loop.on("completion:attempted", handleCompletionAttempted);
+    // Auto-approval status event (Phase 35+)
+    // Use type cast since event was added in Phase 35+
+    const loopWithAutoApproval = loop as unknown as {
+      on(event: "autoApproval:statusChange", handler: typeof handleAutoApprovalStatus): void;
+      off(event: "autoApproval:statusChange", handler: typeof handleAutoApprovalStatus): void;
+    };
+    try {
+      loopWithAutoApproval.on("autoApproval:statusChange", handleAutoApprovalStatus);
+    } catch {
+      // Event may not exist in older versions
+    }
 
     // Cleanup subscriptions
     return () => {
@@ -526,6 +617,12 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       // User prompt and completion events cleanup
       loop.off("userPrompt:required", handleUserPromptRequired);
       loop.off("completion:attempted", handleCompletionAttempted);
+      // Auto-approval status event cleanup (Phase 35+)
+      try {
+        loopWithAutoApproval.off("autoApproval:statusChange", handleAutoApprovalStatus);
+      } catch {
+        // Event may not exist in older versions
+      }
     };
   }, [loop]);
 
@@ -605,6 +702,7 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     userPromptState,
     submitUserResponse,
     completionState,
+    autoApprovalStatus,
     run,
     cancel,
     clear,

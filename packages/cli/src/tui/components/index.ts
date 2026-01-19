@@ -10,6 +10,8 @@ export { AgentProgress, type AgentProgressProps } from "./AgentProgress.js";
 export * from "./Banner/index.js";
 // Backtrack controls
 export * from "./backtrack/index.js";
+// Checkpoint (Snapshot-based file state) components
+export * from "./Checkpoint/index.js";
 // Cost Display (Phase 35)
 export {
   CostBadge,
@@ -49,6 +51,8 @@ export {
 } from "./ScreenReaderLayout.js";
 // Sidebar components
 export * from "./Sidebar/index.js";
+// Status components (provider health)
+export * from "./Status/index.js";
 export * from "./StatusBar/index.js";
 export * from "./session/index.js";
 // Tip Banner

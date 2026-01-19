@@ -10,8 +10,12 @@ import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 
+import { ProtectedFilesManager } from "../permission/index.js";
 import { defineTool, fail, ok } from "../types/index.js";
 import { validatePath } from "./utils/index.js";
+
+/** Singleton protected files manager for checking file protection status */
+const protectedFilesManager = new ProtectedFilesManager();
 
 /** Default maximum recursion depth */
 const DEFAULT_MAX_DEPTH = 3;
@@ -56,6 +60,8 @@ export interface DirEntry {
   modifiedAt?: string;
   /** Relative path from the listed directory */
   relativePath: string;
+  /** Whether this file matches protected patterns (sensitive files) */
+  isProtected?: boolean;
 }
 
 /** Output type for list_dir tool */
@@ -70,6 +76,8 @@ export interface ListDirOutput {
   dirCount: number;
   /** Whether the listing was truncated (for very large directories) */
   truncated: boolean;
+  /** Whether any protected files were found in the listing */
+  hasProtectedFiles: boolean;
 }
 
 /** Maximum entries to return (to prevent memory issues) */
@@ -141,10 +149,14 @@ async function listDirectory(
       const stats = await stat(entryPath);
       const isDirectory = stats.isDirectory();
 
+      // Check if file is protected (matches sensitive file patterns)
+      const isProtected = !isDirectory && protectedFilesManager.isProtected(entryPath);
+
       const entry: DirEntry = {
         name,
         type: isDirectory ? "directory" : "file",
         relativePath,
+        ...(isProtected && { isProtected: true }),
       };
 
       if (!isDirectory) {
@@ -244,6 +256,7 @@ export const listDirTool = defineTool({
 
       const fileCount = entries.filter((e) => e.type === "file").length;
       const dirCount = entries.filter((e) => e.type === "directory").length;
+      const hasProtectedFiles = entries.some((e) => e.isProtected === true);
 
       return ok({
         path: resolvedPath,
@@ -251,6 +264,7 @@ export const listDirTool = defineTool({
         fileCount,
         dirCount,
         truncated: entries.length >= MAX_ENTRIES,
+        hasProtectedFiles,
       });
     } catch (error) {
       if (error instanceof Error) {

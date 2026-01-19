@@ -51,6 +51,22 @@ export type {
 } from "./types.js";
 
 // =============================================================================
+// Limit Types (Phase 35+)
+// =============================================================================
+
+export type {
+  CostApprovedEvent,
+  CostLimitHandlerEvents,
+  CostLimitReachedEvent,
+  CostLimitsConfig,
+  CostWarningEvent,
+  LimitCheckResult,
+  LimitReason,
+} from "./types-limits.js";
+
+export { CostLimitsConfigSchema } from "./types-limits.js";
+
+// =============================================================================
 // Pricing
 // =============================================================================
 
@@ -82,3 +98,9 @@ export {
 // =============================================================================
 
 export { CostService, createCostService } from "./service.js";
+
+// =============================================================================
+// Limit Handler (Phase 35+)
+// =============================================================================
+
+export { CostLimitHandler, createCostLimitHandler } from "./limit-handler.js";

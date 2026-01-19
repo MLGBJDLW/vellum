@@ -12,6 +12,11 @@
  */
 
 import { type DoomLoopResult, detectDoomLoop, type ToolCall } from "./doom.js";
+import type {
+  LLMLoopCheckResult,
+  LLMLoopVerifier,
+  LLMLoopVerifierConfig,
+} from "./llm-loop-verifier.js";
 import {
   extractTextFromMessages,
   LLMStuckDetector,
@@ -45,6 +50,8 @@ export interface CombinedLoopResult {
   doomLoop?: DoomLoopResult;
   /** Details about LLM stuck detection */
   stuckDetection?: StuckResult;
+  /** Details about LLM verification (if performed) */
+  llmVerification?: LLMLoopCheckResult;
   /** Human-readable description */
   description?: string;
 }
@@ -61,12 +68,19 @@ export interface LoopDetectionConfig {
   enableStuckDetection?: boolean;
   /** Configuration for stuck detection */
   stuckDetectorConfig?: StuckDetectorConfig;
+  /** Enable LLM-based loop verification for borderline cases */
+  enableLLMVerification?: boolean;
+  /** Configuration for LLM loop verifier */
+  llmVerifierConfig?: LLMLoopVerifierConfig;
 }
 
 /**
  * Default configuration for loop detection.
  */
-export const DEFAULT_LOOP_DETECTION_CONFIG: Required<LoopDetectionConfig> = {
+export const DEFAULT_LOOP_DETECTION_CONFIG: Required<
+  Omit<LoopDetectionConfig, "llmVerifierConfig">
+> &
+  Pick<LoopDetectionConfig, "llmVerifierConfig"> = {
   enableDoomLoop: true,
   doomLoopThreshold: 3,
   enableStuckDetection: true,
@@ -77,6 +91,8 @@ export const DEFAULT_LOOP_DETECTION_CONFIG: Required<LoopDetectionConfig> = {
     enableLLMFallback: false,
     borderlineZone: [0.75, 0.9],
   },
+  enableLLMVerification: false,
+  llmVerifierConfig: undefined,
 };
 
 /**
@@ -87,6 +103,16 @@ export interface LoopDetectionContext {
   toolCalls: ToolCall[];
   /** Recent LLM response texts for stuck detection */
   responses: string[];
+}
+
+/**
+ * Extended context for loop detection with LLM verification support.
+ */
+export interface ExtendedLoopDetectionContext extends LoopDetectionContext {
+  /** LLM loop verifier instance for borderline case verification */
+  llmVerifier?: LLMLoopVerifier;
+  /** Full session messages for LLM verification (more context than responses) */
+  messages?: import("../session/message.js").SessionMessage[];
 }
 
 /**
@@ -254,6 +280,129 @@ export async function detectLoopAsync(
   }
 
   return combineResults(doomLoopResult, stuckResult);
+}
+
+/**
+ * Enhanced async loop detection with LLM verification for borderline cases.
+ *
+ * When similarity-based detection returns a borderline result (in the borderline zone),
+ * this function can invoke an LLM to verify whether the agent is truly stuck.
+ *
+ * @param context - Extended detection context with optional LLM verifier
+ * @param config - Optional configuration
+ * @returns Promise resolving to combined detection result with optional LLM verification
+ */
+export async function detectLoopWithVerification(
+  context: ExtendedLoopDetectionContext,
+  config: LoopDetectionConfig = {}
+): Promise<CombinedLoopResult> {
+  const cfg = { ...DEFAULT_LOOP_DETECTION_CONFIG, ...config };
+
+  let doomLoopResult: DoomLoopResult | undefined;
+  let stuckResult: StuckResult | undefined;
+  let llmVerificationResult: LLMLoopCheckResult | undefined;
+
+  // Run doom loop detection (synchronous, deterministic)
+  if (cfg.enableDoomLoop && context.toolCalls.length >= cfg.doomLoopThreshold) {
+    doomLoopResult = detectDoomLoop(context.toolCalls, { threshold: cfg.doomLoopThreshold });
+  }
+
+  // If doom loop detected, no need for further analysis
+  if (doomLoopResult?.detected) {
+    return combineResultsWithVerification(doomLoopResult, undefined, undefined);
+  }
+
+  // Run LLM stuck detection
+  if (
+    cfg.enableStuckDetection &&
+    context.responses.length >= (cfg.stuckDetectorConfig?.windowSize ?? 3)
+  ) {
+    const detector = new LLMStuckDetector(cfg.stuckDetectorConfig);
+    stuckResult = await detector.detectAsync(context.responses);
+  }
+
+  // Check if we should run LLM verification for borderline cases
+  const shouldVerifyWithLLM =
+    cfg.enableLLMVerification &&
+    context.llmVerifier &&
+    context.messages &&
+    context.messages.length >= 3 &&
+    isBorderlineResult(stuckResult, cfg.stuckDetectorConfig?.borderlineZone);
+
+  if (shouldVerifyWithLLM && context.llmVerifier && context.messages) {
+    // Only verify if the verifier's turn counter says it's time
+    if (context.llmVerifier.isDue()) {
+      llmVerificationResult = await context.llmVerifier.verify(context.messages);
+    }
+  }
+
+  return combineResultsWithVerification(doomLoopResult, stuckResult, llmVerificationResult);
+}
+
+/**
+ * Checks if a stuck result is in the borderline zone.
+ */
+function isBorderlineResult(
+  result: StuckResult | undefined,
+  borderlineZone?: [number, number]
+): boolean {
+  if (!result?.similarityScore) return false;
+  const [low, high] = borderlineZone ?? [0.75, 0.9];
+  return result.similarityScore >= low && result.similarityScore < high;
+}
+
+/**
+ * Combines results including LLM verification.
+ */
+function combineResultsWithVerification(
+  doomLoop?: DoomLoopResult,
+  stuck?: StuckResult,
+  llmVerification?: LLMLoopCheckResult
+): CombinedLoopResult {
+  // Start with the base combination
+  const baseResult = combineResults(doomLoop, stuck);
+
+  // If no LLM verification was performed, return base result
+  if (!llmVerification) {
+    return baseResult;
+  }
+
+  // Add LLM verification to the result
+  const resultWithVerification: CombinedLoopResult = {
+    ...baseResult,
+    llmVerification,
+  };
+
+  // If LLM verification has high confidence, it can override similarity-based detection
+  if (llmVerification.confidence >= 0.9) {
+    if (llmVerification.isStuck && !baseResult.detected) {
+      // LLM says stuck but similarity didn't detect - trust LLM with high confidence
+      return {
+        ...resultWithVerification,
+        type: "llm_stuck",
+        detected: true,
+        confidence: llmVerification.confidence,
+        suggestedAction: "intervene",
+        description: `LLM verification detected loop: ${llmVerification.analysis}`,
+      };
+    } else if (!llmVerification.isStuck && baseResult.detected && baseResult.type === "llm_stuck") {
+      // LLM says not stuck but similarity detected - trust LLM for borderline cases
+      // Only override if the original detection was borderline (not high confidence doom loop)
+      if (baseResult.confidence < 0.9) {
+        return {
+          ...resultWithVerification,
+          type: "none",
+          detected: false,
+          confidence: llmVerification.confidence,
+          suggestedAction: "continue",
+          description: `LLM verification cleared false positive: ${llmVerification.analysis}`,
+        };
+      }
+    }
+  }
+
+  // For lower confidence or confirming results, just add the verification info
+  return resultWithVerification;
 }
 
 /**

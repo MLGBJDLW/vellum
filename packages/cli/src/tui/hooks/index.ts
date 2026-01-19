@@ -155,6 +155,14 @@ export {
   type UsePersistenceShortcutsReturn,
   usePersistenceShortcuts,
 } from "./usePersistenceShortcuts.js";
+// Provider status hook (circuit breaker states)
+export {
+  type CircuitState,
+  type ProviderStatusEntry,
+  type UseProviderStatusOptions,
+  type UseProviderStatusReturn,
+  useProviderStatus,
+} from "./useProviderStatus.js";
 export {
   type AnnouncementPriority,
   formatForScreenReader,
@@ -190,6 +198,12 @@ export {
   type UseSmoothScrollReturn,
   useSmoothScroll,
 } from "./useSmoothScroll.js";
+// Snapshot-based checkpoint hook
+export {
+  type RestoreResult,
+  type UseSnapshotsResult,
+  useSnapshots,
+} from "./useSnapshots.js";
 // State and ref hook for stable callbacks (Gemini CLI pattern)
 export { useStateAndRef } from "./useStateAndRef.js";
 // Terminal size hook (responsive layouts)

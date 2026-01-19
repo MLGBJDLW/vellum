@@ -65,6 +65,14 @@ export {
   sessionsToContexts,
   sessionToContext,
 } from "./context-integration.js";
+// Cost Limit Integration (Phase 35+)
+export {
+  type CostCheckResult,
+  CostLimitIntegration,
+  type CostLimitIntegrationConfig,
+  type CostLimitIntegrationEvents,
+  createCostLimitIntegration,
+} from "./cost-limit-integration.js";
 // Doom Loop Detection (T018)
 export {
   countConsecutiveIdenticalCalls,
@@ -91,6 +99,15 @@ export {
 } from "./legacy-modes.js";
 // Agent Level Hierarchy (T001) - canSpawn function, T013 - canAgentSpawn function
 export { canAgentSpawn, canSpawn } from "./level.js";
+// LLM Loop Verifier (T041)
+export {
+  createLLMJudgmentCallback,
+  createLLMLoopVerifier,
+  DEFAULT_LLM_LOOP_VERIFIER_CONFIG,
+  type LLMLoopCheckResult,
+  LLMLoopVerifier,
+  type LLMLoopVerifierConfig,
+} from "./llm-loop-verifier.js";
 export {
   AgentLoop,
   type AgentLoopConfig,
@@ -103,6 +120,8 @@ export {
   DEFAULT_LOOP_DETECTION_CONFIG,
   detectLoop,
   detectLoopAsync,
+  detectLoopWithVerification,
+  type ExtendedLoopDetectionContext,
   getLoopWarningLevel,
   type LoopAction,
   type LoopDetectionConfig,
@@ -230,7 +249,6 @@ export {
   type ShutdownResult,
   type ShutdownSignal,
 } from "./shutdown.js";
-
 // Similarity Functions (T019)
 export {
   averageSimilarity,
@@ -265,6 +283,15 @@ export {
   type SnapshotContext,
   type StatePersister,
 } from "./state-persister.js";
+// Streaming Loop Detection
+export {
+  DEFAULT_STREAMING_LOOP_CONFIG,
+  type StreamingLoopConfig,
+  StreamingLoopDetector,
+  type StreamingLoopResult,
+  type StreamingLoopState,
+  type StreamingLoopType,
+} from "./streaming-loop-detector.js";
 // LLM Stuck Detection (T020)
 export {
   createStuckDetector,

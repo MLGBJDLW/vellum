@@ -10,6 +10,8 @@ import type { UserPromptSignal } from "../builtin/ask-followup.js";
 import type { AttemptCompletionOutput } from "../builtin/attempt-completion.js";
 import type { DelegateAgentSignal } from "../builtin/delegate-agent.js";
 import { SessionAgentsIntegration } from "../context/agents/session-integration.js";
+import type { CostService } from "../cost/service.js";
+import type { CostLimitsConfig } from "../cost/types-limits.js";
 import { ErrorCode, VellumError } from "../errors/index.js";
 import type { LLMLogger } from "../logger/llm-logger.js";
 import type { Logger } from "../logger/logger.js";
@@ -55,12 +57,24 @@ import {
   type ContextManagerConfig,
   createContextIntegrationFromLoopConfig,
 } from "./context-integration.js";
+import { CostLimitIntegration } from "./cost-limit-integration.js";
 import type { AgentLevel } from "./level.js";
-import { type CombinedLoopResult, detectLoop } from "./loop-detection.js";
+import type { LLMLoopVerifier } from "./llm-loop-verifier.js";
+import {
+  type CombinedLoopResult,
+  detectLoop,
+  detectLoopWithVerification,
+  type ExtendedLoopDetectionContext,
+} from "./loop-detection.js";
 import type { ModeConfig } from "./modes.js";
 import { fromPromptBuilder } from "./prompt.js";
 import type { AgentState, StateContext } from "./state.js";
 import { createStateContext, isValidTransition } from "./state.js";
+import {
+  type StreamingLoopConfig,
+  StreamingLoopDetector,
+  type StreamingLoopResult,
+} from "./streaming-loop-detector.js";
 import {
   createTerminationContext,
   TerminationChecker,
@@ -174,6 +188,63 @@ export interface AgentLoopConfig {
    * @default true
    */
   continueAfterTools?: boolean;
+  /**
+   * Cost limits configuration for guardrails (Phase 35+).
+   * When configured, tracks cost/requests and can pause for approval.
+   */
+  costLimits?: CostLimitsConfig;
+  /**
+   * CostService instance for cost tracking (Phase 35+).
+   * Required if costLimits is configured.
+   */
+  costService?: CostService;
+  /**
+   * LLM-based loop verification configuration (T041).
+   * When enabled, uses an LLM to verify borderline loop detections.
+   */
+  llmLoopVerification?: {
+    /**
+     * Enable LLM-based loop verification.
+     * @default false
+     */
+    enabled: boolean;
+    /**
+     * Confidence threshold for trusting LLM verification results.
+     * @default 0.9
+     */
+    confidenceThreshold?: number;
+    /**
+     * Number of turns between LLM verification checks.
+     * @default 30
+     */
+    checkIntervalTurns?: number;
+    /**
+     * Maximum messages to include in verification analysis.
+     * @default 20
+     */
+    maxHistoryMessages?: number;
+  };
+  /**
+   * Streaming loop detection configuration.
+   * Detects loops during streaming, not just after turn completion.
+   */
+  streamingLoopDetection?: {
+    /**
+     * Enable streaming loop detection.
+     * @default false
+     */
+    enabled: boolean;
+    /**
+     * Configuration options for the streaming loop detector.
+     */
+    config?: StreamingLoopConfig;
+    /**
+     * Interrupt the stream when a loop is detected.
+     * When true, aborts the stream and adds partial response to history.
+     * @default false
+     */
+    interruptOnDetection?: boolean;
+  };
 }
 
 /**
@@ -210,6 +281,8 @@ export interface AgentLoopEvents {
   terminated: [reason: TerminationReason, result: TerminationResult];
   /** Emitted when loop detection finds a potential issue (T021) */
   loopDetected: [result: CombinedLoopResult];
+  /** Emitted when streaming loop detection finds a potential issue during streaming */
+  "streaming:loopDetected": [result: StreamingLoopResult];
   /** Emitted when a retry is attempted (T025) */
   retry: [attempt: number, error: Error, delay: number];
   /** Emitted when all retries are exhausted (T025) */
@@ -237,6 +310,37 @@ export interface AgentLoopEvents {
   /** Emitted when agent attempts completion (GAP 2 fix - attempt_completion) */
   "completion:attempted": [
     completion: { result: string; verified: boolean; verificationPassed?: boolean },
+  ];
+  /** Emitted when approaching a cost/request limit (Phase 35+) */
+  "cost:warning": [
+    event: { type: "cost" | "requests"; current: number; limit: number; percentUsed: number },
+  ];
+  /** Emitted when a cost/request limit is reached (Phase 35+) */
+  "cost:limitReached": [
+    event: { type: "cost" | "requests"; current: number; limit: number; requiresApproval: boolean },
+  ];
+  /** Emitted when awaiting user approval to continue past limit (Phase 35+) */
+  "cost:awaitingApproval": [
+    limits: {
+      costUsed: number;
+      costLimit?: number;
+      requestsUsed: number;
+      requestLimit?: number;
+      percentUsed: number;
+    },
+  ];
+  /** Emitted when auto-approval status changes (Phase 35+) */
+  "autoApproval:statusChange": [
+    status: {
+      consecutiveRequests: number;
+      requestLimit: number;
+      consecutiveCost: number;
+      costLimit: number;
+      requestPercentUsed: number;
+      costPercentUsed: number;
+      limitReached: boolean;
+      limitType?: "requests" | "cost";
+    },
   ];
 }
 
@@ -330,6 +434,15 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** ModeManager for coding mode integration (T057) */
   private readonly modeManager?: import("./mode-manager.js").ModeManager;
 
+  /** LLM Loop Verifier for borderline case verification (T041) */
+  private llmLoopVerifier?: LLMLoopVerifier;
+
+  /** Streaming loop detector for real-time loop detection */
+  private readonly streamingLoopDetector?: StreamingLoopDetector;
+
+  /** Whether to interrupt stream on loop detection */
+  private readonly interruptOnStreamingLoop: boolean;
+
   /** Current iteration count for the agentic loop (T058) */
   private iterationCount = 0;
 
@@ -366,6 +479,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
   /** Context integration for automatic context management (T403) */
   private contextIntegration?: ContextIntegration;
+
+  /** Cost limit integration for guardrails (Phase 35+) */
+  private costLimitIntegration?: CostLimitIntegration;
 
   constructor(config: AgentLoopConfig) {
     super();
@@ -479,6 +595,54 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         enabled: true,
       });
     }
+
+    // Initialize Cost Limit integration if configured (Phase 35+)
+    if (config.costLimits && config.costService) {
+      this.costLimitIntegration = new CostLimitIntegration({
+        costService: config.costService,
+        limits: config.costLimits,
+        providerType: config.providerType,
+        model: config.model,
+        logger: this.logger,
+      });
+
+      // Forward cost events to AgentLoop events
+      this.costLimitIntegration.on("cost:warning", (event) => {
+        this.emit("cost:warning", event);
+      });
+
+      this.costLimitIntegration.on("cost:limitReached", (event) => {
+        this.emit("cost:limitReached", event);
+      });
+
+      this.costLimitIntegration.on("cost:awaitingApproval", (limits) => {
+        this.emit("cost:awaitingApproval", limits);
+      });
+
+      this.logger?.debug("Cost limit integration initialized", {
+        maxCostPerSession: config.costLimits.maxCostPerSession,
+        maxRequestsPerSession: config.costLimits.maxRequestsPerSession,
+        warningThreshold: config.costLimits.warningThreshold,
+        pauseOnLimitReached: config.costLimits.pauseOnLimitReached,
+      });
+    }
+
+    // Initialize streaming loop detector if enabled
+    if (config.streamingLoopDetection?.enabled) {
+      this.streamingLoopDetector = new StreamingLoopDetector(config.streamingLoopDetection.config);
+      this.interruptOnStreamingLoop = config.streamingLoopDetection.interruptOnDetection ?? false;
+
+      this.logger?.debug("Streaming loop detector initialized", {
+        interruptOnDetection: this.interruptOnStreamingLoop,
+        config: this.streamingLoopDetector.getConfig(),
+      });
+    } else {
+      this.interruptOnStreamingLoop = false;
+    }
+
+    // Note: LLM Loop Verifier is lazy-initialized when first needed
+    // via setLLMLoopVerifier() method, as it requires an LLMProvider instance.
+    // The config.llmLoopVerification settings are stored for later use.
   }
 
   /**
@@ -518,9 +682,70 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
   /**
    * Adds a message to the conversation.
+   *
+   * If this is a user message, resets auto-approval counters to ensure
+   * the user stays engaged with the agent's actions (safety measure).
    */
   addMessage(message: SessionMessage): void {
     this.messages.push(message);
+
+    // Reset auto-approval counters on user message for safety
+    if (message.role === "user") {
+      this.resetAutoApprovalCounters();
+    }
+  }
+
+  /**
+   * Resets auto-approval counters on user interaction.
+   *
+   * This is a safety measure to ensure the user stays engaged with
+   * the agent's autonomous actions. Called automatically when a user
+   * message is added.
+   *
+   * @example
+   * ```typescript
+   * // Manual reset (if needed)
+   * loop.resetAutoApprovalCounters();
+   * ```
+   */
+  resetAutoApprovalCounters(): void {
+    const checker = this.config.permissionChecker;
+    if (checker instanceof DefaultPermissionChecker) {
+      const handler = checker.autoApprovalHandler;
+      handler.resetOnUserMessage();
+
+      // Emit status update
+      const state = handler.getState();
+      this.emit("autoApproval:statusChange", {
+        consecutiveRequests: state.consecutiveRequests,
+        requestLimit: state.requestLimit,
+        consecutiveCost: state.consecutiveCost,
+        costLimit: state.costLimit,
+        requestPercentUsed: state.requestPercentUsed,
+        costPercentUsed: state.costPercentUsed,
+        limitReached: state.requestLimitReached || state.costLimitReached,
+        limitType: state.requestLimitReached
+          ? "requests"
+          : state.costLimitReached
+            ? "cost"
+            : undefined,
+      });
+
+      this.logger?.debug("Auto-approval counters reset on user interaction", state);
+    }
+  }
+
+  /**
+   * Gets the current auto-approval status.
+   *
+   * @returns Auto-approval state or null if not using DefaultPermissionChecker
+   */
+  getAutoApprovalStatus(): import("../permission/auto-approval.js").AutoApprovalState | null {
+    const checker = this.config.permissionChecker;
+    if (checker instanceof DefaultPermissionChecker) {
+      return checker.autoApprovalHandler.getState();
+    }
+    return null;
   }
 
   /**
@@ -794,6 +1019,87 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   }
 
   /**
+   * Runs enhanced loop detection with LLM verification for borderline cases (T041).
+   *
+   * Uses the LLM loop verifier when:
+   * - LLM verification is enabled in config
+   * - A verifier instance is set
+   * - The similarity-based detection is in a borderline state
+   *
+   * @returns Promise resolving to CombinedLoopResult with optional LLM verification
+   */
+  async checkLoopDetectionAsync(): Promise<CombinedLoopResult> {
+    const llmVerificationConfig = this.config.llmLoopVerification;
+
+    // If LLM verification is not enabled or no verifier is set, use sync detection
+    if (!llmVerificationConfig?.enabled || !this.llmLoopVerifier) {
+      return this.checkLoopDetection();
+    }
+
+    // Build extended context for verification
+    const extendedContext: ExtendedLoopDetectionContext = {
+      toolCalls: this.recentToolCalls,
+      responses: this.recentResponses,
+      llmVerifier: this.llmLoopVerifier,
+      messages: this.messages,
+    };
+
+    // Run detection with LLM verification support
+    const result = await detectLoopWithVerification(extendedContext, {
+      enableLLMVerification: true,
+      llmVerifierConfig: {
+        confidenceThreshold: llmVerificationConfig.confidenceThreshold,
+        checkIntervalTurns: llmVerificationConfig.checkIntervalTurns,
+        maxHistoryMessages: llmVerificationConfig.maxHistoryMessages,
+      },
+    });
+
+    if (result.detected) {
+      this.emit("loopDetected", result);
+    }
+
+    // Log LLM verification if it was performed
+    if (result.llmVerification) {
+      this.logger?.debug("LLM loop verification performed", {
+        isStuck: result.llmVerification.isStuck,
+        confidence: result.llmVerification.confidence,
+        analysis: result.llmVerification.analysis,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Sets the LLM loop verifier instance for borderline case verification (T041).
+   *
+   * The verifier requires an initialized LLMProvider, so it must be set
+   * externally after the provider is ready.
+   *
+   * @param verifier - LLMLoopVerifier instance
+   */
+  setLLMLoopVerifier(verifier: LLMLoopVerifier): void {
+    this.llmLoopVerifier = verifier;
+    this.logger?.debug("LLM loop verifier set", {
+      config: verifier.getConfig(),
+    });
+  }
+
+  /**
+   * Gets the LLM loop verifier instance if set.
+   */
+  getLLMLoopVerifier(): LLMLoopVerifier | undefined {
+    return this.llmLoopVerifier;
+  }
+
+  /**
+   * Gets the streaming loop detector instance if enabled.
+   */
+  getStreamingLoopDetector(): StreamingLoopDetector | undefined {
+    return this.streamingLoopDetector;
+  }
+
+  /**
    * Resets the termination context for a new run (T021).
    */
   resetTerminationContext(): void {
@@ -802,6 +1108,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.recentResponses = [];
     // GAP 2 FIX: Reset completion state as well
     this.completionAttempted = false;
+    // Reset streaming loop detector
+    this.streamingLoopDetector?.reset();
   }
 
   /**
@@ -900,7 +1208,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private async processStreamResponse(
     stream: AsyncIterable<StreamEvent>,
     pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
-  ): Promise<void> {
+  ): Promise<{ interrupted: boolean }> {
+    // Reset streaming loop detector at start of new stream
+    this.streamingLoopDetector?.reset();
+
     if (this.useStreamProcessor && this.streamProcessor) {
       const wrappedStream = this.wrapStreamForProcessor(stream);
       const result = await this.streamProcessor.processStream(wrappedStream);
@@ -932,13 +1243,21 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         }
       }
       this.streamProcessor.reset();
+      return { interrupted: false };
     } else {
       for await (const event of stream) {
         if (this.cancellation.isCancelled) {
           break;
         }
-        await this.handleStreamEvent(event, pendingToolCalls);
+        const result = await this.handleStreamEvent(event, pendingToolCalls);
+        if (result.loopDetected) {
+          // Loop detected and interrupt requested - abort stream
+          this.logger?.warn("Interrupting stream due to loop detection");
+          this.abortController?.abort();
+          return { interrupted: true };
+        }
       }
+      return { interrupted: false };
     }
   }
 
@@ -1160,7 +1479,41 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Track and process pending tool calls
       const pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> =
         [];
-      await this.processStreamResponse(stream, pendingToolCalls);
+      const streamResult = await this.processStreamResponse(stream, pendingToolCalls);
+
+      // Handle stream interruption due to loop detection
+      if (streamResult.interrupted) {
+        this.logger?.warn("Stream interrupted due to loop detection", {
+          accumulatedTextLength: this.accumulatedText.length,
+          pendingToolCalls: pendingToolCalls.length,
+        });
+
+        // Add partial response to history if we have any content
+        if (this.accumulatedText.trim() || this.accumulatedReasoning.trim()) {
+          const assistantParts: import("../session/index.js").SessionMessagePart[] = [];
+          if (this.accumulatedReasoning.trim()) {
+            assistantParts.push(SessionParts.reasoning(this.accumulatedReasoning));
+          }
+          if (this.accumulatedText.trim()) {
+            assistantParts.push(
+              SessionParts.text(`${this.accumulatedText}\n[Interrupted: Loop detected]`)
+            );
+          }
+          const assistantMessage = createAssistantMessage(assistantParts, {
+            model: this.config.model,
+            provider: this.config.providerType,
+          });
+          this.messages.push(assistantMessage);
+        }
+
+        // Reset accumulators
+        this.accumulatedText = "";
+        this.accumulatedReasoning = "";
+
+        this.transitionTo("idle");
+        this.emit("complete");
+        return;
+      }
 
       if (
         !this.cancellation.isCancelled &&
@@ -2178,7 +2531,28 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private async handleStreamEvent(
     event: LLMStreamEvent,
     pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
-  ): Promise<void> {
+  ): Promise<{ loopDetected: boolean }> {
+    // Check streaming loop detector if enabled
+    if (this.streamingLoopDetector) {
+      // Convert LLMStreamEvent to StreamEvent for detector
+      const streamEvent = this.convertToStreamEvent(event);
+      if (streamEvent) {
+        const loopResult = this.streamingLoopDetector.addAndCheck(streamEvent);
+        if (loopResult.detected) {
+          this.emit("streaming:loopDetected", loopResult);
+          this.logger?.warn("Streaming loop detected", {
+            type: loopResult.type,
+            evidence: loopResult.evidence,
+            confidence: loopResult.confidence,
+          });
+
+          if (this.interruptOnStreamingLoop) {
+            return { loopDetected: true };
+          }
+        }
+      }
+    }
+
     switch (event.type) {
       case "text": {
         const textContent = event.content ?? (event as { text?: string }).text ?? "";
@@ -2220,16 +2594,29 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         // Partial tool call - ignore for now, handled when complete
         break;
 
-      case "usage":
-        // Emit usage statistics (including thinkingTokens for extended thinking models)
-        this.emit("usage", {
+      case "usage": {
+        const usageData = {
           inputTokens: event.inputTokens,
           outputTokens: event.outputTokens,
           thinkingTokens: event.thinkingTokens,
           cacheReadTokens: event.cacheReadTokens,
           cacheWriteTokens: event.cacheWriteTokens,
-        });
+        };
+
+        // Emit usage statistics (including thinkingTokens for extended thinking models)
+        this.emit("usage", usageData);
+
+        // Track usage with cost limit integration (Phase 35+)
+        if (this.costLimitIntegration) {
+          const costResult = this.costLimitIntegration.trackUsage(usageData);
+          this.logger?.debug("Cost limit check after usage", {
+            withinLimits: costResult.limits.withinLimits,
+            percentUsed: costResult.limits.percentUsed.toFixed(1),
+            awaitingApproval: costResult.awaitingApproval,
+          });
+        }
         break;
+      }
 
       case "error":
         // Emit error
@@ -2240,6 +2627,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         // Stream complete - handle in run() after loop exits
         break;
     }
+
+    return { loopDetected: false };
   }
 
   /**
@@ -2417,6 +2806,45 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    */
   getActiveSkills(): SkillLoaded[] {
     return [...this.activeSkills];
+  }
+
+  // ============================================
+  // Cost Limit Integration (Phase 35+)
+  // ============================================
+
+  /**
+   * Returns the CostLimitIntegration instance if configured.
+   */
+  getCostLimitIntegration(): CostLimitIntegration | undefined {
+    return this.costLimitIntegration;
+  }
+
+  /**
+   * Check if cost limits allow continuation.
+   *
+   * @returns true if within limits or no limits configured
+   */
+  checkCostLimits(): boolean {
+    if (!this.costLimitIntegration) {
+      return true;
+    }
+    return this.costLimitIntegration.checkLimits().withinLimits;
+  }
+
+  /**
+   * Grant approval to continue past cost limit.
+   *
+   * @param extendLimit - Optional new limits to set
+   */
+  grantCostApproval(extendLimit?: { cost?: number; requests?: number }): void {
+    this.costLimitIntegration?.grantApproval(extendLimit);
+  }
+
+  /**
+   * Deny approval (stop execution due to cost limit).
+   */
+  denyCostApproval(): void {
+    this.costLimitIntegration?.denyApproval();
   }
 
   /**

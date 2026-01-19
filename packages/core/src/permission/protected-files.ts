@@ -284,3 +284,62 @@ export class ProtectedFilesManager {
     this.#ignoreInstance = this.#buildIgnore();
   }
 }
+
+// ============================================
+// Protected File Indicator
+// ============================================
+
+/**
+ * Indicator prefix for protected files in directory listings.
+ * Uses [#] to indicate protection status (no emoji for compatibility).
+ */
+export const PROTECTED_FILE_INDICATOR = "[#]" as const;
+
+/**
+ * Format a list of file names/paths with protection indicators.
+ *
+ * Files matching protected patterns will be prefixed with [#].
+ *
+ * @param files - Array of file names or paths to format
+ * @param basePath - Base path for resolving relative paths
+ * @param protectedFilesManager - Manager instance to check protection status
+ * @returns Array of formatted file names with [#] prefix for protected files
+ *
+ * @example
+ * ```typescript
+ * const manager = new ProtectedFilesManager();
+ * const files = ['.env', 'config.ts', 'secrets.json'];
+ * const formatted = formatFileListWithProtection(files, '/project', manager);
+ * // Returns: ['[#] .env', 'config.ts', '[#] secrets.json']
+ * ```
+ */
+export function formatFileListWithProtection(
+  files: readonly string[],
+  basePath: string,
+  protectedFilesManager: ProtectedFilesManager
+): string[] {
+  return files.map((file) => {
+    // Construct full path for checking
+    const fullPath = basePath ? `${basePath}/${file}` : file;
+    const isProtected = protectedFilesManager.isProtected(fullPath);
+    return isProtected ? `${PROTECTED_FILE_INDICATOR} ${file}` : file;
+  });
+}
+
+/**
+ * Check if a single file is protected and return formatted name.
+ *
+ * @param fileName - File name to check
+ * @param basePath - Base path for resolving
+ * @param protectedFilesManager - Manager instance
+ * @returns Formatted file name with [#] prefix if protected
+ */
+export function formatFileWithProtection(
+  fileName: string,
+  basePath: string,
+  protectedFilesManager: ProtectedFilesManager
+): string {
+  const fullPath = basePath ? `${basePath}/${fileName}` : fileName;
+  const isProtected = protectedFilesManager.isProtected(fullPath);
+  return isProtected ? `${PROTECTED_FILE_INDICATOR} ${fileName}` : fileName;
+}
