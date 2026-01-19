@@ -8,9 +8,10 @@
  * - Collapsible: Toggle between collapsed (1-line summary) and expanded view
  * - Duration display: Shows how long thinking took (e.g., "Thought for 3.2s")
  * - Streaming indicator: Shows spinner while thinking is in progress
- * - Character count: Shows length in collapsed mode (e.g., "💭 (1,234 chars)")
+ * - Character count: Shows length in collapsed mode (e.g., "[...] (1,234 chars)")
  * - Keyboard toggle: 't' key to toggle expand/collapse
  * - Visual distinction: Box border to separate from main content
+ * - Tool calls: Optional inline display of tool calls within thinking block
  *
  * @module tui/components/Messages/ThinkingBlock
  */
@@ -18,9 +19,14 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
+import { useAnimationFrame } from "../../context/AnimationContext.js";
+import type { ToolCallInfo } from "../../context/MessagesContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
 import { useTheme } from "../../theme/index.js";
 import { SPINNER_STYLES, Spinner } from "../common/Spinner.js";
+
+// Spinner frames for tool call status
+const TOOL_SPINNER_FRAMES = ["-", "\\", "|", "/"];
 
 // =============================================================================
 // Types
@@ -50,6 +56,8 @@ export interface ThinkingBlockProps {
   readonly showCharCount?: boolean;
   /** Callback when toggle state changes */
   readonly onToggle?: (collapsed: boolean) => void;
+  /** Tool calls to display inline within the thinking block */
+  readonly toolCalls?: readonly ToolCallInfo[];
 }
 
 // =============================================================================
@@ -133,6 +141,7 @@ function getPreview(content: string, maxLines: number, maxChars: number): string
  * />
  * ```
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: ThinkingBlock UI inherently complex due to multiple render modes
 export function ThinkingBlock({
   content,
   durationMs,
@@ -144,8 +153,12 @@ export function ThinkingBlock({
   collapsedPreviewChars = 80,
   showCharCount = true,
   onToggle,
+  toolCalls,
 }: ThinkingBlockProps): React.JSX.Element | null {
   const { theme } = useTheme();
+
+  // Animation frame for tool call spinners
+  const frameIndex = useAnimationFrame(TOOL_SPINNER_FRAMES);
 
   const { isCollapsed, toggle: _toggle } = useCollapsible({
     initialCollapsed,
@@ -159,6 +172,9 @@ export function ThinkingBlock({
   const thinkingColor = theme.colors.warning ?? "yellow";
   const mutedColor = theme.semantic.text.muted;
   const borderColor = theme.colors.warning ?? "yellow";
+  const accentColor = theme.colors.accent ?? "cyan";
+  const successColor = theme.colors.success ?? "green";
+  const errorColor = theme.colors.error ?? "red";
 
   // Memoized values
   const charCount = useMemo(() => content.length, [content]);
@@ -219,7 +235,7 @@ export function ThinkingBlock({
         )}
 
         {/* Icon */}
-        <Text color={thinkingColor}>💭 </Text>
+        <Text color={thinkingColor}>[...] </Text>
 
         {/* Header text - clickable area concept (visual only in TUI) */}
         <Text
@@ -256,6 +272,52 @@ export function ThinkingBlock({
           <Text color={thinkingColor} dimColor wrap="wrap">
             {content}
           </Text>
+        </Box>
+      )}
+
+      {/* Tool calls (when present) */}
+      {toolCalls && toolCalls.length > 0 && (
+        <Box marginLeft={2} marginTop={0} flexDirection="column">
+          {toolCalls.map((toolCall) => {
+            // Determine status indicator and color
+            let statusIcon: string;
+            let statusColor: string;
+
+            switch (toolCall.status) {
+              case "running":
+              case "pending":
+                statusIcon = TOOL_SPINNER_FRAMES[frameIndex] ?? "-";
+                statusColor = accentColor;
+                break;
+              case "completed":
+                statusIcon = "+";
+                statusColor = successColor;
+                break;
+              case "error":
+                statusIcon = "x";
+                statusColor = errorColor;
+                break;
+              default:
+                statusIcon = "o";
+                statusColor = mutedColor;
+            }
+
+            return (
+              <Box key={toolCall.id} flexDirection="row">
+                <Text color={statusColor}>{statusIcon}</Text>
+                <Text> </Text>
+                <Text color={accentColor} bold>
+                  {toolCall.name}
+                </Text>
+                {toolCall.status === "error" && toolCall.error && (
+                  <Text color={errorColor} dimColor>
+                    {" "}
+                    — {toolCall.error}
+                  </Text>
+                )}
+              </Box>
+            );
+          })}
         </Box>
       )}
     </Box>
@@ -298,7 +360,7 @@ export function CompactThinkingIndicator({
   const { theme } = useTheme();
   const thinkingColor = theme.colors.warning ?? "yellow";
 
-  const parts: string[] = ["💭"];
+  const parts: string[] = ["[...]"];
 
   if (isStreaming) {
     parts.push("Thinking...");

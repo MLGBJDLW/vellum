@@ -13,7 +13,7 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useTheme } from "../../theme/index.js";
 import { formatDuration, useElapsedTime } from "./EnhancedLoadingIndicator.js";
 import { SPINNER_STYLES, Spinner } from "./Spinner.js";
@@ -78,11 +78,11 @@ export const PHASE_LABELS: Record<StreamingPhase, string> = {
  */
 export const PHASE_ICONS: Record<StreamingPhase, string> = {
   idle: "",
-  thinking: "🧠",
-  generating: "✍️",
-  tool_call: "🔧",
-  tool_executing: "⚙️",
-  waiting_confirmation: "⏸️",
+  thinking: "[?]",
+  generating: "[>]",
+  tool_call: "[+]",
+  tool_executing: "[*]",
+  waiting_confirmation: "[.]",
 } as const;
 
 /**
@@ -139,12 +139,36 @@ export function useStreamingPhase(phase: StreamingPhase): {
 // =============================================================================
 
 /**
+ * Custom comparison for React.memo - re-render only when meaningful props change.
+ * Note: rightContent uses referential equality (React nodes).
+ */
+function areStreamingPropsEqual(
+  prev: StreamingIndicatorProps,
+  next: StreamingIndicatorProps
+): boolean {
+  return (
+    prev.phase === next.phase &&
+    prev.label === next.label &&
+    prev.toolName === next.toolName &&
+    prev.showPhaseTime === next.showPhaseTime &&
+    prev.showCancelHint === next.showCancelHint &&
+    prev.cancelHint === next.cancelHint &&
+    prev.spinnerColor === next.spinnerColor &&
+    prev.narrow === next.narrow &&
+    prev.rightContent === next.rightContent
+  );
+}
+
+/**
  * StreamingIndicator - Context-aware streaming phase indicator.
  *
  * Shows different states with appropriate labels and spinners:
  * - Thinking phase: Brain-style spinner, "Thinking..."
  * - Generating phase: Braille spinner, "Generating..."
  * - Tool execution: Arc spinner, "Using [tool name]..."
+ *
+ * Memoized to prevent re-renders from parent context updates.
+ * Internal elapsed time updates are isolated via useElapsedTime hook.
  *
  * @example
  * ```tsx
@@ -167,7 +191,7 @@ export function useStreamingPhase(phase: StreamingPhase): {
  * />
  * ```
  */
-export function StreamingIndicator({
+function StreamingIndicatorImpl({
   phase,
   label,
   toolName,
@@ -286,5 +310,7 @@ export function StreamingIndicator({
     </Box>
   );
 }
+
+export const StreamingIndicator = memo(StreamingIndicatorImpl, areStreamingPropsEqual);
 
 export default StreamingIndicator;

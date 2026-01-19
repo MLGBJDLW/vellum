@@ -109,7 +109,7 @@ export const InitErrorBanner: React.FC<InitErrorBannerProps> = ({ error, compact
       </Box>
 
       <Box marginTop={1}>
-        <Text color="yellow">💡 {suggestion}</Text>
+        <Text color="yellow">[i] {suggestion}</Text>
       </Box>
 
       <Box marginTop={1}>

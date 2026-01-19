@@ -108,7 +108,7 @@ function getFileIcon(suggestion: FileSuggestion): string {
     case "json":
       return "📋";
     case "md":
-      return "📝";
+      return "[f]";
     case "css":
     case "scss":
       return "🎨";
@@ -122,7 +122,7 @@ function getFileIcon(suggestion: FileSuggestion): string {
       return "🐹";
     case "yaml":
     case "yml":
-      return "⚙️";
+      return "[*]";
     default:
       return "📄";
   }

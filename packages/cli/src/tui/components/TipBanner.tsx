@@ -66,7 +66,7 @@ export const TipBanner: React.FC<TipBannerProps> = ({ tip, onDismiss, compact = 
     return (
       <Box>
         <Text color="cyan">
-          {tip.icon ?? "💡"} {tip.title}: {tip.content}
+          {tip.icon ?? "[i]"} {tip.title}: {tip.content}
           <Text color="gray"> [d] {t("tip.dismiss")}</Text>
         </Text>
       </Box>
@@ -84,7 +84,7 @@ export const TipBanner: React.FC<TipBannerProps> = ({ tip, onDismiss, compact = 
     >
       <Box>
         <Text color="cyan" bold>
-          {tip.icon ?? "💡"} {tip.title}
+          {tip.icon ?? "[i]"} {tip.title}
         </Text>
       </Box>
 
