@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { TodoItemData } from "../components/TodoItem.js";
 import type { ToolExecution } from "../context/ToolsContext.js";
 
-export type SidebarContent = "todo" | "memory" | "tools" | "mcp" | "help";
+export type SidebarContent = "todo" | "memory" | "tools" | "mcp" | "help" | "snapshots";
 
 export type SidebarPanelDataOptions = {
   readonly sidebarVisible: boolean;

@@ -88,6 +88,10 @@ import {
 } from "./tui/adapters/session-adapter.js";
 import { Banner } from "./tui/components/Banner/index.js";
 import { BacktrackControls } from "./tui/components/backtrack/BacktrackControls.js";
+import { SnapshotCheckpointPanel } from "./tui/components/Checkpoint/SnapshotCheckpointPanel.js";
+// New status components (Phase 35+)
+import { AutoApprovalStatus } from "./tui/components/common/AutoApprovalStatus.js";
+import { CostWarning } from "./tui/components/common/CostWarning.js";
 import { ErrorBoundary } from "./tui/components/common/ErrorBoundary.js";
 import { DEFAULT_HOTKEYS, HotkeyHelpModal } from "./tui/components/common/HotkeyHelpModal.js";
 import { LoadingIndicator } from "./tui/components/common/Spinner.js";
@@ -104,9 +108,11 @@ import { ModeSelector } from "./tui/components/ModeSelector.js";
 import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
 import { SystemStatusPanel } from "./tui/components/Sidebar/SystemStatusPanel.js";
+import { ModelStatusBar } from "./tui/components/Status/ModelStatusBar.js";
 import { StatusBar } from "./tui/components/StatusBar/StatusBar.js";
 import type { TrustMode } from "./tui/components/StatusBar/TrustModeIndicator.js";
 import { SessionPicker } from "./tui/components/session/SessionPicker.js";
+// Note: ProtectedFileLegend is rendered by tool output formatters, not app.tsx directly
 import type { SessionMetadata, SessionPreviewMessage } from "./tui/components/session/types.js";
 import { TipBanner } from "./tui/components/TipBanner.js";
 import type { TodoItemData } from "./tui/components/TodoItem.js";
@@ -132,8 +138,10 @@ import { useGitStatus } from "./tui/hooks/useGitStatus.js";
 import { type HotkeyDefinition, useHotkeys } from "./tui/hooks/useHotkeys.js";
 import { useInputHistory } from "./tui/hooks/useInputHistory.js";
 import { useModeShortcuts } from "./tui/hooks/useModeShortcuts.js";
+import { useProviderStatus } from "./tui/hooks/useProviderStatus.js";
 import { isScreenReaderEnabled, useScreenReader } from "./tui/hooks/useScreenReader.js";
-import { useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
+import { type SidebarContent, useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
+import { useSnapshots } from "./tui/hooks/useSnapshots.js";
 import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
 import { useVim } from "./tui/hooks/useVim.js";
 import { useWorkspace } from "./tui/hooks/useWorkspace.js";
@@ -999,9 +1007,7 @@ function AppContent({
 
   // Sidebar visibility states
   const [showSidebar, setShowSidebar] = useState(true);
-  const [sidebarContent, setSidebarContent] = useState<"memory" | "todo" | "tools" | "mcp">(
-    "memory"
-  );
+  const [sidebarContent, setSidebarContent] = useState<SidebarContent>("memory");
 
   // Warning ref for thinking mode (used for model capability warnings)
   const thinkingWarningRef = useRef<Set<string>>(new Set());
@@ -1460,6 +1466,110 @@ function AppContent({
   );
 
   // ==========================================================================
+  // Provider Status (ModelStatusBar integration)
+  // ==========================================================================
+
+  // Track provider health status with circuit breaker states
+  const providerStatus = useProviderStatus({
+    initialProviders: [{ id: provider, name: provider, isActive: true }],
+  });
+
+  // ==========================================================================
+  // Snapshots (SnapshotCheckpointPanel integration)
+  // ==========================================================================
+
+  const snapshots = useSnapshots();
+
+  // Cost tracking state for CostWarning component
+  const [costWarningState, setCostWarningState] = useState<{
+    show: boolean;
+    limitReached: boolean;
+    percentUsed: number;
+    costLimit: number;
+    requestLimit: number;
+  }>({ show: false, limitReached: false, percentUsed: 0, costLimit: 10, requestLimit: 100 });
+
+  // Auto-approval status state for AutoApprovalStatus component
+  // NOTE: setAutoApprovalState is kept for future integration with AgentLoop's
+  // getAutoApprovalStatus() method. Currently set via useEffect below.
+  const [autoApprovalState, setAutoApprovalState] = useState<{
+    consecutiveRequests: number;
+    requestLimit: number;
+    consecutiveCost: number;
+    costLimit: number;
+    requestPercentUsed: number;
+    costPercentUsed: number;
+    limitReached: boolean;
+    limitType?: "requests" | "cost";
+  } | null>(null);
+
+  // Update auto-approval state from AgentLoop when available
+  useEffect(() => {
+    if (!agentLoopProp) return;
+
+    // Check if AgentLoop has getAutoApprovalStatus method (Phase 35+)
+    const loopWithStatus = agentLoopProp as typeof agentLoopProp & {
+      getAutoApprovalStatus?: () => {
+        consecutiveRequests: number;
+        requestLimit: number;
+        consecutiveCost: number;
+        costLimit: number;
+        requestPercentUsed: number;
+        costPercentUsed: number;
+        requestLimitReached: boolean;
+        costLimitReached: boolean;
+      } | null;
+    };
+
+    if (typeof loopWithStatus.getAutoApprovalStatus !== "function") {
+      return;
+    }
+
+    // Periodic polling for auto-approval status
+    const updateStatus = () => {
+      const status = loopWithStatus.getAutoApprovalStatus?.();
+      if (status) {
+        setAutoApprovalState({
+          consecutiveRequests: status.consecutiveRequests,
+          requestLimit: status.requestLimit,
+          consecutiveCost: status.consecutiveCost,
+          costLimit: status.costLimit,
+          requestPercentUsed: status.requestPercentUsed,
+          costPercentUsed: status.costPercentUsed,
+          limitReached: status.requestLimitReached || status.costLimitReached,
+          limitType: status.requestLimitReached
+            ? "requests"
+            : status.costLimitReached
+              ? "cost"
+              : undefined,
+        });
+      }
+    };
+
+    // Update immediately and then on interval
+    updateStatus();
+    const interval = setInterval(updateStatus, 1000);
+    return () => clearInterval(interval);
+  }, [agentLoopProp]);
+
+  // Update cost warning based on token usage
+  useEffect(() => {
+    const costLimit = 10; // Default $10 limit
+    const requestLimit = 100;
+    const percentUsed = costLimit > 0 ? (tokenUsage.totalCost / costLimit) * 100 : 0;
+    const showWarning = percentUsed >= 80; // Show when 80%+ of limit used
+    const limitReached = percentUsed >= 100;
+
+    setCostWarningState({
+      show: showWarning,
+      limitReached,
+      percentUsed: Math.min(percentUsed, 100),
+      costLimit,
+      requestLimit,
+    });
+  }, [tokenUsage.totalCost]);
+
+  // ==========================================================================
   // FIX 3: Permission System Integration
   // ==========================================================================
 
@@ -1820,6 +1930,17 @@ function AppContent({
           setSidebarContent("mcp");
         },
         description: "Show MCP panel (Alt)",
+        scope: "global",
+      },
+      // Snapshots panel (Ctrl+Shift+S or Alt+S)
+      {
+        key: "s",
+        alt: true,
+        handler: () => {
+          setShowSidebar(true);
+          setSidebarContent("snapshots");
+        },
+        description: "Show snapshots panel",
         scope: "global",
       },
       {
@@ -3222,6 +3343,10 @@ function AppContent({
         unsavedCount: persistence.unsavedCount,
         lastSavedAt: persistence.lastSavedAt,
       }}
+      snapshots={snapshots}
+      providerStatus={providerStatus}
+      costWarningState={costWarningState}
+      autoApprovalState={autoApprovalState}
     />
   );
 }
@@ -3312,7 +3437,7 @@ interface AppContentViewProps {
   readonly onApproveAll: () => void;
   readonly onRejectAll: () => void;
   readonly showSidebar: boolean;
-  readonly sidebarContent: "memory" | "todo" | "tools" | "mcp";
+  readonly sidebarContent: SidebarContent;
   readonly specPhase: number;
   readonly themeContext: ThemeContextValue;
   readonly todoItems: readonly TodoItemData[];
@@ -3350,6 +3475,29 @@ interface AppContentViewProps {
     unsavedCount: number;
     lastSavedAt: Date | null;
   };
+  /** Snapshots hook result for checkpoint panel */
+  readonly snapshots: ReturnType<typeof useSnapshots>;
+  /** Provider status for ModelStatusBar */
+  readonly providerStatus: ReturnType<typeof useProviderStatus>;
+  /** Cost warning state */
+  readonly costWarningState: {
+    show: boolean;
+    limitReached: boolean;
+    percentUsed: number;
+    costLimit: number;
+    requestLimit: number;
+  };
+  /** Auto-approval status */
+  readonly autoApprovalState: {
+    consecutiveRequests: number;
+    requestLimit: number;
+    consecutiveCost: number;
+    costLimit: number;
+    requestPercentUsed: number;
+    costPercentUsed: number;
+    limitReached: boolean;
+    limitType?: "requests" | "cost";
+  } | null;
 }
 
 function renderSidebarContent({
@@ -3361,10 +3509,11 @@ function renderSidebarContent({
   memoryEntries,
   toolRegistry,
   persistence,
+  snapshots,
 }: {
   readonly announce: (message: string) => void;
   readonly showSidebar: boolean;
-  readonly sidebarContent: "memory" | "todo" | "tools" | "mcp";
+  readonly sidebarContent: SidebarContent;
   readonly todoItems: readonly TodoItemData[];
   readonly refreshTodos: () => void;
   readonly memoryEntries: MemoryPanelProps["entries"];
@@ -3374,6 +3523,7 @@ function renderSidebarContent({
     unsavedCount: number;
     lastSavedAt: Date | null;
   };
+  readonly snapshots: ReturnType<typeof useSnapshots>;
 }): React.ReactNode | undefined {
   if (!showSidebar) return undefined;
 
@@ -3395,6 +3545,40 @@ function renderSidebarContent({
     panelContent = <ToolsPanel isFocused={showSidebar} maxItems={20} />;
   } else if (sidebarContent === "mcp") {
     panelContent = <McpPanel isFocused={showSidebar} toolRegistry={toolRegistry} />;
+  } else if (sidebarContent === "snapshots") {
+    panelContent = (
+      <SnapshotCheckpointPanel
+        snapshots={snapshots.snapshots}
+        isLoading={snapshots.isLoading}
+        error={snapshots.error}
+        isInitialized={snapshots.isInitialized}
+        isFocused={showSidebar}
+        maxHeight={20}
+        onRestore={async (hash) => {
+          const result = await snapshots.restore(hash);
+          if (result.success) {
+            announce(`Restored ${result.files.length} files from checkpoint`);
+          } else {
+            announce(`Restore failed: ${result.error}`);
+          }
+        }}
+        onDiff={async (hash) => {
+          const diff = await snapshots.diff(hash);
+          announce(`Diff: ${diff.slice(0, 100)}...`);
+        }}
+        onTakeCheckpoint={async () => {
+          try {
+            await snapshots.take("Manual checkpoint");
+            announce("Checkpoint created");
+          } catch (err) {
+            announce(
+              `Failed to create checkpoint: ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }}
+        onRefresh={() => void snapshots.refresh()}
+      />
+    );
   } else {
     panelContent = <MemoryPanel entries={memoryEntries} isFocused={showSidebar} maxHeight={20} />;
   }
@@ -3759,6 +3943,10 @@ function AppContentView({
   branch,
   changedFiles,
   persistence,
+  snapshots,
+  providerStatus,
+  costWarningState,
+  autoApprovalState,
 }: AppContentViewProps): React.JSX.Element {
   const sidebar = renderSidebarContent({
     announce,
@@ -3769,6 +3957,7 @@ function AppContentView({
     memoryEntries,
     toolRegistry,
     persistence,
+    snapshots,
   });
 
   const footer = (
@@ -3801,6 +3990,47 @@ function AppContentView({
       showAllModes={showModeSelector}
       persistence={persistence}
     />
+  );
+
+  // Extended footer with ModelStatusBar and warnings
+  const extendedFooter = (
+    <Box flexDirection="column">
+      {/* Cost warning - show above status bar when approaching/exceeding limit */}
+      {costWarningState.show && (
+        <CostWarning
+          costUsed={tokenUsage.totalCost}
+          costLimit={costWarningState.costLimit}
+          requestsUsed={0}
+          requestLimit={costWarningState.requestLimit}
+          percentUsed={costWarningState.percentUsed}
+          limitReached={costWarningState.limitReached}
+          compact={true}
+          severity={costWarningState.limitReached ? "error" : "warning"}
+        />
+      )}
+      {/* Auto-approval status - show when auto-approvals are active */}
+      {autoApprovalState && autoApprovalState.consecutiveRequests > 0 && (
+        <AutoApprovalStatus
+          consecutiveRequests={autoApprovalState.consecutiveRequests}
+          requestLimit={autoApprovalState.requestLimit}
+          consecutiveCost={autoApprovalState.consecutiveCost}
+          costLimit={autoApprovalState.costLimit}
+          requestPercentUsed={autoApprovalState.requestPercentUsed}
+          costPercentUsed={autoApprovalState.costPercentUsed}
+          limitReached={autoApprovalState.limitReached}
+          limitType={autoApprovalState.limitType}
+          compact={true}
+        />
+      )}
+      {/* Model status bar - shows provider health */}
+      {providerStatus.providers.length > 1 && (
+        <Box marginBottom={1}>
+          <ModelStatusBar providers={providerStatus.providers} compact={true} maxVisible={5} />
+        </Box>
+      )}
+      {/* Main status bar */}
+      {footer}
+    </Box>
   );
 
   // Conditional rendering to avoid hook count mismatch from early returns
@@ -3907,7 +4137,7 @@ function AppContentView({
                 undoBacktrack={undoBacktrack}
               />
             }
-            footer={footer}
+            footer={extendedFooter}
             sidebar={sidebar}
             showSidebar={showSidebar}
             workspace={workspace}
