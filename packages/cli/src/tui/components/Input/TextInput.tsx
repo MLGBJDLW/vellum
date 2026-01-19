@@ -45,6 +45,8 @@ export interface TextInputProps {
   readonly mask?: string;
   /** When true, suppress Enter from submitting (for autocomplete integration) */
   readonly suppressEnter?: boolean;
+  /** When true, suppress Tab from inserting spaces (for autocomplete integration) */
+  readonly suppressTab?: boolean;
   /** When true, move cursor to end of value on next render */
   readonly cursorToEnd?: boolean;
   /** Callback when cursorToEnd is consumed */
@@ -156,6 +158,7 @@ function TextInputComponent({
   minHeight,
   mask,
   suppressEnter = false,
+  suppressTab = false,
   cursorToEnd = false,
   onCursorMoved,
   showBorder = true,
@@ -575,34 +578,41 @@ function TextInputComponent({
    * - Enter (single-line): Submits
    */
   const handleReturn = useCallback(
-    (ctrl: boolean, shift: boolean) => {
+    (ctrl: boolean, shift: boolean): boolean => {
       // Skip if Enter should be suppressed (e.g., autocomplete is active)
       // Check prop directly for synchronous behavior - state-based check was racy
       if (suppressEnter) {
-        return;
+        return false; // Let parent handle it
       }
       // Shift+Enter always inserts newline (multiline mode required)
       if (shift && multiline) {
         handleNewline();
-        return;
+        return true;
       }
       if (multiline && !ctrl) {
         handleNewline();
       } else {
         handleSubmit();
       }
+      return true;
     },
     [multiline, handleNewline, handleSubmit, suppressEnter]
   );
 
   /**
    * Handle tab key (multiline only)
+   * Returns true if key was handled, false to pass through
    */
-  const handleTab = useCallback(() => {
+  const handleTab = useCallback((): boolean => {
+    // Skip if Tab should be suppressed (e.g., autocomplete is active)
+    if (suppressTab) {
+      return false; // Let parent handle it
+    }
     if (multiline) {
       handleInput("  ");
     }
-  }, [multiline, handleInput]);
+    return true;
+  }, [multiline, handleInput, suppressTab]);
 
   /**
    * Process a key event and dispatch to appropriate handler.
@@ -642,12 +652,10 @@ function TextInputComponent({
         return true;
       }
       if (key.return) {
-        handleReturn(key.ctrl, key.shift);
-        return true;
+        return handleReturn(key.ctrl, key.shift);
       }
       if (key.tab) {
-        handleTab();
-        return true;
+        return handleTab();
       }
       if (key.escape) {
         return true;

@@ -423,6 +423,7 @@ export function EnhancedCommandInput({
         focused={focused}
         multiline={multiline}
         suppressEnter={autocompleteJustCompleted || activeAutocomplete !== null}
+        suppressTab={activeAutocomplete !== null}
         cursorToEnd={autocompleteJustCompleted}
         onCursorMoved={handleCursorMoved}
       />
