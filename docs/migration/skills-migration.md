@@ -42,7 +42,7 @@ vellum migrate prompts --backup
 
 # Run migration (overwrites if exists)
 vellum migrate prompts
-```
+```markdown
 
 ### Option 2: Manual Migration
 
@@ -57,20 +57,20 @@ If you prefer manual control, follow these steps.
 ```bash
 # Create the .vellum/skills/ directory
 mkdir -p .vellum/skills
-```
+```markdown
 
 ### Step 2: Copy Skill Directories
 
 ```bash
 # Copy all skills
 cp -r .github/skills/* .vellum/skills/
-```
+```markdown
 
 ### Step 3: Verify Structure
 
 Each skill should have this structure:
 
-```
+```text
 .vellum/skills/
 └── my-skill/
     ├── SKILL.md           # Required: manifest file
@@ -96,7 +96,7 @@ mv .github/skills .github/skills.backup
 
 # Or delete if confident
 rm -rf .github/skills
-```
+```text
 
 ---
 
@@ -123,7 +123,7 @@ tags:
   - testing
   - python
 ---
-```
+```markdown
 
 ### No Changes Required
 
@@ -170,7 +170,7 @@ Summary:
   0 conflicts detected
 
 Run without --dry-run to apply changes.
-```
+```markdown
 
 ### Running the Migration
 
@@ -186,7 +186,7 @@ Vellum Prompt Migration
 ✓ Migrated: react-hooks
 
 Migration complete: 3 skills migrated
-```
+```text
 
 ---
 
@@ -206,7 +206,7 @@ Options:
   1. Use --force to overwrite .vellum/ versions
   2. Manually merge the skills
   3. Rename one of the conflicting skills
-```
+```markdown
 
 ### Resolution Options
 
@@ -214,7 +214,7 @@ Options:
 
 ```bash
 vellum migrate prompts --force
-```
+```markdown
 
 **Option 2: Manual Merge**
 
@@ -225,7 +225,7 @@ Compare both versions and merge manually:
 diff .github/skills/python-testing/SKILL.md .vellum/skills/python-testing/SKILL.md
 
 # Edit .vellum version to include desired content
-```
+```markdown
 
 **Option 3: Rename**
 
@@ -233,7 +233,7 @@ Rename one skill to avoid conflict:
 
 ```bash
 mv .vellum/skills/python-testing .vellum/skills/python-testing-project
-```
+```text
 
 ---
 
@@ -304,7 +304,7 @@ Vellum continues to scan `.github/skills/` with priority 90. You can:
 
 After migration, Vellum loads skills from all sources:
 
-```
+```text
 Priority Order:
 100 → .vellum/skills/        ← Migrated location (highest)
  90 → .github/skills/        ← Original location
@@ -319,7 +319,7 @@ Priority Order:
 
 If a skill exists in multiple locations, highest priority wins:
 
-```
+```text
 .vellum/skills/python-testing/     → Priority 100 ✓ (used)
 .github/skills/python-testing/     → Priority 90  ✗ (ignored)
 ```

@@ -44,7 +44,7 @@ All spec documents must align:
 |------------------|--------------|--------|-------|-------|
 | "UserService" | "User Service" | "UserService" | "user-service" | Inconsistent |
 | "auth" | "authentication" | "auth" | "auth" | OK (alias noted) |
-```
+```markdown
 
 ### Requirements Coverage
 
@@ -66,7 +66,7 @@ Every requirement must trace to implementation:
 - With Tasks: 12 (80%)
 - Testable: 15 (100%)
 - **Overall**: 80% coverage (FAIL - must be 100%)
-```
+```markdown
 
 ### Task Completeness
 
@@ -85,7 +85,7 @@ Every task must be implementable:
 1. T002: Acceptance criteria "works correctly" is not specific
 2. T003: Missing file targets
 3. T003: Dependency T099 does not exist
-```
+```markdown
 
 ### Risk Assessment
 
@@ -111,7 +111,7 @@ Aggregate risk from all documents:
 | Consistency | 0 | 0 | 2 | 4 |
 | Completeness | 1 | 1 | 1 | 1 |
 | Clarity | 0 | 0 | 0 | 0 |
-```
+```text
 
 ---
 
@@ -139,7 +139,7 @@ Aggregate risk from all documents:
 - [ ] Tech versions match package.json
 - [ ] File paths exist and are valid
 - [ ] Terminology matches project glossary
-```
+```markdown
 
 ### Requirements Document Validation
 
@@ -168,7 +168,7 @@ Aggregate risk from all documents:
 - [ ] No duplicate requirements
 - [ ] No conflicting requirements
 - [ ] Terminology consistent with research
-```
+```markdown
 
 ### Architecture Document Validation
 
@@ -199,7 +199,7 @@ Aggregate risk from all documents:
 - [ ] No circular dependencies between components
 - [ ] Scalability requirements addressed
 - [ ] Migration path defined (if applicable)
-```
+```markdown
 
 ### Tasks Document Validation
 
@@ -230,7 +230,7 @@ Aggregate risk from all documents:
 - [ ] Checkpoints defined
 - [ ] Risk register populated
 - [ ] No XL tasks (must be split)
-```
+```text
 
 ---
 
@@ -252,7 +252,7 @@ Aggregate risk from all documents:
 
 ### Coverage Formula
 
-```
+```text
 Coverage = (Traced Items / Total Items) × 100
 
 Requirements Coverage = (REQs with Tasks / Total REQs) × 100
@@ -268,7 +268,7 @@ Test Coverage = (Tasks with Test Strategy / Total Tasks) × 100
 | Task → Files | 100% | 90% | <90% |
 | Task → Criteria | 100% | 100% | <100% |
 | NFR Coverage | 100% | 80% | <80% |
-```
+```markdown
 
 ### Traceability Chain
 
@@ -283,7 +283,7 @@ US-001 → REQ-001 → ADR-001 → T001, T002, T003 → TC-001
 |-------|-----|-------------|-------|
 | US-002 | T005 | REQ-003 → ADR | No ADR for REQ-003 |
 | US-003 | T008 | ADR-002 → T | No task implements ADR-002 |
-```
+```text
 
 ---
 
@@ -314,7 +314,7 @@ US-001 → REQ-001 → ADR-001 → T001, T002, T003 → TC-001
 ### Missing Requirements Found
 1. [REQ-XXX needed for: description]
 2. [REQ-YYY needed for: description]
-```
+```markdown
 
 ### Finding Undefined Interfaces
 
@@ -338,7 +338,7 @@ US-001 → REQ-001 → ADR-001 → T001, T002, T003 → TC-001
 ### Action Required
 - Define INotificationService interface
 - Add to design.md Architecture section
-```
+```markdown
 
 ### Finding Unhandled Edge Cases
 
@@ -365,7 +365,7 @@ US-001 → REQ-001 → ADR-001 → T001, T002, T003 → TC-001
 
 3. **Database Timeout**: No error handling specified
    - Add: REQ-ERR-XXX: "IF database query exceeds 5s..."
-```
+```markdown
 
 ### Finding Security Gaps
 
@@ -391,7 +391,7 @@ US-001 → REQ-001 → ADR-001 → T001, T002, T003 → TC-001
    
 2. **Audit Logging**: Only NFR, needs functional REQ
    - Add: REQ-SEC-XXX for audit trail
-```
+```text
 
 ---
 
@@ -529,7 +529,7 @@ pnpm test --run
 
 # Build verification
 pnpm build
-```
+```markdown
 
 ### Results
 
@@ -619,7 +619,7 @@ pnpm lint
 
 # Both with auto-fix
 pnpm lint --fix
-```
+```markdown
 
 ### Test Execution
 ```bash
@@ -631,7 +631,7 @@ pnpm test --run --coverage
 
 # Run specific tests
 pnpm test --run src/specific.test.ts
-```
+```markdown
 
 ### Build Verification
 ```bash
@@ -640,7 +640,7 @@ pnpm build
 
 # Clean and rebuild
 pnpm clean && pnpm build
-```
+```markdown
 
 ### File Validation
 ```bash
@@ -649,7 +649,7 @@ Test-Path "src/path/to/file.ts"
 
 # Find files matching pattern
 Get-ChildItem -Recurse -Filter "*.test.ts"
-```
+```text
 ```
 
 ---

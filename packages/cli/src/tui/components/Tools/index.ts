@@ -9,6 +9,10 @@ export {
   type ApprovalQueueProps,
 } from "./ApprovalQueue.js";
 export {
+  OptionSelector,
+  type OptionSelectorProps,
+} from "./OptionSelector.js";
+export {
   PermissionDialog,
   type PermissionDialogProps,
   type RiskLevel,

@@ -108,7 +108,7 @@ jobs:
         with:
           name: build
           path: dist/
-```
+```markdown
 
 ### Rollback Planning
 
@@ -150,7 +150,7 @@ Deployment Rollback Matrix:
 
 Rollback Command:
 $ kubectl rollout undo deployment/app --to-revision=N
-```
+```markdown
 
 ### Monitoring Setup
 
@@ -188,7 +188,7 @@ Alerting Best Practices:
 │ Medium    │ < 4 hours    │ Disk > 80%                  │
 │ Low       │ Next day     │ Certificate expires in 30d  │
 └───────────┴──────────────┴─────────────────────────────┘
-```
+```markdown
 
 ## Tool Priorities
 
@@ -265,7 +265,7 @@ spec:
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 5
-```
+```markdown
 
 ### Security Hardening
 

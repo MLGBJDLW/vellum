@@ -82,7 +82,7 @@ const user = await db.query(
   "SELECT * FROM users WHERE id = $1 AND status = $2",
   [userId, "active"]
 );
-```
+```markdown
 
 ### Authentication Patterns
 
@@ -142,7 +142,7 @@ const sessionConfig = {
     path: "/",
   },
 };
-```
+```markdown
 
 ### Authorization Middleware
 
@@ -236,7 +236,7 @@ async function authorizeOwnership(
 
   next();
 }
-```
+```markdown
 
 ### Security Headers
 
@@ -284,7 +284,7 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
   maxAge: 86400,
 }));
-```
+```markdown
 
 ### Secrets Management
 
@@ -335,7 +335,7 @@ function redactSecrets(obj: unknown): unknown {
     ])
   );
 }
-```
+```markdown
 
 ## Anti-Patterns
 
@@ -385,7 +385,7 @@ new Function(userCode)();
 
 // ✅ Never execute user-provided code
 throw new Error("Code execution not allowed");
-```
+```markdown
 
 ## Examples
 
@@ -437,7 +437,7 @@ throw new Error("Code execution not allowed");
 - [ ] Dependencies audited (`npm audit`)
 - [ ] No known vulnerabilities
 - [ ] Automated security updates enabled
-```
+```markdown
 
 ### Audit Logging
 

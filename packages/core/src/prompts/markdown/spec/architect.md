@@ -35,7 +35,7 @@ Architecture is the skeleton of software. Poor architecture leads to:
 
 ### Clean Architecture Layers
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    External Interfaces                       │
 │    (UI, API Controllers, CLI, Database, External APIs)       │
@@ -85,7 +85,7 @@ class UserService {
 class PostgresDatabase implements Database {
   async query<T>(sql: string): Promise<T> { ... }
 }
-```
+```text
 
 ---
 
@@ -112,7 +112,7 @@ Recommended for:
 - Domains still being discovered
 
 Structure:
-```
+```text
 src/
 ├── modules/
 │   ├── auth/          # Self-contained module
@@ -138,7 +138,7 @@ Considerations:
 - Distributed transactions
 - Service discovery
 - Operational overhead
-```
+```markdown
 
 ### Event-Driven Architecture
 
@@ -173,7 +173,7 @@ interface DomainEvent<T> {
     userId?: string;
   };
 }
-```
+```text
 ```
 
 ### CQRS/Event Sourcing
@@ -183,7 +183,7 @@ interface DomainEvent<T> {
 
 Separate read and write models:
 
-```
+```text
                     ┌─────────────────┐
                     │    Commands     │
                     │   (Write API)   │
@@ -217,7 +217,7 @@ Separate read and write models:
 - Simple CRUD operations
 - Consistent read-after-write required
 - Small team, limited complexity
-```
+```markdown
 
 ### Plugin Architecture
 
@@ -246,7 +246,7 @@ interface PluginLoader {
   load(manifest: PluginManifest): Promise<Plugin>;
   validate(plugin: Plugin): ValidationResult;
 }
-```
+```markdown
 
 ### Plugin Lifecycle
 
@@ -380,7 +380,7 @@ interface PluginLoader {
 |------|--------|--------|
 | YYYY-MM-DD | Initial proposal | [Name] |
 | YYYY-MM-DD | Updated after review | [Name] |
-```
+```text
 
 ---
 
@@ -433,7 +433,7 @@ interface UserService {
    */
   update(id: string, data: UpdateUserInput): Promise<Result<User, NotFoundError | ValidationError>>;
 }
-```
+```text
 ```
 
 ### Data Flow Diagrams
@@ -441,7 +441,7 @@ interface UserService {
 ```markdown
 ### Sequence Diagram: User Authentication
 
-```
+```text
 User        API Gateway      Auth Service      Database      Token Store
  │              │                 │                │              │
  │─── Login ───>│                 │                │              │
@@ -457,7 +457,7 @@ User        API Gateway      Auth Service      Database      Token Store
 
 ### Data Flow Diagram: Request Pipeline
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Request Flow                             │
 ├─────────────────────────────────────────────────────────────────┤
@@ -486,14 +486,14 @@ User        API Gateway      Auth Service      Database      Token Store
 │                                        └─────────────┘          │
 └─────────────────────────────────────────────────────────────────┘
 ```
-```
+```markdown
 
 ### State Machines
 
 ```markdown
 ### State Machine: Order Lifecycle
 
-```
+```text
                     ┌───────────────────────────────────┐
                     │                                   │
                     ▼                                   │
@@ -519,7 +519,7 @@ User        API Gateway      Auth Service      Database      Token Store
 | Paid | ship | Shipped | - | sendTrackingEmail |
 | Shipped | deliver | Delivered | - | requestReview |
 | * | cancel | Cancelled | state != Shipped | refundIfPaid |
-```
+```markdown
 
 ### Error Handling Strategy
 
@@ -554,7 +554,7 @@ interface ErrorDetail {
   code: string;             // "REQUIRED" | "INVALID_FORMAT" | ...
   message: string;          // Specific error message
 }
-```
+```markdown
 
 ### Error Boundary Pattern
 
@@ -573,7 +573,7 @@ async function withErrorBoundary<T>(
     return { ok: false, error: appError };
   }
 }
-```
+```text
 ```
 
 ---
@@ -604,7 +604,7 @@ async function withErrorBoundary<T>(
 
 ### Context Diagram
 
-```
+```text
 [High-level diagram showing system boundaries and external interfaces]
 ```
 
@@ -636,7 +636,7 @@ async function withErrorBoundary<T>(
 interface ComponentName {
   // Methods with documentation
 }
-```
+```markdown
 
 #### Internal Structure
 
@@ -646,7 +646,7 @@ component/
 ├── application/    # Use cases
 ├── infrastructure/ # External concerns
 └── index.ts        # Public API
-```
+```markdown
 
 ### Component 2: [Name]
 
@@ -665,14 +665,14 @@ component/
 interface CreateResourceRequest {
   // Fields
 }
-```
+```markdown
 
 **Response**:
 ```typescript
 interface CreateResourceResponse {
   // Fields
 }
-```
+```markdown
 
 **Error Codes**: 400, 401, 409, 500
 
@@ -693,7 +693,7 @@ interface Entity {
   createdAt: Date;
   updatedAt: Date;
 }
-```
+```markdown
 
 ### Value Object: [Name]
 
@@ -701,7 +701,7 @@ interface Entity {
 interface ValueObject {
   // Immutable properties
 }
-```
+```markdown
 
 ### Database Schema
 
@@ -712,7 +712,7 @@ CREATE TABLE entities (
   created_at TIMESTAMP NOT NULL,
   updated_at TIMESTAMP NOT NULL
 );
-```
+```text
 
 ---
 

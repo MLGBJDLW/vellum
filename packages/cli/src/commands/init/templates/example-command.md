@@ -33,7 +33,7 @@ When this command is invoked:
 
 ## Output Format
 
-```
+```markdown
 ## Summary
 
 **Purpose**: [One-sentence description]
@@ -50,7 +50,7 @@ When this command is invoked:
 
 ### For Code Files
 
-```
+```markdown
 ## Summary
 
 **Purpose**: HTTP request handler for user authentication
@@ -65,7 +65,7 @@ When this command is invoked:
 
 ### For Documentation
 
-```
+```markdown
 ## Summary
 
 **Purpose**: API reference for the authentication module

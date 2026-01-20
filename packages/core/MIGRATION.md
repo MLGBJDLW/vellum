@@ -28,7 +28,7 @@ const message: Message = {
   content: 'Hello, world!',
   timestamp: Date.now(),
 };
-```
+```markdown
 
 **After:**
 ```typescript
@@ -44,7 +44,7 @@ const message: Message = {
   content: [{ kind: 'text', text: 'Hello, world!' }],
   createdAt: Date.now(),
 };
-```
+```markdown
 
 ### 2. Message Content
 
@@ -53,7 +53,7 @@ Content is now an array of `MessageContent` parts instead of a string.
 **Before:**
 ```typescript
 message.content // string
-```
+```markdown
 
 **After:**
 ```typescript
@@ -62,7 +62,7 @@ message.content // MessageContent[]
 // Access text content
 const textParts = message.content.filter(p => p.kind === 'text');
 const text = textParts.map(p => p.text).join('');
-```
+```markdown
 
 ### 3. Message Roles
 
@@ -71,7 +71,7 @@ The `role` field now includes `'tool_result'` and uses Zod validation.
 **Before:**
 ```typescript
 type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
-```
+```markdown
 
 **After:**
 ```typescript
@@ -82,7 +82,7 @@ type Role = 'user' | 'assistant' | 'system' | 'tool_result';
 // Runtime validation
 RoleSchema.parse('user'); // ✓
 RoleSchema.parse('invalid'); // throws ZodError
-```
+```markdown
 
 ### 4. Tool Definition
 
@@ -100,7 +100,7 @@ const myTool: Tool = {
     return { success: true, output: 'done' };
   },
 };
-```
+```markdown
 
 **After:**
 ```typescript
@@ -121,7 +121,7 @@ const myTool = defineTool({
     return ok({ result: input.toUpperCase() });
   },
 });
-```
+```markdown
 
 ### 5. Tool Results
 
@@ -134,7 +134,7 @@ return { success: true, output: 'data' };
 
 // Failure
 return { success: false, output: '', error: 'Something went wrong' };
-```
+```markdown
 
 **After:**
 ```typescript
@@ -162,7 +162,7 @@ match(result, {
   ok: (value) => console.log('Success:', value),
   err: (error) => console.error('Error:', error),
 });
-```
+```markdown
 
 ## New Features
 
@@ -190,7 +190,7 @@ Parts.file('/path/to/file.txt');
 
 // Image
 Parts.image('data:image/png;base64,...', 'image/png');
-```
+```markdown
 
 ### Tool State Tracking
 
@@ -204,7 +204,7 @@ state = ToolStates.running();
 state = ToolStates.completed({ result: 'done' });
 // or
 state = ToolStates.error('Something went wrong');
-```
+```markdown
 
 ### Result Utilities
 
@@ -231,7 +231,7 @@ const results = all([Ok(1), Ok(2), Ok(3)]); // Ok([1, 2, 3])
 // Wrap throwing functions
 const result = tryCatch(() => JSON.parse('{"a":1}'));
 const asyncResult = await tryCatchAsync(async () => fetch('/api'));
-```
+```markdown
 
 ### EventBus
 
@@ -258,7 +258,7 @@ bus.once(Events.sessionEnd, ({ reason }) => {
 // Cleanup
 unsub();
 bus.offAll();
-```
+```markdown
 
 ### Dependency Injection
 
@@ -289,7 +289,7 @@ const eventBus = container.resolve(Tokens.EventBus);
 
 // Cleanup
 await shutdown(container);
-```
+```markdown
 
 ## Type Reference
 
@@ -336,7 +336,7 @@ const text = accumulator.text;
 const reasoning = accumulator.reasoning;
 const usage = accumulator.usage;
 const toolCalls = accumulator.toolCalls;
-```
+```markdown
 
 **After (recommended):**
 ```typescript
@@ -370,7 +370,7 @@ if (result.ok) {
   // message.stopReason: StopReason
   // message.citations: GroundingChunk[]
 }
-```
+```markdown
 
 **CollectorAction Types:**
 

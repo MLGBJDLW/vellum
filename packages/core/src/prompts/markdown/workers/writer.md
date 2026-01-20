@@ -53,7 +53,7 @@ When creating documentation:
    - Check links and references
    - Update when code changes
 
-```
+```text
 Documentation Structure:
 ┌────────────────────────────────────────────────┐
 │ README.md                                       │
@@ -113,7 +113,7 @@ const result = await client.fetch({
 
 console.log(result);
 // Output: { users: [...], hasMore: true, cursor: 'abc123' }
-```
+```markdown
 
 ### Visual Aids
 
@@ -156,7 +156,7 @@ Configuration Options:
 │ baseUrl     │ string     │ required  │ API base URL           │
 │ debug       │ boolean    │ false     │ Enable debug logging   │
 └─────────────┴────────────┴───────────┴────────────────────────┘
-```
+```markdown
 
 ## Tool Priorities
 
@@ -218,7 +218,7 @@ More detailed content.
 // Code blocks with language annotation
 const example = 'syntax highlighted';
 \`\`\`
-```
+```markdown
 
 ### Audience-Appropriate Language
 

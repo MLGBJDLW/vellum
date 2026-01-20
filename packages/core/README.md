@@ -6,7 +6,7 @@ Core library for the Vellum AI coding assistant. Provides the agent loop, tool s
 
 ```bash
 pnpm add @vellum/core
-```
+```markdown
 
 ## Features
 
@@ -59,7 +59,7 @@ const result = await executor.execute(
   },
   registry
 );
-```
+```markdown
 
 ### Core Components
 
@@ -77,7 +77,7 @@ const tools = registry.getTools();
 
 // Get a specific tool
 const readFile = registry.getTool("read_file");
-```
+```markdown
 
 #### Built-in Tools
 
@@ -93,7 +93,7 @@ await registerAllBuiltinTools(registry, {
   enableWeb: false,      // Enable web tools (default: false)
   enableMcp: false,      // Enable MCP proxy (default: false)
 });
-```
+```text
 
 Available built-in tools:
 - `read_file` - Read file contents with line range support
@@ -152,7 +152,7 @@ if (result.success) {
 } else {
   console.error("Error:", result.error);
 }
-```
+```markdown
 
 #### Smart Edit (edit_file)
 
@@ -168,7 +168,7 @@ const editInput = {
 
 // Supports fuzzy matching for whitespace differences
 // Validates unique matches before applying
-```
+```markdown
 
 ### Custom Tools
 
@@ -198,7 +198,7 @@ const myTool: Tool = {
 
 // Register
 registry.registerTool(myTool);
-```
+```markdown
 
 ### MCP Proxy
 
@@ -221,7 +221,7 @@ await proxy.connect({
 proxy.registerTools(registry);
 
 // Tools are now available as: mcp__my-mcp-server__tool_name
-```
+```markdown
 
 ### Permission System
 
@@ -249,7 +249,7 @@ const checker = createDefaultPermissionChecker({
 });
 
 const executor = new ToolExecutor({ permissionChecker: checker });
-```
+```markdown
 
 #### Trust Presets
 
@@ -281,7 +281,7 @@ const trustManager = new TrustManager({
     },
   },
 });
-```
+```markdown
 
 #### Session Permissions
 
@@ -297,7 +297,7 @@ const sessionManager = new SessionPermissionManager();
 
 // Clear session permissions when needed
 sessionManager.clear();
-```
+```markdown
 
 #### Permission Events
 
@@ -317,7 +317,7 @@ checker.eventBus.on("permissionGranted", (event) => {
 checker.eventBus.on("permissionDenied", (event) => {
   console.log(`Denied: ${event.type} - ${event.reason}`);
 });
-```
+```markdown
 
 #### Dangerous Operation Detection
 
@@ -333,7 +333,7 @@ const result = detector.check("rm -rf /");
 if (result.isDangerous) {
   console.log(`Blocked: ${result.reason}`);
 }
-```
+```text
 
 Detected patterns include:
 - Recursive deletion (`rm -rf`, `del /s /q`)
@@ -355,7 +355,7 @@ const askService = new PermissionAskService({
     return await showPermissionDialog(info);
   },
 });
-```
+```markdown
 
 #### Protected Files
 
@@ -374,7 +374,7 @@ if (isProtectedFile("/etc/passwd")) {
 // - Git credentials (~/.git-credentials)
 // - Environment files (*.env, .env.*)
 // - Shell config (~/.bashrc, ~/.zshrc)
-```
+```markdown
 
 #### Permission Types
 
@@ -399,7 +399,7 @@ type PermissionDecision = "allow" | "ask" | "deny";
 
 // User response to permission prompt
 type PermissionResponse = "once" | "always" | "reject" | undefined;
-```
+```markdown
 
 ### Error Handling
 
@@ -424,7 +424,7 @@ if (result.success) {
     // Handle missing tool
   }
 }
-```
+```text
 
 ---
 
@@ -450,7 +450,7 @@ await docLookupTool.execute({ source: "pypi", package: "requests" });
 
 // GitHub README
 await docLookupTool.execute({ source: "github", repo: "microsoft/vscode" });
-```
+```markdown
 
 ### Security Features
 
@@ -480,7 +480,7 @@ const config = WebBrowsingConfigSchema.parse({
     defaultTtlMs: 300_000,
   },
 });
-```
+```markdown
 
 ### Error Codes
 
@@ -509,7 +509,7 @@ const prompt = new PromptBuilder()
   .withModeOverrides('Focus on TypeScript')
   .setVariable('PROJECT_NAME', 'my-app')
   .build();
-```
+```markdown
 
 ### Features
 
@@ -541,7 +541,7 @@ const prompt = new PromptBuilder()
 │  │ (active file, git status, current task) │   │
 │  └─────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────┘
-```
+```markdown
 
 ### PromptBuilder API
 
@@ -581,7 +581,7 @@ if (size > 100000) {
 
 // Inspect layers for debugging
 const layers = builder.getLayers();
-```
+```markdown
 
 ### ContextBuilder
 
@@ -604,7 +604,7 @@ const context = contextBuilder.buildContext({
 const fileContext = contextBuilder.buildFileContext({ path: 'src/app.ts', language: 'typescript' });
 const taskContext = contextBuilder.buildTaskContext({ id: 'T001', description: 'Fix bug', status: 'pending' });
 const gitContext = contextBuilder.buildGitContext({ branch: 'main', modified: [], staged: [] });
-```
+```markdown
 
 ### Role Prompts
 
@@ -626,7 +626,7 @@ const coderPrompt = CODER_PROMPT;
 const qaPrompt = QA_PROMPT;
 
 // Available roles: orchestrator, coder, qa, writer, analyst, architect
-```
+```markdown
 
 ### Sanitization
 
@@ -645,7 +645,7 @@ const safe = sanitizeVariable('input', userProvidedValue);
 // - Removes control characters
 // - Replaces injection patterns with [FILTERED]
 // - Truncates if too long (default: 10000 chars)
-```
+```markdown
 
 ### Error Handling
 
@@ -663,7 +663,7 @@ try {
 }
 
 // MAX_PROMPT_SIZE = 200000 characters
-```
+```markdown
 
 ### Migration from Legacy Config
 
@@ -680,7 +680,7 @@ const builder = PromptBuilder.fromLegacyConfig({
   mode: 'code',
   cwd: '/project/root'
 });
-```
+```text
 
 ---
 
@@ -722,7 +722,7 @@ const trackResult = await snapshotService.track();
 if (trackResult.ok && trackResult.value) {
   console.log("Snapshot created:", trackResult.value);
 }
-```
+```markdown
 
 ### Core Operations
 
@@ -744,7 +744,7 @@ if (result.ok) {
   // Error occurred
   console.error("Failed:", result.error.message);
 }
-```
+```markdown
 
 #### patch() - Get Changed Files
 
@@ -758,7 +758,7 @@ if (patchResult.ok) {
     // file.type: "added" | "modified" | "deleted" | "renamed"
   }
 }
-```
+```markdown
 
 #### diff() - Get Unified Diff
 
@@ -769,7 +769,7 @@ const diffResult = await snapshotService.diff(snapshotHash);
 if (diffResult.ok) {
   console.log(diffResult.value); // Standard unified diff output
 }
-```
+```markdown
 
 #### restore() - Full Restore
 
@@ -780,7 +780,7 @@ const restoreResult = await snapshotService.restore(snapshotHash);
 if (restoreResult.ok) {
   console.log("Working directory restored");
 }
-```
+```markdown
 
 #### revert() - Selective Revert
 
@@ -794,7 +794,7 @@ if (patchResult.ok) {
     console.log("Selected files reverted");
   }
 }
-```
+```markdown
 
 ### Configuration Options
 
@@ -846,7 +846,7 @@ if (!result.ok) {
       console.error(result.error.message);
   }
 }
-```
+```markdown
 
 ### Safety Features
 
@@ -863,7 +863,7 @@ if (!safeResult.ok) {
 
 // Get sanitized environment (no credential prompts)
 const env = getSanitizedEnv();
-```
+```text
 
 Protected paths include:
 
@@ -890,7 +890,7 @@ console.log(`Hunks: ${formatted.hunks.length}`);
 // Get statistics
 const stats = getDiffStats(formatted);
 console.log(`+${stats.additions} -${stats.deletions}`);
-```
+```markdown
 
 ### Event Bus Integration
 
@@ -919,7 +919,7 @@ const service = createGitSnapshotService({
   lock,
   eventBus,
 });
-```
+```text
 
 ---
 
@@ -956,7 +956,7 @@ loop.on("complete", () => console.log("Done"));
 // Run the loop
 loop.addMessage(createUserMessage("Hello!"));
 await loop.run();
-```
+```text
 
 ---
 
@@ -978,7 +978,7 @@ const messages = session.getMessages();
 
 // Clear session
 session.clear();
-```
+```text
 
 ---
 
@@ -1015,7 +1015,7 @@ await persistence.onMessage(message);
 
 // 5. Close when done
 await persistence.closeSession();
-```
+```markdown
 
 ### Core Components
 
@@ -1043,7 +1043,7 @@ const sessions = await storage.listSessions();
 
 // Delete session
 await storage.deleteSession("session-123");
-```
+```markdown
 
 #### PersistenceManager
 
@@ -1084,7 +1084,7 @@ await persistence.createCheckpoint("Before refactor");
 
 // Close session (final save)
 await persistence.closeSession();
-```
+```markdown
 
 #### SearchService
 
@@ -1115,7 +1115,7 @@ for (const result of results) {
 
 // Rebuild index after changes
 await searchService.rebuildIndex();
-```
+```markdown
 
 #### ExportService
 
@@ -1147,7 +1147,7 @@ const text = exportService.export(session, { format: 'text' });
 await exportService.exportToFile(session, '/path/to/export.md', {
   format: 'markdown'
 });
-```
+```markdown
 
 **Supported Formats:**
 - `json` - Pretty-printed JSON with full session data
@@ -1188,7 +1188,7 @@ await Snapshot.restore("/project/root", snapshot.hash, ["src/main.ts"]);
 
 // List all snapshots
 const snapshots = await Snapshot.list("/project/root");
-```
+```markdown
 
 ### Error Handling
 
@@ -1214,7 +1214,7 @@ try {
     }
   }
 }
-```
+```text
 
 ---
 
@@ -1239,7 +1239,7 @@ default = "claude-sonnet-4-20250514"
 bash = true
 web = false
 mcp = false
-```
+```text
 
 ---
 

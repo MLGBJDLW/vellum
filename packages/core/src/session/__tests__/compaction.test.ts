@@ -483,7 +483,8 @@ describe("CompactionService", () => {
 
   describe("DEFAULT_COMPACTION_CONFIG", () => {
     it("should have correct default values", () => {
-      expect(DEFAULT_COMPACTION_CONFIG.maxToolOutputLength).toBe(1000);
+      // Note: maxToolOutputLength increased from 1000 to 3000 (T076 fix)
+      expect(DEFAULT_COMPACTION_CONFIG.maxToolOutputLength).toBe(3000);
       expect(DEFAULT_COMPACTION_CONFIG.keepFirstMessages).toBe(5);
       expect(DEFAULT_COMPACTION_CONFIG.keepLastMessages).toBe(10);
       expect(DEFAULT_COMPACTION_CONFIG.prunedMarker).toBe("[工具输出已裁剪]");

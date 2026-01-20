@@ -172,12 +172,13 @@ export function AnimationProvider({
   }, []);
 
   useEffect(() => {
+    // Don't start timer when paused - completely stops animation overhead
+    if (isPaused) return;
+
     let mounted = true;
 
     const tick = () => {
       if (!mounted) return;
-      // Skip animation updates when paused (reduces render load during input)
-      if (isPausedRef.current) return;
 
       const now = Date.now();
       const sinceLastRender = now - lastRenderRef.current;
@@ -200,7 +201,7 @@ export function AnimationProvider({
       mounted = false;
       clearInterval(timer);
     };
-  }, [tickInterval]);
+  }, [tickInterval, isPaused]);
 
   const contextValue: AnimationContextValue = {
     ...state,

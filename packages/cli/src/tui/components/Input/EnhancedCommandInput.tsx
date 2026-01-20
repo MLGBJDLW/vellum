@@ -323,19 +323,23 @@ export function EnhancedCommandInput({
     { isActive: focused && !disabled && !multiline && activeAutocomplete === null }
   );
 
+  // Extract stable values for memoization to reduce unnecessary recomputation
+  const slashQuery = slashAutocomplete.query;
+  const slashActive = slashAutocomplete.active;
+
   // Compute filtered/sorted slash options for Enter/Tab selection
   const sortedSlashOptions = useMemo(() => {
-    if (!slashAutocomplete.active || slashOptions.length === 0) return [];
+    if (!slashActive || slashOptions.length === 0) return [];
     // Normalize to AutocompleteOption format
     const normalized = slashOptions.map((opt) => (typeof opt === "string" ? { name: opt } : opt));
     // Filter by prefix
-    const query = slashAutocomplete.query.toLowerCase();
+    const query = slashQuery.toLowerCase();
     const filtered = query
       ? normalized.filter((opt) => opt.name.toLowerCase().startsWith(query))
       : normalized;
     // Sort alphabetically
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [slashAutocomplete.active, slashAutocomplete.query, slashOptions]);
+  }, [slashActive, slashQuery, slashOptions]);
 
   // Handle slash autocomplete selection
   const handleSlashSelect = useCallback(

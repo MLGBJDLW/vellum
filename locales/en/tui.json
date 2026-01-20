@@ -1,4 +1,24 @@
 {
+  "trust": {
+    "detected_monorepo": "Detected monorepo workspace",
+    "new_project": "New Project Directory",
+    "monorepo_type": "Type",
+    "root_directory": "Root directory",
+    "current_directory": "Current directory",
+    "workspaces": "Workspaces",
+    "prompt_trust": "Trust this directory for file access?",
+    "option_yes": "Trust this session",
+    "option_no": "Deny",
+    "option_always": "Always trust",
+    "option_skip": "Skip",
+    "added": "Added to trusted paths",
+    "denied": "Access denied",
+    "skipped": "Skipped",
+    "removed": "Removed from trusted paths",
+    "list_empty": "No trusted paths configured",
+    "list_title": "Trusted Paths",
+    "blocked_path": "Cannot trust system directory"
+  },
   "status": {
     "model": "Model",
     "mode": "Mode",

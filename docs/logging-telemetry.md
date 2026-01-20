@@ -17,7 +17,7 @@ const logger = createLogger({
 logger.info('Application started');
 logger.debug('Debug info', { userId: '123' });
 logger.error('Something failed', { error: err });
-```
+```markdown
 
 ### Timer for Performance Tracking
 
@@ -28,7 +28,7 @@ const timer = logger.time('database-query');
 
 timer.end('Query completed'); // Logs duration
 // Or: const ms = timer.stop(); // Returns ms without logging
-```
+```markdown
 
 ### LLM Request Logging
 
@@ -51,7 +51,7 @@ llmLogger.logRequestComplete({
   outputTokens: 500,
   durationMs: 1234,
 });
-```
+```text
 
 ---
 
@@ -73,7 +73,7 @@ setupTelemetry({
   otlpEndpoint: 'http://localhost:4318/v1/traces',
   samplingRatio: 0.1,
 });
-```
+```markdown
 
 ### Environment Variables
 
@@ -98,7 +98,7 @@ const result = await instrumentor.instrument(
     return await openai.chat.completions.create({ ... });
   }
 );
-```
+```markdown
 
 ### Streaming Instrumentation
 
@@ -111,7 +111,7 @@ const stream = instrumentor.instrumentStream(
 for await (const chunk of stream) {
   // Process chunks - span stays open until stream ends
 }
-```
+```text
 
 ---
 
@@ -135,7 +135,7 @@ filter.filterObject({
   nested: { apiKey: 'sk-xyz' }
 });
 // → { user: 'john', password: '[REDACTED]', nested: { apiKey: '[REDACTED]' } }
-```
+```markdown
 
 ### Telemetry Sanitization
 
@@ -150,7 +150,7 @@ sanitizer.sanitizeAttributes({
   'gen_ai.response': 'AI response...',  // Removed
 });
 // → { 'gen_ai.model': 'gpt-4' }
-```
+```text
 
 ---
 
@@ -166,7 +166,7 @@ const requestCounter = metrics.createCounter({ name: 'requests_total' });
 
 requestCounter.inc({ endpoint: '/api/chat' });
 requestCounter.get({ endpoint: '/api/chat' }); // → 1
-```
+```markdown
 
 ### Histograms
 
@@ -179,7 +179,7 @@ latency.observe(180);
 
 latency.getStats();
 // → { count: 3, sum: 530, min: 150, max: 200, avg: 176.67, p50: 180, p90: 200, p99: 200 }
-```
+```markdown
 
 ### Pre-built Vellum Metrics
 
@@ -193,7 +193,7 @@ import {
 llmRequestsTotal.inc({ provider: 'anthropic', model: 'claude-3' });
 promptTokensTotal.inc({}, 100);
 llmRequestDuration.observe(1234);
-```
+```text
 
 ---
 
@@ -210,7 +210,7 @@ const transport = new RotatingFileTransport({
 });
 
 transport.write({ level: 'info', message: 'Hello', timestamp: Date.now() });
-```
+```text
 
 ---
 
@@ -225,7 +225,7 @@ const config = getLoggingConfig(); // Uses NODE_ENV
 
 // Development: debug level, colors, no telemetry
 // Production: info level, JSON output, 10% sampling
-```
+```markdown
 
 ### Native SDK Telemetry Integration
 

@@ -18,26 +18,46 @@
 import { describe, expect, it } from "vitest";
 import { ContextBuilder } from "../context-builder.js";
 import { PromptBuilder } from "../prompt-builder.js";
-import {
-  ANALYST_PROMPT,
-  ARCHITECT_PROMPT,
-  BASE_PROMPT,
-  CODER_PROMPT,
-  ORCHESTRATOR_PROMPT,
-  QA_PROMPT,
-  WRITER_PROMPT,
-} from "../roles/index.js";
 import { containsDangerousContent, sanitizeVariable } from "../sanitizer.js";
 import type { AgentRole, SessionContext } from "../types.js";
 
+// =============================================================================
+// Test Fixtures - Mock role prompts for testing layer composition
+// =============================================================================
+
+const TEST_BASE_PROMPT = `# Core Identity
+You are an AI assistant.
+
+## Safety Guardrails
+### ABSOLUTE RULES
+- Follow safety guidelines.`;
+
+const TEST_CODER_PROMPT = `# Coder Role
+You are a code implementation specialist.`;
+
+const TEST_QA_PROMPT = `# QA Role
+You are a testing specialist.`;
+
+const TEST_WRITER_PROMPT = `# Writer Role
+You are a documentation specialist.`;
+
+const TEST_ANALYST_PROMPT = `# Analyst Role
+You are a code analysis specialist.`;
+
+const TEST_ARCHITECT_PROMPT = `# Architect Role
+You are a system design specialist.`;
+
+const TEST_ORCHESTRATOR_PROMPT = `# Orchestrator Role
+You are the master coordinator.`;
+
 // Role prompt mapping for tests
 const ROLE_PROMPTS: Record<AgentRole, string> = {
-  orchestrator: ORCHESTRATOR_PROMPT,
-  coder: CODER_PROMPT,
-  qa: QA_PROMPT,
-  writer: WRITER_PROMPT,
-  analyst: ANALYST_PROMPT,
-  architect: ARCHITECT_PROMPT,
+  orchestrator: TEST_ORCHESTRATOR_PROMPT,
+  coder: TEST_CODER_PROMPT,
+  qa: TEST_QA_PROMPT,
+  writer: TEST_WRITER_PROMPT,
+  analyst: TEST_ANALYST_PROMPT,
+  architect: TEST_ARCHITECT_PROMPT,
 };
 
 function getRolePrompt(role: AgentRole): string {
@@ -56,8 +76,8 @@ describe("Integration - 4-Layer Composition", () => {
     };
 
     const prompt = new PromptBuilder()
-      .withBase(BASE_PROMPT)
-      .withRole("coder", CODER_PROMPT)
+      .withBase(TEST_BASE_PROMPT)
+      .withRole("coder", TEST_CODER_PROMPT)
       .withModeOverrides("Focus on implementation, minimize planning.")
       .withSessionContext(sessionContext)
       .build();
@@ -281,7 +301,7 @@ describe("Integration - Complete PromptBuilder Workflow", () => {
     };
 
     const prompt = new PromptBuilder()
-      .withBase(BASE_PROMPT)
+      .withBase(TEST_BASE_PROMPT)
       .withRole(role, rolePrompt)
       .withModeOverrides("Focus on code quality and test coverage.")
       .withSessionContext(sessionContext)
@@ -349,10 +369,13 @@ describe("Integration - Complete PromptBuilder Workflow", () => {
 
     for (const role of roles) {
       const rolePrompt = getRolePrompt(role);
-      const prompt = new PromptBuilder().withBase(BASE_PROMPT).withRole(role, rolePrompt).build();
+      const prompt = new PromptBuilder()
+        .withBase(TEST_BASE_PROMPT)
+        .withRole(role, rolePrompt)
+        .build();
 
       // Each role should produce a non-empty prompt
-      expect(prompt.length).toBeGreaterThan(BASE_PROMPT.length);
+      expect(prompt.length).toBeGreaterThan(TEST_BASE_PROMPT.length);
     }
   });
 });
@@ -513,20 +536,20 @@ describe("Integration - Cross-Module Verification", () => {
 
   it("role prompts load and compose correctly", () => {
     // Verify role prompts exist
-    const coderPrompt = CODER_PROMPT;
-    const qaPrompt = QA_PROMPT;
+    const coderPrompt = TEST_CODER_PROMPT;
+    const qaPrompt = TEST_QA_PROMPT;
 
     expect(coderPrompt.length).toBeGreaterThan(0);
     expect(qaPrompt.length).toBeGreaterThan(0);
 
-    // Compose with BASE_PROMPT
+    // Compose with TEST_BASE_PROMPT
     const fullPrompt = new PromptBuilder()
-      .withBase(BASE_PROMPT)
+      .withBase(TEST_BASE_PROMPT)
       .withRole("coder", coderPrompt)
       .build();
 
     // Should have both base safety rules and role-specific content
     expect(fullPrompt).toContain("Safety Guardrails");
-    expect(fullPrompt.length).toBeGreaterThan(BASE_PROMPT.length);
+    expect(fullPrompt.length).toBeGreaterThan(TEST_BASE_PROMPT.length);
   });
 });

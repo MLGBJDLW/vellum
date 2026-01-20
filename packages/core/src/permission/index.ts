@@ -150,13 +150,17 @@ export {
   VIBE_MODE_GROUPS,
 } from "./tool-groups.js";
 // ============================================
-// Trust Manager
+// Trust Preset Manager
 // ============================================
 export {
-  createTrustManager,
+  createTrustPresetManager,
+  createTrustPresetManager as createTrustManager,
   TRUST_ENV_VAR,
-  TrustManager,
-  type TrustManagerOptions,
+  TrustPresetManager,
+  // Backward compatibility aliases (deprecated)
+  TrustPresetManager as TrustManager,
+  type TrustPresetManagerOptions,
+  type TrustPresetManagerOptions as TrustManagerOptions,
   type TrustResult,
   type TrustSource,
   type YoloConfirmResult,

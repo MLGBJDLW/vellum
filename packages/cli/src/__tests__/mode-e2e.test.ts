@@ -1,5 +1,5 @@
 /**
- * Mode E2E Integration Tests (T058)
+ * Mode E2E Integration Tests
  *
  * End-to-end tests verifying complete flow from CLI flag to mode behavior:
  * 1. CLI flag parsing → ModeManager initialization

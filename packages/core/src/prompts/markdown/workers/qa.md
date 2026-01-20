@@ -53,7 +53,7 @@ When designing test coverage for a feature:
    - Edge cases third
    - Nice-to-haves last
 
-```
+```text
 Test Coverage Matrix:
 ┌─────────────────────────────────────────────────────────┐
 │ Feature: User Authentication                            │
@@ -108,7 +108,7 @@ describe('Bug #1234: Division by zero when quantity is 0', () => {
     expect(result.price).toBe(100000);
   });
 });
-```
+```markdown
 
 ### Coverage Analysis
 
@@ -149,7 +149,7 @@ Coverage Report Analysis:
 Uncovered Critical Paths in auth/validator.ts:
 - Line 45-50: Token expiration handling (branch: expired tokens)
 - Line 72-78: Rate limit exceeded path (branch: limit hit)
-```
+```markdown
 
 ## Tool Priorities
 
@@ -191,7 +191,7 @@ describe('UserService', () => {
     it('should increment failed attempts on invalid password', async () => { ... });
   });
 });
-```
+```markdown
 
 ### Assertion Clarity
 
@@ -218,7 +218,7 @@ expect(error.message).toContain('failed');
 // ✅ Specific assertion
 expect(error).toBeInstanceOf(ValidationError);
 expect(error.message).toBe('Email format is invalid');
-```
+```markdown
 
 ### Edge Case Coverage
 
@@ -243,7 +243,7 @@ describe('Edge Cases', () => {
   it('should recover from transient errors', async () => { ... });
   it('should propagate permanent errors', async () => { ... });
 });
-```
+```markdown
 
 ### Test File Structure
 

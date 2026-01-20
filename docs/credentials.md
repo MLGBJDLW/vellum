@@ -22,7 +22,7 @@ vellum credentials add anthropic
 
 # Using slash commands in TUI
 /login anthropic
-```
+```markdown
 
 ### 2. Use in configuration
 
@@ -35,7 +35,7 @@ providers:
       type: api_key
       provider: anthropic
       # Automatically resolves from keychain/env/file
-```
+```markdown
 
 ### 3. Programmatic access
 
@@ -52,7 +52,7 @@ const result = await manager.resolve("anthropic");
 if (result.ok) {
   console.log(`Found credential from ${result.value.source}`);
 }
-```
+```markdown
 
 ## CredentialManager API
 
@@ -60,7 +60,7 @@ if (result.ok) {
 
 ```typescript
 new CredentialManager(stores: CredentialStore[], options?: CredentialManagerOptions)
-```
+```markdown
 
 **Options:**
 
@@ -82,7 +82,7 @@ if (result.ok) {
   const credential = result.value;
   // credential.value contains the API key
 }
-```
+```markdown
 
 #### `store(input: CredentialInput): Promise<Result<CredentialRef>>`
 
@@ -95,7 +95,7 @@ await manager.store({
   value: "sk-...",
   metadata: { label: "Production Key" },
 });
-```
+```markdown
 
 #### `delete(provider: string, key?: string): Promise<Result<void>>`
 
@@ -103,7 +103,7 @@ Delete a credential.
 
 ```typescript
 await manager.delete("anthropic");
-```
+```markdown
 
 #### `list(): Promise<Result<CredentialRef[]>>`
 
@@ -116,7 +116,7 @@ if (result.ok) {
     console.log(`${ref.provider}: ${ref.source}`);
   }
 }
-```
+```markdown
 
 #### `exists(provider: string, key?: string): Promise<Result<boolean>>`
 
@@ -124,7 +124,7 @@ Check if a credential exists.
 
 ```typescript
 const exists = await manager.exists("anthropic");
-```
+```markdown
 
 #### `validate(provider: string): Promise<Result<CredentialValidationResult>>`
 
@@ -135,7 +135,7 @@ const validation = await manager.validate("anthropic");
 if (validation.ok && validation.value.valid) {
   console.log("Credential is valid");
 }
-```
+```markdown
 
 ### Events
 
@@ -155,7 +155,7 @@ manager.on((event) => {
       break;
   }
 });
-```
+```markdown
 
 ## Storage Backends
 
@@ -167,7 +167,7 @@ Reads credentials from environment variables. **Read-only**.
 import { EnvCredentialStore } from "@vellum/core";
 
 const store = new EnvCredentialStore();
-```
+```markdown
 
 **Environment variable mapping:**
 
@@ -191,7 +191,7 @@ import { KeychainStore } from "@vellum/core";
 const store = new KeychainStore({
   service: "vellum", // Service name in keychain
 });
-```
+```markdown
 
 **Platform support:**
 
@@ -212,7 +212,7 @@ const store = new EncryptedFileStore({
   filePath: "~/.vellum/credentials.enc",
   password: process.env.VELLUM_CREDENTIAL_PASSWORD,
 });
-```
+```markdown
 
 **Encryption details:**
 
@@ -234,7 +234,7 @@ const store = new HybridCredentialStore({
   fileStorePath: "~/.vellum/credentials.enc",
   password: process.env.VELLUM_CREDENTIAL_PASSWORD,
 });
-```
+```text
 
 Uses keychain when available, falls back to encrypted file automatically.
 
@@ -242,7 +242,7 @@ Uses keychain when available, falls back to encrypted file automatically.
 
 ```bash
 export VELLUM_FORCE_FILE_STORAGE=true
-```
+```markdown
 
 ## CLI Commands
 
@@ -259,7 +259,7 @@ vellum credentials add <provider>
 
 # Remove a credential
 vellum credentials remove <provider>
-```
+```markdown
 
 **Example output:**
 
@@ -279,7 +279,7 @@ Stored Credentials:
 │ openai   │ env      │ -                   │
 │ google   │ file     │ 2025-12-25 14:20:00 │
 └──────────┴──────────┴─────────────────────┘
-```
+```markdown
 
 ### Slash Commands (TUI)
 
@@ -294,7 +294,7 @@ Add or update a credential.
 🔐 Adding credential for anthropic. Enter your API key:
 > sk-ant-api03-...
 ✅ Credential for anthropic saved to keychain
-```
+```markdown
 
 #### `/logout [provider]`
 
@@ -303,7 +303,7 @@ Remove a credential.
 ```
 /logout anthropic
 ✅ Credential for anthropic removed
-```
+```markdown
 
 #### `/credentials`
 
@@ -315,7 +315,7 @@ Show credential status.
   anthropic: ✓ keychain
   openai:    ✓ env
   google:    ✗ not configured
-```
+```markdown
 
 ## Configuration
 
@@ -343,7 +343,7 @@ providers:
   - name: google
     model: gemini-pro
     apiKey: ${GOOGLE_API_KEY}
-```
+```markdown
 
 ### Environment Variables
 
@@ -382,7 +382,7 @@ import { SecureString } from "@vellum/core";
 using secure = new SecureString(apiKey);
 // ... use secure.value
 // Memory cleared when scope exits
-```
+```markdown
 
 ## Troubleshooting
 
@@ -390,7 +390,7 @@ using secure = new SecureString(apiKey);
 
 ```
 ⚠️ Keychain unavailable, using encrypted file storage
-```
+```markdown
 
 **Solutions:**
 
@@ -402,17 +402,17 @@ using secure = new SecureString(apiKey);
 
 ```
 ❌ EPERM: Cannot read ~/.vellum/credentials.enc
-```
+```markdown
 
 **Solution:**
 
 ```bash
 chmod 600 ~/.vellum/credentials.enc
-```
+```markdown
 
 ### Invalid credential format
 
-```
+```text
 ❌ Invalid API key format for anthropic
 ```
 

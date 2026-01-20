@@ -89,7 +89,7 @@ export const UserCard: FC<UserCardProps> = ({
     </article>
   );
 };
-```
+```markdown
 
 ### Custom Hooks
 
@@ -132,7 +132,7 @@ export function useFetch<T>(url: string): UseFetchResult<T> {
 
   return { data, loading, error, refetch: fetchData };
 }
-```
+```markdown
 
 ### Compound Components
 
@@ -202,7 +202,7 @@ const TabPanel: FC<{ id: string; children: ReactNode }> = ({ id, children }) => 
 Tabs.List = TabList;
 Tabs.Tab = Tab;
 Tabs.Panel = TabPanel;
-```
+```markdown
 
 ### Render Props & Children as Function
 
@@ -231,7 +231,7 @@ export function DataLoader<T>({ url, children }: DataLoaderProps<T>) {
     return <UserList users={data ?? []} />;
   }}
 </DataLoader>
-```
+```markdown
 
 ## Anti-Patterns
 
@@ -266,7 +266,7 @@ const fullName = useMemo(() => `${first} ${last}`, [first, last]);
 useEffect(() => {
   setCount(items.length);
 }, [items]); // Just compute: const count = items.length;
-```
+```markdown
 
 ## Examples
 
@@ -341,7 +341,7 @@ export const LoginForm: FC<{ onSubmit: (data: FormData) => void }> = ({
     </form>
   );
 };
-```
+```markdown
 
 ### List with Virtualization Hook
 

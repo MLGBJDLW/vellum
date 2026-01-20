@@ -285,10 +285,8 @@ describe("System Prompt Override Integration", () => {
 
   describe("PromptBuilder with PromptLoader integration", () => {
     it("should load role prompt via withExternalRole", async () => {
-      // Arrange - use loader without workspace path to test fallback behavior
-      const loader = new PromptLoader({
-        enableFallback: true, // Enable TypeScript fallback
-      });
+      // Arrange - use loader to test load behavior
+      const loader = new PromptLoader({});
 
       // Act
       const builder = new PromptBuilder();

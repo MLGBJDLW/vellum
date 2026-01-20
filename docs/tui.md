@@ -58,7 +58,7 @@ Vellum’s sidebar panels are designed to be discoverable via keyboard. When the
 
 ## Architecture
 
-```
+```text
 packages/cli/src/tui/
 ├── adapters/          # External service adapters
 ├── components/        # UI components
@@ -91,7 +91,7 @@ import { RootProvider } from "@vellum/cli";
 >
   <App />
 </RootProvider>
-```
+```markdown
 
 **Props:**
 
@@ -119,7 +119,7 @@ import { Layout } from "@vellum/cli";
 >
   <MessageList messages={messages} />
 </Layout>
-```
+```markdown
 
 **Props:**
 
@@ -153,7 +153,7 @@ import { TextInput } from "@vellum/cli";
   multiline={true}
   maxLength={4000}
 />
-```
+```markdown
 
 **Props:**
 
@@ -193,7 +193,7 @@ import { MessageList } from "@vellum/cli";
   maxHeight={20}
   onScrollChange={(isAtBottom) => setShowNewIndicator(!isAtBottom)}
 />
-```
+```markdown
 
 **Props:**
 
@@ -215,7 +215,7 @@ interface Message {
   isStreaming?: boolean;
   toolCalls?: ToolCallInfo[];
 }
-```
+```text
 
 ---
 
@@ -233,7 +233,7 @@ import { StatusBar } from "@vellum/cli";
   thinking={{ active: true, budget: 10000, used: 2500 }}
   showBorder={true}
 />
-```
+```markdown
 
 **Props:**
 
@@ -261,7 +261,7 @@ import { PermissionDialog } from "@vellum/cli";
   onReject={handleReject}
   onApproveAlways={handleAlwaysAllow}
 />
-```
+```markdown
 
 **Props:**
 
@@ -304,7 +304,7 @@ function MyComponent() {
     </Box>
   );
 }
-```
+```markdown
 
 **State Shape:**
 
@@ -316,7 +316,7 @@ interface AppState {
   vimMode: boolean;
   focusedArea: "input" | "messages" | "tools" | "status";
 }
-```
+```text
 
 ---
 
@@ -341,7 +341,7 @@ function MyComponent() {
 
   return <MessageList messages={state.messages} />;
 }
-```
+```markdown
 
 **Actions:**
 
@@ -378,7 +378,7 @@ function MyComponent() {
     </Box>
   );
 }
-```
+```markdown
 
 **State Shape:**
 
@@ -396,7 +396,7 @@ interface ToolExecution {
   result?: unknown;
   error?: Error;
 }
-```
+```text
 
 ---
 
@@ -430,7 +430,7 @@ function Editor() {
     </Box>
   );
 }
-```
+```markdown
 
 **Return Value:**
 
@@ -442,7 +442,7 @@ interface UseVimReturn {
   setMode: (mode: VimMode) => void;
   handleKey: (key: string, modifiers?: KeyModifiers) => VimAction | null;
 }
-```
+```markdown
 
 **Key Mappings:**
 
@@ -490,7 +490,7 @@ function MyComponent() {
 
   return <Box>...</Box>;
 }
-```
+```markdown
 
 **Hotkey Definition:**
 
@@ -504,7 +504,7 @@ interface HotkeyDefinition {
   description?: string;  // Help text
   scope?: "global" | "input" | "messages" | "tools";
 }
-```
+```text
 
 ---
 
@@ -547,7 +547,7 @@ function MessageViewer() {
     </Box>
   );
 }
-```
+```markdown
 
 **Return Value:**
 
@@ -560,7 +560,7 @@ interface UseCopyModeReturn {
   copySelection: (content: string[][]) => Promise<void>;
   isInSelection: (line: number, col: number) => boolean;
 }
-```
+```markdown
 
 **Platform Support:**
 - macOS: `pbcopy`
@@ -602,7 +602,7 @@ function MyComponent() {
     </Box>
   );
 }
-```
+```markdown
 
 ### Custom Themes
 
@@ -628,7 +628,7 @@ const customTheme: VellumTheme = {
 <RootProvider theme={customTheme}>
   <App />
 </RootProvider>
-```
+```text
 
 ---
 
@@ -696,7 +696,7 @@ render(
     <App />
   </RootProvider>
 );
-```
+```markdown
 
 ### Tool Approval Flow
 
@@ -721,7 +721,7 @@ function ToolApprovalManager() {
     />
   );
 }
-```
+```markdown
 
 ### Vim Mode Integration
 
@@ -761,7 +761,7 @@ function VimEditor() {
     </Box>
   );
 }
-```
+```text
 
 ---
 
@@ -786,7 +786,7 @@ import { AdaptiveLayout, ScreenReaderLayout } from "@vellum/cli";
 <ScreenReaderLayout>
   <App />
 </ScreenReaderLayout>
-```
+```text
 
 ---
 

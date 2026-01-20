@@ -15,7 +15,7 @@ The Skills System enables Vellum to adapt its behavior based on context. Skills 
 
 ### Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      Agent Loop                              │
 ├─────────────────────────────────────────────────────────────┤
@@ -32,7 +32,7 @@ The Skills System enables Vellum to adapt its behavior based on context. Skills 
 
 Each skill is defined by a `SKILL.md` file in its directory:
 
-```
+```text
 skills/
 └── python-testing/
     ├── SKILL.md           # Required: manifest file
@@ -72,7 +72,7 @@ tags:
   - testing
   - python
 ---
-```
+```markdown
 
 ### Required Fields
 
@@ -132,7 +132,7 @@ Code examples demonstrating proper usage.
 def test_example(client):
     response = client.get("/api/users")
     assert response.status_code == 200
-```
+```markdown
 
 ## References
 
@@ -166,7 +166,7 @@ When the same skill name exists in multiple sources:
 
 Skills can be scoped to specific agent modes:
 
-```
+```text
 .vellum/
 ├── skills/           # General skills
 │   └── typescript/
@@ -197,7 +197,7 @@ Regex pattern matched against the user's request text.
 triggers:
   - type: keyword
     pattern: "test|pytest|unittest"
-```
+```markdown
 
 **Score Multiplier**: 10
 
@@ -209,7 +209,7 @@ Glob pattern matched against files in context.
 triggers:
   - type: file_pattern
     pattern: "**/*.test.ts"
-```
+```markdown
 
 **Score Multiplier**: 5
 
@@ -221,7 +221,7 @@ Exact match on slash commands.
 triggers:
   - type: command
     pattern: "/test"
-```
+```markdown
 
 **Score Multiplier**: 100 (highest priority)
 
@@ -233,7 +233,7 @@ Key:value match on project context metadata.
 triggers:
   - type: context
     pattern: "framework:react"
-```
+```markdown
 
 **Score Multiplier**: 3
 
@@ -244,7 +244,7 @@ Always activates (use sparingly).
 ```yaml
 triggers:
   - type: always
-```
+```markdown
 
 **Score Multiplier**: 1 (lowest priority)
 
@@ -252,7 +252,7 @@ triggers:
 
 ```
 score = skill.priority × trigger_type_multiplier
-```
+```text
 
 Skills are sorted by score descending. Higher scores activate first.
 
@@ -303,7 +303,7 @@ vellum skill list --format json
 
 # Verbose with full descriptions
 vellum skill list --verbose
-```
+```markdown
 
 **Output columns**: Name, Source, Version, Triggers
 
@@ -317,7 +317,7 @@ vellum skill show python-testing
 
 # Include full SKILL.md content
 vellum skill show python-testing --content
-```
+```markdown
 
 ### Create New Skill
 
@@ -325,7 +325,7 @@ Interactive skill creation:
 
 ```bash
 vellum skill create my-skill
-```
+```text
 
 This will:
 1. Prompt for location (workspace, user, or global)
@@ -346,7 +346,7 @@ vellum skill validate --skill python-testing
 
 # Strict mode (warnings become errors)
 vellum skill validate --strict
-```
+```markdown
 
 **Output**: ✓ Valid / ✗ Invalid for each skill
 
@@ -385,7 +385,7 @@ compatibility:
     - write_file
   denyTools:       # Denylist: these tools disabled
     - execute_command
-```
+```text
 
 When multiple skills are active:
 - **Allowlist**: Intersection of all tool allowlists
@@ -404,7 +404,7 @@ skills:
       permission: allow
     - pattern: "untrusted-*"
       permission: deny
-```
+```text
 
 ---
 
@@ -447,7 +447,7 @@ tags:
 - Don't test implementation details
 - Avoid snapshot tests for dynamic content
 - Never skip tests without documentation
-```
+```markdown
 
 ### Framework-Specific Skill
 
@@ -494,7 +494,7 @@ tags:
 - Co-locate loading.tsx and error.tsx with page.tsx
 - Use route groups for layout organization
 - Implement streaming with Suspense boundaries
-```
+```markdown
 
 ### Claude-Compatible Aliases
 
@@ -510,7 +510,7 @@ when:                                    # alias for triggers
 requires:                                # alias for dependencies
   - code-style
 ---
-```
+```text
 
 ---
 
@@ -562,7 +562,7 @@ const skill = await loader.loadL2('python-testing');
 
 // L3: Access skill resources
 const accessed = await loader.accessL3('python-testing');
-```
+```markdown
 
 ### SkillMatcher
 
@@ -579,7 +579,7 @@ const matches = matcher.matchAll(skills, {
 });
 
 // Returns SkillMatch[] sorted by score
-```
+```markdown
 
 ### SkillManager
 

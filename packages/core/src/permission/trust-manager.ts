@@ -21,9 +21,9 @@ import { type PermissionConfig, resolvePermissionConfig, type TrustPreset } from
 export type TrustSource = "cli" | "env" | "config" | "default";
 
 /**
- * Options for TrustManager initialization.
+ * Options for TrustPresetManager initialization.
  */
-export interface TrustManagerOptions {
+export interface TrustPresetManagerOptions {
   /** CLI-provided preset (highest priority) */
   cliPreset?: TrustPreset;
   /** Environment variable preset */
@@ -103,7 +103,7 @@ const TRUST_ORDER: readonly TrustPreset[] = [
  *
  * @example
  * ```typescript
- * const manager = new TrustManager({
+ * const manager = new TrustPresetManager({
  *   cliPreset: 'cautious',  // Highest priority
  *   envPreset: 'default',   // From VELLUM_TRUST_PRESET
  *   configPreset: 'relaxed' // From config file
@@ -116,7 +116,7 @@ const TRUST_ORDER: readonly TrustPreset[] = [
  * // Full permission config based on preset
  * ```
  */
-export class TrustManager {
+export class TrustPresetManager {
   readonly #cliPreset?: TrustPreset;
   readonly #envPreset?: TrustPreset;
   readonly #configPreset?: TrustPreset;
@@ -130,11 +130,11 @@ export class TrustManager {
   #capReason?: string;
 
   /**
-   * Creates a new TrustManager.
+   * Creates a new TrustPresetManager.
    *
    * @param options - Configuration options
    */
-  constructor(options: TrustManagerOptions = {}) {
+  constructor(options: TrustPresetManagerOptions = {}) {
     this.#cliPreset = options.cliPreset;
     this.#envPreset = options.envPreset ?? this.#getEnvPreset();
     this.#configPreset = options.configPreset ?? options.config?.preset;
@@ -421,13 +421,28 @@ export class TrustManager {
 }
 
 /**
- * Create a TrustManager from environment and config.
+ * Create a TrustPresetManager from environment and config.
  *
  * Convenience factory function.
  *
  * @param options - Options for the manager
- * @returns Configured TrustManager
+ * @returns Configured TrustPresetManager
  */
-export function createTrustManager(options: TrustManagerOptions = {}): TrustManager {
-  return new TrustManager(options);
+export function createTrustPresetManager(
+  options: TrustPresetManagerOptions = {}
+): TrustPresetManager {
+  return new TrustPresetManager(options);
 }
+
+// ============================================
+// Backward Compatibility Aliases (deprecated)
+// ============================================
+
+/** @deprecated Use TrustPresetManagerOptions instead */
+export type TrustManagerOptions = TrustPresetManagerOptions;
+
+/** @deprecated Use createTrustPresetManager instead */
+export const createTrustManager = createTrustPresetManager;
+
+/** @deprecated Use TrustPresetManager instead */
+export { TrustPresetManager as TrustManager };

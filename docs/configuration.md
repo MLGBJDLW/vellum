@@ -45,7 +45,7 @@ Controls whether Vellum uses the terminal's alternate screen buffer (like vim, l
     "alternateBuffer": true
   }
 }
-```
+```markdown
 
 #### Default Behavior
 
@@ -66,7 +66,7 @@ If you prefer to keep Vellum output in your terminal scrollback:
     "alternateBuffer": false
   }
 }
-```
+```markdown
 
 #### Screen Reader Compatibility
 
@@ -95,7 +95,7 @@ interface StorageConfig {
   /** Name of the index file for session metadata (default: "index.json") */
   indexFileName: string;
 }
-```
+```markdown
 
 #### Default Values
 
@@ -106,7 +106,7 @@ interface StorageConfig {
   compressionEnabled: true,
   indexFileName: "index.json"
 }
-```
+```markdown
 
 #### Platform-Specific Storage Paths
 
@@ -123,7 +123,7 @@ interface StorageConfig {
 import { StorageManager, getDefaultStorageConfig } from '@vellum/core/session';
 
 const storage = await StorageManager.create(getDefaultStorageConfig());
-```
+```markdown
 
 **Custom storage path:**
 ```typescript
@@ -134,14 +134,14 @@ const storage = await StorageManager.create({
   maxSessions: 200,
   compressionEnabled: true
 });
-```
+```markdown
 
 **Override specific options:**
 ```typescript
 // Uses default basePath but custom maxSessions
 const config = createStorageConfig({ maxSessions: 50 });
 const storage = await StorageManager.create(config);
-```
+```markdown
 
 **Disable compression (for debugging):**
 ```typescript
@@ -150,7 +150,7 @@ const storage = await StorageManager.create({
   compressionEnabled: false,  // Stores as plain JSON
   maxSessions: 10
 });
-```
+```text
 
 ---
 
@@ -169,7 +169,7 @@ interface PersistenceConfig {
   /** Maximum unsaved messages before triggering save (default: 5) */
   maxUnsavedMessages: number;
 }
-```
+```markdown
 
 #### Default Values
 
@@ -179,7 +179,7 @@ interface PersistenceConfig {
   autoSaveIntervalSecs: 30,
   maxUnsavedMessages: 5
 }
-```
+```markdown
 
 #### Configuration Examples
 
@@ -188,7 +188,7 @@ interface PersistenceConfig {
 import { PersistenceManager, DEFAULT_PERSISTENCE_CONFIG } from '@vellum/core/session';
 
 const persistence = new PersistenceManager(storage, DEFAULT_PERSISTENCE_CONFIG);
-```
+```markdown
 
 **Aggressive auto-save (frequent saves):**
 ```typescript
@@ -197,7 +197,7 @@ const persistence = new PersistenceManager(storage, {
   autoSaveIntervalSecs: 10,    // Save every 10 seconds
   maxUnsavedMessages: 2         // Or after 2 messages
 });
-```
+```markdown
 
 **Minimal auto-save (less frequent):**
 ```typescript
@@ -206,7 +206,7 @@ const persistence = new PersistenceManager(storage, {
   autoSaveIntervalSecs: 120,   // Save every 2 minutes
   maxUnsavedMessages: 20        // Or after 20 messages
 });
-```
+```markdown
 
 **Disable auto-save (manual save only):**
 ```typescript
@@ -215,7 +215,7 @@ const persistence = new PersistenceManager(storage, {
   autoSaveIntervalSecs: 30,
   maxUnsavedMessages: 5
 });
-```
+```text
 
 ---
 
@@ -247,7 +247,7 @@ interface AutoCompactionConfig extends CompactionConfig {
   /** Strategy for automatic compaction (default: 'both') */
   compactionStrategy: 'prune' | 'truncate' | 'both';
 }
-```
+```markdown
 
 #### Default Values
 
@@ -265,7 +265,7 @@ interface AutoCompactionConfig extends CompactionConfig {
   warningThreshold: 80000,
   compactionStrategy: 'both'
 }
-```
+```markdown
 
 #### Compaction Strategies
 
@@ -289,7 +289,7 @@ const config: AutoCompactionConfig = {
   prunedMarker: "[...]",
   truncatedMarker: "[{count} messages omitted]"
 };
-```
+```markdown
 
 **Aggressive compaction (lower limits):**
 ```typescript
@@ -303,7 +303,7 @@ const config: AutoCompactionConfig = {
   prunedMarker: "[Output truncated]",
   truncatedMarker: "[{count} messages removed]"
 };
-```
+```markdown
 
 **Custom markers:**
 ```typescript
@@ -317,7 +317,7 @@ const config: AutoCompactionConfig = {
   prunedMarker: "⚠️ [Tool output shortened for context efficiency]",
   truncatedMarker: "📦 [{count} earlier messages archived]"
 };
-```
+```text
 
 ---
 
@@ -338,7 +338,7 @@ interface SearchOptions {
   /** Fields to search (defaults to all) */
   fields?: string[];
 }
-```
+```markdown
 
 #### Default Values
 
@@ -349,7 +349,7 @@ interface SearchOptions {
   prefix: true,
   fields: ['title', 'summary', 'tags', 'content']
 }
-```
+```markdown
 
 #### Search Index Configuration
 
@@ -370,7 +370,7 @@ The search service uses MiniSearch with the following built-in configuration:
     }
   }
 }
-```
+```markdown
 
 #### Configuration Examples
 
@@ -383,7 +383,7 @@ await search.initialize();
 
 const results = search.search('refactoring');
 // Returns up to 10 results with fuzzy/prefix matching
-```
+```markdown
 
 **Exact matching (no fuzzy):**
 ```typescript
@@ -392,7 +392,7 @@ const results = search.search('typescript', {
   prefix: false,
   limit: 20
 });
-```
+```markdown
 
 **Search specific fields only:**
 ```typescript
@@ -400,7 +400,7 @@ const results = search.search('bug fix', {
   fields: ['title', 'tags'],  // Only search title and tags
   limit: 5
 });
-```
+```markdown
 
 **Large result set:**
 ```typescript
@@ -409,7 +409,7 @@ const results = search.search('session', {
   fuzzy: true,
   prefix: true
 });
-```
+```markdown
 
 **Custom index path:**
 ```typescript
@@ -418,7 +418,7 @@ const search = new SearchService(
   '/custom/path/my-search-index.json'
 );
 await search.initialize();
-```
+```text
 
 ---
 
@@ -437,7 +437,7 @@ interface SummaryConfig {
   /** Whether to automatically update session title from summary */
   autoUpdateTitle: boolean;
 }
-```
+```markdown
 
 #### Default Values
 
@@ -447,7 +447,7 @@ interface SummaryConfig {
   minMessagesForSummary: 10,
   autoUpdateTitle: true
 }
-```
+```markdown
 
 #### Configuration Examples
 
@@ -456,7 +456,7 @@ interface SummaryConfig {
 import { SessionSummaryService, DEFAULT_SUMMARY_CONFIG } from '@vellum/core/session';
 
 const summaryService = new SessionSummaryService(DEFAULT_SUMMARY_CONFIG);
-```
+```markdown
 
 **Larger summary window:**
 ```typescript
@@ -465,7 +465,7 @@ const summaryService = new SessionSummaryService({
   minMessagesForSummary: 20,    // Require more messages before summary
   autoUpdateTitle: true
 });
-```
+```markdown
 
 **Minimal summaries:**
 ```typescript
@@ -474,7 +474,7 @@ const summaryService = new SessionSummaryService({
   minMessagesForSummary: 5,     // Generate summaries earlier
   autoUpdateTitle: false        // Don't auto-update title
 });
-```
+```markdown
 
 **Manual title control:**
 ```typescript
@@ -486,7 +486,7 @@ const summaryService = new SessionSummaryService({
 
 // Generate summary without title update
 const summary = await summaryService.generateSummary(session);
-```
+```text
 
 ---
 
@@ -505,19 +505,19 @@ The session system respects the following environment variables:
 **Windows (PowerShell):**
 ```powershell
 $env:APPDATA = "C:\CustomData"
-```
+```markdown
 
 **macOS/Linux (Bash):**
 ```bash
 export XDG_DATA_HOME="/custom/data"
-```
+```markdown
 
 **Cross-platform (Node.js):**
 ```typescript
 process.env.XDG_DATA_HOME = '/custom/data';
 // Then create storage (will use custom path)
 const storage = await StorageManager.create(getDefaultStorageConfig());
-```
+```text
 
 ---
 
@@ -570,7 +570,7 @@ const summaryService = new SessionSummaryService({
   minMessagesForSummary: 15,
   autoUpdateTitle: true
 });
-```
+```markdown
 
 ### Example 2: Development/Debug Configuration
 
@@ -590,7 +590,7 @@ const persistence = new PersistenceManager(storage, {
   autoSaveIntervalSecs: 5,   // Save frequently
   maxUnsavedMessages: 1       // Save after every message
 });
-```
+```markdown
 
 ### Example 3: Resource-Constrained Environment
 
@@ -622,7 +622,7 @@ const compactionConfig: AutoCompactionConfig = {
   prunedMarker: "[...]",
   truncatedMarker: "[{count} removed]"
 };
-```
+```markdown
 
 ### Example 4: Custom Search Index Location
 
@@ -646,7 +646,7 @@ for (const sessionId of sessions) {
   const session = await storage.loadSession(sessionId);
   await search.indexSession(session);
 }
-```
+```text
 
 ---
 
@@ -694,7 +694,7 @@ import type {
   SearchOptions,
   SummaryConfig
 } from '@vellum/core/session';
-```
+```text
 
 For default values:
 

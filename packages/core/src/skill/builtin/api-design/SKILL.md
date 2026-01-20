@@ -46,7 +46,7 @@ Guidelines for designing consistent, intuitive, and maintainable HTTP APIs.
 
 ### URL Structure
 
-```
+```markdown
 # Collection operations
 GET    /v1/users              # List users (paginated)
 POST   /v1/users              # Create user
@@ -112,7 +112,7 @@ interface CollectionResponse<T> {
     "timestamp": "2024-01-15T12:00:00Z"
   }
 }
-```
+```markdown
 
 ### Error Response Format
 
@@ -161,7 +161,7 @@ interface ErrorDetail {
     "requestId": "req_xyz789"
   }
 }
-```
+```markdown
 
 ### HTTP Status Codes
 
@@ -185,7 +185,7 @@ interface ErrorDetail {
 502 Bad Gateway     // Upstream service error
 503 Unavailable     // Service temporarily down
 504 Gateway Timeout // Upstream timeout
-```
+```markdown
 
 ### Pagination (Cursor-Based)
 
@@ -217,7 +217,7 @@ function encodeCursor(cursor: PaginationCursor): string {
 function decodeCursor(encoded: string): PaginationCursor {
   return JSON.parse(Buffer.from(encoded, "base64url").toString());
 }
-```
+```markdown
 
 ### Request Validation with Zod
 
@@ -264,7 +264,7 @@ function validateBody<T extends z.ZodSchema>(schema: T) {
     next();
   };
 }
-```
+```markdown
 
 ## Anti-Patterns
 
@@ -312,7 +312,7 @@ GET /v1/users?page=1&pageSize=20
 // ❌ Breaking changes without versioning
 // Changed field name from "userName" to "name"
 // ✅ Maintain backward compatibility or version
-```
+```markdown
 
 ## Examples
 
@@ -390,7 +390,7 @@ router.delete("/users/:id", async (req, res, next) => {
 });
 
 export default router;
-```
+```markdown
 
 ### OpenAPI Documentation
 

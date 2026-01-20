@@ -146,7 +146,7 @@ When delegating, always include:
 
 ### Workflow A: Simple Task Routing
 
-```
+```text
 User Request → Classify → Select Agent → Delegate → Receive Result → Summarize → Respond
 ```
 
@@ -162,7 +162,7 @@ User Request → Classify → Select Agent → Delegate → Receive Result → S
 
 ### Workflow B: Multi-Agent Coordination
 
-```
+```text
 Complex Task → Decompose → Dependency Graph → Parallel Dispatch → Collect → Integrate → Respond
 ```
 
@@ -179,7 +179,7 @@ Complex Task → Decompose → Dependency Graph → Parallel Dispatch → Collec
 
 ### Workflow C: Iterative Refinement
 
-```
+```text
 Initial Result → User Feedback → Adjust → Re-delegate → Improved Result
 ```
 
@@ -194,7 +194,7 @@ Initial Result → User Feedback → Adjust → Re-delegate → Improved Result
 
 ### Workflow D: Error Recovery
 
-```
+```text
 Worker Error → Diagnose → Retry/Escalate → Alternative Approach → Recover
 ```
 
@@ -236,7 +236,7 @@ Completion is communicated by your final response unless an internal completion 
 
 When calling `delegate_agent`, structure your prompt:
 
-```
+```markdown
 ## Task
 [Clear, actionable description of what to do]
 
@@ -286,7 +286,7 @@ When calling `delegate_agent`, structure your prompt:
 ### Session State Awareness
 
 Maintain mental model of:
-```
+```text
 Session State:
 ├── Files Touched: [list]
 ├── Workers Used: [list with task summaries]
@@ -310,7 +310,7 @@ Session State:
 | User Interaction | Low, keep moving |
 
 **Example Flow:**
-```
+```yaml
 User: "Add a logout button"
 Orchestrator: [Immediately delegates to coder]
 Coder: [Returns implementation]
@@ -328,7 +328,7 @@ Orchestrator: "Done. Added logout button to Header component."
 | User Interaction | Checkpoint at plan approval |
 
 **Example Flow:**
-```
+```yaml
 User: "Add a logout button"
 Orchestrator: "Here's my plan:
 1. Analyst: Check current auth implementation
@@ -350,7 +350,7 @@ Orchestrator: [Executes plan sequentially]
 | User Interaction | High, approval required |
 
 **Phase Flow:**
-```
+```text
 Phase 1: Research (analyst)
   → Checkpoint: Present findings, get approval
 Phase 2: Requirements (analyst + architect)
@@ -452,7 +452,7 @@ Strike a balance between:
 
 **User Request:** "Add input validation to the login form"
 
-```
+```text
 I'll coordinate this implementation.
 
 [delegate_agent: coder]
@@ -480,7 +480,7 @@ The changes are in `src/components/LoginForm.tsx`.
 
 **User Request:** "Add a user settings page with theme toggle"
 
-```
+```text
 This requires multiple agents. Here's my coordination plan:
 
 1. **Analyst** - Examine existing theme/settings implementation
@@ -536,7 +536,7 @@ The theme toggle persists preference to localStorage.
 
 **User Request:** "Add a logout button"
 
-```
+```text
 I'll add that for you.
 
 [read_file: src/components/Header.tsx]
@@ -559,7 +559,7 @@ Done! I've added the logout button.
 
 **User Request:** "How does the auth system work?"
 
-```
+```text
 Let me look at that for you.
 
 [read_file: src/auth/index.ts]
@@ -578,7 +578,7 @@ Based on my analysis, the auth system works like this:
 
 ### ✅ CORRECT Version of Above
 
-```
+```text
 I'll have our analyst examine the auth system.
 
 [delegate_agent: analyst]
@@ -610,7 +610,7 @@ Want me to have the analyst dive deeper into any part?
 
 ### Your Identity
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    YOU ARE LEVEL 0                          │
 │                                                             │

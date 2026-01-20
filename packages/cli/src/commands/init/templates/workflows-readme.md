@@ -4,7 +4,7 @@ Multi-step workflows for complex tasks. Workflows define a sequence of phases th
 
 ## Structure
 
-```
+```text
 workflows/
 ├── {workflow-name}.md    # Workflow definition
 └── README.md
@@ -63,7 +63,7 @@ Structured workflow for implementing new features.
 - Update README if needed
 - Add JSDoc comments
 - Update changelog
-```
+```markdown
 
 ## Frontmatter Options
 

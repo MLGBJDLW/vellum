@@ -76,8 +76,16 @@ export interface TruncationResult {
 // Constants
 // =============================================================================
 
-/** Default maximum output length before truncation (50KB) */
-export const DEFAULT_MAX_LENGTH = 50_000;
+/**
+ * Default maximum output length before truncation (20KB).
+ *
+ * Reduced from 50KB to 20KB to better manage context window usage:
+ * - 20KB ≈ 5,000 tokens at 4 chars/token
+ * - Leaves room for system prompt, conversation history, and tool definitions
+ * - Prevents single tool outputs from dominating the context window
+ * - Most useful output fits within 20KB; larger outputs can spill to file
+ */
+export const DEFAULT_MAX_LENGTH = 20_000;
 
 /** Default characters to preserve at end */
 export const DEFAULT_PRESERVE_TAIL = 1_000;

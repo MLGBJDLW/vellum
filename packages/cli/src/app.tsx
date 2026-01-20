@@ -109,6 +109,7 @@ import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
 import { SystemStatusPanel } from "./tui/components/Sidebar/SystemStatusPanel.js";
 import { ModelStatusBar } from "./tui/components/Status/ModelStatusBar.js";
+import { FileChangesIndicator } from "./tui/components/StatusBar/FileChangesIndicator.js";
 import { StatusBar } from "./tui/components/StatusBar/StatusBar.js";
 import type { TrustMode } from "./tui/components/StatusBar/TrustModeIndicator.js";
 import { SessionPicker } from "./tui/components/session/SessionPicker.js";
@@ -118,6 +119,7 @@ import { TipBanner } from "./tui/components/TipBanner.js";
 import type { TodoItemData } from "./tui/components/TodoItem.js";
 import { TodoPanel } from "./tui/components/TodoPanel.js";
 import { ApprovalQueue } from "./tui/components/Tools/ApprovalQueue.js";
+import { OptionSelector } from "./tui/components/Tools/OptionSelector.js";
 import { PermissionDialog } from "./tui/components/Tools/PermissionDialog.js";
 import { ToolsPanel } from "./tui/components/Tools/ToolsPanel.js";
 import { UpdateBanner } from "./tui/components/UpdateBanner.js";
@@ -134,6 +136,7 @@ import { useAlternateBuffer } from "./tui/hooks/useAlternateBuffer.js";
 import { useBacktrack } from "./tui/hooks/useBacktrack.js";
 import { useCopyMode } from "./tui/hooks/useCopyMode.js";
 import { useDesktopNotification } from "./tui/hooks/useDesktopNotification.js";
+import { useFileChangeStats } from "./tui/hooks/useFileChangeStats.js";
 import { useGitStatus } from "./tui/hooks/useGitStatus.js";
 import { type HotkeyDefinition, useHotkeys } from "./tui/hooks/useHotkeys.js";
 import { useInputHistory } from "./tui/hooks/useInputHistory.js";
@@ -164,25 +167,25 @@ import {
 } from "./tui/plugins.js";
 
 // =============================================================================
-// Feature Integrations (T063-T070)
+// Feature Integrations-
 // =============================================================================
 
 import { getProviderModels } from "@vellum/provider";
-// Enterprise integration (T068)
+// Enterprise integration
 import {
   createEnterpriseHooks,
   type EnterpriseHooks,
   initializeEnterprise,
   shutdownEnterprise,
 } from "./tui/enterprise-integration.js";
-// Metrics integration (T067)
+// Metrics integration
 import { getMetricsManager, type TuiMetricsManager } from "./tui/metrics-integration.js";
-// Resilience integration (T064-T066)
+// Resilience integration-
 import { createResilientProvider, type ResilientProvider } from "./tui/resilience.js";
-// Sandbox integration (T063)
+// Sandbox integration
 import { cleanupSandbox, initializeSandbox } from "./tui/sandbox-integration.js";
 import { type ThemeName, useTheme } from "./tui/theme/index.js";
-// Tip integration (T069)
+// Tip integration
 import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
 // Cursor management utilities
 import { CursorManager } from "./tui/utils/cursor-manager.js";
@@ -240,18 +243,18 @@ function getDefaultApprovalPolicyForMode(mode: CodingMode): ApprovalPolicy {
 
 /**
  * Props for the App component.
- * Extended with coding mode options (T037-T040).
+ * Extended with coding mode options-.
  */
 interface AppProps {
   /** Model to use for AI responses */
   model: string;
   /** Provider to use (anthropic, openai, etc.) */
   provider: string;
-  /** Initial coding mode (T037) */
+  /** Initial coding mode */
   mode?: CodingMode;
-  /** Approval policy override (T038) */
+  /** Approval policy override */
   approval?: ApprovalPolicy;
-  /** Sandbox policy override (T039) */
+  /** Sandbox policy override */
   sandbox?: SandboxPolicy;
   /** Optional AgentLoop instance for real agent integration */
   agentLoop?: AgentLoop;
@@ -392,7 +395,7 @@ function FocusDebugger({
 }
 
 // =============================================================================
-// T036: Command Registry Initialization
+//: Command Registry Initialization
 // =============================================================================
 
 /**
@@ -427,7 +430,7 @@ function createCommandRegistry(): CommandRegistry {
     registry.register(cmd);
   }
 
-  // T041: Register mode slash commands
+  //: Register mode slash commands
   for (const cmd of modeSlashCommands) {
     registry.register(cmd);
   }
@@ -437,15 +440,15 @@ function createCommandRegistry(): CommandRegistry {
     registry.register(cmd);
   }
 
-  // T403: Register context management command
+  //: Register context management command
   registry.register(condenseCommand);
 
-  // T042: Register theme slash commands
+  //: Register theme slash commands
   for (const cmd of themeSlashCommands) {
     registry.register(cmd);
   }
 
-  // T067: Register metrics commands
+  //: Register metrics commands
   for (const cmd of metricsCommands) {
     registry.register(cmd);
   }
@@ -455,7 +458,7 @@ function createCommandRegistry(): CommandRegistry {
     registry.register(cmd);
   }
 
-  // T061: Plugin commands are registered via registerPluginCommands()
+  //: Plugin commands are registered via registerPluginCommands()
   // after PluginManager initialization in AppContent
 
   // Wire up help command to access registry
@@ -580,17 +583,17 @@ function AppContent({
   }, [interactivePrompt]);
 
   // ==========================================================================
-  // New TUI Hooks Integration (T038-T059)
+  // New TUI Hooks Integration-
   // ==========================================================================
 
-  // Vim modal editing mode (T041)
+  // Vim modal editing mode
   const [vimEnabled, setVimEnabled] = useState(false);
   const vim = useVim();
 
-  // Copy mode for visual selection (T055)
+  // Copy mode for visual selection
   const copyMode = useCopyMode();
 
-  // Desktop notifications (T059)
+  // Desktop notifications
   const {
     notify: _notify,
     notifyTaskComplete,
@@ -601,7 +604,7 @@ function AppContent({
   const { name: workspaceName } = useWorkspace();
   const { branch: gitBranch, changedFiles: gitChangedFiles } = useGitStatus();
 
-  // Alternate buffer configuration (T043)
+  // Alternate buffer configuration
   // Enabled by default (config defaults to true)
   // Automatically disabled when screen reader is detected for accessibility
   const { stdout } = useStdout();
@@ -610,7 +613,7 @@ function AppContent({
   // Enable alternate buffer in VS Code terminal to fix cursor flickering
   const alternateBufferEnabled = alternateBufferConfig && !screenReaderDetected;
 
-  // Alternate buffer for full-screen rendering (T043)
+  // Alternate buffer for full-screen rendering
   // Benefits: Clean exit (restores original terminal), no scrollback pollution
   const alternateBuffer = useAlternateBuffer({
     enabled: alternateBufferEnabled,
@@ -677,7 +680,7 @@ function AppContent({
     process.on("SIGINT", restoreConsole);
     process.on("SIGTERM", restoreConsole);
 
-    // Exception handlers for complete coverage (T002 Hardening)
+    // Exception handlers for complete coverage Hardening)
     // These ensure TUI mode is disabled even on unexpected crashes
     process.on("uncaughtException", restoreConsole);
     process.on("unhandledRejection", restoreConsole);
@@ -697,10 +700,10 @@ function AppContent({
   // race conditions and flickering from multiple cursor hide/show operations.
 
   // ==========================================================================
-  // Feature Integrations (T063-T070)
+  // Feature Integrations-
   // ==========================================================================
 
-  // T063: Sandbox integration for shell tool execution
+  //: Sandbox integration for shell tool execution
   const sandboxRef = useRef<ReturnType<typeof initializeSandbox> | null>(null);
   useEffect(() => {
     // Initialize sandbox on mount
@@ -717,7 +720,7 @@ function AppContent({
     };
   }, []);
 
-  // T064-T066: Resilience (circuit breaker, rate limiter, fallback)
+  //-: Resilience (circuit breaker, rate limiter, fallback)
   const [_resilientProvider, setResilientProvider] = useState<ResilientProvider | null>(null);
   useEffect(() => {
     // Create resilient provider wrapper
@@ -744,7 +747,7 @@ function AppContent({
     };
   }, [provider]);
 
-  // T067: Metrics integration
+  //: Metrics integration
   const metricsManager = useMemo<TuiMetricsManager>(() => getMetricsManager(), []);
 
   // Track message processing
@@ -754,7 +757,7 @@ function AppContent({
     }
   }, [messages.length, metricsManager]);
 
-  // T068: Enterprise integration
+  //: Enterprise integration
   const [enterpriseHooks, setEnterpriseHooks] = useState<EnterpriseHooks | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -775,7 +778,7 @@ function AppContent({
     };
   }, []);
 
-  // T068: Wire enterprise hooks to ToolExecutor when both are available
+  //: Wire enterprise hooks to ToolExecutor when both are available
   useEffect(() => {
     if (!enterpriseHooks) {
       return;
@@ -822,7 +825,7 @@ function AppContent({
     };
   }, [enterpriseHooks, agentLoopProp]);
 
-  // T069: Tip engine integration
+  //: Tip engine integration
   const { currentTip, showTip, dismissTip, tipsEnabled } = useTipEngine({
     enabled: true,
     maxTipsPerSession: 5,
@@ -832,7 +835,7 @@ function AppContent({
   // Note: The tip context useEffect is placed after state declarations below
 
   // ==========================================================================
-  // Adapter Integration - Agent Adapter (T060)
+  // Adapter Integration - Agent Adapter
   // ==========================================================================
 
   // Agent adapter for AgentLoop ↔ Context integration
@@ -850,7 +853,7 @@ function AppContent({
   useEffect(() => {
     if (agentLoopProp) {
       adapterConnect(agentLoopProp);
-      // Wire up context management command (T403)
+      // Wire up context management command
       setCondenseCommandLoop(agentLoopProp);
       // Thinking content is now handled directly in the agent-adapter
       // and integrated into the streaming message's `thinking` field.
@@ -1196,7 +1199,7 @@ function AppContent({
   }, [refreshSessions]);
 
   // ==========================================================================
-  // Adapter Integration - Session Adapter (T060)
+  // Adapter Integration - Session Adapter
   // ==========================================================================
 
   // Session adapter for persistence with auto-save
@@ -1240,7 +1243,7 @@ function AppContent({
   }, [storageReady, refreshSessions]);
 
   // ==========================================================================
-  // Persistence Hook Integration (T060)
+  // Persistence Hook Integration
   // ==========================================================================
 
   // Initialize persistence hook with advanced features
@@ -1608,7 +1611,7 @@ function AppContent({
     }
   }, [isFirstRun]);
 
-  // T069: Show contextual tips based on state (placed after state declarations)
+  //: Show contextual tips based on state (placed after state declarations)
   useEffect(() => {
     if (!tipsEnabled) return;
 
@@ -1621,7 +1624,7 @@ function AppContent({
     showTip(context);
   }, [currentMode, messages.length, showOnboarding, tipsEnabled, showTip]);
 
-  // Ref to track current cancellation controller (T031)
+  // Ref to track current cancellation controller
   const cancellationRef = useRef<CancellationController | null>(null);
 
   // ==========================================================================
@@ -1984,7 +1987,7 @@ function AppContent({
         description: "Toggle model selector",
         scope: "global",
       },
-      // Vim mode toggle (T041)
+      // Vim mode toggle
       {
         key: "v",
         ctrl: true,
@@ -1996,7 +1999,7 @@ function AppContent({
         description: "Toggle vim mode",
         scope: "global",
       },
-      // Copy mode toggle (T055)
+      // Copy mode toggle
       {
         key: "c",
         ctrl: true,
@@ -2015,7 +2018,7 @@ function AppContent({
       },
     ];
 
-    // Alternate buffer toggle for full-screen views (T043)
+    // Alternate buffer toggle for full-screen views
     if (alternateBufferEnabled) {
       hotkeys.push({
         key: "f",
@@ -2056,13 +2059,13 @@ function AppContent({
       !pendingOperation,
   });
 
-  // T042: Wire theme context to theme commands
+  //: Wire theme context to theme commands
   useEffect(() => {
     setThemeContext(themeContext);
     return () => setThemeContext(null);
   }, [themeContext]);
 
-  // T036: Initialize command registry once on mount
+  //: Initialize command registry once on mount
   const [commandRegistryVersion, setCommandRegistryVersion] = useState(0);
   const bumpCommandRegistryVersion = useCallback(
     () => setCommandRegistryVersion((prev) => prev + 1),
@@ -2071,7 +2074,7 @@ function AppContent({
   const commandRegistry = useMemo(() => createCommandRegistry(), []);
 
   // ==========================================================================
-  // T061: Plugin System Integration
+  //: Plugin System Integration
   // ==========================================================================
 
   // Plugin initialization state
@@ -2157,7 +2160,7 @@ function AppContent({
   }, [commandRegistry, bumpCommandRegistryVersion]);
 
   // ==========================================================================
-  // T062: LSP Integration
+  //: LSP Integration
   // ==========================================================================
 
   // LSP initialization state
@@ -2215,7 +2218,13 @@ function AppContent({
   const handleCommandEvent = useCallback(
     (event: string, data?: unknown) => {
       if (event === "app:exit") {
-        exit();
+        // Show goodbye message
+        addMessage({ role: "assistant", content: "Goodbye! See you next time." });
+        // Give time for message to render, then exit
+        setTimeout(() => {
+          exit();
+          setTimeout(() => process.exit(0), 50);
+        }, 150);
         return;
       }
 
@@ -2227,12 +2236,12 @@ function AppContent({
         }
       }
     },
-    [exit, setMessages, switchToSession]
+    [exit, addMessage, setMessages, switchToSession]
   );
 
   const contextProviderRef = useRef<DefaultContextProvider | null>(null);
 
-  // T036: Create command executor with context provider
+  //: Create command executor with context provider
   const commandExecutor = useMemo(() => {
     if (!credentialManager) {
       return null;
@@ -2315,7 +2324,7 @@ function AppContent({
     }
   }, [storageReady, commandRegistry, bumpCommandRegistryVersion]);
 
-  // Register shutdown cleanup on mount (T030)
+  // Register shutdown cleanup on mount
   useEffect(() => {
     setShutdownCleanup(() => {
       if (cancellationRef.current) {
@@ -2441,7 +2450,7 @@ function AppContent({
     []
   );
 
-  // Handle Ctrl+C and ESC for cancellation (T031)
+  // Handle Ctrl+C and ESC for cancellation
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This handler must process multiple input types in a single callback for proper event handling
   useInput((inputChar, key) => {
     if (interactivePrompt) {
@@ -2465,7 +2474,7 @@ function AppContent({
       return;
     }
 
-    // Handle vim mode key processing (T041)
+    // Handle vim mode key processing
     if (vimEnabled && vim.enabled) {
       const vimAction = vim.handleKey(inputChar, { ctrl: key.ctrl, shift: key.shift });
       if (vimAction) {
@@ -2480,7 +2489,7 @@ function AppContent({
       }
     }
 
-    // Handle copy mode navigation (T055)
+    // Handle copy mode navigation
     if (copyMode.state.active) {
       if (key.escape) {
         copyMode.exitCopyMode();
@@ -2524,7 +2533,11 @@ function AppContent({
         addMessage({ role: "assistant", content: "[Operation cancelled]" });
       } else {
         // No operation running, exit app
-        exit();
+        addMessage({ role: "assistant", content: "Goodbye! See you next time." });
+        setTimeout(() => {
+          exit();
+          setTimeout(() => process.exit(0), 50);
+        }, 150);
       }
       return;
     }
@@ -2538,12 +2551,16 @@ function AppContent({
         return;
       }
 
-      exit();
+      addMessage({ role: "assistant", content: "Goodbye! See you next time." });
+      setTimeout(() => {
+        exit();
+        setTimeout(() => process.exit(0), 50);
+      }, 150);
       return;
     }
   });
 
-  // T038: Handle slash command detection and execution
+  //: Handle slash command detection and execution
   const handleSlashCommand = useCallback(
     async (text: string): Promise<boolean> => {
       if (!text.trim().startsWith("/")) {
@@ -2561,7 +2578,11 @@ function AppContent({
           normalized.startsWith("/q ");
 
         if (isExitCommand) {
-          exit();
+          addMessage({ role: "assistant", content: "Goodbye! See you next time." });
+          setTimeout(() => {
+            exit();
+            setTimeout(() => process.exit(0), 50);
+          }, 150);
           return true;
         }
 
@@ -2702,7 +2723,7 @@ function AppContent({
       // Thinking content is now integrated into the streaming message
       // via the agent-adapter's handleThinking function.
 
-      // Use AgentLoop if available (T038)
+      // Use AgentLoop if available
       if (agentLoopProp) {
         // Wire cancellation to AgentLoop
         cancellationRef.current = {
@@ -2718,7 +2739,7 @@ function AppContent({
           await agentLoopProp.run();
           // Messages are synced via AgentLoop adapter event handlers (handleText)
           // User message was already added via addMessage() above
-          // Notify on completion (T059)
+          // Notify on completion
           notifyTaskComplete("Response received");
           announce("Response received");
         } catch (err) {
@@ -3832,10 +3853,28 @@ function AppHeader({
   specPhase,
   undoBacktrack,
 }: AppHeaderProps): React.JSX.Element {
+  const fileStats = useFileChangeStats();
+  const showFileChanges = fileStats.additions > 0 || fileStats.deletions > 0;
+
   return (
     <Box flexDirection="column">
       {initError && <InitErrorBanner error={initError} />}
-      <TipBanner tip={currentTip} onDismiss={dismissTip} compact />
+      {(currentTip || showFileChanges) && (
+        <Box flexDirection="row" justifyContent="space-between">
+          <Box flexGrow={1}>
+            {currentTip && <TipBanner tip={currentTip} onDismiss={dismissTip} compact />}
+          </Box>
+          {showFileChanges && (
+            <Box flexDirection="row">
+              <Text color="gray">diff </Text>
+              <FileChangesIndicator
+                additions={fileStats.additions}
+                deletions={fileStats.deletions}
+              />
+            </Box>
+          )}
+        </Box>
+      )}
       {currentMode === "spec" && (
         <PhaseProgressIndicator currentPhase={specPhase} showLabels showPercentage />
       )}
@@ -4171,19 +4210,26 @@ function AppContentView({
             </Box>
 
             <Box flexShrink={0} flexDirection="column">
-              {followupPrompt && (
+              {/* Followup prompt with suggestions - use OptionSelector for keyboard navigation */}
+              {followupPrompt && followupPrompt.suggestions.length > 0 && (
+                <OptionSelector
+                  question={followupPrompt.question}
+                  options={followupPrompt.suggestions}
+                  onSelect={(option) => {
+                    handleMessage(option);
+                  }}
+                  onCancel={() => {
+                    handleMessage("");
+                  }}
+                  isFocused={commandInputFocused}
+                />
+              )}
+              {/* Followup prompt without suggestions - show simple text prompt */}
+              {followupPrompt && followupPrompt.suggestions.length === 0 && (
                 <Box marginTop={1} flexDirection="column">
                   <Text color={themeContext.theme.semantic.text.secondary}>
                     ↳ {followupPrompt.question}
                   </Text>
-                  {followupPrompt.suggestions.length > 0 && (
-                    <Box marginTop={1} flexDirection="column">
-                      <Text dimColor>Options:</Text>
-                      {followupPrompt.suggestions.map((option, index) => (
-                        <Text key={option}>{`${index + 1}. ${option}`}</Text>
-                      ))}
-                    </Box>
-                  )}
                   <Text dimColor>Type your reply and press Enter (Esc to skip)</Text>
                 </Box>
               )}

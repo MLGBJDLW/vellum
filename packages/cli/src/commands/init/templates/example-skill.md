@@ -54,7 +54,7 @@ export function Button({
     </button>
   );
 }
-```
+```markdown
 
 ### Compound Components
 
@@ -89,7 +89,7 @@ Tabs.Tab = function Tab({ id, children }: TabProps) {
     </button>
   );
 };
-```
+```markdown
 
 ## Hook Patterns
 
@@ -108,7 +108,7 @@ function useLocalStorage<T>(key: string, initialValue: T) {
 
   return [value, setValue] as const;
 }
-```
+```markdown
 
 ### Cleanup Pattern
 
@@ -126,7 +126,7 @@ useEffect(() => {
   
   return () => controller.abort();
 }, []);
-```
+```markdown
 
 ## Anti-Patterns to Avoid
 
@@ -137,7 +137,7 @@ useEffect(() => {
    
    // ✅ Good
    setItems([...items, newItem]);
-   ```
+   ```text
 
 2. **Don't use index as key for dynamic lists**
    ```tsx
@@ -146,7 +146,7 @@ useEffect(() => {
    
    // ✅ Good
    items.map(item => <Item key={item.id} {...item} />);
-   ```
+   ```text
 
 3. **Don't overuse useEffect**
    ```tsx

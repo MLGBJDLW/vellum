@@ -457,10 +457,19 @@ export class AnthropicProvider implements Provider {
 
   /**
    * Create transform config for Anthropic API calls.
+   *
    * @param model - Optional model ID for model-specific features
-   * @param enableCaching - Whether to enable prompt caching
+   * @param enableCaching - Whether to enable prompt caching (default: true)
+   *
+   * @remarks
+   * Caching is enabled by default to reduce costs and latency for:
+   * - System prompts (reused across requests)
+   * - Recent conversation context (likely to be repeated)
+   * - Tool definitions (static per session)
+   *
+   * See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
    */
-  private createTransformConfig(model?: string, enableCaching = false): TransformConfig {
+  private createTransformConfig(model?: string, enableCaching = true): TransformConfig {
     return {
       provider: "anthropic",
       modelId: model,

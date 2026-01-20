@@ -323,81 +323,52 @@ describe("E2E: /exit command", () => {
     harness.registerCoreCommands();
   });
 
-  it("should prompt for confirmation with /exit", async () => {
-    const result = await harness.execute("/exit");
-
-    expect(result.kind).toBe("interactive");
-    if (result.kind === "interactive") {
-      expect(result.prompt.inputType).toBe("confirm");
-      expect(result.prompt.message).toContain("sure you want to exit");
-    }
-  });
-
-  it("should exit immediately with /exit --force", async () => {
+  it("should exit immediately with /exit", async () => {
     harness.clearEvents();
-    const result = await harness.execute("/exit --force");
+    const result = await harness.execute("/exit");
 
     expect(result.kind).toBe("success");
     if (result.kind === "success") {
-      expect(result.message).toContain("Exiting");
-      expect(result.data).toEqual({ exit: true, forced: true });
+      expect(result.data).toEqual({ exit: true });
     }
 
     const events = harness.getEmittedEvents();
     expect(events).toContainEqual({
       event: "app:exit",
-      data: { reason: "user-command", forced: true },
+      data: { reason: "user-command" },
     });
   });
 
-  it("should exit with /exit -f (short flag)", async () => {
-    const result = await harness.execute("/exit -f");
+  it("should support quit alias", async () => {
+    harness.clearEvents();
+    const result = await harness.execute("/quit");
 
     expect(result.kind).toBe("success");
     if (result.kind === "success") {
-      expect(result.data).toEqual({ exit: true, forced: true });
-    }
-  });
-
-  it("should handle confirmation yes", async () => {
-    harness.clearEvents();
-    const result = await harness.execute("/exit");
-
-    expect(result.kind).toBe("interactive");
-    if (result.kind === "interactive") {
-      const confirmResult = await result.prompt.handler("y");
-      expect(confirmResult.kind).toBe("success");
-      if (confirmResult.kind === "success") {
-        expect(confirmResult.message).toContain("Exiting");
-      }
+      expect(result.data).toEqual({ exit: true });
     }
 
     const events = harness.getEmittedEvents();
     expect(events).toContainEqual({
       event: "app:exit",
-      data: { reason: "user-command", forced: false },
+      data: { reason: "user-command" },
     });
   });
 
-  it("should handle confirmation no", async () => {
-    const result = await harness.execute("/exit");
+  it("should support q alias", async () => {
+    harness.clearEvents();
+    const result = await harness.execute("/q");
 
-    expect(result.kind).toBe("interactive");
-    if (result.kind === "interactive") {
-      const cancelResult = await result.prompt.handler("n");
-      expect(cancelResult.kind).toBe("success");
-      if (cancelResult.kind === "success") {
-        expect(cancelResult.message).toContain("cancelled");
-      }
+    expect(result.kind).toBe("success");
+    if (result.kind === "success") {
+      expect(result.data).toEqual({ exit: true });
     }
-  });
 
-  it("should support quit and q aliases", async () => {
-    const resultQuit = await harness.execute("/quit --force");
-    expect(resultQuit.kind).toBe("success");
-
-    const resultQ = await harness.execute("/q --force");
-    expect(resultQ.kind).toBe("success");
+    const events = harness.getEmittedEvents();
+    expect(events).toContainEqual({
+      event: "app:exit",
+      data: { reason: "user-command" },
+    });
   });
 });
 
@@ -613,7 +584,7 @@ describe("E2E: full command lifecycle", () => {
     const result2 = await harness.execute("/clear");
     expect(result2.kind).toBe("success");
 
-    const result3 = await harness.execute("/exit --force");
+    const result3 = await harness.execute("/exit");
     expect(result3.kind).toBe("success");
 
     // All should succeed independently

@@ -57,6 +57,11 @@ export {
   type UseDesktopNotificationReturn,
   useDesktopNotification,
 } from "./useDesktopNotification.js";
+// File change statistics hook (aggregates diff metadata)
+export {
+  type FileChangeStats,
+  useFileChangeStats,
+} from "./useFileChangeStats.js";
 export {
   type UseFileSuggestionsOptions,
   type UseFileSuggestionsResult,

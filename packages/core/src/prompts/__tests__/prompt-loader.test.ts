@@ -234,19 +234,18 @@ describe("PromptLoader", () => {
   });
 
   // ===========================================================================
-  // TypeScript Fallback Tests
+  // Loading Behavior Tests
   // ===========================================================================
 
-  describe("TypeScript Fallback", () => {
+  describe("Loading Behavior", () => {
     it("loads from builtin markdown when project file missing for role", async () => {
       // No project file exists, should load from builtin markdown
-      const loaderWithFallback = new PromptLoader({
+      const loader = new PromptLoader({
         discovery: { workspacePath: tempWorkspace },
-        enableFallback: true,
       });
 
       // Load a known role - should find builtin markdown file
-      const prompt = await loaderWithFallback.load("coder", "role");
+      const prompt = await loader.load("coder", "role");
 
       expect(prompt).toBeDefined();
       // The builtin markdown file uses 'role-coder' as id
@@ -255,23 +254,21 @@ describe("PromptLoader", () => {
       expect(prompt.content).toBeTruthy();
     });
 
-    it("throws when fallback is disabled and file not found", async () => {
-      const loaderNoFallback = new PromptLoader({
+    it("throws when file not found", async () => {
+      const loader = new PromptLoader({
         discovery: { workspacePath: tempWorkspace },
-        enableFallback: false,
       });
 
-      await expect(loaderNoFallback.load("nonexistent", "role")).rejects.toThrow(PromptError);
+      await expect(loader.load("nonexistent", "role")).rejects.toThrow(PromptError);
     });
 
-    it("fallback only applies to role category", async () => {
-      const loaderWithFallback = new PromptLoader({
+    it("throws when worker category file not found", async () => {
+      const loader = new PromptLoader({
         discovery: { workspacePath: tempWorkspace },
-        enableFallback: true,
       });
 
-      // Worker category should not have fallback
-      await expect(loaderWithFallback.load("nonexistent", "worker")).rejects.toThrow(PromptError);
+      // Worker category should throw when not found
+      await expect(loader.load("nonexistent", "worker")).rejects.toThrow(PromptError);
     });
   });
 
@@ -281,30 +278,27 @@ describe("PromptLoader", () => {
 
   describe("Error Handling", () => {
     it("throws PROMPT_NOT_FOUND when prompt does not exist", async () => {
-      const loaderNoFallback = new PromptLoader({
+      const loader = new PromptLoader({
         discovery: { workspacePath: tempWorkspace },
-        enableFallback: false,
       });
 
-      await expect(loaderNoFallback.load("missing-prompt", "role")).rejects.toThrow(PromptError);
-      await expect(loaderNoFallback.load("missing-prompt", "role")).rejects.toMatchObject({
+      await expect(loader.load("missing-prompt", "role")).rejects.toThrow(PromptError);
+      await expect(loader.load("missing-prompt", "role")).rejects.toMatchObject({
         code: "PROMPT_NOT_FOUND",
       });
     });
 
-    it("handles corrupt file gracefully with fallback", async () => {
+    it("throws when file is corrupt", async () => {
       const promptsDir = join(tempWorkspace, ".vellum", "prompts", "roles");
       mkdirSync(promptsDir, { recursive: true });
-      createCorruptPromptFile(promptsDir, "coder"); // Corrupt file for known role
+      createCorruptPromptFile(promptsDir, "corrupt-coder");
 
-      const loaderWithFallback = new PromptLoader({
+      const loader = new PromptLoader({
         discovery: { workspacePath: tempWorkspace },
-        enableFallback: true,
       });
 
-      // Should fall back to TypeScript definition
-      const prompt = await loaderWithFallback.load("coder", "role");
-      expect(prompt).toBeDefined();
+      // Should throw on corrupt file
+      await expect(loader.load("corrupt-coder", "role")).rejects.toThrow(PromptError);
     });
   });
 

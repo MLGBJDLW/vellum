@@ -45,7 +45,7 @@ Use for unconditional requirements that must always hold.
 - "The system SHALL be secure" (not testable)
 - "The system SHALL handle errors" (not specific)
 - "The system SHALL be fast" (not measurable)
-```
+```markdown
 
 #### 2. Event-Driven (E) - When Something Happens
 
@@ -64,7 +64,7 @@ Use for reactive behavior in response to specific events.
 ❌ BAD:
 - "WHEN something goes wrong, handle it" (vague trigger)
 - "WHEN user does something, respond appropriately" (vague response)
-```
+```markdown
 
 #### 3. State-Driven (S) - While in a State
 
@@ -83,7 +83,7 @@ Use for ongoing behavior that persists during a specific state.
 ❌ BAD:
 - "WHILE running, work correctly" (meaningless)
 - "WHILE user is logged in, be responsive" (not measurable)
-```
+```markdown
 
 #### 4. Optional Feature (O) - Where Configured
 
@@ -101,7 +101,7 @@ Use for configurable features or conditional functionality.
 
 ❌ BAD:
 - "WHERE needed, do the right thing" (undefined condition)
-```
+```markdown
 
 #### 5. Unwanted Behavior (X) - Exception Handling
 
@@ -120,7 +120,7 @@ Use for error handling, edge cases, and exceptional situations.
 ❌ BAD:
 - "IF error, THEN handle it" (too vague)
 - "IF something bad happens, THEN deal with it" (undefined)
-```
+```markdown
 
 #### 6. Complex (C) - Combinations
 
@@ -138,7 +138,7 @@ Use for sophisticated requirements that need multiple conditions.
    the system SHALL allow requests up to premium limit"
 - "IF network connection fails, WHILE retry count is below 3, 
    the system SHALL attempt reconnection with exponential backoff"
-```
+```text
 
 ---
 
@@ -161,7 +161,7 @@ Scenario: [Scenario name]
   When [action taken]
   Then [expected outcome]
   And [additional outcome]
-```
+```markdown
 
 #### Priority
 - **MoSCoW**: [Must/Should/Could/Won't]
@@ -205,7 +205,7 @@ Scenario: Account locked
   When I attempt to login again
   Then I see message "Account locked. Try again in 15 minutes"
   And no login attempt is processed
-```
+```markdown
 
 #### Priority
 - **MoSCoW**: Must
@@ -239,7 +239,7 @@ Scenario: Account locked
 | REQ-001 | US-001 | Product | ADR-003 | T-101 | TC-001 | Pending |
 | REQ-002 | Research | Security | ADR-004 | T-102 | TC-002 | Pending |
 | REQ-003 | US-002 | UX | ADR-003 | T-103 | TC-003 | Pending |
-```
+```markdown
 
 ### Link to Research Findings
 
@@ -254,7 +254,7 @@ Scenario: Account locked
 - Source: findings.md, Section "Security Patterns"
 
 **Rationale**: Aligns with existing pattern while meeting current security standards
-```
+```markdown
 
 ### Link to Design Decisions
 
@@ -272,7 +272,7 @@ Scenario: Account locked
 - T-201: Implement response envelope
 - T-202: Update existing endpoints
 - T-203: Update API documentation
-```
+```text
 
 ---
 
@@ -301,7 +301,7 @@ Every requirement must pass these tests:
 - Can automate (count clicks)
 - Pass: ≤3 clicks, Fail: >3 clicks
 - Measurable and observable
-```
+```markdown
 
 ### Ambiguous Terms to Avoid
 
@@ -338,7 +338,7 @@ Every requirement must pass these tests:
 - [ ] Maximum limits defined
 - [ ] Timeout behaviors specified
 - [ ] Concurrent access addressed
-```
+```markdown
 
 ### Conflict Detection
 
@@ -367,7 +367,7 @@ Look for equally-prioritized conflicting features:
 - REQ-020 (Must): "Support offline mode"
 - REQ-021 (Must): "Real-time sync all changes"
 Note: Cannot fully satisfy both simultaneously
-```
+```text
 
 ---
 
@@ -388,7 +388,7 @@ Note: Cannot fully satisfy both simultaneously
 
 **Measurement**: Application Performance Monitoring (APM) latency metrics
 **Test Method**: Load test with 1000 concurrent users for 10 minutes
-```
+```markdown
 
 #### Security Requirements
 
@@ -403,7 +403,7 @@ Note: Cannot fully satisfy both simultaneously
 
 **Compliance**: OWASP Authentication Cheat Sheet
 **Test Method**: Security scan + penetration testing
-```
+```markdown
 
 #### Reliability Requirements
 
@@ -416,7 +416,7 @@ Note: Cannot fully satisfy both simultaneously
 **Calculation**: (Total minutes - Downtime minutes) / Total minutes × 100
 **Exclusions**: Scheduled maintenance windows (max 4 hours/month)
 **Test Method**: Uptime monitoring with 1-minute intervals
-```
+```markdown
 
 #### Scalability Requirements
 
@@ -428,7 +428,7 @@ Note: Cannot fully satisfy both simultaneously
 
 **Degradation**: Above 10,000, response times may increase up to 2x
 **Test Method**: Load test ramping to 15,000 users
-```
+```text
 
 ---
 

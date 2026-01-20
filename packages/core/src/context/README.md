@@ -37,7 +37,7 @@ console.log(result.actions);  // ['pruned 3 tool outputs', 'truncated 5 messages
 
 // Get API-safe history (excludes compressed originals)
 const apiHistory = getEffectiveApiHistory(result.messages);
-```
+```markdown
 
 ## Architecture
 
@@ -55,7 +55,7 @@ const apiHistory = getEffectiveApiHistory(result.messages);
 │  │  3. Execute actions (prune/truncate/compress)         │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
-```
+```markdown
 
 ## State Machine
 
@@ -80,7 +80,7 @@ interface AutoContextManagerConfig {
   maxCheckpoints?: number;          // LRU limit (default: 5)
   recentCount?: number;             // Recent messages to protect (default: 3)
 }
-```
+```markdown
 
 ## Priority System
 
@@ -110,7 +110,7 @@ class AutoContextManager {
   createCheckpoint(messages: ContextMessage[], label?: string): string;
   rollbackToCheckpoint(id: string, messages: ContextMessage[]): ContextMessage[];
 }
-```
+```markdown
 
 ### Token Budget
 
@@ -122,7 +122,7 @@ function calculateTokenBudget(options: {
 }): TokenBudget;
 
 function calculateOutputReserve(contextWindow: number): number;
-```
+```markdown
 
 ### Compression
 
@@ -133,7 +133,7 @@ class NonDestructiveCompressor {
 
 function isSummaryMessage(message: ContextMessage): boolean;
 function getCompressedMessages(messages: ContextMessage[], condenseId: string): ContextMessage[];
-```
+```markdown
 
 ### Checkpoints
 
@@ -143,7 +143,7 @@ class CheckpointManager {
   rollback(id: string, currentMessages: ContextMessage[]): RollbackResult;
   list(): Checkpoint[];
 }
-```
+```markdown
 
 ## Model-Specific Thresholds
 
@@ -168,7 +168,7 @@ Provider-specific calculations:
 ```typescript
 const calc = createImageCalculator('anthropic');
 const tokens = calc.calculateTokens(imageBlock);
-```
+```markdown
 
 ## Testing
 

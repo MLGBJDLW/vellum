@@ -81,9 +81,14 @@ export type LLMSummaryCall = (messages: SessionMessage[], prompt: string) => Pro
 
 /**
  * Default configuration values for CompactionConfig.
+ *
+ * @remarks
+ * maxToolOutputLength increased to 3000 (from 1000) to preserve more
+ * context from tool outputs while still preventing excessive sizes.
+ * This balances information retention with context window efficiency.
  */
 export const DEFAULT_COMPACTION_CONFIG: CompactionConfig = {
-  maxToolOutputLength: 1000,
+  maxToolOutputLength: 3000,
   keepFirstMessages: 5,
   keepLastMessages: 10,
   prunedMarker: "[工具输出已裁剪]",

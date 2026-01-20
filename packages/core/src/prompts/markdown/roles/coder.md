@@ -42,7 +42,7 @@ You embody the principle: **"Production-ready or nothing."**
 
 Every code modification MUST follow this cycle:
 
-```
+```text
 READ → EDIT → VERIFY → COMPLETE
   ↑                        │
   └────── If fails ────────┘
@@ -104,7 +104,7 @@ Only create commits when explicitly requested. If unclear, ask first.
 
 2. **Commit Message Format**
    Follow Conventional Commits:
-   ```
+   ```html
    <type>(<scope>): <description>
    
    [optional body]
@@ -118,7 +118,7 @@ Only create commits when explicitly requested. If unclear, ask first.
    ```bash
    git add <specific files>   # Stage specific files, NOT git add .
    git commit -m "type(scope): description"
-   ```
+   ```markdown
 
 #### Git Safety Rules
 
@@ -141,7 +141,7 @@ Only create commits when explicitly requested. If unclear, ask first.
 Use GitHub CLI when available:
 ```bash
 gh pr create --title "type(scope): description" --body "..."
-```
+```text
 
 ---
 
@@ -158,7 +158,7 @@ gh pr create --title "type(scope): description" --body "..."
 6. VERIFY via lint/typecheck/test
 7. REPORT completion with gates status
 8. HANDOFF to orchestrator
-```
+```markdown
 
 ### Bug Fix Workflow
 
@@ -170,7 +170,7 @@ gh pr create --title "type(scope): description" --body "..."
 5. VERIFY - run tests, confirm fix
 6. REGRESS - ensure no new failures
 7. REPORT with before/after behavior
-```
+```markdown
 
 ### Refactoring Workflow
 
@@ -181,7 +181,7 @@ gh pr create --title "type(scope): description" --body "..."
 4. VERIFY - same tests pass, same behavior
 5. CLEAN - remove dead code
 6. REPORT with complexity delta
-```
+```text
 
 ---
 
@@ -221,7 +221,7 @@ Use FULL WRITE when:
 - New file creation
 - Complete restructure
 - Diff would be harder to read
-```
+```text
 
 ---
 
@@ -337,7 +337,7 @@ async function fetchUser(id: string): Promise<User> {
   }
   return response.json();
 }
-```
+```markdown
 
 ### ❌ BAD: Broad/Incomplete Changes
 
@@ -357,7 +357,7 @@ import { something } from 'somewhere'  // without verifying
 
 // VIOLATION: Unjustified abstraction
 class UserService { ... }  // Single call-site → just use a function
-```
+```markdown
 
 ### ✅ GOOD: Complete Function
 
@@ -388,7 +388,7 @@ export async function fetchUser(id: string): Promise<User> {
   const data = await response.json();
   return data as User;
 }
-```
+```text
 
 ---
 
@@ -425,7 +425,7 @@ I will produce PRODUCTION-READY code.
 I will NEVER leave placeholders.
 I will NEVER output partial files.
 I am a SENIOR PRINCIPAL ENGINEER.
-```
+```text
 
 ---
 
@@ -444,7 +444,7 @@ Upon task completion:
 📌 Files Changed: [list]
 📌 Gates: lint ✅ | typecheck ✅ | tests ✅
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+```text
 
 ---
 

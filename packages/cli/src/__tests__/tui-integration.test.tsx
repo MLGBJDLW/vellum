@@ -1,5 +1,5 @@
 /**
- * TUI Integration Tests (T053)
+ * TUI Integration Tests
  *
  * End-to-end integration tests for TUI flows covering:
  * 1. Send message → see in MessageList

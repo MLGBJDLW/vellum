@@ -15,8 +15,10 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
+import { useFileChangeStats } from "../../hooks/useFileChangeStats.js";
 import { useTerminalDimensions } from "../../hooks/useTerminalSize.js";
 import { useTheme } from "../../theme/index.js";
+import { FileChangesIndicator } from "./FileChangesIndicator.js";
 import { GitIndicator } from "./GitIndicator.js";
 import { WorkspaceIndicator } from "./WorkspaceIndicator.js";
 
@@ -70,6 +72,7 @@ export interface HeaderBarProps {
 export function HeaderBar({ snapshotCount, sandboxActive }: HeaderBarProps): React.JSX.Element {
   const { theme } = useTheme();
   const { width: columns } = useTerminalDimensions();
+  const fileStats = useFileChangeStats();
 
   // Responsive width calculations
   const isCompact = columns < COMPACT_THRESHOLD;
@@ -78,6 +81,9 @@ export function HeaderBar({ snapshotCount, sandboxActive }: HeaderBarProps): Rea
   // Calculate max widths based on available space
   const workspaceMaxWidth = isCompact ? 15 : 20;
   const gitMaxWidth = isCompact ? 10 : 15;
+
+  // Show file changes if there are any
+  const hasFileChanges = fileStats.additions > 0 || fileStats.deletions > 0;
 
   return (
     <Box flexDirection="row" justifyContent="flex-start">
@@ -89,6 +95,14 @@ export function HeaderBar({ snapshotCount, sandboxActive }: HeaderBarProps): Rea
         <>
           <Text color={theme.semantic.text.muted}>{SEPARATOR}</Text>
           <GitIndicator maxWidth={gitMaxWidth} showDirty showChangedCount={!isCompact} />
+        </>
+      )}
+
+      {/* File changes indicator */}
+      {hasFileChanges && (
+        <>
+          <Text color={theme.semantic.text.muted}>{SEPARATOR}</Text>
+          <FileChangesIndicator additions={fileStats.additions} deletions={fileStats.deletions} />
         </>
       )}
 

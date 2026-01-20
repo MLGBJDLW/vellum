@@ -11,6 +11,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
+    "postbuild": "node -e \"const fs=require('fs');const p=require('path');fs.cpSync(p.join('src','prompts','markdown'),p.join('dist','markdown'),{recursive:true})\"",
     "dev": "tsup src/index.ts --format esm --dts --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"

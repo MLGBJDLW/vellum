@@ -34,7 +34,7 @@ Fast autonomous coding with full tool access.
 **Example:**
 ```bash
 vellum --mode=vibe "fix the typo in README.md"
-```
+```markdown
 
 ### 📋 Plan Mode
 
@@ -55,7 +55,7 @@ Plan-then-execute workflow with one checkpoint.
 **Example:**
 ```bash
 vellum --mode=plan "add input validation to all API endpoints"
-```
+```markdown
 
 ### 📐 Spec Mode
 
@@ -85,7 +85,7 @@ vellum --mode=plan "add input validation to all API endpoints"
 **Example:**
 ```bash
 vellum --mode=spec "implement user authentication system"
-```
+```markdown
 
 ## CLI Flags
 
@@ -97,7 +97,7 @@ Set the coding mode directly:
 vellum --mode=vibe "quick task"
 vellum --mode=plan "medium task"
 vellum --mode=spec "large feature"
-```
+```markdown
 
 ### `--approval`
 
@@ -107,7 +107,7 @@ Override the approval policy:
 # Override approval for any mode
 vellum --mode=plan --approval=full-auto "trusted task"
 vellum --mode=vibe --approval=suggest "careful task"
-```
+```text
 
 Available policies:
 - `full-auto` - No confirmations
@@ -120,7 +120,7 @@ Override the sandbox policy:
 
 ```bash
 vellum --mode=vibe --sandbox=workspace-write "limited access"
-```
+```text
 
 Available policies:
 - `full-access` - No restrictions
@@ -133,7 +133,7 @@ Shorthand for `--mode=vibe --approval=full-auto`:
 
 ```bash
 vellum --full-auto "autonomous task"
-```
+```markdown
 
 ## Slash Commands
 
@@ -163,7 +163,7 @@ Switched to vibe mode ⚡
 
 > /spec
 ⚠️ Spec mode requires 6 checkpoints. Proceed? (y/n)
-```
+```markdown
 
 ## Keyboard Shortcuts
 
@@ -200,12 +200,12 @@ vellum draft "prototype idea"
 # New (recommended)
 vellum --mode=vibe "fix bug"
 vellum --mode=vibe "prototype idea"
-```
+```text
 
 Using legacy mode names will trigger a deprecation warning:
 ```
 ⚠️ 'code' is deprecated, use '--mode=vibe' instead
-```
+```markdown
 
 ## Configuration
 
@@ -216,7 +216,7 @@ Set default mode in your configuration:
   "defaultMode": "plan",
   "defaultApproval": "auto-edit"
 }
-```
+```text
 
 Or via environment variables:
 

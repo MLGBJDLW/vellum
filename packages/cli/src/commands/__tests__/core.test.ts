@@ -4,7 +4,7 @@
  * Tests for help, clear, and exit commands including:
  * - Help command output formatting
  * - Clear command clearScreen flag
- * - Exit command interactive and force modes
+ * - Exit command immediate exit behavior
  *
  * @module cli/commands/__tests__/core
  */
@@ -13,13 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clearCommand, exitCommand, helpCommand, setHelpRegistry } from "../core/index.js";
 import { CommandRegistry } from "../registry.js";
-import type {
-  CommandContext,
-  CommandInteractive,
-  CommandSuccess,
-  ParsedArgs,
-  SlashCommand,
-} from "../types.js";
+import type { CommandContext, CommandSuccess, ParsedArgs, SlashCommand } from "../types.js";
 
 // =============================================================================
 // Test Fixtures
@@ -339,98 +333,22 @@ describe("clearCommand", () => {
 // =============================================================================
 
 describe("exitCommand", () => {
-  describe("/exit --force", () => {
-    it("should emit app:exit event and return success", async () => {
-      const ctx = createMockContext({
-        command: "exit",
-        positional: [],
-        named: { force: true },
-      });
-
-      const result = await exitCommand.execute(ctx);
-
-      expect(result.kind).toBe("success");
-      expect(ctx.emit).toHaveBeenCalledWith("app:exit", {
-        reason: "user-command",
-        forced: true,
-      });
-      expect(result).toMatchObject({
-        kind: "success",
-        data: { exit: true, forced: true },
-      });
-    });
-  });
-
-  describe("/exit (without force)", () => {
-    it("should return interactive confirmation prompt", async () => {
-      const ctx = createMockContext({
-        command: "exit",
-        positional: [],
-        named: {},
-      });
-
-      const result = await exitCommand.execute(ctx);
-
-      expect(result.kind).toBe("interactive");
-      const interactiveResult = result as CommandInteractive;
-      expect(interactiveResult.prompt.inputType).toBe("confirm");
-      expect(interactiveResult.prompt.message).toContain("exit");
+  it("should emit app:exit event and return success immediately", async () => {
+    const ctx = createMockContext({
+      command: "exit",
+      positional: [],
+      named: {},
     });
 
-    it("should emit app:exit when user confirms", async () => {
-      const ctx = createMockContext({
-        command: "exit",
-        positional: [],
-        named: {},
-      });
+    const result = await exitCommand.execute(ctx);
 
-      const result = await exitCommand.execute(ctx);
-      expect(result.kind).toBe("interactive");
-
-      const interactiveResult = result as CommandInteractive;
-      const handlerResult = await interactiveResult.prompt.handler("yes");
-
-      expect(handlerResult.kind).toBe("success");
-      expect(ctx.emit).toHaveBeenCalledWith("app:exit", {
-        reason: "user-command",
-        forced: false,
-      });
+    expect(result.kind).toBe("success");
+    expect(ctx.emit).toHaveBeenCalledWith("app:exit", {
+      reason: "user-command",
     });
-
-    it("should not exit when user declines", async () => {
-      const ctx = createMockContext({
-        command: "exit",
-        positional: [],
-        named: {},
-      });
-
-      const result = await exitCommand.execute(ctx);
-      expect(result.kind).toBe("interactive");
-
-      const interactiveResult = result as CommandInteractive;
-      const handlerResult = await interactiveResult.prompt.handler("no");
-
-      expect(handlerResult.kind).toBe("success");
-      expect((handlerResult as CommandSuccess).message).toBe("Exit cancelled");
-      // emit should not be called for exit after handler returns
-    });
-
-    it("should handle cancel", async () => {
-      const ctx = createMockContext({
-        command: "exit",
-        positional: [],
-        named: {},
-      });
-
-      const result = await exitCommand.execute(ctx);
-      expect(result.kind).toBe("interactive");
-
-      const interactiveResult = result as CommandInteractive;
-      expect(interactiveResult.prompt.onCancel).toBeDefined();
-
-      const cancelResult = interactiveResult.prompt.onCancel?.();
-      expect(cancelResult?.kind).toBe("success");
-      expect((cancelResult as CommandSuccess).message).toBe("Exit cancelled");
+    expect(result).toMatchObject({
+      kind: "success",
+      data: { exit: true },
     });
   });
 
@@ -440,7 +358,5 @@ describe("exitCommand", () => {
     expect(exitCommand.category).toBe("system");
     expect(exitCommand.aliases).toContain("quit");
     expect(exitCommand.aliases).toContain("q");
-    expect(exitCommand.namedArgs).toBeDefined();
-    expect(exitCommand.namedArgs?.[0]?.name).toBe("force");
   });
 });

@@ -4,7 +4,7 @@ Custom slash commands that extend Vellum's functionality.
 
 ## Structure
 
-```
+```text
 commands/
 ├── {command-name}.md    # Command definition
 └── README.md
@@ -51,7 +51,7 @@ Brief overview of changes
 
 ### Suggestions
 Improvement recommendations
-```
+```markdown
 
 ## Frontmatter Options
 

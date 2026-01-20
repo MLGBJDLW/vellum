@@ -53,7 +53,7 @@ When designing new components or systems:
    - Document dependencies and interaction patterns
    - Plan for failure modes and recovery
 
-```
+```text
 Design Document Structure:
 ┌────────────────────────────────────────────────┐
 │ 1. OVERVIEW                                    │
@@ -132,7 +132,7 @@ interface AuthService {
    */
   verifyToken(token: string): Promise<Claims | null>;
 }
-```
+```markdown
 
 ### Migration Planning
 
@@ -182,7 +182,7 @@ Migration Phases:
 │   - Remove abstraction if no longer needed     │
 │   - Update documentation                       │
 └────────────────────────────────────────────────┘
-```
+```markdown
 
 ## Tool Priorities
 
@@ -260,7 +260,7 @@ Include relevant constraints and requirements.]
 
 ## Notes
 - [Any additional context or future considerations]
-```
+```markdown
 
 ### Decision Rationale
 

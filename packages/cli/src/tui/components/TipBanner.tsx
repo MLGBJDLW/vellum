@@ -9,6 +9,7 @@
 
 import { Box, Text, useInput } from "ink";
 import type React from "react";
+import { memo } from "react";
 import type { Tip } from "../../onboarding/index.js";
 import { useTUITranslation } from "../i18n/index.js";
 
@@ -43,7 +44,11 @@ export interface TipBannerProps {
  * />
  * ```
  */
-export const TipBanner: React.FC<TipBannerProps> = ({ tip, onDismiss, compact = false }) => {
+export const TipBanner = memo(function TipBanner({
+  tip,
+  onDismiss,
+  compact = false,
+}: TipBannerProps): React.JSX.Element | null {
   const { t } = useTUITranslation();
 
   // Handle dismiss key press
@@ -107,4 +112,4 @@ export const TipBanner: React.FC<TipBannerProps> = ({ tip, onDismiss, compact = 
       </Box>
     </Box>
   );
-};
+});

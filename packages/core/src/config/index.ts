@@ -104,3 +104,14 @@ export {
   type TimeoutsConfig,
   TimeoutsConfigSchema,
 } from "./schema.js";
+
+// ===========================================
+// Trust Manager (Path Security) - T060
+// ===========================================
+export {
+  type TrustDecision,
+  TrustManager as PathTrustManager,
+  type TrustPromptInfo,
+  type TrustReason,
+  type TrustScope,
+} from "./trust-manager.js";

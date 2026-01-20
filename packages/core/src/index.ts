@@ -627,6 +627,8 @@ export {
   type OAuthTokenCredential,
   OAuthTokenCredentialSchema,
   type PartialConfig,
+  // Trust Manager (Path Security) - T060
+  PathTrustManager,
   type Permission,
   type PermissionMode,
   PermissionModeSchema,
@@ -642,6 +644,10 @@ export {
   // Timeouts config
   type TimeoutsConfig,
   TimeoutsConfigSchema,
+  type TrustDecision,
+  type TrustPromptInfo,
+  type TrustReason,
+  type TrustScope,
 } from "./config/index.js";
 // ============================================
 // Logging Config

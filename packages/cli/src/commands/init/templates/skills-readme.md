@@ -4,7 +4,7 @@ Skills are reusable prompt modules with specialized knowledge. They can be activ
 
 ## Structure
 
-```
+```text
 skills/
 ├── {skill-name}/
 │   ├── SKILL.md           # Main skill definition (required)

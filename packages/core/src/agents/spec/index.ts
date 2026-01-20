@@ -23,7 +23,6 @@ import { specValidatorAgent } from "./validator.js";
  * Uses LRU caching to avoid repeated file reads.
  */
 const specPromptLoader = new PromptLoader({
-  enableFallback: true,
   maxCacheSize: 10,
   cacheTtlMs: 5 * 60 * 1000, // 5 minutes
 });

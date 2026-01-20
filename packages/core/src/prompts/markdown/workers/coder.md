@@ -65,7 +65,7 @@ function formatCurrency(amount: number): string {
 }
 
 // 3. Refactor: Extract and generalize if needed
-```
+```markdown
 
 ### Refactoring Strategy
 
@@ -169,7 +169,7 @@ export async function processBatch<T>(
 ): Promise<BatchResult<T>> {
   // Implementation
 }
-```
+```markdown
 
 ### Error Handling
 

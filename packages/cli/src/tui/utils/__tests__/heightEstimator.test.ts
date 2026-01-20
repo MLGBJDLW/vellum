@@ -16,6 +16,7 @@ import {
   HEIGHT_SAFETY_MARGIN,
   MIN_MESSAGE_HEIGHT,
   THINKING_HEADER_UPPER_BOUND,
+  TOOL_CALL_DIFF_UPPER_BOUND,
   TOOL_CALL_UPPER_BOUND,
 } from "../heightEstimator.js";
 
@@ -91,6 +92,35 @@ describe("estimateMessageHeight - Upper Bound Estimation", () => {
     const height2 = estimateMessageHeight(msgWithTwoTools, { width: 80 });
     // Each tool adds TOOL_CALL_UPPER_BOUND lines
     expect(height2 - height1).toBe(TOOL_CALL_UPPER_BOUND);
+  });
+
+  it("uses TOOL_CALL_DIFF_UPPER_BOUND when diff metadata is present", () => {
+    const diffMeta = {
+      diff: "--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-foo\n+bar",
+      additions: 1,
+      deletions: 1,
+    };
+    const msgWithoutDiff: Message = {
+      ...baseMessage,
+      toolCalls: [{ id: "t1", name: "apply_patch", arguments: {}, status: "completed" }],
+    };
+    const msgWithDiff: Message = {
+      ...baseMessage,
+      toolCalls: [
+        {
+          id: "t1",
+          name: "apply_patch",
+          arguments: {},
+          status: "completed",
+          result: { diffMeta },
+        },
+      ],
+    };
+    const heightWithoutDiff = estimateMessageHeight(msgWithoutDiff, { width: 80 });
+    const heightWithDiff = estimateMessageHeight(msgWithDiff, { width: 80 });
+    expect(heightWithDiff - heightWithoutDiff).toBe(
+      TOOL_CALL_DIFF_UPPER_BOUND - TOOL_CALL_UPPER_BOUND
+    );
   });
 
   it("handles tool_group messages with upper bound per tool", () => {

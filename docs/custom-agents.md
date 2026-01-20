@@ -23,7 +23,7 @@ Custom Agents allow you to define specialized AI assistants that inherit from ba
 
 # View agent details
 /custom-agents info my-agent
-```
+```markdown
 
 ## Agent Definition Format
 
@@ -45,7 +45,7 @@ You are a specialized AI assistant...
 ## Instructions
 
 Your specific instructions go here.
-```
+```markdown
 
 ## File Locations
 
@@ -116,7 +116,7 @@ whenToUse:
     - type: regex
       pattern: "^(fix|bug):"
   priority: 10
-```
+```markdown
 
 #### Multi-Agent Coordination
 
@@ -127,7 +127,7 @@ coordination:
     - coder
     - reviewer
   maxConcurrentSubagents: 3
-```
+```markdown
 
 ## Templates
 
@@ -137,7 +137,7 @@ Minimal configuration for simple agents:
 
 ```bash
 /custom-agents create my-agent --template=basic
-```
+```text
 
 ```yaml
 ---
@@ -147,7 +147,7 @@ mode: code
 description: "Custom agent"
 icon: "🤖"
 ---
-```
+```markdown
 
 ### Advanced Template
 
@@ -155,7 +155,7 @@ Full configuration with restrictions and settings:
 
 ```bash
 /custom-agents create my-agent --template=advanced
-```
+```yaml
 
 Includes:
 - Tool group configuration
@@ -169,7 +169,7 @@ For multi-agent workflows:
 
 ```bash
 /custom-agents create my-agent --template=orchestrator
-```
+```yaml
 
 Includes:
 - Orchestrator level
@@ -187,7 +187,7 @@ List all discovered agents grouped by scope.
 /custom-agents list --json       # JSON output
 /custom-agents list --global     # User-level only
 /custom-agents list --local      # Project-level only
-```
+```markdown
 
 ### create
 
@@ -197,7 +197,7 @@ Create a new agent from a template.
 /custom-agents create <slug>
 /custom-agents create <slug> --template=advanced
 /custom-agents create <slug> --global  # Create in ~/.vellum/agents/
-```
+```markdown
 
 ### validate
 
@@ -207,7 +207,7 @@ Validate agent definition files.
 /custom-agents validate              # All agents
 /custom-agents validate <slug>       # Specific agent
 /custom-agents validate --strict     # Treat warnings as errors
-```
+```markdown
 
 ### info
 
@@ -217,7 +217,7 @@ Show detailed agent information.
 /custom-agents info <slug>
 /custom-agents info <slug> --json
 /custom-agents info <slug> --show-prompt
-```
+```markdown
 
 ### export
 
@@ -227,7 +227,7 @@ Export agent definition to file.
 /custom-agents export <slug>
 /custom-agents export <slug> --output=./agent.yaml
 /custom-agents export <slug> --format=json
-```
+```markdown
 
 ### import
 
@@ -236,7 +236,7 @@ Import agent from YAML/JSON file.
 ```bash
 /custom-agents import ./agent.yaml
 /custom-agents import ./agent.json --global
-```
+```markdown
 
 ## Examples
 
@@ -288,7 +288,7 @@ You are a test writing specialist.
 2. Use the testing framework found in the project
 3. Follow AAA pattern (Arrange, Act, Assert)
 4. Include edge cases and error handling
-```
+```markdown
 
 ### Security Reviewer Agent
 
@@ -324,7 +324,7 @@ You are a security expert reviewing code for vulnerabilities.
 - Authentication/authorization issues
 - Sensitive data exposure
 - Dependency vulnerabilities
-```
+```markdown
 
 ## Agent Routing
 
@@ -338,7 +338,7 @@ You can also explicitly invoke an agent:
 
 ```
 @test-writer write tests for the user service
-```
+```markdown
 
 ## Inheritance
 
@@ -353,7 +353,7 @@ description: "Specialized for React component testing"
 ---
 
 Additional React-specific instructions...
-```
+```text
 
 The child agent inherits:
 - System prompt (prepended to child's prompt)

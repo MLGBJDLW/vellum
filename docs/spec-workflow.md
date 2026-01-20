@@ -29,7 +29,7 @@ vellum spec resume payments
 
 # Check status
 vellum spec status payments
-```
+```markdown
 
 ## Phases
 
@@ -109,7 +109,7 @@ vellum spec resume payments --from=design
 
 # Skip a phase (if allowed)
 vellum spec skip payments requirements
-```
+```markdown
 
 ### Skippable Phases
 
@@ -170,7 +170,7 @@ Options:
   --name, -n     Spec name (default: auto-generated from description)
   --skip         Phases to skip (comma-separated)
   --template     Custom template directory
-```
+```markdown
 
 ### `vellum spec resume`
 
@@ -182,7 +182,7 @@ vellum spec resume <name> [options]
 Options:
   --from         Resume from specific phase
   --force        Skip checkpoint approval
-```
+```markdown
 
 ### `vellum spec status`
 
@@ -196,7 +196,7 @@ Output:
   - Completed phases with timestamps
   - Pending phases
   - Last checkpoint
-```
+```markdown
 
 ### `vellum spec list`
 
@@ -208,7 +208,7 @@ vellum spec list [options]
 Options:
   --status       Filter by status (active, complete, abandoned)
   --json         Output as JSON
-```
+```markdown
 
 ## File Structure
 
@@ -229,7 +229,7 @@ Options:
         ├── validation.md
         ├── adr/             # Architecture decisions
         └── checkpoints/     # Workflow state
-```
+```markdown
 
 ## Configuration
 
@@ -251,7 +251,7 @@ export default {
     requireApproval: true,
   }
 }
-```
+```markdown
 
 ## Best Practices
 
@@ -271,7 +271,7 @@ vellum spec status my-feature
 
 # Force proceed (use with caution)
 vellum spec resume my-feature --force
-```
+```markdown
 
 ### Template validation failed
 

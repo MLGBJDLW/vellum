@@ -140,7 +140,7 @@ When a language server is not found on your system, Vellum can automatically ins
 3. If `pyright-langserver` is not found, Vellum runs:
    ```bash
    npm install -g pyright
-   ```
+   ```text
 4. Server starts automatically after installation
 
 ### Install Methods
@@ -163,14 +163,14 @@ To disable automatic installation globally:
 {
   "autoInstall": false
 }
-```
+```markdown
 
 **Per-project** (`.vellum/lsp.json`):
 ```json
 {
   "autoInstall": false
 }
-```
+```text
 
 ---
 
@@ -230,7 +230,7 @@ Values are deep-merged, so you only need to specify what you want to change.
     }
   }
 }
-```
+```markdown
 
 #### Top-Level Options
 
@@ -275,7 +275,7 @@ Disable ESLint server globally:
 {
   "disabled": ["eslint"]
 }
-```
+```text
 
 Disable multiple servers:
 
@@ -283,7 +283,7 @@ Disable multiple servers:
 {
   "disabled": ["eslint", "biome", "deno"]
 }
-```
+```markdown
 
 #### Disable a Server Conditionally
 
@@ -297,7 +297,7 @@ Disable via server config (keeps the server registered but inactive):
     }
   }
 }
-```
+```markdown
 
 #### Custom Server Command
 
@@ -316,7 +316,7 @@ Use a different Python language server:
     }
   }
 }
-```
+```text
 
 Use project-local TypeScript server:
 
@@ -329,7 +329,7 @@ Use project-local TypeScript server:
     }
   }
 }
-```
+```markdown
 
 #### Add Custom Server
 
@@ -353,7 +353,7 @@ Add support for a language not included by default:
     }
   }
 }
-```
+```markdown
 
 #### Configure Server Settings
 
@@ -370,7 +370,7 @@ Pass settings to the TypeScript server:
     }
   }
 }
-```
+```text
 
 Configure Pyright settings:
 
@@ -384,7 +384,7 @@ Configure Pyright settings:
     }
   }
 }
-```
+```markdown
 
 #### Environment Variables
 
@@ -401,7 +401,7 @@ Set environment variables for a server:
     }
   }
 }
-```
+```markdown
 
 #### Adjust Performance
 
@@ -416,7 +416,7 @@ Reduce resource usage:
     "ttlSeconds": 600
   }
 }
-```
+```text
 
 ---
 
@@ -453,12 +453,12 @@ These tools are automatically available to the AI assistant when LSP servers are
    ```bash
    which typescript-language-server  # macOS/Linux
    where typescript-language-server  # Windows
-   ```
+   ```text
 
 2. Verify the server can start:
    ```bash
    typescript-language-server --stdio
-   ```
+   ```markdown
 
 **Solutions:**
 
@@ -495,7 +495,7 @@ rustup component add rust-analyzer
 # Java (varies by OS)
 brew install jdtls  # macOS
 scoop install jdtls # Windows
-```
+```markdown
 
 ### Performance Issues
 
@@ -506,12 +506,12 @@ scoop install jdtls # Windows
 1. **Reduce concurrent servers:**
    ```json
    { "maxConcurrentServers": 3 }
-   ```
+   ```text
 
 2. **Disable unused servers:**
    ```json
    { "disabled": ["eslint", "biome"] }
-   ```
+   ```text
 
 3. **Adjust cache settings:**
    ```json
@@ -521,7 +521,7 @@ scoop install jdtls # Windows
        "ttlSeconds": 600
      }
    }
-   ```
+   ```text
 
 4. **Check for conflicting servers:**
    - ESLint and Biome can conflict
@@ -540,7 +540,7 @@ scoop install jdtls # Windows
 {
   "disabled": ["deno"]
 }
-```
+```text
 
 Or disable TypeScript for Deno projects:
 
@@ -548,7 +548,7 @@ Or disable TypeScript for Deno projects:
 {
   "disabled": ["typescript", "eslint"]
 }
-```
+```markdown
 
 ### Root Detection Issues
 
@@ -566,7 +566,7 @@ Or disable TypeScript for Deno projects:
     }
   }
 }
-```
+```markdown
 
 ### Debug Mode
 
@@ -574,7 +574,7 @@ For detailed troubleshooting, enable debug logging:
 
 ```bash
 DEBUG=vellum:lsp* vellum
-```
+```text
 
 This will show:
 - Server startup/shutdown events
@@ -604,7 +604,7 @@ No configuration needed. Just create a project with `tsconfig.json`.
     }
   }
 }
-```
+```markdown
 
 ### Monorepo with Multiple Languages
 
@@ -625,7 +625,7 @@ No configuration needed. Just create a project with `tsconfig.json`.
     }
   }
 }
-```
+```markdown
 
 ### Deno Project
 

@@ -6,7 +6,7 @@
 
 ```bash
 pnpm add @vellum/cli
-```
+```markdown
 
 ## Usage
 
@@ -19,7 +19,7 @@ vellum "Create a React component"
 
 # Run with a configuration file
 vellum --config vellum.config.json
-```
+```markdown
 
 ## TUI System
 
@@ -35,7 +35,7 @@ tui/
 ├── theme/         # Theming system
 ├── adapters/      # External integrations
 └── i18n/          # Internationalization
-```
+```markdown
 
 ### Quick Start
 
@@ -54,7 +54,7 @@ function App() {
     </RootProvider>
   );
 }
-```
+```markdown
 
 ### Core Components
 
@@ -89,7 +89,7 @@ Built-in themes: `dark`, `light`, `dracula`, `nord`, `solarized`
 
 // Or provide a custom theme
 <RootProvider theme={customTheme}>
-```
+```text
 
 For detailed documentation, see [docs/tui.md](../../docs/tui.md).
 
@@ -136,7 +136,7 @@ The CLI provides a powerful slash command system for quick actions and configura
 
 # Mixed positional and named arguments
 /config theme --value dark --global
-```
+```markdown
 
 ## AGENTS.md Commands
 
@@ -158,7 +158,7 @@ vellum init --force
 
 # Non-interactive mode for CI
 vellum init --non-interactive
-```
+```markdown
 
 **Options:**
 
@@ -184,7 +184,7 @@ vellum agents show --verbose
 
 # Show config for specific scope
 vellum agents show --scope ./src
-```
+```markdown
 
 **Options:**
 
@@ -210,7 +210,7 @@ vellum agents validate --json
 
 # Verbose output with warnings
 vellum agents validate --verbose
-```
+```markdown
 
 **Options:**
 
@@ -242,7 +242,7 @@ vellum agents generate --output ./config/AGENTS.md
 
 # Merge with existing file
 vellum agents generate --merge
-```
+```markdown
 
 **Options:**
 
@@ -316,7 +316,7 @@ const myCommand: SlashCommand = {
 
 // Register with a CommandRegistry instance
 registry.register(myCommand);
-```
+```markdown
 
 ### Command Result Types
 
@@ -356,7 +356,7 @@ The CLI supports multiple languages for UI text.
 
 # Clear preference (use auto-detection)
 /language auto
-```
+```markdown
 
 **Using the `--language` CLI flag:**
 
@@ -367,7 +367,7 @@ vellum -l zh
 
 # Start with English UI
 vellum --language en
-```
+```markdown
 
 **Using environment variable:**
 
@@ -375,7 +375,7 @@ vellum --language en
 # Set default language via environment
 export VELLUM_LANGUAGE=zh
 vellum
-```
+```markdown
 
 ### Language Priority
 

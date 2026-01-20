@@ -12,7 +12,7 @@ The session system provides comprehensive session management with five core comp
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      Application Layer                      │
 │  (TUI, CLI, Agent Loop, User Interface)                     │
@@ -77,7 +77,7 @@ class StorageManager {
   getStorageDir(): string
   getSessionPath(sessionId: string): string
 }
-```
+```markdown
 
 ### Configuration
 
@@ -88,7 +88,7 @@ interface StorageConfig {
   /** Enable gzip compression (default: false) */
   compress?: boolean;
 }
-```
+```markdown
 
 **Default paths:**
 - **Linux/macOS:** `~/.local/share/vellum/sessions`
@@ -133,7 +133,7 @@ for (const meta of sessions) {
 
 // Delete session
 await storage.deleteSession("session-123");
-```
+```markdown
 
 #### Error Handling
 
@@ -160,7 +160,7 @@ try {
     }
   }
 }
-```
+```text
 
 ---
 
@@ -194,7 +194,7 @@ class PersistenceManager extends EventEmitter {
   on(event: 'save', listener: (session: Session) => void): this
   on(event: 'error', listener: (err: Error, session: Session | null) => void): this
 }
-```
+```markdown
 
 ### Configuration
 
@@ -207,7 +207,7 @@ interface PersistenceConfig {
   /** Max unsaved messages before save (default: 5) */
   maxUnsavedMessages: number;
 }
-```
+```markdown
 
 ### Usage Examples
 
@@ -261,7 +261,7 @@ await persistence.onMessage(nextMessage);
 
 // Clean shutdown (final save)
 await persistence.closeSession();
-```
+```markdown
 
 #### Loading Existing Session
 
@@ -278,7 +278,7 @@ await persistence.onMessage(message);
 
 // Close when done
 await persistence.closeSession();
-```
+```markdown
 
 #### Checkpoint Management
 
@@ -292,7 +292,7 @@ const session = persistence.getCurrentSession();
 for (const cp of session.checkpoints) {
   console.log(`${cp.name} at ${cp.timestamp}`);
 }
-```
+```text
 
 ---
 
@@ -321,7 +321,7 @@ class SearchService {
   async removeSession(sessionId: string): Promise<void>
   async updateSession(session: Session): Promise<void>
 }
-```
+```markdown
 
 ### Search Options
 
@@ -336,7 +336,7 @@ interface SearchOptions {
   /** Prefix matching (default: true) */
   prefix?: boolean;
 }
-```
+```markdown
 
 ### Usage Examples
 
@@ -358,7 +358,7 @@ for (const result of results) {
   console.log(`  ID: ${result.sessionId}`);
   console.log(`  Matches: ${result.matches.join(", ")}`);
 }
-```
+```markdown
 
 #### Advanced Search with Snippets
 
@@ -387,7 +387,7 @@ for (const result of results) {
   console.log(`Created: ${result.metadata.createdAt}`);
   console.log(`Tags: ${result.metadata.tags.join(", ")}`);
 }
-```
+```markdown
 
 #### Index Management
 
@@ -403,7 +403,7 @@ await searchService.removeSession("session-123");
 
 // Rebuild entire index (e.g., after bulk operations)
 await searchService.rebuildIndex();
-```
+```markdown
 
 #### Custom Index Location
 
@@ -415,7 +415,7 @@ const searchService = new SearchService(
 );
 
 await searchService.initialize();
-```
+```text
 
 ---
 
@@ -437,7 +437,7 @@ class ExportService {
   export(session: Session, options: ExportOptions): string
   async exportToFile(session: Session, filePath: string, options: ExportOptions): Promise<void>
 }
-```
+```markdown
 
 ### Export Options
 
@@ -452,7 +452,7 @@ interface ExportOptions {
   /** Include timestamps (default: true) */
   includeTimestamps?: boolean;
 }
-```
+```markdown
 
 ### Usage Examples
 
@@ -471,7 +471,7 @@ const markdown = exportService.export(session, {
 });
 
 console.log(markdown);
-```
+```markdown
 
 **Output:**
 ```markdown
@@ -496,12 +496,12 @@ I'll review the code for you.
 **Input:**
 ```json
 {"path": "src/user.ts"}
-```
+```markdown
 
 **Output:**
 ```
 export class User { ... }
-```
+```markdown
 
 ## 🤖 Assistant (10:30:25)
 
@@ -518,7 +518,7 @@ const html = exportService.export(session, {
 
 // HTML is self-contained with inline CSS
 // Includes color-coded roles and styled message blocks
-```
+```markdown
 
 #### Export to JSON
 
@@ -529,7 +529,7 @@ const json = exportService.export(session, {
 
 // Pretty-printed JSON with full session data
 const parsed = JSON.parse(json);
-```
+```markdown
 
 #### Export to Text
 
@@ -539,7 +539,7 @@ const text = exportService.export(session, {
   includeTimestamps: false,  // Omit timestamps for cleaner output
   includeToolOutputs: false  // Skip tool details
 });
-```
+```markdown
 
 **Output:**
 ```
@@ -552,7 +552,7 @@ Can you review this TypeScript code?
 
 [Assistant]
 I'll review the code for you. The code looks good, but I suggest...
-```
+```markdown
 
 #### Export to File
 
@@ -569,7 +569,7 @@ await exportService.exportToFile(
   '/path/to/export/session-123.html',
   { format: 'html' }
 );
-```
+```text
 
 ---
 
@@ -597,7 +597,7 @@ namespace Snapshot {
   function list(projectRoot: string): Promise<Result<SnapshotInfo[], SnapshotError>>
   function cleanup(projectRoot: string): Promise<Result<void, SnapshotError>>
 }
-```
+```markdown
 
 ### Types
 
@@ -623,7 +623,7 @@ interface DiffResult {
   /** Unified diff patch */
   patch: string;
 }
-```
+```markdown
 
 ### Usage Examples
 
@@ -640,7 +640,7 @@ if (result.isOk()) {
 } else {
   console.error("Init failed:", result.error.message);
 }
-```
+```markdown
 
 #### Create Snapshots
 
@@ -658,7 +658,7 @@ if (result.isOk()) {
   console.log("Files:", snapshot.files);
   console.log("Time:", snapshot.timestamp);
 }
-```
+```markdown
 
 #### View Snapshot Information
 
@@ -682,7 +682,7 @@ if (list.isOk()) {
     console.log(`${snapshot.hash.slice(0, 7)} - ${snapshot.message}`);
   }
 }
-```
+```markdown
 
 #### Diff Against Snapshot
 
@@ -701,7 +701,7 @@ if (diffResult.isOk()) {
   console.log("\nChanges:");
   console.log(diff.patch);
 }
-```
+```markdown
 
 #### Restore from Snapshot
 
@@ -723,7 +723,7 @@ const restoreAll = await Snapshot.restore(
   "abc123..."
   // No files array = restore all
 );
-```
+```markdown
 
 #### Cleanup
 
@@ -734,7 +734,7 @@ const cleanup = await Snapshot.cleanup("/path/to/project");
 if (cleanup.isOk()) {
   console.log("Shadow repo removed");
 }
-```
+```text
 
 ---
 
@@ -782,7 +782,7 @@ const markdown = exportService.export(
 
 // 6. Close session
 await persistence.closeSession();
-```
+```markdown
 
 ### Session Recovery
 
@@ -801,7 +801,7 @@ if (target) {
   // Continue working
   await persistence.onMessage(newMessage);
 }
-```
+```markdown
 
 ### Batch Export
 
@@ -820,7 +820,7 @@ for (const meta of sessions) {
 }
 
 console.log(`Exported ${sessions.length} sessions`);
-```
+```markdown
 
 ### File Tracking with Snapshots
 
@@ -849,7 +849,7 @@ console.log("Modified:", diff.value.modified);
 if (userWantsToRevert) {
   await Snapshot.restore(projectRoot, before.value.hash);
 }
-```
+```text
 
 ---
 
@@ -871,7 +871,7 @@ Override with custom path:
 const storage = await StorageManager.create({
   storageDir: "/custom/path/sessions"
 });
-```
+```markdown
 
 ### Persistence Settings
 
@@ -886,7 +886,7 @@ const persistence = new PersistenceManager(storage, {
   // Save after N unsaved messages
   maxUnsavedMessages: 10
 });
-```
+```markdown
 
 ### Search Index Location
 
@@ -899,14 +899,14 @@ const customSearch = new SearchService(
   storage,
   "/custom/path/index.json"
 );
-```
+```markdown
 
 ### Snapshot Location
 
 Snapshots are always stored in:
 ```
 <projectRoot>/.vellum/.git-shadow/
-```
+```text
 
 This directory is automatically created by `Snapshot.init()`.
 
@@ -942,7 +942,7 @@ try {
     }
   }
 }
-```
+```markdown
 
 ### Snapshot Errors
 
@@ -973,7 +973,7 @@ if (result.isErr()) {
       break;
   }
 }
-```
+```markdown
 
 ### Persistence Events
 
@@ -987,7 +987,7 @@ persistence.on('error', (err, session) => {
   
   // Implement retry logic, user notification, etc.
 });
-```
+```text
 
 ---
 
@@ -1011,7 +1011,7 @@ const allMetadata = await storage.listSessions();
 for (const meta of allMetadata) {
   console.log(meta.title);
 }
-```
+```markdown
 
 ### Search
 

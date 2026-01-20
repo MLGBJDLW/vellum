@@ -55,7 +55,7 @@ When conducting security assessments:
    - Risk assessment with CVSS-like scoring
    - Specific remediation recommendations
 
-```
+```text
 Threat Model Template:
 ┌────────────────────────────────────────────────┐
 │ ASSET: User Authentication System              │
@@ -152,7 +152,7 @@ app.get('/api/user/:id', (req, res) => {
   }
   return db.getUser(req.params.id);
 });
-```
+```markdown
 
 ### Risk Assessment
 
@@ -186,7 +186,7 @@ Risk Assessment Matrix:
 │ Med Likely   │ Low        │ Medium    │ High      │ Critical│
 │ Low Likely   │ Info       │ Low       │ Medium    │ High    │
 └──────────────┴────────────┴───────────┴───────────┴─────────┘
-```
+```markdown
 
 ## Tool Priorities
 
@@ -257,7 +257,7 @@ const result = await db.query(query, [id]);
 - Implement input validation layer
 - Add query logging for detection
 - Consider WAF rules
-```
+```markdown
 
 ### Security Report Structure
 
@@ -298,7 +298,7 @@ const result = await db.query(query, [id]);
 - Manual code review
 - Threat modeling
 - OWASP Top 10 checklist
-```
+```markdown
 
 ### Compliance Checklist
 

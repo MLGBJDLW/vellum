@@ -10,6 +10,7 @@ import { readFileTool } from "../read-file.js";
 // Mock fs/promises
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
+  stat: vi.fn(),
 }));
 
 // Mock path-security module
@@ -34,6 +35,8 @@ describe("readFileTool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default mock for stat - small file size (no warning)
+    vi.mocked(fs.stat).mockResolvedValue({ size: 1000 } as Awaited<ReturnType<typeof fs.stat>>);
   });
 
   describe("definition", () => {

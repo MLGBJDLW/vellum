@@ -4,7 +4,7 @@ Global rules that apply to all Vellum sessions. Rules are always included in the
 
 ## Structure
 
-```
+```text
 rules/
 ├── *.md               # Global rules (all modes)
 └── rules-{mode}/      # Mode-specific rules
@@ -15,7 +15,7 @@ rules/
 
 Create subdirectories for mode-specific rules:
 
-```
+```text
 rules/
 ├── coding-standards.md       # All modes
 ├── rules-vibe/

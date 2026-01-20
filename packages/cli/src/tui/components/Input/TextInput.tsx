@@ -725,15 +725,27 @@ function TextInputComponent({
       }
 
       // Handle regular character input
-      // Strategy: Single chars display immediately, multi-char inputs (paste) use buffering
+      // Strategy: Single chars ALWAYS display immediately, multi-char inputs (paste) use buffering
       if (input && !key.ctrl && !key.meta) {
         const normalizedInput = normalizeInputValue(input, multiline);
         if (normalizedInput.length === 0) return;
 
-        // Single character: process immediately for responsive typing
+        // Single character: ALWAYS process immediately for responsive typing
+        // Multi-char (paste): use buffering to batch operations
         const isSingleChar = normalizedInput.length === 1;
 
-        if (isSingleChar && inputBufferRef.current.length === 0) {
+        if (isSingleChar) {
+          // Clear any pending buffer timer - single chars take priority
+          if (inputTimerRef.current) {
+            clearTimeout(inputTimerRef.current);
+            inputTimerRef.current = null;
+          }
+          // Flush any buffered content first
+          if (inputBufferRef.current.length > 0) {
+            const buffered = inputBufferRef.current;
+            inputBufferRef.current = "";
+            handleInput(buffered);
+          }
           // Immediate processing - no buffering delay
           const currentValue = valueRef.current;
           const currentCursorPosition = cursorPositionRef.current;
@@ -758,9 +770,8 @@ function TextInputComponent({
           startTransition(() => {
             setCursorPosition(newPosition);
           });
-        } else {
-          // Multi-character input (paste) or continuation of buffered input
-          // Use buffering to batch paste operations
+        } else if (normalizedInput.length > 1) {
+          // Multi-character input (paste) only - use buffering to batch paste operations
           inputBufferRef.current += normalizedInput;
 
           if (inputTimerRef.current) {

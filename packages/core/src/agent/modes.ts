@@ -173,9 +173,25 @@ export const ExtendedModeConfigSchema = ModeConfigSchema.extend({
 });
 
 // ============================================
-// Mode-Specific Prompts
+// Mode-Specific Prompts (Legacy TypeScript Fallback)
+// ============================================
+// These prompts are deprecated. Use markdown files instead:
+// - plan: packages/core/src/prompts/markdown/modes/plan.md
+// - code: packages/core/src/prompts/markdown/modes/vibe.md (via vibe mode)
+// - draft/debug/ask: mapped to plan or vibe mode (see legacy-modes.ts)
+//
+// These constants exist only as TypeScript fallback for resilience.
+// The PromptLoader loads markdown files as the primary source.
 // ============================================
 
+/**
+ * System prompt for plan mode.
+ *
+ * @deprecated Use markdown file instead: `packages/core/src/prompts/markdown/modes/plan.md`
+ * This constant is kept as TypeScript fallback for resilience when MD files are unavailable.
+ *
+ * @see {@link ../prompts/markdown/modes/plan.md} for the primary prompt source
+ */
 const PROMPT_PLAN = `You are a strategic planning assistant. Your role is to:
 - Analyze requirements and constraints carefully
 - Break down complex tasks into actionable steps
@@ -185,6 +201,14 @@ const PROMPT_PLAN = `You are a strategic planning assistant. Your role is to:
 You have READ-ONLY access to the codebase. You can analyze files and structure but cannot modify them.
 Focus on understanding the current state and proposing a clear path forward.`;
 
+/**
+ * System prompt for code mode.
+ *
+ * @deprecated Use markdown file instead: `packages/core/src/prompts/markdown/modes/vibe.md`
+ * This constant is kept as TypeScript fallback for resilience when MD files are unavailable.
+ *
+ * @see {@link ../prompts/markdown/modes/vibe.md} for the primary prompt source
+ */
 const PROMPT_CODE = `You are an autonomous coding assistant with full access to modify the codebase. Your role is to:
 - Implement features according to specifications
 - Write clean, maintainable, well-tested code
@@ -194,6 +218,15 @@ const PROMPT_CODE = `You are an autonomous coding assistant with full access to 
 You have FULL access to edit files, run commands, and execute tests.
 Always verify your changes compile and pass tests before completing.`;
 
+/**
+ * System prompt for draft mode.
+ *
+ * @deprecated Draft mode is deprecated and maps to vibe mode with temperature 0.8.
+ * Use markdown file: `packages/core/src/prompts/markdown/modes/vibe.md`
+ * This constant is kept as TypeScript fallback for resilience when MD files are unavailable.
+ *
+ * @see {@link ./legacy-modes.ts} for the legacy → new mode mapping
+ */
 const PROMPT_DRAFT = `You are a creative prototyping assistant. Your role is to:
 - Explore multiple solution approaches quickly
 - Create working prototypes to validate ideas
@@ -203,6 +236,15 @@ const PROMPT_DRAFT = `You are a creative prototyping assistant. Your role is to:
 You have FULL access to edit and run code. Be exploratory and creative.
 It's okay to leave TODOs for production hardening.`;
 
+/**
+ * System prompt for debug mode.
+ *
+ * @deprecated Debug mode is deprecated and maps to vibe mode with temperature 0.1.
+ * Use markdown file: `packages/core/src/prompts/markdown/modes/vibe.md`
+ * This constant is kept as TypeScript fallback for resilience when MD files are unavailable.
+ *
+ * @see {@link ./legacy-modes.ts} for the legacy → new mode mapping
+ */
 const PROMPT_DEBUG = `You are an expert debugging assistant. Your role is to:
 - Analyze error messages and stack traces systematically
 - Identify root causes through careful investigation
@@ -212,6 +254,15 @@ const PROMPT_DEBUG = `You are an expert debugging assistant. Your role is to:
 You have FULL access to edit files and run diagnostic commands.
 Be methodical: reproduce the issue, identify the cause, fix it, verify the fix.`;
 
+/**
+ * System prompt for ask mode.
+ *
+ * @deprecated Ask mode is deprecated and maps to plan mode.
+ * Use markdown file: `packages/core/src/prompts/markdown/modes/plan.md`
+ * This constant is kept as TypeScript fallback for resilience when MD files are unavailable.
+ *
+ * @see {@link ./legacy-modes.ts} for the legacy → new mode mapping
+ */
 const PROMPT_ASK = `You are a knowledgeable assistant for answering questions. Your role is to:
 - Provide accurate, well-explained answers
 - Reference relevant documentation and code
@@ -222,11 +273,30 @@ You have READ-ONLY access. You can search and analyze but cannot modify anything
 Focus on being helpful, accurate, and educational.`;
 
 // ============================================
-// Mode Configurations
+// Mode Configurations (Legacy 5-Mode System)
+// ============================================
+// This 5-mode system (plan, code, draft, debug, ask) is being replaced
+// by the 3-mode system (vibe, plan, spec) in coding-modes.ts.
+// See legacy-modes.ts for the mapping between old and new modes.
 // ============================================
 
 /**
  * Complete configuration map for all agent modes.
+ *
+ * **Note**: This uses the legacy 5-mode system. The new 3-mode system
+ * (`vibe`, `plan`, `spec`) is defined in `coding-modes.ts`.
+ *
+ * - `code` → `vibe` (fast autonomous coding)
+ * - `draft` → `vibe` with temperature 0.8
+ * - `debug` → `vibe` with temperature 0.1
+ * - `ask` → `plan` (conversational)
+ * - `plan` → `plan` (unchanged)
+ *
+ * The prompts in this object use deprecated TypeScript constants.
+ * Primary prompt source: `packages/core/src/prompts/markdown/modes/*.md`
+ *
+ * @see {@link ./coding-modes.ts} for the new 3-mode system
+ * @see {@link ./legacy-modes.ts} for the legacy → new mode mapping
  */
 export const MODE_CONFIGS: Readonly<Record<AgentMode, ModeConfig>> = {
   plan: {

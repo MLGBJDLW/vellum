@@ -39,6 +39,7 @@ import {
   VirtualizedList,
   type VirtualizedListRef,
 } from "../common/VirtualizedList/index.js";
+import { DiffView } from "./DiffView.js";
 import { MarkdownRenderer } from "./MarkdownRenderer.js";
 import { ThinkingBlock } from "./ThinkingBlock.js";
 
@@ -193,6 +194,35 @@ function estimateMessageHeightLegacy(
   return estimateMessageHeight(message, { width, includeToolCalls });
 }
 
+interface DiffMetadata {
+  readonly diff: string;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+function isDiffMetadata(value: unknown): value is DiffMetadata {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj.diff === "string" &&
+    typeof obj.additions === "number" &&
+    typeof obj.deletions === "number"
+  );
+}
+
+function getDiffMetadata(result: unknown): DiffMetadata | null {
+  if (isDiffMetadata(result)) {
+    return result;
+  }
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+  const diffMeta = (result as Record<string, unknown>).diffMeta;
+  return isDiffMetadata(diffMeta) ? diffMeta : null;
+}
+
 // =============================================================================
 // Sub-Components
 // =============================================================================
@@ -246,19 +276,47 @@ const InlineToolCall = memo(function InlineToolCall({
       statusColor = mutedColor;
   }
 
+  const diffMeta = getDiffMetadata(toolCall.result);
+  const hasDiffStats =
+    toolCall.status === "completed" &&
+    diffMeta !== null &&
+    (diffMeta.additions > 0 || diffMeta.deletions > 0);
+  const hasDiffContent =
+    toolCall.status === "completed" &&
+    diffMeta !== null &&
+    diffMeta.diff.trim() !== "" &&
+    diffMeta.diff !== "(no changes)";
+
   return (
-    <Box flexDirection="row">
-      <Text color={statusColor}>{statusIcon}</Text>
-      <Text> </Text>
-      <Text color={accentColor} bold>
-        {toolCall.name}
-      </Text>
-      {/* Show error message inline if present */}
-      {toolCall.status === "error" && toolCall.error && (
-        <Text color={errorColor} dimColor>
-          {" "}
-          — {toolCall.error}
+    <Box flexDirection="column">
+      <Box flexDirection="row">
+        <Text color={statusColor}>{statusIcon}</Text>
+        <Text> </Text>
+        <Text color={accentColor} bold>
+          {toolCall.name}
         </Text>
+        {hasDiffStats && diffMeta && (
+          <>
+            <Text> </Text>
+            <Text color={successColor}>+{diffMeta.additions}</Text>
+            <Text> </Text>
+            <Text color={errorColor}>-{diffMeta.deletions}</Text>
+          </>
+        )}
+        {/* Show error message inline if present */}
+        {toolCall.status === "error" && toolCall.error && (
+          <Text color={errorColor} dimColor>
+            {" "}
+            — {toolCall.error}
+          </Text>
+        )}
+      </Box>
+      {hasDiffContent && diffMeta && (
+        <Box marginLeft={2} marginTop={1}>
+          <MaxSizedBox maxHeight={12} truncationIndicator="... (diff truncated)">
+            <DiffView diff={diffMeta.diff} compact />
+          </MaxSizedBox>
+        </Box>
       )}
     </Box>
   );
@@ -510,10 +568,15 @@ const MessageList = memo(function MessageList({
     inputReserve: 5,
   });
 
+  const estimatedContentWidth = Math.max(20, width - 24);
+
   // Calculate total estimated content height for mode decisions
   const totalContentHeight = useMemo(() => {
-    return messages.reduce((sum, msg) => sum + estimateMessageHeight(msg, { width }), 0);
-  }, [messages, width]);
+    return messages.reduce(
+      (sum, msg) => sum + estimateMessageHeight(msg, { width: estimatedContentWidth }),
+      0
+    );
+  }, [messages, estimatedContentWidth]);
 
   // Mode controller for adaptive rendering decisions
   const { mode, windowSize, modeReason, staticThreshold, virtualThreshold } = useModeController({
@@ -552,6 +615,10 @@ const MessageList = memo(function MessageList({
     [toolGroupCallIds]
   );
 
+  const isStaticOutputMode = process.env.VELLUM_STATIC_OUTPUT === "1";
+  const shouldConstrainHeight =
+    !isStaticOutputMode && (useAltBuffer || (process.stdout.isTTY ?? false));
+
   // Ref for VirtualizedList imperative control
   const virtualizedListRef = useRef<VirtualizedListRef<Message>>(null);
 
@@ -580,12 +647,12 @@ const MessageList = memo(function MessageList({
       return effectiveMaxHeight;
     }
     if (useVirtualizedListInternal) {
-      // In non-alternate-buffer mode, the root layout does not have a fixed height.
-      // VirtualizedList relies on a parent with a concrete height for height="100%" to work.
-      // If we leave this undefined, the list container can grow with content and push
-      // the input/footer out of view. Using the viewport-derived availableHeight keeps
-      // the message area clipped and preserves stick-to-bottom behavior.
-      return availableHeight;
+      // When the layout isn't height-constrained, give VirtualizedList a fixed height
+      // so it doesn't expand with content and push the input/footer out of view.
+      if (!shouldConstrainHeight) {
+        return availableHeight;
+      }
+      return undefined;
     }
     if (!adaptive) {
       return undefined;
@@ -595,7 +662,15 @@ const MessageList = memo(function MessageList({
       return windowSize;
     }
     return undefined;
-  }, [effectiveMaxHeight, useVirtualizedListInternal, availableHeight, adaptive, mode, windowSize]);
+  }, [
+    effectiveMaxHeight,
+    useVirtualizedListInternal,
+    shouldConstrainHeight,
+    availableHeight,
+    adaptive,
+    mode,
+    windowSize,
+  ]);
 
   const thinkingIndicatorHeight = showThinkingIndicator ? 2 : 0;
 
@@ -612,8 +687,14 @@ const MessageList = memo(function MessageList({
   // NOTE: Static rendering does not support windowed scrolling; fall back when maxHeight is set.
   // T-VIRTUAL-SCROLL: Removed hasToolGroups check - tool groups work fine with Static rendering
   // as they are processed separately during message rendering.
+  // FIX: Disable Static mode when history contains thinking blocks to avoid layout issues
+  // when ThinkingBlock collapses (Ink's <Static> doesn't recalculate height on item changes)
+  const hasThinkingInHistory = historyMessages?.some((m) => m.thinking && m.thinking.length > 0);
   const useStaticRendering =
-    historyMessages !== undefined && !computedMaxHeight && (mode === "static" || !adaptive);
+    historyMessages !== undefined &&
+    !computedMaxHeight &&
+    !hasThinkingInHistory &&
+    (mode === "static" || !adaptive);
 
   // ==========================================================================
   // New Scroll Controller (enableScroll=true)
@@ -1188,8 +1269,6 @@ const MessageList = memo(function MessageList({
       list.scrollTo(targetScrollTop);
     }
   }, [enableScroll, useVirtualizedListInternal, scrollState.offsetFromBottom]);
-
-  const estimatedContentWidth = Math.max(20, (process.stdout.columns ?? 80) - 24);
 
   // IMPORTANT: pendingMessage is merged into allMessages to avoid Ink <Static>
   // layout issues. Ink's <Static> doesn't participate in Flexbox layout and

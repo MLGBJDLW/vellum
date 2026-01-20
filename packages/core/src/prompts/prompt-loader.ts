@@ -21,32 +21,7 @@ import { readFile } from "node:fs/promises";
 import { promptLoadError, promptNotFoundError } from "./errors.js";
 import { PromptDiscovery, type PromptDiscoveryOptions } from "./prompt-discovery.js";
 import { PromptParser } from "./prompt-parser.js";
-import {
-  ANALYST_PROMPT,
-  ARCHITECT_PROMPT,
-  CODER_PROMPT,
-  ORCHESTRATOR_PROMPT,
-  QA_PROMPT,
-  WRITER_PROMPT,
-} from "./roles/index.js";
-import type { AgentRole, PromptCategory, PromptLoaded, PromptLocation } from "./types.js";
-
-// =============================================================================
-// Role Prompt Mapping (used for fallback)
-// =============================================================================
-
-const ROLE_PROMPTS: Record<AgentRole, string> = {
-  orchestrator: ORCHESTRATOR_PROMPT,
-  coder: CODER_PROMPT,
-  qa: QA_PROMPT,
-  writer: WRITER_PROMPT,
-  analyst: ANALYST_PROMPT,
-  architect: ARCHITECT_PROMPT,
-};
-
-function getRolePrompt(role: AgentRole): string {
-  return ROLE_PROMPTS[role] ?? "";
-}
+import type { PromptCategory, PromptLoaded, PromptLocation } from "./types.js";
 
 // =============================================================================
 // Constants
@@ -116,12 +91,6 @@ export interface PromptLoaderOptions {
    * @default 300000 (5 minutes)
    */
   cacheTtlMs?: number;
-
-  /**
-   * Whether to enable TypeScript fallback.
-   * @default true
-   */
-  enableFallback?: boolean;
 }
 
 /**
@@ -183,7 +152,6 @@ export class PromptLoader {
   private readonly cache: Map<string, PromptCacheEntry>;
   private readonly maxCacheSize: number;
   private readonly cacheTtlMs: number;
-  private readonly enableFallback: boolean;
 
   /**
    * Creates a new PromptLoader instance.
@@ -196,7 +164,6 @@ export class PromptLoader {
     this.cache = new Map();
     this.maxCacheSize = options.maxCacheSize ?? DEFAULT_MAX_CACHE_SIZE;
     this.cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
-    this.enableFallback = options.enableFallback ?? true;
   }
 
   // ===========================================================================
@@ -240,16 +207,11 @@ export class PromptLoader {
         const prompt = await this.loadFromFile(location);
         this.setCache(cacheKey, prompt, location);
         return prompt;
-      } catch {
-        // Fall through to fallback
-      }
-    }
-
-    // Fallback to TypeScript
-    if (this.enableFallback && category === "role") {
-      const fallbackPrompt = this.loadFallback(name, category);
-      if (fallbackPrompt) {
-        return fallbackPrompt;
+      } catch (error) {
+        throw promptLoadError(
+          location.path,
+          error instanceof Error ? error.message : String(error)
+        );
       }
     }
 
@@ -296,19 +258,15 @@ export class PromptLoader {
   }
 
   /**
-   * Loads a role prompt with automatic fallback.
+   * Loads a role prompt.
    *
    * @param role - The agent role
    * @returns The role prompt content string
+   * @throws PromptError if prompt not found
    */
-  async loadRole(role: AgentRole): Promise<string> {
-    try {
-      const prompt = await this.load(role, "role");
-      return prompt.content;
-    } catch {
-      // Fallback to TypeScript role prompt
-      return getRolePrompt(role);
-    }
+  async loadRole(role: string): Promise<string> {
+    const prompt = await this.load(role, "role");
+    return prompt.content;
   }
 
   /**
@@ -512,33 +470,5 @@ export class PromptLoader {
   private async loadFromFile(location: PromptLocation): Promise<PromptLoaded> {
     const content = await readFile(location.path, "utf-8");
     return this.parser.parse(content, location);
-  }
-
-  /**
-   * Loads a fallback prompt from TypeScript definitions.
-   */
-  private loadFallback(name: string, category: PromptCategory): PromptLoaded | null {
-    if (category !== "role") {
-      return null;
-    }
-
-    // Try to load from TypeScript role prompts
-    const rolePrompt = getRolePrompt(name as AgentRole);
-    if (!rolePrompt) {
-      return null;
-    }
-
-    return {
-      id: name,
-      name,
-      category: "role",
-      content: rolePrompt,
-      location: {
-        source: "builtin",
-        path: `builtin:roles/${name}`,
-        priority: 99,
-      },
-      frontmatter: { fallback: true },
-    };
   }
 }

@@ -74,7 +74,6 @@ describe("Provider Headers Integration", () => {
     tempWorkspace = createTempDir("provider-headers");
     loader = new PromptLoader({
       discovery: { workspacePath: tempWorkspace },
-      enableFallback: false,
     });
   });
 

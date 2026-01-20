@@ -29,7 +29,7 @@ providers:
   - name: openai
     model: gpt-4
     apiKey: ${OPENAI_API_KEY}   # ⚠️ DEPRECATED
-```
+```markdown
 
 ### After (Recommended)
 
@@ -48,7 +48,7 @@ providers:
     credential:
       type: api_key
       provider: openai
-```
+```markdown
 
 ## Step-by-Step Migration
 
@@ -63,7 +63,7 @@ vellum credentials add anthropic
 
 # Option B: Slash command in TUI
 /login anthropic
-```
+```text
 
 This stores your credential in the OS keychain (preferred) or encrypted file.
 
@@ -83,7 +83,7 @@ Replace `apiKey` with `credential` reference:
   credential:
     type: api_key
     provider: anthropic
-```
+```markdown
 
 ### Step 3: Verify migration
 
@@ -93,7 +93,7 @@ vellum credentials list
 
 # Test provider works
 vellum chat --provider anthropic
-```
+```markdown
 
 ### Step 4: Remove old keys
 
@@ -115,7 +115,7 @@ apiKey: sk-ant-api03-xxxxx
 credential:
   type: api_key
   provider: anthropic
-```
+```markdown
 
 ### Pattern 2: Environment variable → Credential reference
 
@@ -128,7 +128,7 @@ credential:
   type: api_key
   provider: anthropic
   # EnvCredentialStore reads ANTHROPIC_API_KEY automatically
-```
+```text
 
 Keep environment variables - they're checked first in resolution order.
 
@@ -146,7 +146,7 @@ credential:
 
 # Store with:
 # vellum credentials add openai --key production
-```
+```markdown
 
 ### Pattern 4: OAuth/Token credentials
 
@@ -158,7 +158,7 @@ credential:
   type: oauth_token
   provider: vertex
   # Token stored securely with refresh support
-```
+```markdown
 
 ## Deprecation Timeline
 
@@ -177,7 +177,7 @@ When `apiKey` is used, you'll see:
 ⚠️ DEPRECATION WARNING: 'apiKey' field is deprecated.
    Migrate to 'credential' for secure storage.
    See: https://vellum.dev/docs/migration/credential-migration
-```
+```markdown
 
 ## Programmatic Migration
 
@@ -207,7 +207,7 @@ const config = {
 };
 
 // Credential resolved automatically during provider creation
-```
+```markdown
 
 ### Provider creation migration
 
@@ -223,7 +223,7 @@ const provider = createProvider({
   name: "anthropic",
   credential: await manager.resolve("anthropic"),
 });
-```
+```markdown
 
 ## FAQ
 
@@ -249,7 +249,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 # Option 3: Mount credentials file
 docker run -v ~/.vellum:/root/.vellum vellum
-```
+```markdown
 
 ### Q: How do I migrate in CI/CD pipelines?
 
@@ -267,7 +267,7 @@ providers:
       type: api_key
       provider: anthropic
       # Resolved from ANTHROPIC_API_KEY env var
-```
+```markdown
 
 ### Q: Can I use both old and new format during migration?
 
@@ -280,7 +280,7 @@ providers:
     credential:
       type: api_key
       provider: anthropic  # Used first
-```
+```markdown
 
 ### Q: How do I verify credentials are migrated correctly?
 
@@ -293,7 +293,7 @@ vellum credentials list
 # anthropic: keychain (migrated ✓)
 # openai: env (OPENAI_API_KEY)
 # google: file (encrypted)
-```
+```markdown
 
 ### Q: What about shared team configurations?
 
@@ -308,7 +308,7 @@ providers:
       type: api_key
       provider: anthropic
       # Each developer runs: vellum credentials add anthropic
-```
+```markdown
 
 ## Rollback
 

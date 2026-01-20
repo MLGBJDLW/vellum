@@ -36,7 +36,7 @@ Every task MUST satisfy these conditions:
 □ **Testable**: Has clear, verifiable acceptance criteria
 □ **Mergeable**: Results in a PR that can be merged independently
 □ **Complete**: Includes tests, types, and minimal docs
-```
+```markdown
 
 ### Breaking Down Large Tasks
 
@@ -77,7 +77,7 @@ Split into:
 ├── T004: Add sorting options
 ├── T005: Add search result highlighting
 └── T006: Optimize search performance
-```
+```markdown
 
 ### Single Responsibility Rule
 
@@ -93,7 +93,7 @@ Split into:
   - T001: Create user service core CRUD operations
   - T002: Add input validation to user service
   - T003: Add email notification on user creation
-```
+```markdown
 
 ### Clear Acceptance Criteria
 
@@ -114,7 +114,7 @@ Split into:
 - Tests missing or failing
 - Any `any` types present
 - Lint warnings exist
-```
+```text
 
 ---
 
@@ -158,7 +158,7 @@ Include context from design decisions when helpful.]
 [Any additional context, gotchas, or references to design docs]
 
 ---
-```
+```markdown
 
 ### Task Example
 
@@ -201,7 +201,7 @@ The Result type should support:
 #### Notes
 - Reference: ADR-003 Error Handling Strategy
 - Pattern source: Rust's Result type, neverthrow library
-```
+```text
 
 ---
 
@@ -214,7 +214,7 @@ Visualize task dependencies as a Directed Acyclic Graph:
 ```markdown
 ### Dependency Graph
 
-```
+```text
 TASK-001 ──┬──> TASK-002 ──┬──> TASK-005
            │               │
            └──> TASK-003 ──┤
@@ -229,7 +229,7 @@ TASK-004 ─────────────────>┴──> TASK-006
 | Hard | → | Cannot start until predecessor complete |
 | Soft | ⇢ | Can start, but may need rework |
 | Parallel | ∥ | No dependency, can run simultaneously |
-```
+```markdown
 
 ### Critical Path Identification
 
@@ -252,7 +252,7 @@ Delays on critical path = project delay.
 2. **Reorder**: Move high-risk tasks earlier
 3. **Split**: Break critical path tasks if possible
 4. **Fast-Track**: Overlap tasks where safe to do so
-```
+```markdown
 
 ### Parallel Execution Groups
 
@@ -273,7 +273,7 @@ Delays on critical path = project delay.
 
 **Wave 4** (Depends on Wave 3):
 - TASK-007: Integration tests (M)
-```
+```markdown
 
 ### Blocking Dependency Detection
 
@@ -292,7 +292,7 @@ Delays on critical path = project delay.
 |------|--------|------|
 | TASK-001 | 5 tasks | HIGH - Complete first |
 | TASK-005 | 3 tasks | MEDIUM - Track closely |
-```
+```text
 
 ---
 
@@ -334,7 +334,7 @@ Task: Implement OAuth2 integration
 Base Estimate: M (2-4h)
 Confidence: Low (new to team)
 Adjusted: M × 2.0 = L (4-8h)
-```
+```text
 
 ---
 
@@ -382,7 +382,7 @@ Adjusted: M × 2.0 = L (4-8h)
 - Add inline docs for complex logic
 - Update API documentation
 - Include examples where helpful
-```
+```text
 
 ---
 
@@ -406,7 +406,7 @@ Adjusted: M × 2.0 = L (4-8h)
 [What to do if checkpoint fails - which tasks to revisit]
 
 **Next Phase**: Proceed to TASK-006 through TASK-010
-```
+```text
 
 ---
 
@@ -449,7 +449,7 @@ Adjusted: M × 2.0 = L (4-8h)
 
 ## Dependency Graph
 
-```
+```text
 [ASCII or mermaid diagram showing task dependencies]
 ```
 

@@ -12,16 +12,18 @@
  * - **PromptLoader**: Progressive loading with LRU caching
  * - **PromptParser**: Frontmatter parsing and variable interpolation
  * - **PromptWatcher**: Hot-reload via file system watching
- * - **Role Prompts**: Pre-built prompts for different agent specializations
  * - **Sanitization**: Security utilities to prevent prompt injection
  *
  * @example
  * ```typescript
- * import { PromptBuilder, loadRolePrompt, BASE_PROMPT } from '@vellum/core';
+ * import { PromptBuilder, PromptLoader } from '@vellum/core';
+ *
+ * const loader = new PromptLoader({ discovery: { workspacePath: '/project' } });
+ * const rolePrompt = await loader.loadRole('coder');
  *
  * const prompt = new PromptBuilder()
- *   .withBase(BASE_PROMPT)
- *   .withRole('coder', loadRolePrompt('coder'))
+ *   .withBase(basePrompt)
+ *   .withRole('coder', rolePrompt)
  *   .setVariable('PROJECT_NAME', 'my-app')
  *   .build();
  * ```
@@ -109,38 +111,6 @@ export {
   PromptWatcher,
   type PromptWatcherOptions,
 } from "./prompt-watcher.js";
-
-// Role Prompts
-/**
- * Pre-built role prompts for different agent specializations.
- *
- * Available roles:
- * - `ORCHESTRATOR_PROMPT`: Master coordinator for task delegation
- * - `CODER_PROMPT`: Implementation specialist
- * - `QA_PROMPT`: Testing and debugging specialist
- * - `WRITER_PROMPT`: Documentation specialist
- * - `ANALYST_PROMPT`: Code analysis specialist
- * - `ARCHITECT_PROMPT`: System design specialist
- * - `BASE_PROMPT`: Core system instructions (shared across all roles)
- *
- * @example
- * ```typescript
- * import { BASE_PROMPT, CODER_PROMPT } from '@vellum/core';
- *
- * // Use constants directly
- * const base = BASE_PROMPT;
- * const coder = CODER_PROMPT;
- * ```
- */
-export {
-  ANALYST_PROMPT,
-  ARCHITECT_PROMPT,
-  BASE_PROMPT,
-  CODER_PROMPT,
-  ORCHESTRATOR_PROMPT,
-  QA_PROMPT,
-  WRITER_PROMPT,
-} from "./roles/index.js";
 
 // Sanitization
 /**

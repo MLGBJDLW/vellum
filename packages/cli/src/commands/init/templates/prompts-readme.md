@@ -4,7 +4,7 @@ Custom prompt files for Vellum. Place your `.md` files here to extend or overrid
 
 ## Structure
 
-```
+```text
 prompts/
 ├── roles/          # Role definitions (e.g., coder, architect)
 ├── providers/      # Provider-specific prompts

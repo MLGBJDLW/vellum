@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createTrustManager, TRUST_ENV_VAR, TrustManager } from "../trust-manager.js";
+import { createTrustPresetManager, TRUST_ENV_VAR, TrustPresetManager } from "../trust-manager.js";
 import { TrustedFoldersManager } from "../trusted-folders.js";
 
-describe("TrustManager", () => {
+describe("TrustPresetManager", () => {
   // Store original env
   const originalEnv = process.env[TRUST_ENV_VAR];
 
@@ -21,13 +21,13 @@ describe("TrustManager", () => {
 
   describe("constructor", () => {
     it("should initialize with default values", () => {
-      const manager = new TrustManager();
+      const manager = new TrustPresetManager();
       expect(manager.trustedFolders).toBeInstanceOf(TrustedFoldersManager);
     });
 
     it("should accept custom trusted folders manager", () => {
       const customFolders = new TrustedFoldersManager(["/custom/path"]);
-      const manager = new TrustManager({ trustedFolders: customFolders });
+      const manager = new TrustPresetManager({ trustedFolders: customFolders });
       expect(manager.trustedFolders).toBe(customFolders);
     });
   });
@@ -38,7 +38,7 @@ describe("TrustManager", () => {
 
   describe("getEffectivePreset - priority", () => {
     it("should use CLI preset when provided (highest priority)", () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "cautious",
         envPreset: "relaxed",
         configPreset: "paranoid",
@@ -50,7 +50,7 @@ describe("TrustManager", () => {
     });
 
     it("should use env preset when CLI not provided", () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         envPreset: "relaxed",
         configPreset: "paranoid",
       });
@@ -61,7 +61,7 @@ describe("TrustManager", () => {
     });
 
     it("should use config preset when CLI and env not provided", () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         configPreset: "paranoid",
       });
 
@@ -71,7 +71,7 @@ describe("TrustManager", () => {
     });
 
     it("should use default when no preset provided", () => {
-      const manager = new TrustManager();
+      const manager = new TrustPresetManager();
 
       const result = manager.getEffectivePreset();
       expect(result.preset).toBe("default");
@@ -81,7 +81,7 @@ describe("TrustManager", () => {
     it("should read from VELLUM_TRUST_PRESET environment variable", () => {
       process.env[TRUST_ENV_VAR] = "cautious";
 
-      const manager = new TrustManager();
+      const manager = new TrustPresetManager();
       const result = manager.getEffectivePreset();
 
       expect(result.preset).toBe("cautious");
@@ -91,7 +91,7 @@ describe("TrustManager", () => {
     it("should ignore invalid env preset values", () => {
       process.env[TRUST_ENV_VAR] = "invalid-preset";
 
-      const manager = new TrustManager();
+      const manager = new TrustPresetManager();
       const result = manager.getEffectivePreset();
 
       expect(result.preset).toBe("default");
@@ -101,7 +101,7 @@ describe("TrustManager", () => {
     it("should handle case-insensitive env preset", () => {
       process.env[TRUST_ENV_VAR] = "CAUTIOUS";
 
-      const manager = new TrustManager();
+      const manager = new TrustPresetManager();
       const result = manager.getEffectivePreset();
 
       expect(result.preset).toBe("cautious");
@@ -117,7 +117,7 @@ describe("TrustManager", () => {
 
     for (const preset of presets) {
       it(`should support "${preset}" preset`, () => {
-        const manager = new TrustManager({ cliPreset: preset });
+        const manager = new TrustPresetManager({ cliPreset: preset });
         const result = manager.getEffectivePreset();
         expect(result.preset).toBe(preset);
       });
@@ -130,7 +130,7 @@ describe("TrustManager", () => {
 
   describe("getEffectiveConfig", () => {
     it("should return config based on effective preset", () => {
-      const manager = new TrustManager({ cliPreset: "paranoid" });
+      const manager = new TrustPresetManager({ cliPreset: "paranoid" });
       const config = manager.getEffectiveConfig();
 
       expect(config.edit).toBe("deny");
@@ -139,7 +139,7 @@ describe("TrustManager", () => {
     });
 
     it("should apply config overrides on top of preset", () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "paranoid",
         config: {
           edit: "allow", // Override the paranoid default
@@ -159,7 +159,7 @@ describe("TrustManager", () => {
   describe("workspace trust capping", () => {
     it("should cap trust for untrusted workspace", () => {
       const trustedFolders = new TrustedFoldersManager(["/trusted/path"]);
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
         trustedFolders,
         workspacePath: "/untrusted/workspace",
@@ -174,7 +174,7 @@ describe("TrustManager", () => {
 
     it("should not cap trust for trusted workspace", () => {
       const trustedFolders = new TrustedFoldersManager(["/trusted/path"]);
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
         trustedFolders,
         workspacePath: "/trusted/path/project",
@@ -188,7 +188,7 @@ describe("TrustManager", () => {
 
     it("should not cap restrictive presets", () => {
       const trustedFolders = new TrustedFoldersManager(["/trusted/path"]);
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "cautious",
         trustedFolders,
         workspacePath: "/untrusted/workspace",
@@ -202,7 +202,7 @@ describe("TrustManager", () => {
 
     it("should report wasWorkspaceTrustCapped correctly", () => {
       const trustedFolders = new TrustedFoldersManager(["/trusted"]);
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "relaxed",
         trustedFolders,
         workspacePath: "/untrusted",
@@ -213,7 +213,7 @@ describe("TrustManager", () => {
     });
 
     it("should not cap when no workspace path provided", () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
       });
 
@@ -228,7 +228,7 @@ describe("TrustManager", () => {
 
   describe("confirmYoloMode (REQ-016)", () => {
     it("should require confirmation for yolo mode", async () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
       });
 
@@ -240,7 +240,7 @@ describe("TrustManager", () => {
     });
 
     it("should allow yolo when confirmed via callback", async () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
         confirmYoloMode: async () => true,
       });
@@ -253,7 +253,7 @@ describe("TrustManager", () => {
     });
 
     it("should fall back to relaxed when yolo rejected", async () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
         confirmYoloMode: async () => false,
       });
@@ -265,7 +265,7 @@ describe("TrustManager", () => {
     });
 
     it("should skip confirmation for non-yolo presets", async () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "relaxed",
       });
 
@@ -277,7 +277,7 @@ describe("TrustManager", () => {
 
     it("should remember yolo confirmation", async () => {
       const confirmMock = vi.fn().mockResolvedValue(true);
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
         confirmYoloMode: confirmMock,
       });
@@ -291,7 +291,7 @@ describe("TrustManager", () => {
 
     it("should allow resetting yolo confirmation", async () => {
       const confirmMock = vi.fn().mockResolvedValue(true);
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
         confirmYoloMode: confirmMock,
       });
@@ -304,7 +304,7 @@ describe("TrustManager", () => {
     });
 
     it("should handle callback errors gracefully", async () => {
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
         confirmYoloMode: async () => {
           throw new Error("Callback failed");
@@ -326,7 +326,7 @@ describe("TrustManager", () => {
   describe("EC-010: yolo with protected", () => {
     it("should still require confirmation even with trusted workspace", async () => {
       const trustedFolders = new TrustedFoldersManager(["/trusted"]);
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         cliPreset: "yolo",
         trustedFolders,
         workspacePath: "/trusted/project",
@@ -347,7 +347,7 @@ describe("TrustManager", () => {
   describe("isWorkspaceTrusted", () => {
     it("should return true for trusted workspace", () => {
       const trustedFolders = new TrustedFoldersManager(["/trusted"]);
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         trustedFolders,
         workspacePath: "/trusted/project",
       });
@@ -357,7 +357,7 @@ describe("TrustManager", () => {
 
     it("should return false for untrusted workspace", () => {
       const trustedFolders = new TrustedFoldersManager(["/trusted"]);
-      const manager = new TrustManager({
+      const manager = new TrustPresetManager({
         trustedFolders,
         workspacePath: "/other/project",
       });
@@ -366,7 +366,7 @@ describe("TrustManager", () => {
     });
 
     it("should return false when no workspace path", () => {
-      const manager = new TrustManager();
+      const manager = new TrustPresetManager();
       expect(manager.isWorkspaceTrusted()).toBe(false);
     });
   });
@@ -378,39 +378,39 @@ describe("TrustManager", () => {
   describe("static methods", () => {
     describe("compareTrustLevels", () => {
       it("should return negative when a is more restrictive", () => {
-        expect(TrustManager.compareTrustLevels("paranoid", "yolo")).toBeLessThan(0);
-        expect(TrustManager.compareTrustLevels("cautious", "default")).toBeLessThan(0);
+        expect(TrustPresetManager.compareTrustLevels("paranoid", "yolo")).toBeLessThan(0);
+        expect(TrustPresetManager.compareTrustLevels("cautious", "default")).toBeLessThan(0);
       });
 
       it("should return positive when a is less restrictive", () => {
-        expect(TrustManager.compareTrustLevels("yolo", "paranoid")).toBeGreaterThan(0);
-        expect(TrustManager.compareTrustLevels("relaxed", "cautious")).toBeGreaterThan(0);
+        expect(TrustPresetManager.compareTrustLevels("yolo", "paranoid")).toBeGreaterThan(0);
+        expect(TrustPresetManager.compareTrustLevels("relaxed", "cautious")).toBeGreaterThan(0);
       });
 
       it("should return 0 when equal", () => {
-        expect(TrustManager.compareTrustLevels("default", "default")).toBe(0);
+        expect(TrustPresetManager.compareTrustLevels("default", "default")).toBe(0);
       });
     });
 
     describe("getMoreRestrictive", () => {
       it("should return next more restrictive preset", () => {
-        expect(TrustManager.getMoreRestrictive("yolo")).toBe("relaxed");
-        expect(TrustManager.getMoreRestrictive("default")).toBe("cautious");
+        expect(TrustPresetManager.getMoreRestrictive("yolo")).toBe("relaxed");
+        expect(TrustPresetManager.getMoreRestrictive("default")).toBe("cautious");
       });
 
       it("should return paranoid when already most restrictive", () => {
-        expect(TrustManager.getMoreRestrictive("paranoid")).toBe("paranoid");
+        expect(TrustPresetManager.getMoreRestrictive("paranoid")).toBe("paranoid");
       });
     });
 
     describe("getLessRestrictive", () => {
       it("should return next less restrictive preset", () => {
-        expect(TrustManager.getLessRestrictive("paranoid")).toBe("cautious");
-        expect(TrustManager.getLessRestrictive("default")).toBe("relaxed");
+        expect(TrustPresetManager.getLessRestrictive("paranoid")).toBe("cautious");
+        expect(TrustPresetManager.getLessRestrictive("default")).toBe("relaxed");
       });
 
       it("should return yolo when already least restrictive", () => {
-        expect(TrustManager.getLessRestrictive("yolo")).toBe("yolo");
+        expect(TrustPresetManager.getLessRestrictive("yolo")).toBe("yolo");
       });
     });
   });
@@ -419,16 +419,16 @@ describe("TrustManager", () => {
   // Factory Function
   // ============================================
 
-  describe("createTrustManager", () => {
-    it("should create a TrustManager with options", () => {
-      const manager = createTrustManager({ cliPreset: "cautious" });
-      expect(manager).toBeInstanceOf(TrustManager);
+  describe("createTrustPresetManager", () => {
+    it("should create a TrustPresetManager with options", () => {
+      const manager = createTrustPresetManager({ cliPreset: "cautious" });
+      expect(manager).toBeInstanceOf(TrustPresetManager);
       expect(manager.getEffectivePreset().preset).toBe("cautious");
     });
 
-    it("should create a TrustManager with defaults", () => {
-      const manager = createTrustManager();
-      expect(manager).toBeInstanceOf(TrustManager);
+    it("should create a TrustPresetManager with defaults", () => {
+      const manager = createTrustPresetManager();
+      expect(manager).toBeInstanceOf(TrustPresetManager);
     });
   });
 });

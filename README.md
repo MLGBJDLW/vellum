@@ -93,6 +93,7 @@ Create specialized AI agents with custom behaviors, restrictions, and activation
 ```
 
 Built-in templates:
+
 - **frontend** - React, Vue, CSS development
 - **backend** - APIs, databases, server logic
 - **security** - Security reviews and audits

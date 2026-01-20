@@ -17,7 +17,7 @@ Vellum externalizes its AI prompts into Markdown files that you can customize. T
 
 Create a `.vellum/` directory in your project root:
 
-```
+```text
 .vellum/
 ├── prompts/                      # Prompt overrides
 │   ├── roles/                    # Override role prompts
@@ -42,7 +42,7 @@ Create a `.vellum/` directory in your project root:
 
 Global customizations apply to all projects:
 
-```
+```text
 ~/.vellum/
 ├── prompts/                      # Global prompt overrides
 ├── rules/                        # Global rules
@@ -88,7 +88,7 @@ mode: vibe
 # Coder Instructions
 
 Your custom instructions here...
-```
+```markdown
 
 ### Required Fields
 
@@ -124,7 +124,7 @@ triggers:
     pattern: "vibe"
   - type: always
     pattern: "*"
-```
+```text
 
 ---
 
@@ -160,7 +160,7 @@ When running commands, use {{shell}} syntax.
 The user's language preference is {{language}}.
 
 Current mode: {{mode}}
-```
+```text
 
 ---
 
@@ -202,7 +202,7 @@ Present findings as:
 - ✅ Passing checks
 - ⚠️ Warnings  
 - ❌ Issues requiring attention
-```
+```markdown
 
 ### Using Custom Commands
 
@@ -210,7 +210,7 @@ Present findings as:
 # In Vellum TUI
 /review                    # Run the review command
 /review src/api.ts         # Review specific file
-```
+```text
 
 ---
 
@@ -247,7 +247,7 @@ Run the full test suite:
 
 ```bash
 pnpm test --run
-```
+```text
 
 Verify all tests pass before proceeding.
 
@@ -257,7 +257,7 @@ Create production build:
 
 ```bash
 pnpm build
-```
+```text
 
 Verify build completes without errors.
 
@@ -267,7 +267,7 @@ Deploy to production:
 
 ```bash
 ./scripts/deploy.sh production
-```
+```text
 
 Monitor deployment logs for any errors.
 
@@ -277,7 +277,7 @@ If deployment fails:
 
 ```bash
 ./scripts/rollback.sh
-```
+```text
 ```
 
 ### Running Workflows
@@ -286,7 +286,7 @@ If deployment fails:
 # In Vellum TUI
 /workflow deploy           # Start deployment workflow
 /workflow deploy --step 2  # Resume from step 2
-```
+```text
 
 ---
 
@@ -310,7 +310,7 @@ description: "Project coding standards"
 - Prefer functional patterns over classes
 - Use named exports, never default exports
 - Maximum line length: 100 characters
-```
+```markdown
 
 ### Mode-Specific Rules
 
@@ -334,7 +334,7 @@ vellum init prompts
 
 # Or with --force to overwrite existing
 vellum init prompts --force
-```
+```text
 
 This creates the directory structure with example files.
 
@@ -346,7 +346,7 @@ vellum prompt validate
 
 # Auto-fix simple issues
 vellum prompt validate --fix
-```
+```markdown
 
 ### Migrate from Other Tools
 
@@ -356,7 +356,7 @@ vellum migrate prompts
 
 # Preview changes without applying
 vellum migrate prompts --dry-run
-```
+```text
 
 ---
 
@@ -389,7 +389,7 @@ You are an expert TypeScript developer.
 - Use functional components with hooks
 - Prefer composition over inheritance
 - Keep functions under 50 lines
-```
+```markdown
 
 ### Add Project Rules
 
@@ -417,7 +417,7 @@ interface ApiResponse<T> {
   data?: T;
   error?: { code: string; message: string };
 }
-```
+```text
 ```
 
 ### Create Testing Command

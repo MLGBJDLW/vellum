@@ -39,7 +39,7 @@ Get the current repository status including branch, staged changes, and working 
   untracked: string[]; // Untracked files
   clean: boolean;      // Whether working directory is clean
 }
-```
+```markdown
 
 **Example:**
 
@@ -51,7 +51,7 @@ const result = await executor.execute({
   input: {}
 });
 // Returns: { branch: "main", staged: [], modified: ["src/app.ts"], untracked: [], clean: false }
-```
+```text
 
 ---
 
@@ -77,7 +77,7 @@ Show differences between commits, working tree, and staging area.
   filesChanged: number; // Number of files changed
   hunks?: DiffHunk[];   // Parsed diff hunks (if not truncated)
 }
-```
+```markdown
 
 **Examples:**
 
@@ -109,7 +109,7 @@ const result = await executor.execute({
   name: "git_diff",
   input: { paths: ["src/index.ts", "src/utils.ts"] }
 });
-```
+```text
 
 ---
 
@@ -144,7 +144,7 @@ interface GitLogCommit {
   date: string;      // ISO 8601 date
   message: string;   // Commit subject line
 }
-```
+```markdown
 
 **Examples:**
 
@@ -176,7 +176,7 @@ const result = await executor.execute({
   name: "git_log",
   input: { since: "1.week.ago" }
 });
-```
+```text
 
 ---
 
@@ -201,7 +201,7 @@ Create a commit with staged changes.
   hash: string;    // Short commit hash
   message: string; // Commit message used
 }
-```
+```markdown
 
 **Examples:**
 
@@ -219,7 +219,7 @@ const result = await executor.execute({
   name: "git_commit",
   input: { all: true }
 });
-```
+```text
 
 ---
 
@@ -252,7 +252,7 @@ Manage branches (list, create, delete, rename).
   message: string;
   branch: string;
 }
-```
+```markdown
 
 **⚠️ Confirmation Required:** `action: "delete"` requires user confirmation.
 
@@ -286,7 +286,7 @@ const result = await executor.execute({
   name: "git_branch",
   input: { action: "rename", name: "old-name", newName: "new-name" }
 });
-```
+```text
 
 ---
 
@@ -312,7 +312,7 @@ Switch branches or restore files.
   created: boolean;        // Whether branch was created
   restoredFiles?: string[]; // Files restored (if paths specified)
 }
-```
+```markdown
 
 **⚠️ Confirmation Required:** `force: true` requires user confirmation.
 
@@ -346,7 +346,7 @@ const result = await executor.execute({
   name: "git_checkout",
   input: { target: "main", force: true }
 });
-```
+```text
 
 ---
 
@@ -373,7 +373,7 @@ Merge a branch into the current branch.
   conflicts?: string[];  // Conflicting files (if any)
   fastForward?: boolean; // Whether it was a fast-forward merge
 }
-```
+```markdown
 
 **⚠️ Confirmation Required:** All merge operations require user confirmation.
 
@@ -400,7 +400,7 @@ const result = await executor.execute({
   name: "git_merge",
   input: { branch: "", abort: true }
 });
-```
+```text
 
 ---
 
@@ -430,7 +430,7 @@ interface ConflictFile {
   theirsContent?: string; // Content from merging branch
   markers: string;       // Raw conflict markers
 }
-```
+```markdown
 
 **Example:**
 
@@ -449,7 +449,7 @@ const result = await executor.execute({
 //     markers: "<<<<<<< HEAD\nconst port = 3000;\n=======\nconst port = 8080;\n>>>>>>> feature"
 //   }]
 // }
-```
+```text
 
 ---
 
@@ -474,7 +474,7 @@ Resolve a merge conflict using specified strategy.
   path: string;
   strategy: "ours" | "theirs" | "content";
 }
-```
+```markdown
 
 **⚠️ Confirmation Required:** All conflict resolutions require user confirmation.
 
@@ -505,7 +505,7 @@ const result = await executor.execute({
     content: "const port = process.env.PORT || 3000;"
   }
 });
-```
+```text
 
 ---
 
@@ -542,7 +542,7 @@ Manage stashed changes.
 
 // clear
 { count: number; }
-```
+```markdown
 
 **⚠️ Confirmation Required:** `drop` and `clear` actions require user confirmation.
 
@@ -597,7 +597,7 @@ const result = await executor.execute({
   name: "git_stash",
   input: { action: "clear" }
 });
-```
+```text
 
 ---
 
@@ -627,7 +627,7 @@ Download objects and refs from a remote repository.
   branch?: string;
   pruned?: boolean;
 }
-```
+```markdown
 
 **Examples:**
 
@@ -652,7 +652,7 @@ const result = await executor.execute({
   name: "git_fetch",
   input: { branch: "develop" }
 });
-```
+```text
 
 ---
 
@@ -680,7 +680,7 @@ Fetch and integrate changes from a remote repository.
   filesUpdated?: number;
   conflicts?: string[];
 }
-```
+```markdown
 
 **Examples:**
 
@@ -705,7 +705,7 @@ const result = await executor.execute({
   name: "git_pull",
   input: { branch: "main" }
 });
-```
+```text
 
 ---
 
@@ -733,7 +733,7 @@ Push local changes to a remote repository.
   branch?: string;
   forced?: boolean;
 }
-```
+```markdown
 
 **⚠️ Confirmation Required:** `force: true` requires user confirmation.
 
@@ -760,7 +760,7 @@ const result = await executor.execute({
   name: "git_push",
   input: { force: true }
 });
-```
+```text
 
 ---
 
@@ -791,7 +791,7 @@ Manage remote repositories.
   message: string;
   name: string;
 }
-```
+```markdown
 
 **⚠️ Confirmation Required:** `action: "remove"` requires user confirmation.
 
@@ -825,7 +825,7 @@ const result = await executor.execute({
   name: "git_remote",
   input: { action: "rename", name: "origin", newName: "upstream" }
 });
-```
+```text
 
 ---
 
@@ -852,7 +852,7 @@ Generate a PR title and description from commits.
   commits: number;       // Number of commits included
   filesChanged: string[]; // List of changed files
 }
-```
+```markdown
 
 **Example:**
 
@@ -868,7 +868,7 @@ const result = await executor.execute({
 //   commits: 2,
 //   filesChanged: ["src/auth/login.ts", "src/auth/logout.ts"]
 // }
-```
+```text
 
 ---
 
@@ -913,7 +913,7 @@ if (!result.success && result.error) {
       console.error(`Git error: ${result.error.message}`);
   }
 }
-```
+```text
 
 ---
 
@@ -948,7 +948,7 @@ const checker = createDefaultPermissionChecker({
     return "once";
   },
 });
-```
+```text
 
 ---
 

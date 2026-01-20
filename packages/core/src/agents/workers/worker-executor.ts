@@ -25,7 +25,6 @@ import type { WorkerContext, WorkerResult } from "./base.js";
  * Uses LRU caching to avoid repeated file reads.
  */
 const promptLoader = new PromptLoader({
-  enableFallback: true,
   maxCacheSize: 20,
   cacheTtlMs: 5 * 60 * 1000, // 5 minutes
 });
@@ -33,13 +32,32 @@ const promptLoader = new PromptLoader({
 // ============================================
 // Worker System Prompts (TypeScript Fallback)
 // ============================================
+// Primary prompt source: packages/core/src/prompts/markdown/workers/*.md
+// These constants exist only as TypeScript fallback for resilience.
+// ============================================
 
 /**
  * System prompts tailored for each worker type.
- * These prompts serve as fallback when markdown files are not found.
  *
- * @deprecated Use getWorkerPrompt() or getWorkerPromptAsync() instead.
- * Direct access to WORKER_PROMPTS may be removed in a future version.
+ * **Primary source**: Markdown files in `packages/core/src/prompts/markdown/workers/`
+ * - analyst.md, architect.md, coder.md, devops.md, qa.md, researcher.md, security.md, writer.md
+ *
+ * These prompts serve as TypeScript fallback when markdown files are not found.
+ *
+ * @deprecated Use `getWorkerPromptAsync()` which loads from markdown files with TypeScript fallback.
+ * Direct access to `WORKER_PROMPTS` will be removed in a future version.
+ *
+ * @example
+ * ```typescript
+ * // ❌ Deprecated - direct access
+ * const prompt = WORKER_PROMPTS.coder;
+ *
+ * // ✅ Preferred - async with markdown support
+ * const prompt = await getWorkerPromptAsync('coder');
+ *
+ * // ✅ Acceptable - sync fallback only
+ * const prompt = getWorkerPrompt('coder');
+ * ```
  */
 export const WORKER_PROMPTS = {
   analyst: `You are an expert code analyst. Your role is to:

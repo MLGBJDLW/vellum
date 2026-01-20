@@ -28,7 +28,7 @@ import {
   type PermissionToolGroupConfig,
   type ToolGroupCheckResult,
 } from "./tool-groups.js";
-import { TrustManager } from "./trust-manager.js";
+import { TrustPresetManager } from "./trust-manager.js";
 import {
   createPermissionInfo,
   isAllowed,
@@ -52,7 +52,7 @@ type PermissionType = "edit" | "bash" | "webfetch" | "external_directory" | "doo
  */
 export interface DefaultPermissionCheckerOptions {
   /** Trust manager for preset resolution */
-  trustManager?: TrustManager;
+  trustManager?: TrustPresetManager;
   /** Session manager for session-scoped permissions */
   sessionManager?: SessionPermissionManager;
   /** Danger detector for dangerous operation checks */
@@ -133,7 +133,7 @@ export interface PermissionResolutionResult {
  * ```
  */
 export class DefaultPermissionChecker implements PermissionChecker {
-  readonly #trustManager: TrustManager;
+  readonly #trustManager: TrustPresetManager;
   readonly #sessionManager: SessionPermissionManager;
   readonly #dangerDetector: DangerousOperationDetector;
   readonly #askService: PermissionAskService;
@@ -148,7 +148,7 @@ export class DefaultPermissionChecker implements PermissionChecker {
    * @param options - Configuration options
    */
   constructor(options: DefaultPermissionCheckerOptions = {}) {
-    this.#trustManager = options.trustManager ?? new TrustManager();
+    this.#trustManager = options.trustManager ?? new TrustPresetManager();
     this.#sessionManager = options.sessionManager ?? new SessionPermissionManager();
     this.#dangerDetector = options.dangerDetector ?? new DangerousOperationDetector();
     this.#askService = options.askService ?? new PermissionAskService();
@@ -293,7 +293,7 @@ export class DefaultPermissionChecker implements PermissionChecker {
   /**
    * Get the trust manager for direct access.
    */
-  get trustManager(): TrustManager {
+  get trustManager(): TrustPresetManager {
     return this.#trustManager;
   }
 
@@ -785,7 +785,7 @@ export class DefaultPermissionChecker implements PermissionChecker {
  *
  * // With custom trust preset
  * const checker = createDefaultPermissionChecker({
- *   trustManager: new TrustManager({ cliPreset: 'cautious' }),
+ *   trustManager: new TrustPresetManager({ cliPreset: 'cautious' }),
  * });
  *
  * // Use with ToolExecutor

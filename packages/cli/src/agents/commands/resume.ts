@@ -1,5 +1,5 @@
 /**
- * CLI Resume Command (T045 - REQ-034)
+ * CLI Resume Command - REQ-034)
  *
  * Implements the `vellum resume [chainId]` CLI command
  * for resuming interrupted task chains.

@@ -32,6 +32,12 @@ export const HEIGHT_SAFETY_MARGIN = 2;
 export const TOOL_CALL_UPPER_BOUND = 3;
 
 /**
+ * Upper bound lines per tool call when a diff preview is shown.
+ * Accounts for status line + margin + MaxSizedBox diff preview (12 lines).
+ */
+export const TOOL_CALL_DIFF_UPPER_BOUND = 14;
+
+/**
  * Upper bound for thinking block header and chrome.
  * Includes collapsible header, borders, and internal padding.
  */
@@ -53,6 +59,14 @@ export const MIN_MESSAGE_HEIGHT = 4;
 // Types
 // =============================================================================
 
+interface DiffMetadata {
+  readonly diff: string;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+type ToolCallInfo = NonNullable<Message["toolCalls"]>[number];
+
 /**
  * Options for message height estimation.
  */
@@ -70,6 +84,39 @@ export interface HeightEstimatorOptions {
 // =============================================================================
 // Functions
 // =============================================================================
+
+function isDiffMetadata(value: unknown): value is DiffMetadata {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj.diff === "string" &&
+    typeof obj.additions === "number" &&
+    typeof obj.deletions === "number"
+  );
+}
+
+function getDiffMetadata(result: unknown): DiffMetadata | null {
+  if (isDiffMetadata(result)) {
+    return result;
+  }
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+  const diffMeta = (result as Record<string, unknown>).diffMeta;
+  return isDiffMetadata(diffMeta) ? diffMeta : null;
+}
+
+function getToolCallUpperBound(toolCall: ToolCallInfo): number {
+  const diffMeta = getDiffMetadata(toolCall.result);
+  const hasDiffContent =
+    toolCall.status === "completed" &&
+    diffMeta !== null &&
+    diffMeta.diff.trim() !== "" &&
+    diffMeta.diff !== "(no changes)";
+  return hasDiffContent ? TOOL_CALL_DIFF_UPPER_BOUND : TOOL_CALL_UPPER_BOUND;
+}
 
 /**
  * Estimate the number of lines a text will occupy when wrapped.
@@ -117,12 +164,13 @@ export function estimateMessageHeight(message: Message, options: HeightEstimator
   const marginLines = 2;
   const contentWidth = Math.max(10, width - contentPadding);
   const thinkingWidth = Math.max(10, width - thinkingPadding);
+  const toolCalls = message.toolCalls ?? [];
 
   // Tool group messages have special handling
   if (message.role === "tool_group") {
-    const toolCount = message.toolCalls?.length ?? 0;
+    const toolLines = toolCalls.reduce((sum, call) => sum + getToolCallUpperBound(call), 0);
     // Each tool in a group can expand to multiple lines
-    return Math.max(MIN_MESSAGE_HEIGHT, toolCount * TOOL_CALL_UPPER_BOUND) + marginLines;
+    return Math.max(MIN_MESSAGE_HEIGHT, toolLines) + marginLines;
   }
 
   const content = message.content || (message.isStreaming ? "" : "(empty)");
@@ -137,9 +185,9 @@ export function estimateMessageHeight(message: Message, options: HeightEstimator
   }
 
   // Add tool call lines if enabled and present (UPPER BOUND per tool)
-  if (includeToolCalls && message.toolCalls && message.toolCalls.length > 0) {
+  if (includeToolCalls && toolCalls.length > 0) {
     lines += 2; // margin + separator before tool calls
-    lines += message.toolCalls.length * TOOL_CALL_UPPER_BOUND;
+    lines += toolCalls.reduce((sum, call) => sum + getToolCallUpperBound(call), 0);
   }
 
   // Add safety margin and ensure minimum height

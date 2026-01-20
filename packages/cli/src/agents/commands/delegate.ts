@@ -1,5 +1,5 @@
 /**
- * CLI Delegate Command (T044 - REQ-034)
+ * CLI Delegate Command - REQ-034)
  *
  * Implements the `vellum delegate <agent> <task>` CLI command
  * for delegating tasks to specific agents.

@@ -379,16 +379,19 @@ export function Layout({
   const footerBorderColor = theme.semantic.border.focus;
   const sidebarBorderColor = theme.semantic.border.default;
 
-  // Only constrain height in alternate buffer mode (like Gemini CLI)
-  // This prevents content clipping when running in normal terminal mode
+  // Constrain height for interactive TUI rendering to prevent scrollback duplication.
+  // Allow static output mode to grow naturally (e.g. debug snapshots/logs).
   const isAlternateBuffer = getAlternateBufferEnabled();
+  const isStaticOutputMode = process.env.VELLUM_STATIC_OUTPUT === "1";
+  const shouldConstrainHeight =
+    !isStaticOutputMode && (isAlternateBuffer || (process.stdout.isTTY ?? false));
 
   return (
     <Box
       flexDirection="column"
       width="100%"
-      height={isAlternateBuffer ? rows : undefined}
-      minHeight={isAlternateBuffer ? undefined : rows}
+      height={shouldConstrainHeight ? rows : undefined}
+      minHeight={shouldConstrainHeight ? undefined : rows}
     >
       {/* Header Region */}
       {header && (

@@ -80,7 +80,7 @@ describe("MyService", () => {
     });
   });
 });
-```
+```markdown
 
 ### Mocking Dependencies
 
@@ -106,7 +106,7 @@ mockFetch.mockResolvedValue(
     headers: { "Content-Type": "application/json" },
   })
 );
-```
+```markdown
 
 ### Testing Async Code
 
@@ -126,7 +126,7 @@ it("should reject with error on failure", async () => {
   
   await expect(service.asyncMethod()).rejects.toThrow("Network error");
 });
-```
+```markdown
 
 ### Snapshot Testing
 
@@ -140,7 +140,7 @@ it("should match inline snapshot", () => {
   const result = service.formatOutput({ key: "value" });
   expect(result).toMatchInlineSnapshot(`"{ key: 'value' }"`);
 });
-```
+```markdown
 
 ## Anti-Patterns
 
@@ -173,7 +173,7 @@ it("broken async test", () => {
 mockFn.mockReturnValueOnce("a")
       .mockReturnValueOnce("b")
       .mockReturnValueOnce("c"); // Fragile, breaks if call order changes
-```
+```markdown
 
 ## Examples
 
@@ -217,7 +217,7 @@ describe("UserService", () => {
     });
   });
 });
-```
+```markdown
 
 ### Testing Error Handling
 

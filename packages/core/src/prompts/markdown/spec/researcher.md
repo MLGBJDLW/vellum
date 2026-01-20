@@ -27,7 +27,7 @@ Research is the foundation of successful specifications. Poor research leads to:
 
 Start wide, then narrow to specific areas of interest:
 
-```
+```text
 Level 1: Project Structure (15 min)
 ├── Root files (package.json, tsconfig, configs)
 ├── Directory layout and organization
@@ -63,7 +63,7 @@ Form hypotheses early, then validate or refute:
 **Hypothesis**: Redux/Zustand pattern for global state
 **Evidence Needed**: Store configuration, action patterns, selectors
 **Status**: [ ] Confirmed [ ] Refuted [ ] Partial
-```
+```markdown
 
 ### Evidence Gathering Standards
 
@@ -91,7 +91,7 @@ Rate sources by reliability:
 | Implementation | Medium | Check git | May have dead code |
 | Comments | Low | Often stale | Verify against code |
 | README/docs | Variable | Check dates | May be outdated |
-```
+```text
 
 ---
 
@@ -117,7 +117,7 @@ Rate sources by reliability:
 - [ ] Layer-based organization (MVC, Clean Architecture)
 - [ ] Domain-driven structure
 - [ ] Hybrid approach
-```
+```markdown
 
 ### 2. Technology Stack Inventory
 
@@ -146,7 +146,7 @@ Rate sources by reliability:
 - **Test**: [Vitest/Jest/Playwright]
 - **Lint**: [ESLint/Biome]
 - **Format**: [Prettier/Biome]
-```
+```markdown
 
 ### 3. Pattern Identification
 
@@ -161,7 +161,7 @@ Rate sources by reliability:
 ```typescript
 // Example from src/utils/result.ts:12-25
 type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
-```
+```markdown
 **Recommendation**: Follow this pattern for new code
 
 #### Pattern: API Response Format
@@ -185,7 +185,7 @@ type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
 ```markdown
 ### Internal Dependencies
 
-```
+```text
 core/
 ├── depends on: shared/
 ├── depended by: cli/, api/
@@ -209,7 +209,7 @@ Files imported by many others (change carefully):
 1. `src/types/index.ts` - 89 importers
 2. `src/utils/helpers.ts` - 67 importers
 3. `src/config/index.ts` - 54 importers
-```
+```markdown
 
 ### 5. Code Quality Assessment
 
@@ -238,7 +238,7 @@ Files imported by many others (change carefully):
 - **Integration**: tests/integration/*.test.ts
 - **E2E**: tests/e2e/*.spec.ts (playwright)
 - **Coverage command**: `pnpm test:coverage`
-```
+```markdown
 
 ### 6. Security Surface Scan
 
@@ -267,7 +267,7 @@ Files imported by many others (change carefully):
 - [ ] Run `pnpm audit` - results
 - [ ] Check for known CVEs in dependencies
 - [ ] OWASP Top 10 applicability
-```
+```markdown
 
 ### 7. Performance Hotspots
 
@@ -291,7 +291,7 @@ Files imported by many others (change carefully):
 - [ ] Large dependencies
 - [ ] Tree-shaking effectiveness
 - [ ] Code splitting strategy
-```
+```text
 
 ---
 
@@ -315,7 +315,7 @@ Purpose: Map error handling patterns
 ### Finding data validation
 Query: "input validation schema zod validate"
 Purpose: Identify validation patterns
-```
+```markdown
 
 ### grep_search - Pattern Frequency
 
@@ -339,7 +339,7 @@ Purpose: Error handling patterns
 ### Find deprecated usage
 Pattern: "@deprecated"
 Purpose: Migration needs
-```
+```markdown
 
 ### file_search - Structure Mapping
 
@@ -359,7 +359,7 @@ Purpose: Type system understanding
 ### Find configuration files
 Pattern: "*.config.{js,ts,json}"
 Purpose: Build system analysis
-```
+```markdown
 
 ### read_file - Deep Dives
 
@@ -380,7 +380,7 @@ Use for detailed understanding:
   - Its type definitions
   - Files that import it
   - Files it imports
-```
+```text
 
 ---
 
@@ -456,7 +456,7 @@ Use for detailed understanding:
 ## Dependencies & Relationships
 
 ### Module Dependency Graph
-```
+```text
 [ASCII or mermaid diagram]
 ```
 
@@ -496,7 +496,7 @@ Use for detailed understanding:
 
 ### References
 [Links to relevant documentation]
-```
+```text
 
 ---
 
@@ -514,7 +514,7 @@ Use for detailed understanding:
 - [ ] Core modules examined
 - [ ] Test patterns understood
 - [ ] Configuration reviewed
-```
+```markdown
 
 ### 2. Unsupported Claims
 
@@ -535,7 +535,7 @@ Use for detailed understanding:
 - [ ] How is it used? (example)
 - [ ] How often? (frequency)
 - [ ] Should we follow it? (recommendation)
-```
+```markdown
 
 ### 4. Scope Creep
 

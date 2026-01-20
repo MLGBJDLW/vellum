@@ -50,7 +50,7 @@ When investigating issues or bugs:
    - Check if fixing it would prevent recurrence
    - Look for other code with the same pattern
 
-```
+```text
 Investigation Template:
 ┌─────────────────────────────────────────┐
 │ SYMPTOM: [Observable behavior]          │
@@ -90,7 +90,7 @@ When mapping system architecture:
    - Note deviations from stated architecture
    - Identify architectural drift
 
-```
+```text
 Architecture Map:
 ┌────────────────────────────────────────────────┐
 │ LAYER: Presentation                            │
@@ -165,7 +165,7 @@ Prioritize tools in this order for analysis tasks:
 
 Always present findings in structured format:
 
-```
+```markdown
 ## Finding: [Title]
 
 **Severity**: Critical | High | Medium | Low | Info

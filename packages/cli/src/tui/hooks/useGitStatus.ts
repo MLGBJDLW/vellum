@@ -9,8 +9,11 @@
  * @module tui/hooks/useGitStatus
  */
 
-import { execSync } from "node:child_process";
-import { useEffect, useState } from "react";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const execAsync = promisify(exec);
 
 // =============================================================================
 // Types
@@ -48,49 +51,43 @@ const REFRESH_INTERVAL_MS = 5000;
  * Uses `git rev-parse --is-inside-work-tree` for accurate detection,
  * which handles both root and nested directories.
  */
-function isGitRepository(cwd: string): boolean {
+async function isGitRepositoryAsync(cwd: string): Promise<boolean> {
   try {
-    const result = execSync("git rev-parse --is-inside-work-tree", {
+    const { stdout } = await execAsync("git rev-parse --is-inside-work-tree", {
       cwd,
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
       timeout: 3000,
-    }).trim();
-    return result === "true";
+    });
+    return stdout.trim() === "true";
   } catch {
     return false;
   }
 }
 
 /**
- * Run a git command and return the output or null on failure.
+ * Run a git command asynchronously and return the output or null on failure.
  */
-function runGitCommand(command: string, cwd: string): string | null {
+async function runGitCommandAsync(command: string, cwd: string): Promise<string | null> {
   try {
-    return execSync(command, {
-      cwd,
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-      timeout: 3000,
-    }).trim();
+    const { stdout } = await execAsync(command, { cwd, timeout: 3000 });
+    return stdout.trim();
   } catch {
     return null;
   }
 }
 
 /**
- * Fetch git status using native git commands.
+ * Fetch git status using native git commands asynchronously.
  */
-function fetchGitStatus(cwd: string): {
+async function fetchGitStatusAsync(cwd: string): Promise<{
   branch: string | null;
   isDirty: boolean;
   changedFiles: number;
-} {
-  // Get current branch
-  const branch = runGitCommand("git rev-parse --abbrev-ref HEAD", cwd);
-
-  // Get status (porcelain for easy parsing)
-  const statusOutput = runGitCommand("git status --porcelain", cwd);
+}> {
+  // Run both commands in parallel for better performance
+  const [branch, statusOutput] = await Promise.all([
+    runGitCommandAsync("git rev-parse --abbrev-ref HEAD", cwd),
+    runGitCommandAsync("git status --porcelain", cwd),
+  ]);
 
   if (statusOutput === null) {
     return { branch: null, isDirty: false, changedFiles: 0 };
@@ -137,40 +134,67 @@ export function useGitStatus(): GitStatus {
     isGitRepo: false,
   });
 
-  useEffect(() => {
-    const cwd = process.cwd();
+  // Track mounted state to prevent state updates after unmount
+  const mountedRef = useRef(true);
 
-    // Early exit if not a git repo
-    if (!isGitRepository(cwd)) {
-      setStatus({
-        branch: null,
-        isDirty: false,
-        changedFiles: 0,
-        isLoading: false,
-        isGitRepo: false,
-      });
-      return;
-    }
+  // Async status update function
+  const updateStatusAsync = useCallback(async (cwd: string) => {
+    if (!mountedRef.current) return;
 
-    // Initial fetch
-    function updateStatus() {
-      const result = fetchGitStatus(cwd);
+    const result = await fetchGitStatusAsync(cwd);
+
+    if (mountedRef.current) {
       setStatus({
         ...result,
         isLoading: false,
         isGitRepo: true,
       });
     }
+  }, []);
 
-    updateStatus();
+  useEffect(() => {
+    mountedRef.current = true;
+    const cwd = process.cwd();
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
-    // Poll for updates
-    const intervalId = setInterval(updateStatus, REFRESH_INTERVAL_MS);
+    // Async initialization
+    const init = async () => {
+      // Early exit if not a git repo
+      const isRepo = await isGitRepositoryAsync(cwd);
+
+      if (!mountedRef.current) return;
+
+      if (!isRepo) {
+        setStatus({
+          branch: null,
+          isDirty: false,
+          changedFiles: 0,
+          isLoading: false,
+          isGitRepo: false,
+        });
+        return;
+      }
+
+      // Initial fetch
+      await updateStatusAsync(cwd);
+
+      // Poll for updates (only if still mounted)
+      if (mountedRef.current) {
+        intervalId = setInterval(() => {
+          void updateStatusAsync(cwd);
+        }, REFRESH_INTERVAL_MS);
+      }
+    };
+
+    void init();
 
     return () => {
-      clearInterval(intervalId);
+      mountedRef.current = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
     };
-  }, []);
+  }, [updateStatusAsync]);
 
   return status;
 }

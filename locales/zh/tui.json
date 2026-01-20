@@ -1,4 +1,24 @@
 {
+  "trust": {
+    "detected_monorepo": "检测到 Monorepo 工作区",
+    "new_project": "新项目目录",
+    "monorepo_type": "类型",
+    "root_directory": "根目录",
+    "current_directory": "当前目录",
+    "workspaces": "工作区",
+    "prompt_trust": "信任此目录以允许文件访问？",
+    "option_yes": "本次会话信任",
+    "option_no": "拒绝",
+    "option_always": "始终信任",
+    "option_skip": "跳过",
+    "added": "已添加到信任路径",
+    "denied": "访问已拒绝",
+    "skipped": "已跳过",
+    "removed": "已从信任路径移除",
+    "list_empty": "暂无配置的信任路径",
+    "list_title": "信任路径",
+    "blocked_path": "无法信任系统目录"
+  },
   "status": {
     "model": "模型",
     "mode": "模式",

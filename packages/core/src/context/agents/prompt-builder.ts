@@ -100,7 +100,11 @@ export class AgentsPromptBuilder {
     this.options = {
       includeSourceAttribution: options.includeSourceAttribution ?? true,
       includeMetadataHeader: options.includeMetadataHeader ?? true,
-      maxSectionLength: options.maxSectionLength ?? 0,
+      /**
+       * Default to 10000 chars per section to prevent AGENTS.md from
+       * consuming excessive context window space. Set to 0 for unlimited.
+       */
+      maxSectionLength: options.maxSectionLength ?? 10000,
     };
   }
 

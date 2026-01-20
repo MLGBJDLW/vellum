@@ -29,6 +29,13 @@ const SECTION_PRIORITIES = {
 } as const;
 
 /**
+ * Maximum character length for a single skill section content.
+ * Prevents any single skill from consuming excessive context window space.
+ * Content exceeding this limit will be truncated with a marker.
+ */
+const MAX_SKILL_SECTION_LENGTH = 8000;
+
+/**
  * A prompt section from a skill.
  */
 export interface SkillPromptSection {
@@ -203,6 +210,27 @@ export class SkillManager {
   // ============================================
 
   /**
+   * Truncate skill content if it exceeds the maximum length.
+   * @param content - The content to potentially truncate
+   * @param skillName - Name of the skill for logging
+   * @returns Truncated content with marker if needed
+   */
+  private truncateSkillContent(content: string, skillName: string): string {
+    if (content.length <= MAX_SKILL_SECTION_LENGTH) {
+      return content;
+    }
+
+    this.logger?.warn("Skill content truncated due to size limit", {
+      skillName,
+      originalLength: content.length,
+      truncatedTo: MAX_SKILL_SECTION_LENGTH,
+    });
+
+    // Truncate and add marker
+    return content.slice(0, MAX_SKILL_SECTION_LENGTH - 20) + "\n...[truncated]";
+  }
+
+  /**
    * Get the mandatory skill check block for system prompt.
    * Lists all available skills with their descriptions and triggers.
    *
@@ -272,11 +300,11 @@ export class SkillManager {
     const sections: SkillPromptSection[] = [];
 
     for (const skill of skills) {
-      // Extract sections with content
+      // Extract sections with content (apply truncation to prevent context overflow)
       if (skill.rules?.trim()) {
         sections.push({
           name: "rules",
-          content: skill.rules,
+          content: this.truncateSkillContent(skill.rules, skill.name),
           skillName: skill.name,
           priority: SECTION_PRIORITIES.rules,
         });
@@ -285,7 +313,7 @@ export class SkillManager {
       if (skill.antiPatterns?.trim()) {
         sections.push({
           name: "antiPatterns",
-          content: skill.antiPatterns,
+          content: this.truncateSkillContent(skill.antiPatterns, skill.name),
           skillName: skill.name,
           priority: SECTION_PRIORITIES.antiPatterns,
         });
@@ -294,7 +322,7 @@ export class SkillManager {
       if (skill.patterns?.trim()) {
         sections.push({
           name: "patterns",
-          content: skill.patterns,
+          content: this.truncateSkillContent(skill.patterns, skill.name),
           skillName: skill.name,
           priority: SECTION_PRIORITIES.patterns,
         });
@@ -303,7 +331,7 @@ export class SkillManager {
       if (skill.examples?.trim()) {
         sections.push({
           name: "examples",
-          content: skill.examples,
+          content: this.truncateSkillContent(skill.examples, skill.name),
           skillName: skill.name,
           priority: SECTION_PRIORITIES.examples,
         });
@@ -312,7 +340,7 @@ export class SkillManager {
       if (skill.referencesSection?.trim()) {
         sections.push({
           name: "references",
-          content: skill.referencesSection,
+          content: this.truncateSkillContent(skill.referencesSection, skill.name),
           skillName: skill.name,
           priority: SECTION_PRIORITIES.references,
         });

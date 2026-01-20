@@ -48,6 +48,46 @@ export interface HighlightResult {
 // =============================================================================
 // Patterns
 // =============================================================================
+// Caching
+// =============================================================================
+
+/**
+ * LRU cache for highlight results to avoid recomputing on every keystroke.
+ * Limited to 50 entries to prevent memory bloat.
+ */
+const HIGHLIGHT_CACHE_SIZE = 50;
+const highlightCache = new Map<string, HighlightResult>();
+
+/**
+ * Add result to cache with LRU eviction.
+ */
+function cacheResult(input: string, result: HighlightResult): void {
+  // Evict oldest entry if at capacity
+  if (highlightCache.size >= HIGHLIGHT_CACHE_SIZE) {
+    const firstKey = highlightCache.keys().next().value;
+    if (firstKey !== undefined) {
+      highlightCache.delete(firstKey);
+    }
+  }
+  highlightCache.set(input, result);
+}
+
+/**
+ * Get cached result if available.
+ */
+function getCachedResult(input: string): HighlightResult | undefined {
+  const cached = highlightCache.get(input);
+  if (cached) {
+    // Move to end for LRU (delete and re-add)
+    highlightCache.delete(input);
+    highlightCache.set(input, cached);
+  }
+  return cached;
+}
+
+// =============================================================================
+// Patterns
+// =============================================================================
 
 /**
  * Pattern definitions for highlighting.
@@ -134,6 +174,7 @@ function removeOverlaps(
 
 /**
  * Parse input text and identify highlighted segments.
+ * Results are cached to avoid redundant regex processing.
  *
  * @param input - The input text to parse
  * @returns HighlightResult with segments and metadata
@@ -152,6 +193,12 @@ function removeOverlaps(
 export function parseHighlights(input: string): HighlightResult {
   if (!input) {
     return { segments: [], hasHighlights: false };
+  }
+
+  // Check cache first
+  const cached = getCachedResult(input);
+  if (cached) {
+    return cached;
   }
 
   const matches = removeOverlaps(findMatches(input));
@@ -188,10 +235,15 @@ export function parseHighlights(input: string): HighlightResult {
     });
   }
 
-  return {
+  const result: HighlightResult = {
     segments,
     hasHighlights: matches.length > 0,
   };
+
+  // Cache the result for future lookups
+  cacheResult(input, result);
+
+  return result;
 }
 
 // =============================================================================

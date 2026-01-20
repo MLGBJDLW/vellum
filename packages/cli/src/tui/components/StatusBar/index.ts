@@ -12,6 +12,10 @@ export {
 } from "./AgentModeIndicator.js";
 export { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 export {
+  FileChangesIndicator,
+  type FileChangesIndicatorProps,
+} from "./FileChangesIndicator.js";
+export {
   GitIndicator,
   type GitIndicatorProps,
 } from "./GitIndicator.js";

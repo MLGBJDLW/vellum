@@ -9,7 +9,7 @@
 
 import { Box, Text, useInput } from "ink";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import type { BacktrackState, Branch } from "../../hooks/useBacktrack.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
@@ -253,7 +253,7 @@ function HistoryIndicator({
  * />
  * ```
  */
-export function BacktrackControls({
+export const BacktrackControls = memo(function BacktrackControls({
   backtrackState,
   branches,
   onUndo,
@@ -375,7 +375,7 @@ export function BacktrackControls({
       )}
     </Box>
   );
-}
+});
 
 /**
  * Compact status bar variant of BacktrackControls.

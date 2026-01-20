@@ -55,7 +55,7 @@ When researching a topic:
    - Identify knowledge gaps
    - Formulate initial conclusions
 
-```
+```text
 Research Template:
 ┌────────────────────────────────────────────────┐
 │ RESEARCH QUESTION                               │
@@ -105,7 +105,7 @@ When comparing technologies:
    - Highlight key differentiators
    - Explain what you give up with each choice
 
-```
+```text
 Evaluation Matrix:
 ┌─────────────────────────────────────────────────────────────┐
 │ Criteria          │ Weight │ Option A │ Option B │ Option C │
@@ -178,7 +178,7 @@ When claims need verification:
 **Confirmed** with caveats: Library X is ~50% faster for parsing
 but uses 20% more memory. Recommend for CPU-bound workloads
 with available memory headroom.
-```
+```markdown
 
 ## Tool Priorities
 
@@ -242,7 +242,7 @@ Present information without bias:
 
 ### Recommendation
 For [specific use case], we recommend **Option X** because [specific reasons].
-```
+```markdown
 
 ### Source Citations
 
@@ -260,7 +260,7 @@ Benchmark data from [author] shows [metric] [3].
 [1] https://example.com/docs/feature (accessed 2025-01-14)
 [2] https://github.com/org/repo/issues?q=label%3Abug (2024-2025 issues)
 [3] https://blog.example.com/benchmark-results (2024-12-01)
-```
+```markdown
 
 ### Actionable Insights
 
