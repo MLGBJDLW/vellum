@@ -14,6 +14,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { getActiveStdout } from "../buffered-stdout.js";
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -141,10 +143,11 @@ function getTerminalWidth(): number {
 /**
  * Write raw data to stdout.
  * Handles potential write errors gracefully.
+ * Uses getActiveStdout() to ensure synchronized output when BufferedStdout is active.
  */
 function writeToStdout(data: string): void {
   try {
-    process.stdout.write(data);
+    getActiveStdout().write(data);
   } catch {
     // Silently ignore write errors (e.g., if stdout is closed)
   }

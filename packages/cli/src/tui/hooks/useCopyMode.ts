@@ -10,6 +10,8 @@
 import { exec } from "node:child_process";
 import { useCallback, useState } from "react";
 
+import { getActiveStdout } from "../buffered-stdout.js";
+
 /**
  * State for copy mode selection.
  */
@@ -92,7 +94,7 @@ async function copyToClipboard(text: string): Promise<void> {
         // For other platforms, try OSC 52 escape sequence
         try {
           const base64Text = Buffer.from(text, "utf8").toString("base64");
-          process.stdout.write(`\x1b]52;c;${base64Text}\x07`);
+          getActiveStdout().write(`\x1b]52;c;${base64Text}\x07`);
           resolve();
           return;
         } catch {
@@ -110,7 +112,7 @@ async function copyToClipboard(text: string): Promise<void> {
               // Last resort: OSC 52
               try {
                 const base64Text = Buffer.from(text, "utf8").toString("base64");
-                process.stdout.write(`\x1b]52;c;${base64Text}\x07`);
+                getActiveStdout().write(`\x1b]52;c;${base64Text}\x07`);
                 resolve();
               } catch {
                 reject(fallbackError);

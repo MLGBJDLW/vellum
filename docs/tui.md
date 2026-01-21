@@ -6,28 +6,28 @@
 
 The Vellum TUI is a React-based terminal interface built with [Ink](https://github.com/vadimdemedes/ink). It provides a modular, themeable, and accessible interface for interacting with the AI agent.
 
-## Troubleshooting: Windows VS Code terminal flicker/tearing (Windows + VS Code 集成终端闪屏/撕裂)
+## Troubleshooting: Windows VS Code terminal flicker/tearing
 
-### Symptoms (症状)
+### Symptoms
 
 - On Windows, when running Vellum in VS Code’s Integrated Terminal (TTY), the screen may **flicker** or **tear** during rapid UI updates.
 
-### Fix (解决)
+### Fix
 
 - Vellum now enables **DEC 2026 Synchronized Output** (buffered stdout) by default in supported TTY terminals. In most cases, this removes flicker/tearing **without requiring any VS Code setting changes**.
 
-### PowerShell/ConPTY 默认策略
+### PowerShell/ConPTY Default Behavior
 
-- 在 PowerShell + ConPTY 环境下，Vellum **默认关闭** alternate buffer，以避免消息满屏时的清屏闪烁问题。
-- 如需强制开启，可在 `~/.vellum/settings.json` 中设置：
+- In PowerShell + ConPTY environments, Vellum **disables** the alternate buffer by default to avoid flickering when the screen is full of messages.
+- To force enable it, set the following in `~/.vellum/settings.json`:
   - `ui.alternateBuffer: true`
 
-### If the issue still happens (若仍有问题)
+### If the issue still happens
 
 - As a temporary workaround, you can disable ConPTY in VS Code:
   - `terminal.integrated.windowsEnableConpty=false`
 
-### Trade-offs (副作用)
+### Trade-offs
 
 - Disabling ConPTY can reduce ANSI/colour capabilities in the integrated terminal (e.g. truecolor / 256-color may degrade).
 
@@ -82,7 +82,7 @@ packages/cli/src/tui/
 The root provider composes all context providers in the correct order.
 
 ```tsx
-import { RootProvider } from "@vellum/cli";
+import { RootProvider } from "@butlerw/vellum";
 
 <RootProvider
   theme="dark"                           // Theme preset or custom theme
@@ -91,7 +91,7 @@ import { RootProvider } from "@vellum/cli";
 >
   <App />
 </RootProvider>
-```markdown
+```
 
 **Props:**
 
@@ -108,7 +108,7 @@ import { RootProvider } from "@vellum/cli";
 Main application layout with configurable regions.
 
 ```tsx
-import { Layout } from "@vellum/cli";
+import { Layout } from "@butlerw/vellum";
 
 <Layout
   header={<StatusBar />}
@@ -119,7 +119,7 @@ import { Layout } from "@vellum/cli";
 >
   <MessageList messages={messages} />
 </Layout>
-```markdown
+```
 
 **Props:**
 
@@ -132,6 +132,7 @@ import { Layout } from "@vellum/cli";
 | `compactMode` | `boolean` | auto | Force compact mode |
 
 **Features:**
+
 - Auto-detects compact mode for narrow terminals (< 80 columns)
 - Responsive sidebar width (25% of terminal, 20-40 columns)
 - Theme-aware border styling
@@ -143,7 +144,7 @@ import { Layout } from "@vellum/cli";
 Multiline text input with keyboard handling.
 
 ```tsx
-import { TextInput } from "@vellum/cli";
+import { TextInput } from "@butlerw/vellum";
 
 <TextInput
   value={value}
@@ -153,7 +154,7 @@ import { TextInput } from "@vellum/cli";
   multiline={true}
   maxLength={4000}
 />
-```markdown
+```
 
 **Props:**
 
@@ -185,7 +186,7 @@ import { TextInput } from "@vellum/cli";
 Displays conversation messages with auto-scroll.
 
 ```tsx
-import { MessageList } from "@vellum/cli";
+import { MessageList } from "@butlerw/vellum";
 
 <MessageList
   messages={messages}
@@ -193,7 +194,7 @@ import { MessageList } from "@vellum/cli";
   maxHeight={20}
   onScrollChange={(isAtBottom) => setShowNewIndicator(!isAtBottom)}
 />
-```markdown
+```
 
 **Props:**
 
@@ -224,7 +225,7 @@ interface Message {
 Displays model, tokens, trust mode, and thinking status.
 
 ```tsx
-import { StatusBar } from "@vellum/cli";
+import { StatusBar } from "@butlerw/vellum";
 
 <StatusBar
   model={{ provider: "anthropic", model: "claude-3-opus" }}
@@ -233,7 +234,7 @@ import { StatusBar } from "@vellum/cli";
   thinking={{ active: true, budget: 10000, used: 2500 }}
   showBorder={true}
 />
-```markdown
+```
 
 **Props:**
 
@@ -252,7 +253,7 @@ import { StatusBar } from "@vellum/cli";
 Tool approval dialog with risk assessment.
 
 ```tsx
-import { PermissionDialog } from "@vellum/cli";
+import { PermissionDialog } from "@butlerw/vellum";
 
 <PermissionDialog
   execution={toolExecution}
@@ -261,7 +262,7 @@ import { PermissionDialog } from "@vellum/cli";
   onReject={handleReject}
   onApproveAlways={handleAlwaysAllow}
 />
-```markdown
+```
 
 **Props:**
 
@@ -292,7 +293,7 @@ import { PermissionDialog } from "@vellum/cli";
 Manages global application state.
 
 ```tsx
-import { useApp } from "@vellum/cli";
+import { useApp } from "@butlerw/vellum";
 
 function MyComponent() {
   const { state, setMode, setError, toggleVimMode, setFocusedArea } = useApp();
@@ -304,7 +305,7 @@ function MyComponent() {
     </Box>
   );
 }
-```markdown
+```
 
 **State Shape:**
 
@@ -325,7 +326,7 @@ interface AppState {
 Manages conversation messages.
 
 ```tsx
-import { useMessages } from "@vellum/cli";
+import { useMessages } from "@butlerw/vellum";
 
 function MyComponent() {
   const { state, addMessage, updateMessage, clearMessages } = useMessages();
@@ -341,7 +342,7 @@ function MyComponent() {
 
   return <MessageList messages={state.messages} />;
 }
-```markdown
+```
 
 **Actions:**
 
@@ -360,7 +361,7 @@ function MyComponent() {
 Manages tool execution state and approvals.
 
 ```tsx
-import { useTools } from "@vellum/cli";
+import { useTools } from "@butlerw/vellum";
 
 function MyComponent() {
   const { state, addExecution, approveExecution, rejectExecution } = useTools();
@@ -378,7 +379,7 @@ function MyComponent() {
     </Box>
   );
 }
-```markdown
+```
 
 **State Shape:**
 
@@ -396,7 +397,7 @@ interface ToolExecution {
   result?: unknown;
   error?: Error;
 }
-```text
+```
 
 ---
 
@@ -407,7 +408,7 @@ interface ToolExecution {
 Vim modal editing mode hook.
 
 ```tsx
-import { useVim } from "@vellum/cli";
+import { useVim } from "@butlerw/vellum";
 
 function Editor() {
   const vim = useVim();
@@ -430,7 +431,7 @@ function Editor() {
     </Box>
   );
 }
-```markdown
+```
 
 **Return Value:**
 
@@ -442,7 +443,7 @@ interface UseVimReturn {
   setMode: (mode: VimMode) => void;
   handleKey: (key: string, modifiers?: KeyModifiers) => VimAction | null;
 }
-```markdown
+```
 
 **Key Mappings:**
 
@@ -464,7 +465,7 @@ interface UseVimReturn {
 Keyboard shortcut management.
 
 ```tsx
-import { useHotkeys } from "@vellum/cli";
+import { useHotkeys } from "@butlerw/vellum";
 
 function MyComponent() {
   useHotkeys([
@@ -490,7 +491,7 @@ function MyComponent() {
 
   return <Box>...</Box>;
 }
-```markdown
+```
 
 **Hotkey Definition:**
 
@@ -513,7 +514,7 @@ interface HotkeyDefinition {
 Visual text selection and clipboard copy.
 
 ```tsx
-import { useCopyMode } from "@vellum/cli";
+import { useCopyMode } from "@butlerw/vellum";
 
 function MessageViewer() {
   const copyMode = useCopyMode();
@@ -547,7 +548,7 @@ function MessageViewer() {
     </Box>
   );
 }
-```markdown
+```
 
 **Return Value:**
 
@@ -560,9 +561,10 @@ interface UseCopyModeReturn {
   copySelection: (content: string[][]) => Promise<void>;
   isInSelection: (line: number, col: number) => boolean;
 }
-```markdown
+```
 
 **Platform Support:**
+
 - macOS: `pbcopy`
 - Windows: PowerShell `Set-Clipboard`
 - Linux: `xclip` or `xsel`
@@ -585,7 +587,7 @@ interface UseCopyModeReturn {
 ### Using Themes
 
 ```tsx
-import { RootProvider, useTheme } from "@vellum/cli";
+import { RootProvider, useTheme } from "@butlerw/vellum";
 
 // With preset
 <RootProvider theme="dracula">
@@ -602,7 +604,7 @@ function MyComponent() {
     </Box>
   );
 }
-```markdown
+```
 
 ### Custom Themes
 
@@ -628,7 +630,7 @@ const customTheme: VellumTheme = {
 <RootProvider theme={customTheme}>
   <App />
 </RootProvider>
-```text
+```
 
 ---
 
@@ -646,7 +648,7 @@ import {
   useApp,
   useMessages,
   useVim,
-} from "@vellum/cli";
+} from "@butlerw/vellum";
 
 function App() {
   const [input, setInput] = useState("");
@@ -696,12 +698,12 @@ render(
     <App />
   </RootProvider>
 );
-```markdown
+```
 
 ### Tool Approval Flow
 
 ```tsx
-import { useTools, PermissionDialog, ApprovalQueue } from "@vellum/cli";
+import { useTools, PermissionDialog, ApprovalQueue } from "@butlerw/vellum";
 
 function ToolApprovalManager() {
   const { state, approveExecution, rejectExecution } = useTools();
@@ -721,12 +723,12 @@ function ToolApprovalManager() {
     />
   );
 }
-```markdown
+```
 
 ### Vim Mode Integration
 
 ```tsx
-import { useVim, useApp } from "@vellum/cli";
+import { useVim, useApp } from "@butlerw/vellum";
 
 function VimEditor() {
   const vim = useVim();
@@ -775,7 +777,7 @@ The TUI includes accessibility features:
 - **High Contrast**: Themes designed for readability
 
 ```tsx
-import { AdaptiveLayout, ScreenReaderLayout } from "@vellum/cli";
+import { AdaptiveLayout, ScreenReaderLayout } from "@butlerw/vellum";
 
 // Auto-detects screen reader
 <AdaptiveLayout>
@@ -795,7 +797,7 @@ import { AdaptiveLayout, ScreenReaderLayout } from "@vellum/cli";
 The TUI supports multiple languages via i18n:
 
 ```tsx
-import { useTranslation } from "@vellum/cli";
+import { useTranslation } from "@butlerw/vellum";
 
 function MyComponent() {
   const { t } = useTranslation();

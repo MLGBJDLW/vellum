@@ -7,6 +7,8 @@
  * @module tui/utils/cursor-manager
  */
 
+import { getActiveStdout } from "../buffered-stdout.js";
+
 const HIDE_CURSOR = "\x1b[?25l";
 const SHOW_CURSOR = "\x1b[?25h";
 
@@ -16,7 +18,11 @@ const SHOW_CURSOR = "\x1b[?25h";
 class CursorManagerImpl {
   private _hidden = false;
   private _locked = false;
-  private readonly _stdout = process.stdout;
+
+  /** Get the active stdout stream (uses BufferedStdout when available) */
+  private get _stdout(): NodeJS.WriteStream {
+    return getActiveStdout();
+  }
 
   /**
    * Hide the cursor (idempotent).

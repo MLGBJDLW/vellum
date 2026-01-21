@@ -88,7 +88,7 @@ mode: vibe
 # Coder Instructions
 
 Your custom instructions here...
-```markdown
+```
 
 ### Required Fields
 
@@ -202,7 +202,7 @@ Present findings as:
 - ✅ Passing checks
 - ⚠️ Warnings  
 - ❌ Issues requiring attention
-```markdown
+```
 
 ### Using Custom Commands
 
@@ -310,7 +310,7 @@ description: "Project coding standards"
 - Prefer functional patterns over classes
 - Use named exports, never default exports
 - Maximum line length: 100 characters
-```markdown
+```
 
 ### Mode-Specific Rules
 
@@ -346,7 +346,7 @@ vellum prompt validate
 
 # Auto-fix simple issues
 vellum prompt validate --fix
-```markdown
+```
 
 ### Migrate from Other Tools
 
@@ -389,7 +389,7 @@ You are an expert TypeScript developer.
 - Use functional components with hooks
 - Prefer composition over inheritance
 - Keep functions under 50 lines
-```markdown
+```
 
 ### Add Project Rules
 

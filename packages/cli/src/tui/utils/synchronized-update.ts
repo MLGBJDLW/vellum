@@ -7,6 +7,8 @@
  * @module tui/utils/synchronized-update
  */
 
+import { getActiveStdout } from "../buffered-stdout.js";
+
 const BEGIN_SYNC = "\x1b[?2026h";
 const END_SYNC = "\x1b[?2026l";
 
@@ -30,7 +32,7 @@ let syncDepth = 0;
  */
 export function syncUpdate<T>(fn: () => T): T {
   if (syncDepth === 0) {
-    process.stdout.write(BEGIN_SYNC);
+    getActiveStdout().write(BEGIN_SYNC);
   }
   syncDepth++;
   try {
@@ -38,7 +40,7 @@ export function syncUpdate<T>(fn: () => T): T {
   } finally {
     syncDepth--;
     if (syncDepth === 0) {
-      process.stdout.write(END_SYNC);
+      getActiveStdout().write(END_SYNC);
     }
   }
 }

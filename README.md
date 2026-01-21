@@ -1,143 +1,173 @@
-# 🌀 Vellum
+# Vellum
 
-> Next-generation AI coding agent
+[![npm version](https://img.shields.io/npm/v/@butlerw/vellum?style=flat-square&logo=npm&color=CB3837)](https://www.npmjs.com/package/@butlerw/vellum)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
-## Quick Start
+> Next-generation AI coding assistant CLI
+
+## ✨ Features
+
+- **17 LLM Providers** — Anthropic, OpenAI, Google, and 14 more
+- **26-Language LSP** — Intelligent code analysis across languages
+- **3 Coding Modes** — vibe, plan, spec for different workflows
+- **MCP Protocol** — Model Context Protocol integration
+- **Skills System** — Extensible domain-specific knowledge
+- **Custom Agents** — Define your own AI personas
+- **Secure Credentials** — System keychain storage
+- **i18n Support** — English and Chinese (中文)
+
+## 📦 Installation
 
 ```bash
+# npm
+npm install -g @butlerw/vellum
+
+# pnpm
+pnpm add -g @butlerw/vellum
+
+# bun
+bun add -g @butlerw/vellum
+```
+
+## 🚀 Quick Start
+
+```bash
+# Start interactive session
+vellum
+
+# Quick task (vibe mode)
+vellum "fix the type error in src/index.ts"
+
+# Plan mode for complex tasks
+vellum plan "add user authentication"
+
+# Spec mode for large features
+vellum spec "redesign the payment system"
+```
+
+## 🎯 Coding Modes
+
+| Mode | Style | Approval | Use Case |
+|------|-------|----------|----------|
+| ⚡ **vibe** | Full-auto | None | Quick fixes, trusted tasks |
+| 📋 **plan** | Semi-auto | Plan approval | Complex tasks |
+| 📐 **spec** | Guided | 6 checkpoints | Large features |
+
+Switch modes anytime with `/vibe`, `/plan`, or `/spec`.
+
+## 🤖 Supported Providers
+
+| Category | Providers |
+|----------|-----------|
+| **Major** | Anthropic (Claude), OpenAI (GPT), Google (Gemini) |
+| **Cloud** | Groq, DeepSeek, Mistral, OpenRouter, xAI |
+| **China** | Qwen, Yi, Zhipu, Baichuan, Moonshot, MiniMax |
+| **GitHub** | Copilot |
+| **Local** | Ollama, LMStudio |
+
+Configure your provider:
+
+```bash
+vellum config set provider anthropic
+vellum config set api-key YOUR_API_KEY
+```
+
+## 🔧 Key Features
+
+### Skills System
+
+Extend Vellum with domain-specific knowledge:
+
+```markdown
+~/.vellum/skills/
+├── backend-development/
+├── frontend-design/
+└── code-refactoring/
+```
+
+See [Skills Documentation](docs/skills.md)
+
+### Custom Agents
+
+Create specialized AI personas:
+
+```markdown
+~/.vellum/agents/
+├── code-reviewer.md
+├── architect.md
+└── debugger.md
+```
+
+See [Custom Agents Guide](docs/custom-agents.md)
+
+### MCP Integration
+
+Connect external tools via Model Context Protocol:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": { "command": "npx", "args": ["-y", "@anthropic/mcp-server-filesystem"] }
+  }
+}
+```
+
+See [MCP Configuration](docs/mcp.md)
+
+## 📚 Documentation
+
+| Topic | Description |
+|-------|-------------|
+| [Getting Started](docs/getting-started.md) | First steps with Vellum |
+| [Configuration](docs/configuration.md) | Settings and customization |
+| [Credentials](docs/credentials.md) | API key management |
+| [Modes](docs/modes.md) | vibe, plan, spec workflows |
+| [Skills](docs/skills.md) | Extending with skills |
+| [Custom Agents](docs/custom-agents.md) | Creating AI personas |
+| [MCP](docs/mcp.md) | Model Context Protocol |
+| [LSP](docs/lsp.md) | Language server support |
+| [TUI](docs/tui.md) | Terminal interface |
+| [Session System](docs/session-system.md) | Managing sessions |
+
+## 🛠️ Development
+
+```bash
+# Clone
+git clone https://github.com/nicepkg/vellum.git
+cd vellum
+
 # Install dependencies
 pnpm install
 
-# Build all packages
+# Development mode
+pnpm dev
+
+# Build
 pnpm build
 
-# Start CLI
-pnpm dev
-```
-
-## Project Structure
-
-```
-packages/
-├── core/      # Agent engine
-├── cli/       # CLI interface
-├── provider/  # LLM providers
-├── tool/      # Tool system
-├── mcp/       # MCP integration
-├── plugin/    # Plugin system
-└── shared/    # Shared types
-```
-
-## Coding Modes
-
-Vellum supports three coding modes that control agent behavior and autonomy:
-
-| Mode | Description | Checkpoints |
-|------|-------------|-------------|
-| ⚡ **vibe** | Fast autonomous coding, full tool access | 0 |
-| 📋 **plan** | Plan-then-execute with review checkpoint | 1 |
-| 📐 **spec** | 6-phase structured workflow | 6 |
-
-```bash
-# Set mode via CLI flag
-pnpm dev --mode=vibe "quick task"
-pnpm dev --mode=plan "complex task"
-pnpm dev --mode=spec "large feature"
-
-# Switch modes during session
-/mode plan
-/vibe
-/spec
-
-# Keyboard shortcuts: Ctrl+1/2/3
-```
-
-See [docs/modes.md](docs/modes.md) for comprehensive documentation.
-
-## Skills System
-
-Vellum supports an extensible skills system for specialized agent behaviors. Skills are modular prompt fragments that activate based on context (keywords, file patterns, commands).
-
-```bash
-# List available skills
-pnpm dev skill list
-
-# Show skill details
-pnpm dev skill show python-testing
-
-# Create a new skill
-pnpm dev skill create my-skill
-
-# Validate skills
-pnpm dev skill validate
-```
-
-See [docs/skills.md](docs/skills.md) for comprehensive documentation.
-
-## Custom Agents
-
-Create specialized AI agents with custom behaviors, restrictions, and activation triggers:
-
-```bash
-# Create a new agent
-/custom-agents create my-agent
-
-# Create from template
-/custom-agents create my-agent --template=advanced
-
-# List all agents
-/custom-agents list
-
-# Validate agents
-/custom-agents validate
-```
-
-Built-in templates:
-
-- **frontend** - React, Vue, CSS development
-- **backend** - APIs, databases, server logic
-- **security** - Security reviews and audits
-- **docs** - Technical documentation
-- **qa** - Testing and quality assurance
-- **devops** - CI/CD, Docker, Kubernetes
-
-See [docs/custom-agents.md](docs/custom-agents.md) for comprehensive documentation.
-
-## Spec Workflow
-
-The `spec` mode provides a 6-phase structured workflow for complex features:
-
-```bash
-# Start spec workflow
-pnpm dev --mode=spec "implement user authentication"
-
-# Resume from checkpoint
-pnpm dev spec resume my-feature
-
-# Show workflow status
-pnpm dev spec status my-feature
-```
-
-**Phases:** Research → Requirements → Design → Tasks → Implementation → Validation
-
-Each phase has a dedicated agent and checkpoint for user approval. See [docs/spec-workflow.md](docs/spec-workflow.md) for full documentation.
-
-## Development
-
-```bash
-# Run tests
+# Test
 pnpm test
 
-# Lint code
+# Lint
 pnpm lint
-
-# Format code
-pnpm format
-
-# Type check
-pnpm typecheck
 ```
 
-## License
+### Project Structure
 
-MIT
+```markdown
+packages/
+├── cli/       # CLI entry point
+├── core/      # Agent loop, orchestration
+├── provider/  # LLM provider adapters
+├── tools/     # Built-in tools
+├── lsp/       # Language server client
+├── mcp/       # MCP integration
+└── shared/    # Shared utilities
+```
+
+## 📄 License
+
+[MIT](LICENSE) © 2025-present

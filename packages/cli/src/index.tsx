@@ -40,8 +40,9 @@ import { getEffectiveThinkingConfig } from "./commands/think.js";
 import type { CommandResult } from "./commands/types.js";
 import { getOrCreateOrchestrator } from "./orchestrator-singleton.js";
 import { executeShutdownCleanup, getShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
-import { BufferedStdout, createCompatStdout } from "./tui/buffered-stdout.js";
+import { BufferedStdout, createCompatStdout, setActiveStdout } from "./tui/buffered-stdout.js";
 import { initI18n } from "./tui/i18n/index.js";
+
 import {
   getAlternateBufferSetting,
   getDefaultAlternateBufferEnabled,
@@ -343,6 +344,11 @@ program
     // by reusing the existing detection in createCompatStdout().
     const compatStdout = createCompatStdout();
     const useBufferedStdout = compatStdout instanceof BufferedStdout;
+
+    // Set active stdout for modules that need to write outside Ink
+    if (useBufferedStdout) {
+      setActiveStdout(compatStdout);
+    }
 
     // Preserve existing behavior everywhere else (proxy stdout).
     const inkStdout: NodeJS.WriteStream = useBufferedStdout ? compatStdout : inkStdoutProxy;

@@ -33,7 +33,7 @@ Agents are defined as Markdown files with YAML frontmatter:
 ---
 slug: my-agent
 name: "My Custom Agent"
-mode: code
+mode: vibe
 description: "A specialized agent for my workflow"
 icon: "🚀"
 ---
@@ -143,7 +143,7 @@ Minimal configuration for simple agents:
 ---
 slug: my-agent
 name: "My Agent"
-mode: code
+mode: vibe
 description: "Custom agent"
 icon: "🤖"
 ---
@@ -246,7 +246,7 @@ Import agent from YAML/JSON file.
 ---
 slug: test-writer
 name: "Test Writer"
-mode: code
+mode: vibe
 description: "Specialized agent for writing tests"
 icon: "🧪"
 tags:
@@ -336,9 +336,9 @@ When you start a conversation, Vellum automatically suggests relevant agents bas
 
 You can also explicitly invoke an agent:
 
-```
+```text
 @test-writer write tests for the user service
-```markdown
+```
 
 ## Inheritance
 

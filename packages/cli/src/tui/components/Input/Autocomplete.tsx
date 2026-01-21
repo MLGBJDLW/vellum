@@ -299,13 +299,13 @@ function HighlightedOption({
 
   return (
     <Text>
-      {segments.map((segment) =>
+      {segments.map((segment, index) =>
         segment.highlighted ? (
-          <Text key={`${segment.start}-${segment.text}`} color={highlightColor} bold>
+          <Text key={`${index}-${segment.text}`} color={highlightColor} bold>
             {segment.text}
           </Text>
         ) : (
-          <Text key={`${segment.start}-${segment.text}`} color={normalColor}>
+          <Text key={`${index}-${segment.text}`} color={normalColor}>
             {segment.text}
           </Text>
         )

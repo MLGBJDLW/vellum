@@ -12,6 +12,35 @@ import fs from "node:fs";
 import { Writable } from "node:stream";
 
 // =============================================================================
+// Shared Stdout Reference
+// =============================================================================
+
+/**
+ * Shared stdout reference for modules that need to write outside Ink.
+ * When BufferedStdout is active, this should point to the BufferedStdout instance.
+ * Other modules should use getActiveStdout() instead of process.stdout directly.
+ */
+let activeStdout: NodeJS.WriteStream = process.stdout;
+
+/**
+ * Get the active stdout stream.
+ * Returns BufferedStdout when active, otherwise process.stdout.
+ * Use this instead of process.stdout directly to ensure synchronized output.
+ */
+export function getActiveStdout(): NodeJS.WriteStream {
+  return activeStdout;
+}
+
+/**
+ * Set the active stdout stream.
+ * Called by App initialization when BufferedStdout is created.
+ * @internal
+ */
+export function setActiveStdout(stream: NodeJS.WriteStream): void {
+  activeStdout = stream;
+}
+
+// =============================================================================
 // Constants
 // =============================================================================
 

@@ -1,7 +1,11 @@
 {
-  "name": "@vellum/cli",
+  "name": "@butlerw/vellum",
   "version": "0.1.0",
-  "private": true,
+  "description": "Next-generation AI coding assistant CLI",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "vellum": "./dist/index.js"

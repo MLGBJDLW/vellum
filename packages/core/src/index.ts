@@ -71,6 +71,8 @@ export {
   type AgentFactoryResult,
   // Agent Level Hierarchy (T001)
   AgentLevel,
+  type AgentLevelOverride,
+  type AgentLevelOverrideSource,
   AgentLevelSchema,
   // Core Loop
   AgentLoop,

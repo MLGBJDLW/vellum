@@ -9,6 +9,7 @@ import type { AgentConfig } from "./agent-config.js";
 import { AgentRegistry } from "./agent-registry.js";
 import type { CodingMode, CodingModeConfig } from "./coding-modes.js";
 import { BUILTIN_CODING_MODES } from "./coding-modes.js";
+import { AgentLevel } from "./level.js";
 import { type DetectionResult, ModeDetector, type ModeDetectorConfig } from "./mode-detection.js";
 import { PlanModeHandler } from "./mode-handlers/plan.js";
 import { SpecModeHandler } from "./mode-handlers/spec.js";
@@ -99,6 +100,25 @@ export class TypedEventEmitter extends EventEmitter {
 }
 
 // ============================================
+// Agent Level Override Types
+// ============================================
+
+/**
+ * Source of an agent level override.
+ */
+export type AgentLevelOverrideSource = "command" | "config" | "agent";
+
+/**
+ * Agent level override information.
+ */
+export interface AgentLevelOverride {
+  /** The overridden level */
+  level: AgentLevel;
+  /** Source of the override */
+  source: AgentLevelOverrideSource;
+}
+
+// ============================================
 // ModeManager Configuration
 // ============================================
 
@@ -165,6 +185,7 @@ export class ModeManager extends TypedEventEmitter {
   private readonly detector: ModeDetector;
   private readonly modes: Record<CodingMode, CodingModeConfig>;
   private readonly activityTracker: ActivityTracker;
+  private agentLevelOverride: AgentLevelOverride | null = null;
 
   /**
    * Create a new ModeManager.
@@ -479,6 +500,63 @@ export class ModeManager extends TypedEventEmitter {
    */
   getActivityTracker(): ActivityTracker {
     return this.activityTracker;
+  }
+
+  // ============================================
+  // Agent Level Override (T046c)
+  // ============================================
+
+  /**
+   * Get the effective agent level, considering any override.
+   *
+   * If an override is set, returns the override level.
+   * Otherwise, returns the level from the current mode's agent config.
+   *
+   * @returns The effective agent level
+   */
+  getEffectiveAgentLevel(): AgentLevel {
+    if (this.agentLevelOverride) {
+      return this.agentLevelOverride.level;
+    }
+    const agentConfig = this.getCurrentAgentConfig();
+    return agentConfig?.level ?? AgentLevel.worker;
+  }
+
+  /**
+   * Get the current agent level override.
+   *
+   * @returns The override info if set, null otherwise
+   */
+  getAgentLevelOverride(): AgentLevelOverride | null {
+    return this.agentLevelOverride;
+  }
+
+  /**
+   * Check if an agent level override is active.
+   *
+   * @returns True if an override is set
+   */
+  hasAgentLevelOverride(): boolean {
+    return this.agentLevelOverride !== null;
+  }
+
+  /**
+   * Set an agent level override.
+   *
+   * @param level - The agent level to override to
+   * @param source - Source of the override (command, config, or agent)
+   */
+  setAgentLevelOverride(level: AgentLevel, source: AgentLevelOverrideSource): void {
+    this.agentLevelOverride = { level, source };
+  }
+
+  /**
+   * Clear the agent level override.
+   *
+   * Restores the agent level to the mode-derived default.
+   */
+  clearAgentLevelOverride(): void {
+    this.agentLevelOverride = null;
   }
 
   // ============================================

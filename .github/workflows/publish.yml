@@ -1,0 +1,185 @@
+name: Publish
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip actual publish)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9.15.0'
+
+jobs:
+  check-version:
+    name: Check Version
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'main' &&
+       contains(github.event.pull_request.title, 'chore: release')) ||
+      github.event_name == 'workflow_dispatch'
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      should-publish: ${{ steps.check.outputs.should-publish }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check published version
+        id: check
+        run: |
+          VERSION=$(node -p "require('./packages/cli/package.json').version")
+          PUBLISHED=$(npm view vellum version 2>/dev/null || echo "0.0.0")
+          
+          echo "Local version: $VERSION"
+          echo "Published version: $PUBLISHED"
+          
+          if npx semver "$VERSION" -r "> $PUBLISHED"; then
+            echo "should-publish=true" >> $GITHUB_OUTPUT
+          else
+            echo "should-publish=false" >> $GITHUB_OUTPUT
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build & Test
+    needs: check-version
+    if: needs.check-version.outputs.should-publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-turbo-
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test:run
+
+      - name: Pack CLI
+        working-directory: packages/cli
+        run: npm pack
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-package
+          path: packages/cli/*.tgz
+          retention-days: 1
+
+  publish-npm:
+    name: Publish to npm
+    needs: [check-version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-package
+          path: ./dist
+
+      - name: Publish to npm
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        working-directory: ./dist
+        run: npm publish *.tgz --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Dry run publish
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        working-directory: ./dist
+        run: npm publish *.tgz --access public --dry-run
+
+  github-release:
+    name: Create GitHub Release
+    needs: [check-version, publish-npm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-package
+          path: ./dist
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION=${{ needs.check-version.outputs.version }}
+          
+          # Extract changelog section for this version
+          CONTENT=$(sed -n "/^## .*${VERSION}/,/^## /p" packages/cli/CHANGELOG.md | sed '1d;$d' || echo "Release v${VERSION}")
+          
+          # Handle empty changelog
+          if [ -z "$CONTENT" ]; then
+            CONTENT="Release v${VERSION}"
+          fi
+          
+          # Write to output using heredoc
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create ZIP archive
+        run: |
+          cd dist
+          zip -r ../vellum-${{ needs.check-version.outputs.version }}.zip .
+        shell: bash
+
+      - name: Create Release
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          name: v${{ needs.check-version.outputs.version }}
+          body: ${{ steps.changelog.outputs.content }}
+          files: |
+            ./dist/*.tgz
+            ./vellum-${{ needs.check-version.outputs.version }}.zip
+          generate_release_notes: false
+          draft: false
+          prerelease: false

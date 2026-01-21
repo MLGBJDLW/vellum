@@ -1,5 +1,4 @@
 import { Box } from "ink";
-import React from "react";
 
 // Define props for the ChatView component based on what will be moved from app.tsx
 

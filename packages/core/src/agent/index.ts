@@ -172,6 +172,8 @@ export {
 } from "./mode-loader.js";
 // Mode Manager (T035)
 export {
+  type AgentLevelOverride,
+  type AgentLevelOverrideSource,
   createModeManager,
   type ModeChangedEvent,
   ModeManager,

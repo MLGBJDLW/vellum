@@ -26,7 +26,7 @@ optional_fields:
 
 ### 1.1 Overall Status
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    VALIDATION RESULT                         │
 ├─────────────────────────────────────────────────────────────┤
@@ -93,7 +93,7 @@ optional_fields:
 
 ### 3.1 Test Summary
 
-```
+```text
 Test Suites: X passed, X failed, X total
 Tests:       X passed, X failed, X skipped, X total
 Coverage:    XX% statements, XX% branches, XX% functions, XX% lines
@@ -128,7 +128,7 @@ Time:        X.XXs
 
 ### 4.1 Coverage Report
 
-```
+```text
 File                    | % Stmts | % Branch | % Funcs | % Lines |
 ------------------------|---------|----------|---------|---------|
 All files               |   XX.XX |    XX.XX |   XX.XX |   XX.XX |
@@ -300,9 +300,10 @@ All files               |   XX.XX |    XX.XX |   XX.XX |   XX.XX |
 
 ## Workflow Complete
 
-**✅ Spec Workflow Completed**
+### ✅ Spec Workflow Completed
 
 All 6 phases have been executed:
+
 1. ✅ Research - Problem analysis complete
 2. ✅ Requirements - Specifications defined
 3. ✅ Design - Architecture designed
@@ -312,7 +313,8 @@ All 6 phases have been executed:
 
 **Output Location**: `.vellum/specs/{{FEATURE_NAME}}/`
 
-**Next Steps**:
+### Next Steps
+
 - Review validation report
 - Address any open items
 - Merge implementation

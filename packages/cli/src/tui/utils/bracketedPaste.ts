@@ -8,6 +8,8 @@
  * @module tui/utils/bracketedPaste
  */
 
+import { getActiveStdout } from "../buffered-stdout.js";
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -38,7 +40,7 @@ export const PASTE_END = "\x1b[201~";
  * This allows applications to distinguish between typed and pasted text.
  */
 export function enableBracketedPaste(): void {
-  process.stdout.write(ENABLE_BRACKETED_PASTE);
+  getActiveStdout().write(ENABLE_BRACKETED_PASTE);
 }
 
 /**
@@ -47,7 +49,7 @@ export function enableBracketedPaste(): void {
  * Should be called when the application exits to restore terminal state.
  */
 export function disableBracketedPaste(): void {
-  process.stdout.write(DISABLE_BRACKETED_PASTE);
+  getActiveStdout().write(DISABLE_BRACKETED_PASTE);
 }
 
 /**
