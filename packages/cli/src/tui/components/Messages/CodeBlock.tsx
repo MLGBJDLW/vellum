@@ -2,15 +2,20 @@
  * CodeBlock Component (T021)
  *
  * Renders code with syntax highlighting, line numbers, and optional copy button.
- * Supports common languages with regex-based highlighting.
+ * Supports Shiki-based highlighting (async) with regex-based fallback.
  *
  * @module tui/components/Messages/CodeBlock
  */
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTUITranslation } from "../../i18n/index.js";
+import {
+  highlightCodeSync,
+  isHighlighterReady,
+  preloadHighlighter,
+} from "../../services/syntax-highlighter.js";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -33,6 +38,10 @@ export interface CodeBlockProps {
   readonly maxHeight?: number;
   /** Line numbers to highlight (1-indexed) */
   readonly highlight?: number[];
+  /** Use Shiki for highlighting (default: true if available) */
+  readonly useShiki?: boolean;
+  /** Callback when copy button is clicked */
+  readonly onCopy?: (code: string) => void;
 }
 
 /**
@@ -330,6 +339,7 @@ function CodeLine({
 interface CodeHeaderProps {
   readonly language: string | undefined;
   readonly showCopyButton: boolean;
+  readonly onCopy?: () => void;
 }
 
 function CodeHeader({ language, showCopyButton }: CodeHeaderProps): React.ReactElement | null {
@@ -368,7 +378,8 @@ function CodeHeader({ language, showCopyButton }: CodeHeaderProps): React.ReactE
  * CodeBlock - Renders code with syntax highlighting
  *
  * Features:
- * - Syntax highlighting for common languages (js/ts, python, bash, json)
+ * - Shiki-based syntax highlighting (when available)
+ * - Regex-based fallback highlighting for common languages
  * - Optional line numbers
  * - Line highlighting support
  * - Copy button (when clipboard API available)
@@ -391,10 +402,39 @@ export function CodeBlock({
   showCopyButton = false,
   maxHeight,
   highlight = [],
+  useShiki = true,
+  onCopy,
 }: CodeBlockProps): React.ReactElement {
   const { theme } = useTheme();
+  const [shikiOutput, setShikiOutput] = useState<string | null>(null);
+  const [highlighterReady, setHighlighterReady] = useState(isHighlighterReady());
 
-  // Parse code into lines
+  // Preload highlighter on mount
+  useEffect(() => {
+    if (useShiki && !highlighterReady) {
+      preloadHighlighter();
+      // Check periodically if highlighter is ready
+      const interval = setInterval(() => {
+        if (isHighlighterReady()) {
+          setHighlighterReady(true);
+          clearInterval(interval);
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [useShiki, highlighterReady]);
+
+  // Try Shiki highlighting when ready
+  useEffect(() => {
+    if (useShiki && highlighterReady) {
+      const result = highlightCodeSync(code, { lang: language });
+      if (result?.success) {
+        setShikiOutput(result.output);
+      }
+    }
+  }, [code, language, useShiki, highlighterReady]);
+
+  // Parse code into lines (for fallback rendering)
   const lines = useMemo(() => {
     const result = code.split("\n");
     // Remove trailing empty line if present
@@ -423,9 +463,29 @@ export function CodeBlock({
   // Determine if header should be shown
   const showHeader = Boolean(language) || showCopyButton;
 
+  // Handle copy
+  const handleCopy = useCallback(() => {
+    onCopy?.(code);
+  }, [code, onCopy]);
+
+  // Use Shiki output if available, otherwise fall back to regex highlighting
+  const useShikiOutput = shikiOutput !== null && !showLineNumbers && highlight.length === 0;
+
+  // For Shiki output with maxHeight, we need to truncate
+  const shikiLines = useMemo(() => {
+    if (!shikiOutput) return [];
+    const result = shikiOutput.split("\n");
+    if (maxHeight !== undefined && result.length > maxHeight) {
+      return result.slice(0, maxHeight);
+    }
+    return result;
+  }, [shikiOutput, maxHeight]);
+
   return (
     <Box flexDirection="column">
-      {showHeader && <CodeHeader language={language} showCopyButton={showCopyButton} />}
+      {showHeader && (
+        <CodeHeader language={language} showCopyButton={showCopyButton} onCopy={handleCopy} />
+      )}
       <Box
         flexDirection="column"
         borderStyle="single"
@@ -433,20 +493,25 @@ export function CodeBlock({
         borderTop={!showHeader}
         paddingX={1}
       >
-        {displayLines.map((line, index) => {
-          const lineNumber = index + 1;
-          return (
-            <CodeLine
-              key={`line-${lineNumber}`}
-              lineNumber={lineNumber}
-              content={line}
-              language={language}
-              showLineNumbers={showLineNumbers}
-              isHighlighted={highlightSet.has(lineNumber)}
-              lineNumberWidth={lineNumberWidth}
-            />
-          );
-        })}
+        {useShikiOutput
+          ? // Shiki-highlighted output (pre-colored ANSI)
+            // biome-ignore lint/suspicious/noArrayIndexKey: shiki lines are stable ANSI output from highlighter
+            shikiLines.map((line, index) => <Text key={`shiki-line-${index}`}>{line}</Text>)
+          : // Fallback regex highlighting
+            displayLines.map((line, index) => {
+              const lineNumber = index + 1;
+              return (
+                <CodeLine
+                  key={`line-${lineNumber}`}
+                  lineNumber={lineNumber}
+                  content={line}
+                  language={language}
+                  showLineNumbers={showLineNumbers}
+                  isHighlighted={highlightSet.has(lineNumber)}
+                  lineNumberWidth={lineNumberWidth}
+                />
+              );
+            })}
         {hasMoreLines && (
           <Box marginTop={0}>
             <Text color={theme.semantic.text.muted} dimColor>

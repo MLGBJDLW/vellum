@@ -43,6 +43,7 @@ import {
 import { DiffView } from "./DiffView.js";
 import { MarkdownRenderer } from "./MarkdownRenderer.js";
 import { ThinkingBlock } from "./ThinkingBlock.js";
+import { ToolResultPreview } from "./ToolResultPreview.js";
 
 // =============================================================================
 // Constants
@@ -290,6 +291,13 @@ const InlineToolCall = memo(function InlineToolCall({
     diffMeta.diff.trim() !== "" &&
     diffMeta.diff !== "(no changes)";
 
+  // Show result preview for non-diff tool results
+  const hasResultPreview =
+    toolCall.status === "completed" &&
+    !hasDiffContent &&
+    toolCall.result !== undefined &&
+    toolCall.result !== null;
+
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
@@ -319,6 +327,11 @@ const InlineToolCall = memo(function InlineToolCall({
           <MaxSizedBox maxHeight={12} truncationIndicator="... (diff truncated)">
             <DiffView diff={diffMeta.diff} compact mode={diffMode} />
           </MaxSizedBox>
+        </Box>
+      )}
+      {hasResultPreview && (
+        <Box marginLeft={2} marginTop={0}>
+          <ToolResultPreview result={toolCall.result} toolName={toolCall.name} />
         </Box>
       )}
     </Box>

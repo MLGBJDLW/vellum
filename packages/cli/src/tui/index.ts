@@ -19,6 +19,8 @@ export * from "./i18n/index.js";
 export * from "./lsp-integration.js";
 // Plugin system integration (T061)
 export * from "./plugins.js";
+// Services
+export * from "./services/index.js";
 // Theme
 export * from "./theme/index.js";
 // Utils

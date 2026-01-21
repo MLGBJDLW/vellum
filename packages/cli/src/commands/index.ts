@@ -683,3 +683,19 @@ export {
   setSourcePriority,
   subscribePromptPriority,
 } from "./prompt-priority.js";
+
+// =============================================================================
+// Copy Command (Clipboard)
+// =============================================================================
+
+export {
+  copyCommand,
+  getCopyCommandLoop,
+  setCopyCommandLoop,
+} from "./copy.js";
+
+// =============================================================================
+// Open Command (External)
+// =============================================================================
+
+export { openCommand } from "./open.js";

@@ -9,6 +9,12 @@
 
 import { Box, Text, useInput } from "ink";
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type FuzzyResult,
+  fuzzySearch,
+  getHighlightSegments,
+  type HighlightRange,
+} from "../../services/fuzzy-search.js";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -84,64 +90,120 @@ function normalizeOptions(
 }
 
 /**
- * Filter options by case-insensitive prefix match.
+ * Fuzzy filtered option with highlight information.
+ */
+interface FilteredOption {
+  readonly option: AutocompleteOption;
+  readonly highlights: readonly HighlightRange[];
+  readonly score: number;
+}
+
+/**
+ * Filter options using fuzzy matching.
  *
  * @param options - All available options (normalized)
  * @param input - Current input to match against
- * @returns Filtered array of matching options
+ * @returns Filtered array of matching options with highlights, sorted by score
  */
 function filterStructuredOptions(
   options: readonly AutocompleteOption[],
   input: string
-): AutocompleteOption[] {
-  if (!input) return [...options];
+): FilteredOption[] {
+  if (!input) {
+    // No input - return all options sorted alphabetically
+    return [...options]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((opt) => ({ option: opt, highlights: [], score: 0 }));
+  }
 
-  const lowerInput = input.toLowerCase();
-  return options.filter(
-    (opt) =>
-      opt.name.toLowerCase().startsWith(lowerInput) ||
-      opt.aliases?.some((alias) => alias.toLowerCase().startsWith(lowerInput))
-  );
+  // Use fuzzy search on the name field
+  const results = fuzzySearch(options, input, "name", {
+    threshold: -10000, // Allow weak matches for better UX
+  });
+
+  // Also check aliases with separate fuzzy search
+  const optionsWithAliases = options.filter((opt) => opt.aliases && opt.aliases.length > 0);
+  const aliasMatches = new Map<AutocompleteOption, FuzzyResult<AutocompleteOption>>();
+
+  for (const opt of optionsWithAliases) {
+    if (!opt.aliases) continue;
+    for (const alias of opt.aliases) {
+      const aliasResult = fuzzySearch([{ ...opt, name: alias }], input, "name");
+      if (aliasResult.length > 0 && aliasResult[0]) {
+        const existing = aliasMatches.get(opt);
+        if (!existing || aliasResult[0].score > existing.score) {
+          aliasMatches.set(opt, { ...aliasResult[0], item: opt });
+        }
+      }
+    }
+  }
+
+  // Merge results: prefer name match, but include alias-only matches
+  const resultMap = new Map<AutocompleteOption, FilteredOption>();
+
+  for (const result of results) {
+    resultMap.set(result.item, {
+      option: result.item,
+      highlights: result.highlights,
+      score: result.score,
+    });
+  }
+
+  // Add alias matches that aren't already in results (or have better score)
+  for (const [opt, aliasResult] of aliasMatches) {
+    const existing = resultMap.get(opt);
+    if (!existing) {
+      // Not matched by name, add with empty highlights (matched via alias)
+      resultMap.set(opt, {
+        option: opt,
+        highlights: [], // Don't highlight name since alias matched
+        score: aliasResult.score,
+      });
+    }
+  }
+
+  // Sort by score (higher is better)
+  return Array.from(resultMap.values()).sort((a, b) => b.score - a.score);
 }
 
 /**
  * Group options by category.
  *
- * @param options - Filtered options to group
+ * @param options - Filtered options to group (already sorted by score)
  * @param categoryOrder - Preferred order of categories
  * @returns Map of category -> options, ordered by categoryOrder
  */
 function groupByCategory(
-  options: readonly AutocompleteOption[],
+  options: readonly FilteredOption[],
   categoryOrder: readonly string[] = []
-): Map<string, AutocompleteOption[]> {
-  const groups = new Map<string, AutocompleteOption[]>();
-  const uncategorized: AutocompleteOption[] = [];
+): Map<string, FilteredOption[]> {
+  const groups = new Map<string, FilteredOption[]>();
+  const uncategorized: FilteredOption[] = [];
 
   // First pass: collect all options by category
-  for (const opt of options) {
-    const category = opt.category || "";
+  for (const filteredOpt of options) {
+    const category = filteredOpt.option.category || "";
     if (!category) {
-      uncategorized.push(opt);
+      uncategorized.push(filteredOpt);
     } else {
       const group = groups.get(category);
       if (group) {
-        group.push(opt);
+        group.push(filteredOpt);
       } else {
-        groups.set(category, [opt]);
+        groups.set(category, [filteredOpt]);
       }
     }
   }
 
   // Build ordered result
-  const result = new Map<string, AutocompleteOption[]>();
+  const result = new Map<string, FilteredOption[]>();
 
   // Add categories in specified order first
   for (const cat of categoryOrder) {
     const group = groups.get(cat);
     if (group && group.length > 0) {
-      // Sort commands within category alphabetically
-      group.sort((a, b) => a.name.localeCompare(b.name));
+      // Sort by score within category (already sorted, but re-sort for consistency)
+      group.sort((a, b) => b.score - a.score);
       result.set(cat, group);
       groups.delete(cat);
     }
@@ -152,14 +214,14 @@ function groupByCategory(
   for (const cat of remainingCategories) {
     const group = groups.get(cat);
     if (group && group.length > 0) {
-      group.sort((a, b) => a.name.localeCompare(b.name));
+      group.sort((a, b) => b.score - a.score);
       result.set(cat, group);
     }
   }
 
   // Add uncategorized at the end if any
   if (uncategorized.length > 0) {
-    uncategorized.sort((a, b) => a.name.localeCompare(b.name));
+    uncategorized.sort((a, b) => b.score - a.score);
     result.set("", uncategorized);
   }
 
@@ -175,14 +237,15 @@ interface FlattenedItem {
   option?: AutocompleteOption;
   category?: string;
   selectableIndex?: number; // Only for options
+  highlights?: readonly HighlightRange[]; // For fuzzy match highlighting
 }
 
 function flattenGroupedOptions(
-  grouped: Map<string, AutocompleteOption[]>,
+  grouped: Map<string, FilteredOption[]>,
   categoryLabels: Record<string, string> = {}
-): { items: FlattenedItem[]; selectableOptions: AutocompleteOption[] } {
+): { items: FlattenedItem[]; selectableOptions: FilteredOption[] } {
   const items: FlattenedItem[] = [];
-  const selectableOptions: AutocompleteOption[] = [];
+  const selectableOptions: FilteredOption[] = [];
   let selectableIndex = 0;
 
   for (const [category, options] of grouped) {
@@ -195,13 +258,14 @@ function flattenGroupedOptions(
     }
 
     // Add options
-    for (const opt of options) {
+    for (const filteredOpt of options) {
       items.push({
         type: "option",
-        option: opt,
+        option: filteredOpt.option,
         selectableIndex,
+        highlights: filteredOpt.highlights,
       });
-      selectableOptions.push(opt);
+      selectableOptions.push(filteredOpt);
       selectableIndex++;
     }
   }
@@ -214,32 +278,38 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Highlight the matching portion of an option.
+ * Highlight the matching portions of an option using fuzzy match ranges.
  *
  * @param option - The option text
- * @param matchLength - Length of the matching prefix
- * @returns JSX elements with highlighted match
+ * @param highlights - Highlight ranges from fuzzy matching
+ * @returns JSX elements with highlighted matches
  */
 function HighlightedOption({
   option,
-  matchLength,
+  highlights,
   highlightColor,
   normalColor,
 }: {
   option: string;
-  matchLength: number;
+  highlights: readonly HighlightRange[];
   highlightColor: string;
   normalColor: string;
 }) {
-  const matchedPart = option.slice(0, matchLength);
-  const restPart = option.slice(matchLength);
+  const segments = getHighlightSegments(option, highlights);
 
   return (
     <Text>
-      <Text color={highlightColor} bold>
-        {matchedPart}
-      </Text>
-      <Text color={normalColor}>{restPart}</Text>
+      {segments.map((segment) =>
+        segment.highlighted ? (
+          <Text key={`${segment.start}-${segment.text}`} color={highlightColor} bold>
+            {segment.text}
+          </Text>
+        ) : (
+          <Text key={`${segment.start}-${segment.text}`} color={normalColor}>
+            {segment.text}
+          </Text>
+        )
+      )}
     </Text>
   );
 }
@@ -319,13 +389,17 @@ function AutocompleteComponent({
   // Group and flatten for display
   const { displayItems, selectableOptions } = useMemo(() => {
     if (!grouped) {
-      // Non-grouped mode: simple list
-      const sorted = [...filteredOptions].sort((a, b) => a.name.localeCompare(b.name));
+      // Non-grouped mode: already sorted by score from filterStructuredOptions
       return {
-        displayItems: sorted.map(
-          (opt, i): FlattenedItem => ({ type: "option", option: opt, selectableIndex: i })
+        displayItems: filteredOptions.map(
+          (filtered, i): FlattenedItem => ({
+            type: "option",
+            option: filtered.option,
+            selectableIndex: i,
+            highlights: filtered.highlights,
+          })
         ),
-        selectableOptions: sorted,
+        selectableOptions: filteredOptions,
       };
     }
 
@@ -473,7 +547,7 @@ function AutocompleteComponent({
         const opt = item.option;
         if (!opt) return null;
         const isSelected = item.selectableIndex === selectedIndex;
-        const matchLength = input.length;
+        const highlights = item.highlights ?? [];
 
         return (
           <Box key={`${opt.name}-${displayIdx}`} flexDirection="row">
@@ -484,7 +558,7 @@ function AutocompleteComponent({
                 </Text>
                 <HighlightedOption
                   option={opt.name}
-                  matchLength={matchLength}
+                  highlights={highlights}
                   highlightColor={highlightColor}
                   normalColor={normalColor}
                 />
@@ -495,7 +569,7 @@ function AutocompleteComponent({
                 {"  "}
                 <HighlightedOption
                   option={opt.name}
-                  matchLength={matchLength}
+                  highlights={highlights}
                   highlightColor={highlightColor}
                   normalColor={normalColor}
                 />

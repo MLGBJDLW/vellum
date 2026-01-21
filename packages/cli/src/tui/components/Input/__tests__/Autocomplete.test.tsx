@@ -170,11 +170,12 @@ describe("Autocomplete", () => {
     it("should limit displayed options to maxVisible", () => {
       const onSelect = vi.fn();
       const onCancel = vi.fn();
-      const manyOptions = ["/a1", "/a2", "/a3", "/a4", "/a5", "/a6", "/a7"];
+      // Use equal-length options so fuzzy scoring doesn't reorder them
+      const manyOptions = ["/opt1", "/opt2", "/opt3", "/opt4", "/opt5", "/opt6", "/opt7"];
 
       const { lastFrame } = renderWithTheme(
         <Autocomplete
-          input="/a"
+          input="/opt"
           options={manyOptions}
           onSelect={onSelect}
           onCancel={onCancel}
@@ -184,10 +185,9 @@ describe("Autocomplete", () => {
       );
 
       const frame = lastFrame() ?? "";
-      // Should show first 3 and overflow indicator
-      expect(frame).toContain("a1");
-      expect(frame).toContain("a2");
-      expect(frame).toContain("a3");
+      // Should show exactly 3 options and overflow indicator
+      const optionMatches = frame.match(/opt\d/g) ?? [];
+      expect(optionMatches.length).toBe(3);
       // Should show "4 more" indicator
       expect(frame).toContain("4 more");
     });
