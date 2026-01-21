@@ -22,6 +22,7 @@ import { useMemo } from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { ToolCallInfo } from "../../context/MessagesContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
+import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { SPINNER_STYLES, Spinner } from "../common/Spinner.js";
 
@@ -58,6 +59,12 @@ export interface ThinkingBlockProps {
   readonly onToggle?: (collapsed: boolean) => void;
   /** Tool calls to display inline within the thinking block */
   readonly toolCalls?: readonly ToolCallInfo[];
+  /**
+   * Display mode for thinking content.
+   * - "full": Show content (default, can expand/collapse)
+   * - "compact": Only show header, no content preview, cannot expand
+   */
+  readonly displayMode?: ThinkingDisplayMode;
 }
 
 // =============================================================================
@@ -154,19 +161,28 @@ export function ThinkingBlock({
   showCharCount = true,
   onToggle,
   toolCalls,
+  displayMode = "full",
 }: ThinkingBlockProps): React.JSX.Element | null {
   const { theme } = useTheme();
 
   // Animation frame for tool call spinners
   const frameIndex = useAnimationFrame(TOOL_SPINNER_FRAMES);
 
+  // In compact mode, force collapsed and disable keyboard toggle
+  const isCompactMode = displayMode === "compact";
+  const effectiveInitialCollapsed = isCompactMode ? true : initialCollapsed;
+  const effectiveKeyboardToggle = isCompactMode ? false : enableKeyboardToggle;
+
   const { isCollapsed, toggle: _toggle } = useCollapsible({
-    initialCollapsed,
-    toggleKey: enableKeyboardToggle ? "t" : undefined,
-    keyboardEnabled: enableKeyboardToggle,
+    initialCollapsed: effectiveInitialCollapsed,
+    toggleKey: effectiveKeyboardToggle ? "t" : undefined,
+    keyboardEnabled: effectiveKeyboardToggle,
     persistenceId,
     onToggle,
   });
+
+  // In compact mode, always show as collapsed (never expandable)
+  const effectiveIsCollapsed = isCompactMode ? true : isCollapsed;
 
   // Theme colors
   const thinkingColor = theme.colors.warning ?? "yellow";
@@ -201,13 +217,13 @@ export function ThinkingBlock({
   }
 
   // Character count (when collapsed or streaming)
-  if (showCharCount && charCount > 0 && (isCollapsed || isStreaming)) {
+  if (showCharCount && charCount > 0 && (effectiveIsCollapsed || isStreaming)) {
     headerParts.push(`(${formatCharCount(charCount)})`);
   }
 
-  // Toggle hint
-  if (!isStreaming) {
-    headerParts.push(isCollapsed ? "[expand ▼]" : "[collapse ▲]");
+  // Toggle hint (not shown in compact mode since it's not toggleable)
+  if (!isStreaming && !isCompactMode) {
+    headerParts.push(effectiveIsCollapsed ? "[expand ▼]" : "[collapse ▲]");
   }
 
   return (
@@ -248,7 +264,7 @@ export function ThinkingBlock({
         </Text>
 
         {/* Keyboard hint */}
-        {enableKeyboardToggle && !isStreaming && (
+        {effectiveKeyboardToggle && !isStreaming && (
           <Text color={mutedColor} dimColor>
             {" "}
             (press 't')
@@ -256,8 +272,8 @@ export function ThinkingBlock({
         )}
       </Box>
 
-      {/* Content area */}
-      {isCollapsed ? (
+      {/* Content area - In compact mode, don't show any content (no preview) */}
+      {isCompactMode ? null : effectiveIsCollapsed ? (
         // Collapsed: show preview only
         content && (
           <Box marginLeft={2} marginTop={0}>

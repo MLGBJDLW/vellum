@@ -254,6 +254,7 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
   // FIX: Added proper dependency array to prevent measuring on every single render
   // which was causing extreme CPU usage and frame drops
   // FIX2: Added periodic re-measurement to catch dynamic content changes (ThinkingBlock expand/collapse)
+  // FIX3: Enhanced detection for significant height changes (>5px threshold) to catch collapsible content
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Item measurement logic with height tracking
   // biome-ignore lint/correctness/useExhaustiveDependencies: measureTick intentionally triggers periodic re-measurement
   useLayoutEffect(() => {
@@ -275,14 +276,32 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
       }
     }
 
+    // FIX3: Check for significant height changes in visible items
+    // This catches ThinkingBlock expand/collapse which can cause large height deltas
+    const HEIGHT_CHANGE_THRESHOLD = 5; // pixels
+    let forceRemeasure = false;
+
+    for (let i = startIndex; i <= endIndex; i++) {
+      const itemRef = itemRefs.current[i];
+      if (itemRef) {
+        const currentHeight = Math.round(measureElement(itemRef).height);
+        const cachedHeight = heights[i] ?? 0;
+        if (Math.abs(currentHeight - cachedHeight) > HEIGHT_CHANGE_THRESHOLD) {
+          forceRemeasure = true;
+          break;
+        }
+      }
+    }
+
     // Measure visible items when:
     // 1. Range changed (scroll/data update)
     // 2. Initial mount (heights.length === 0)
     // 3. measureTick changed (periodic check for dynamic content)
+    // 4. FIX3: Significant height change detected (forceRemeasure)
     // Note: measureTick is in deps, so this runs periodically
-    if (!rangeChanged && heights.length > 0) {
-      // Even if range didn't change, still measure on tick to catch dynamic changes
-      // (like ThinkingBlock expand/collapse)
+    if (!rangeChanged && heights.length > 0 && !forceRemeasure) {
+      // No changes needed - skip expensive remeasurement
+      return;
     }
 
     // Measure visible items

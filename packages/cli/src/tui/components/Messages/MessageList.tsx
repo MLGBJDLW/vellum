@@ -20,6 +20,7 @@
 import { getIcons } from "@vellum/shared";
 import { Box, type Key, Static, Text, useInput } from "ink";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getThinkingDisplayMode, subscribeToDisplayMode } from "../../../commands/think.js";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
 import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
@@ -28,6 +29,7 @@ import { useDiffMode } from "../../hooks/useDiffMode.js";
 import { useKeyboardScroll } from "../../hooks/useKeyboardScroll.js";
 import { type ModeControllerConfig, useModeController } from "../../hooks/useModeController.js";
 import { useScrollController } from "../../hooks/useScrollController.js";
+import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { isEndKey, isHomeKey } from "../../types/ink-extended.js";
 import { estimateMessageHeight } from "../../utils/heightEstimator.js";
@@ -413,6 +415,8 @@ interface MessageItemProps {
   readonly errorColor: string;
   /** Whether to render inline tool calls for this message */
   readonly showToolCalls?: boolean;
+  /** Display mode for thinking blocks */
+  readonly thinkingDisplayMode?: "full" | "compact";
 }
 
 /**
@@ -429,6 +433,7 @@ const MessageItem = memo(function MessageItem({
   successColor,
   errorColor,
   showToolCalls = true,
+  thinkingDisplayMode,
 }: MessageItemProps) {
   const icon = getRoleIcon(message.role);
   const label = getRoleLabel(message.role);
@@ -467,6 +472,7 @@ const MessageItem = memo(function MessageItem({
           initialCollapsed={!message.isStreaming}
           persistenceId={`thinking-${message.id}`}
           showCharCount
+          displayMode={thinkingDisplayMode}
         />
       )}
 
@@ -567,6 +573,14 @@ const MessageList = memo(function MessageList({
   enableScroll = false,
 }: MessageListProps) {
   const { theme } = useTheme();
+
+  // Subscribe to thinking display mode changes
+  const [thinkingDisplayMode, setThinkingDisplayMode] =
+    useState<ThinkingDisplayMode>(getThinkingDisplayMode);
+  useEffect(() => {
+    const unsubscribe = subscribeToDisplayMode(setThinkingDisplayMode);
+    return unsubscribe;
+  }, []);
 
   // Determine if we should show the thinking indicator:
   // - Agent is loading (processing/waiting)
@@ -1232,6 +1246,7 @@ const MessageList = memo(function MessageList({
           successColor={successColor}
           errorColor={errorColor}
           showToolCalls={showToolCallsForItem}
+          thinkingDisplayMode={thinkingDisplayMode}
         />
       );
     },
@@ -1243,6 +1258,7 @@ const MessageList = memo(function MessageList({
       successColor,
       errorColor,
       shouldRenderInlineToolCalls,
+      thinkingDisplayMode,
     ]
   );
 
@@ -1543,6 +1559,7 @@ const MessageList = memo(function MessageList({
                     successColor={successColor}
                     errorColor={errorColor}
                     showToolCalls={shouldRenderInlineToolCalls(message)}
+                    thinkingDisplayMode={thinkingDisplayMode}
                   />
                 </Box>
               )}
@@ -1560,6 +1577,7 @@ const MessageList = memo(function MessageList({
                   successColor={successColor}
                   errorColor={errorColor}
                   showToolCalls={shouldRenderInlineToolCalls(pendingMessage)}
+                  thinkingDisplayMode={thinkingDisplayMode}
                 />
               </Box>
             )}
@@ -1648,6 +1666,7 @@ const MessageList = memo(function MessageList({
                 successColor={successColor}
                 errorColor={errorColor}
                 showToolCalls={shouldRenderInlineToolCalls(message)}
+                thinkingDisplayMode={thinkingDisplayMode}
               />
             )
           )}

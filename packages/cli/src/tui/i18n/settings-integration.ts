@@ -22,12 +22,20 @@ export interface UISettings {
 }
 
 /**
+ * Thinking display mode.
+ * - "full": Show thinking content (default, current behavior)
+ * - "compact": Only show thinking header, no content preview
+ */
+export type ThinkingDisplayMode = "full" | "compact";
+
+/**
  * Thinking mode configuration.
  */
 export interface ThinkingSettings {
   enabled?: boolean;
   budgetTokens?: number;
   priority?: "global" | "mode" | "merge";
+  displayMode?: ThinkingDisplayMode;
 }
 
 /**
@@ -371,6 +379,50 @@ export function setThinkingSettings(thinking: ThinkingSettings): void {
   const newSettings: VellumSettings = {
     ...existingSettings,
     thinking,
+  };
+  writeSettings(newSettings);
+}
+
+/**
+ * Get the thinking display mode preference.
+ *
+ * @returns Display mode ("full" or "compact"), defaults to "full"
+ *
+ * @example
+ * ```typescript
+ * const mode = getThinkingDisplayMode();
+ * // mode is "full" | "compact"
+ * ```
+ */
+export function getThinkingDisplayMode(): ThinkingDisplayMode {
+  const settings = readSettings();
+  const mode = settings?.thinking?.displayMode;
+  if (mode === "full" || mode === "compact") {
+    return mode;
+  }
+  return "full"; // Default
+}
+
+/**
+ * Set the thinking display mode preference.
+ *
+ * @param mode - Display mode to save ("full" or "compact")
+ *
+ * @example
+ * ```typescript
+ * setThinkingDisplayMode("compact");
+ * // Now thinking blocks will be compact by default
+ * ```
+ */
+export function setThinkingDisplayMode(mode: ThinkingDisplayMode): void {
+  const existingSettings = readSettings() ?? {};
+  const existingThinking = existingSettings.thinking ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    thinking: {
+      ...existingThinking,
+      displayMode: mode,
+    },
   };
   writeSettings(newSettings);
 }

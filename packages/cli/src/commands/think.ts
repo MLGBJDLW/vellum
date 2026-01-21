@@ -10,8 +10,11 @@
 
 import { loadConfig } from "@vellum/core";
 import {
+  getThinkingDisplayMode,
   getThinkingSettings,
+  setThinkingDisplayMode,
   setThinkingSettings,
+  type ThinkingDisplayMode,
   type ThinkingSettings,
 } from "../tui/i18n/index.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
@@ -28,6 +31,9 @@ import { error, success } from "./types.js";
  * - "merge": Either enabled means thinking is enabled
  */
 export type ThinkingPriority = "global" | "mode" | "merge";
+
+/** Re-export ThinkingDisplayMode for consumers */
+export type { ThinkingDisplayMode };
 
 /**
  * Effective thinking configuration for LLM calls.
@@ -205,6 +211,55 @@ export function setThinkingPriority(priority: ThinkingPriority): void {
   persistThinkingState();
 }
 
+// =============================================================================
+// Display Mode State (Separate from thinking state)
+// =============================================================================
+
+/**
+ * Listeners for display mode changes
+ */
+type DisplayModeListener = (mode: ThinkingDisplayMode) => void;
+const displayModeListeners: Set<DisplayModeListener> = new Set();
+
+/**
+ * Get the current thinking display mode.
+ *
+ * @returns Current display mode ("full" or "compact")
+ */
+export { getThinkingDisplayMode };
+
+/**
+ * Set the thinking display mode.
+ *
+ * @param mode - Display mode ("full" or "compact")
+ */
+export function setDisplayMode(mode: ThinkingDisplayMode): void {
+  setThinkingDisplayMode(mode);
+  notifyDisplayModeListeners(mode);
+}
+
+/**
+ * Subscribe to display mode changes.
+ *
+ * @param listener - Callback function for mode changes
+ * @returns Unsubscribe function
+ */
+export function subscribeToDisplayMode(listener: DisplayModeListener): () => void {
+  displayModeListeners.add(listener);
+  return () => {
+    displayModeListeners.delete(listener);
+  };
+}
+
+/**
+ * Notify all display mode listeners.
+ */
+function notifyDisplayModeListeners(mode: ThinkingDisplayMode): void {
+  for (const listener of displayModeListeners) {
+    listener(mode);
+  }
+}
+
 /**
  * Get the effective thinking configuration for LLM calls.
  *
@@ -333,12 +388,13 @@ export const thinkCommand: SlashCommand = {
   subcommands: [
     { name: "on", description: "Enable extended thinking" },
     { name: "off", description: "Disable extended thinking" },
+    { name: "mode", description: "Set display mode (full/compact)" },
   ],
   positionalArgs: [
     {
       name: "state",
       type: "string",
-      description: "Enable or disable thinking (on/off)",
+      description: "Enable or disable thinking (on/off) or set display mode",
       required: false,
     },
   ],
@@ -358,6 +414,8 @@ export const thinkCommand: SlashCommand = {
     "/think off          - Disable thinking mode",
     "/think on --budget 20000  - Enable with 20K token budget",
     "/think -b 50k       - Set budget to 50K tokens",
+    "/think mode full    - Show full thinking content",
+    "/think mode compact - Show compact thinking header only",
   ],
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Command handler with multiple state transitions
@@ -401,6 +459,7 @@ export const thinkCommand: SlashCommand = {
 
       // Show current status
       const state = getThinkingState();
+      const displayMode = getThinkingDisplayMode();
       const statusIcon = state.enabled ? "◆" : "◇";
       const statusText = state.enabled ? "On" : "Off";
 
@@ -409,11 +468,13 @@ export const thinkCommand: SlashCommand = {
         "",
         `   Status: ${statusIcon} ${statusText}`,
         `   Budget: ${formatBudget(state.budgetTokens)} tokens`,
+        `   Display: ${displayMode}`,
         "",
         "Commands:",
         "   /think on       - Enable thinking",
         "   /think off      - Disable thinking",
         "   /think -b 20k   - Set budget to 20K tokens",
+        "   /think mode full|compact - Set display mode",
         "",
         "Shortcuts:",
         "   Ctrl+T          - Toggle thinking on/off",
@@ -425,6 +486,32 @@ export const thinkCommand: SlashCommand = {
 
     // Parse state argument
     const normalizedState = stateArg.toLowerCase().trim();
+
+    // Handle "mode" subcommand
+    if (normalizedState === "mode") {
+      const modeArg = ctx.parsedArgs.positional[1] as string | undefined;
+      const currentMode = getThinkingDisplayMode();
+
+      if (!modeArg) {
+        // Show current display mode
+        return success(
+          `🧠 Thinking display mode: ${currentMode}\n` +
+            "   /think mode full    - Show full content\n" +
+            "   /think mode compact - Show header only"
+        );
+      }
+
+      const normalizedMode = modeArg.toLowerCase().trim();
+      if (normalizedMode === "full" || normalizedMode === "compact") {
+        setDisplayMode(normalizedMode);
+        return success(`🧠 Thinking display mode set to: ${normalizedMode}`);
+      }
+
+      return error("INVALID_ARGUMENT", `Invalid display mode: ${modeArg}`, [
+        "Valid modes: full, compact",
+        "Example: /think mode compact",
+      ]);
+    }
 
     if (normalizedState === "on" || normalizedState === "1" || normalizedState === "true") {
       setThinkingEnabled(true);
@@ -447,8 +534,9 @@ export const thinkCommand: SlashCommand = {
 
     // Invalid state argument
     return error("INVALID_ARGUMENT", `Invalid state: ${stateArg}`, [
-      "Valid states: on, off",
+      "Valid states: on, off, mode",
       "Example: /think on --budget 20000",
+      "Example: /think mode compact",
     ]);
   },
 };
