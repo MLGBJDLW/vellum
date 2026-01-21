@@ -57,6 +57,11 @@ export {
   type UseDesktopNotificationReturn,
   useDesktopNotification,
 } from "./useDesktopNotification.js";
+// Diff mode hook for subscribing to diff view mode changes
+export {
+  type UseDiffModeReturn,
+  useDiffMode,
+} from "./useDiffMode.js";
 // File change statistics hook (aggregates diff metadata)
 export {
   type FileChangeStats,
@@ -160,6 +165,13 @@ export {
   type UsePersistenceShortcutsReturn,
   usePersistenceShortcuts,
 } from "./usePersistenceShortcuts.js";
+// Placeholder rotation hook (UX improvement)
+export {
+  DEFAULT_PLACEHOLDER_EXAMPLES,
+  type UsePlaceholderRotationOptions,
+  type UsePlaceholderRotationReturn,
+  usePlaceholderRotation,
+} from "./usePlaceholderRotation.js";
 // Provider status hook (circuit breaker states)
 export {
   type CircuitState,

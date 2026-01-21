@@ -269,6 +269,9 @@ describe("Skill System Integration", () => {
 
         throw new Error("File not found");
       });
+
+      // Mock realpath for symlink resolution
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
     });
 
     it("should complete full activation flow", async () => {
@@ -456,6 +459,9 @@ describe("Skill System Integration", () => {
         return [];
       });
 
+      // Mock realpath for symlink resolution
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
+
       const discovery = new SkillDiscovery({ workspacePath: WORKSPACE_PATH });
       const result = await discovery.discoverAll();
 
@@ -501,6 +507,9 @@ describe("Skill System Integration", () => {
 
         return [];
       });
+
+      // Mock realpath for symlink resolution
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
 
       const discovery = new SkillDiscovery({ workspacePath: WORKSPACE_PATH });
       const result = await discovery.discoverAll();
@@ -587,6 +596,9 @@ triggers:
 
 Cache test rules.
 `);
+
+      // Mock realpath for symlink resolution
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
     });
 
     it("should cache L1 scans on initialization", async () => {
@@ -698,6 +710,9 @@ Content
 `;
       });
 
+      // Mock realpath for symlink resolution
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
+
       const manager = new SkillManager({
         loader: { discovery: { workspacePath: WORKSPACE_PATH } },
       });
@@ -723,6 +738,9 @@ Content
       });
 
       vi.mocked(fs.readdir).mockRejectedValue(new Error("Permission denied"));
+
+      // Mock realpath for symlink resolution
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
 
       const discovery = new SkillDiscovery({ workspacePath: WORKSPACE_PATH });
       const result = await discovery.discoverAll();

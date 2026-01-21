@@ -8,6 +8,7 @@
  * flickering from multiple independent timers.
  *
  * Supports both custom animation frames and ink-spinner types.
+ * Includes scene-based animations for contextual loading states.
  *
  * @module tui/components/common/Spinner
  */
@@ -21,6 +22,18 @@ import { useTheme } from "../../theme/index.js";
 // =============================================================================
 // Types
 // =============================================================================
+
+/**
+ * Scene-based spinner types for contextual loading states.
+ * Each scene has a unique animation that conveys the operation type.
+ */
+export type SpinnerScene =
+  | "default" // Default braille spinner
+  | "thinking" // AI thinking: 🤔 💭 💡 ✨
+  | "writing" // File writing: ✎. ✎.. ✎...
+  | "searching" // Search operation: 🔍 🔎
+  | "loading" // Generic loading: ◐ ◓ ◑ ◒
+  | "streaming"; // Stream output: ▰▰▰▱▱▱
 
 /**
  * Available ink-spinner type names.
@@ -105,8 +118,19 @@ export interface SpinnerProps {
   /** Color of the spinner (default: from theme or "cyan") */
   readonly color?: string;
   /**
+   * Scene-based spinner animation (default: 'default').
+   * Provides contextual animations for different operation types.
+   * Takes precedence over `frames` when specified (unless 'default').
+   */
+  readonly scene?: SpinnerScene;
+  /**
+   * Label to display after the spinner.
+   * Useful for providing context about the current operation.
+   */
+  readonly label?: string;
+  /**
    * Animation frames (default: braille spinner)
-   * Ignored when `type` is specified.
+   * Ignored when `type` or non-default `scene` is specified.
    */
   readonly frames?: readonly string[];
   /**
@@ -116,7 +140,7 @@ export interface SpinnerProps {
   readonly interval?: number;
   /**
    * Use ink-spinner with specified type.
-   * When set, this takes precedence over `frames`.
+   * When set, this takes precedence over `frames` and `scene`.
    * @example "dots", "line", "arc", "bounce"
    */
   readonly type?: SpinnerType;
@@ -150,6 +174,25 @@ export interface LoadingIndicatorProps {
 /** Default spinner animation frames (braille pattern) */
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 
+/**
+ * Scene-based animation frames for contextual loading states.
+ * Each scene provides a unique visual representation of the operation.
+ */
+export const SCENE_FRAMES = {
+  /** Default braille spinner */
+  default: ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"],
+  /** AI thinking animation */
+  thinking: ["🤔", "💭", "💡", "✨"],
+  /** File writing animation */
+  writing: ["✎", "✎.", "✎..", "✎..."],
+  /** Search operation animation */
+  searching: ["🔍", "🔎"],
+  /** Generic loading animation */
+  loading: ["◐", "◓", "◑", "◒"],
+  /** Streaming data animation */
+  streaming: ["▰▱▱▱", "▰▰▱▱", "▰▰▰▱", "▰▰▰▰", "▱▰▰▰", "▱▱▰▰", "▱▱▱▰"],
+} as const;
+
 /** Alternative spinner styles */
 export const SPINNER_STYLES = {
   /** Braille dots (default) */
@@ -182,15 +225,23 @@ const DEFAULT_INTERVAL_MS = 120;
  *
  * Features:
  * - Configurable animation frames
+ * - Scene-based animations for contextual loading states
  * - Adjustable speed
  * - Custom colors
  * - Multiple built-in styles
  * - Support for ink-spinner types
+ * - Optional label display
  *
  * @example
  * ```tsx
  * // Basic usage (custom frames)
  * <Spinner />
+ *
+ * // Scene-based animation
+ * <Spinner scene="thinking" label="Analyzing..." />
+ *
+ * // Writing scene
+ * <Spinner scene="writing" label="Saving file..." />
  *
  * // Custom color
  * <Spinner color="yellow" />
@@ -207,6 +258,8 @@ const DEFAULT_INTERVAL_MS = 120;
  */
 export function Spinner({
   color,
+  scene = "default",
+  label,
   frames = SPINNER_FRAMES,
   // interval prop kept for backward compatibility but no longer used
   interval: _interval = DEFAULT_INTERVAL_MS,
@@ -215,22 +268,31 @@ export function Spinner({
 }: SpinnerProps): React.JSX.Element {
   const { theme } = useTheme();
 
-  // Use global animation context for custom frames
-  const frameIndex = useAnimationFrame(frames);
+  // Determine which frames to use based on scene
+  const effectiveFrames = scene !== "default" ? SCENE_FRAMES[scene] : frames;
 
-  const spinnerColor = color ?? theme.colors.info;
+  // Use global animation context for custom frames
+  const frameIndex = useAnimationFrame(effectiveFrames);
+
+  const spinnerColor = color ?? theme.semantic.text.primary;
 
   // Use ink-spinner if type is specified or useInkSpinner is true
   if (type || useInkSpinner) {
     return (
       <Text color={spinnerColor}>
         <InkSpinner type={type ?? "dots"} />
+        {label && <Text> {label}</Text>}
       </Text>
     );
   }
 
   // Default: use custom frames with AnimationContext
-  return <Text color={spinnerColor}>{frames[frameIndex]}</Text>;
+  return (
+    <Text color={spinnerColor}>
+      {effectiveFrames[frameIndex]}
+      {label && <Text> {label}</Text>}
+    </Text>
+  );
 }
 
 // =============================================================================

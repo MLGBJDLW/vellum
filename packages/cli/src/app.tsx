@@ -10,6 +10,8 @@ import type {
   SandboxPolicy,
   Session,
   SessionMode,
+  TaskChain,
+  TaskChainNode,
   ToolExecutor,
   ToolRegistry,
 } from "@vellum/core";
@@ -25,6 +27,7 @@ import {
   ProjectMemoryService,
   registerAllBuiltinTools,
   registerGitTools,
+  SearchService,
   SessionListService,
   SessionParts,
   StorageManager,
@@ -48,7 +51,9 @@ import {
   createContextProvider,
   createCredentialManager,
   createResumeCommand,
+  createSearchCommand,
   customAgentsCommand,
+  diffModeSlashCommands,
   enhancedAuthCommands,
   exitCommand,
   getEffectiveThinkingConfig,
@@ -70,11 +75,13 @@ import {
   setModelCommandConfig,
   setPersistenceRef,
   setThemeContext,
+  setVimCallbacks,
   subscribeToThinkingState,
   themeSlashCommands,
   thinkSlashCommands,
   toggleThinking,
   tutorialCommand,
+  vimSlashCommands,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
@@ -86,14 +93,18 @@ import {
   type SessionStorage,
   useSessionAdapter,
 } from "./tui/adapters/session-adapter.js";
+import { AgentProgress } from "./tui/components/AgentProgress.js";
 import { Banner } from "./tui/components/Banner/index.js";
 import { BacktrackControls } from "./tui/components/backtrack/BacktrackControls.js";
+import { CheckpointDiffView } from "./tui/components/Checkpoint/CheckpointDiffView.js";
 import { SnapshotCheckpointPanel } from "./tui/components/Checkpoint/SnapshotCheckpointPanel.js";
+import { CostDisplay } from "./tui/components/CostDisplay.js";
 // New status components (Phase 35+)
 import { AutoApprovalStatus } from "./tui/components/common/AutoApprovalStatus.js";
 import { CostWarning } from "./tui/components/common/CostWarning.js";
 import { ErrorBoundary } from "./tui/components/common/ErrorBoundary.js";
 import { DEFAULT_HOTKEYS, HotkeyHelpModal } from "./tui/components/common/HotkeyHelpModal.js";
+import { MaxSizedBox } from "./tui/components/common/MaxSizedBox.js";
 import { LoadingIndicator } from "./tui/components/common/Spinner.js";
 import type { AutocompleteOption } from "./tui/components/Input/Autocomplete.js";
 import { EnhancedCommandInput } from "./tui/components/Input/EnhancedCommandInput.js";
@@ -103,10 +114,12 @@ import { InitErrorBanner, McpPanel } from "./tui/components/index.js";
 import { Layout } from "./tui/components/Layout.js";
 import { MemoryPanel, type MemoryPanelProps } from "./tui/components/MemoryPanel.js";
 import { MessageList } from "./tui/components/Messages/MessageList.js";
+import { ModeIndicator } from "./tui/components/ModeIndicator.js";
 import { ModelSelector } from "./tui/components/ModelSelector.js";
 import { ModeSelector } from "./tui/components/ModeSelector.js";
 import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
+import { AdaptiveLayout } from "./tui/components/ScreenReaderLayout.js";
 import { SystemStatusPanel } from "./tui/components/Sidebar/SystemStatusPanel.js";
 import { ModelStatusBar } from "./tui/components/Status/ModelStatusBar.js";
 import { FileChangesIndicator } from "./tui/components/StatusBar/FileChangesIndicator.js";
@@ -123,6 +136,7 @@ import { OptionSelector } from "./tui/components/Tools/OptionSelector.js";
 import { PermissionDialog } from "./tui/components/Tools/PermissionDialog.js";
 import { ToolsPanel } from "./tui/components/Tools/ToolsPanel.js";
 import { UpdateBanner } from "./tui/components/UpdateBanner.js";
+import { VimModeIndicator } from "./tui/components/VimModeIndicator.js";
 import type { Message } from "./tui/context/MessagesContext.js";
 import { useMessages } from "./tui/context/MessagesContext.js";
 import { RootProvider } from "./tui/context/RootProvider.js";
@@ -146,6 +160,7 @@ import { isScreenReaderEnabled, useScreenReader } from "./tui/hooks/useScreenRea
 import { type SidebarContent, useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
 import { useSnapshots } from "./tui/hooks/useSnapshots.js";
 import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
+import type { VimMode } from "./tui/hooks/useVim.js";
 import { useVim } from "./tui/hooks/useVim.js";
 import { useWorkspace } from "./tui/hooks/useWorkspace.js";
 import {
@@ -435,8 +450,18 @@ function createCommandRegistry(): CommandRegistry {
     registry.register(cmd);
   }
 
+  //: Register vim slash commands
+  for (const cmd of vimSlashCommands) {
+    registry.register(cmd);
+  }
+
   // Register think slash commands
   for (const cmd of thinkSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // Register diff-mode slash commands
+  for (const cmd of diffModeSlashCommands) {
     registry.register(cmd);
   }
 
@@ -590,6 +615,21 @@ function AppContent({
   const [vimEnabled, setVimEnabled] = useState(false);
   const vim = useVim();
 
+  // Wire up vim callbacks for /vim command
+  useEffect(() => {
+    const handleToggle = () => {
+      setVimEnabled((prev) => !prev);
+      vim.toggle();
+    };
+    const isEnabled = () => vimEnabled;
+    setVimCallbacks(handleToggle, isEnabled);
+    return () =>
+      setVimCallbacks(
+        () => {},
+        () => false
+      );
+  }, [vim, vimEnabled]);
+
   // Copy mode for visual selection
   const copyMode = useCopyMode();
 
@@ -720,8 +760,8 @@ function AppContent({
     };
   }, []);
 
-  //-: Resilience (circuit breaker, rate limiter, fallback)
-  const [_resilientProvider, setResilientProvider] = useState<ResilientProvider | null>(null);
+  //: Resilience (circuit breaker, rate limiter, fallback)
+  const [resilientProvider, setResilientProvider] = useState<ResilientProvider | null>(null);
   useEffect(() => {
     // Create resilient provider wrapper
     // In production, this would wrap actual provider clients
@@ -865,6 +905,123 @@ function AppContent({
     };
   }, [agentLoopProp, adapterConnect, adapterDisconnect]);
 
+  const upsertTaskChainNode = useCallback(
+    (taskId: string, agentSlug: string | undefined, status: TaskChainNode["status"]) => {
+      setTaskChain((prev) => {
+        const now = new Date();
+        if (!prev) {
+          const rootNode: TaskChainNode = {
+            taskId,
+            parentTaskId: undefined,
+            agentSlug: agentSlug ?? "agent",
+            depth: 0,
+            createdAt: now,
+            status,
+          };
+
+          return {
+            chainId: `ui-${createId()}`,
+            rootTaskId: taskId,
+            nodes: new Map([[taskId, rootNode]]),
+            maxDepth: 0,
+          };
+        }
+
+        const nodes = new Map(prev.nodes);
+        const existing = nodes.get(taskId);
+        const node: TaskChainNode = {
+          taskId,
+          parentTaskId: existing?.parentTaskId,
+          agentSlug: agentSlug ?? existing?.agentSlug ?? "agent",
+          depth: existing?.depth ?? 0,
+          createdAt: existing?.createdAt ?? now,
+          status,
+        };
+
+        nodes.set(taskId, node);
+
+        return {
+          ...prev,
+          nodes,
+          rootTaskId: prev.rootTaskId ?? taskId,
+          maxDepth: prev.maxDepth ?? 0,
+        };
+      });
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!agentLoopProp) {
+      setTaskChain(null);
+      setCurrentTaskId(undefined);
+      return;
+    }
+
+    const handleDelegationStart = (delegationId: string, agent: string) => {
+      upsertTaskChainNode(delegationId, agent, "running");
+      setCurrentTaskId(delegationId);
+    };
+
+    const handleDelegationComplete = (delegationId: string) => {
+      upsertTaskChainNode(delegationId, undefined, "completed");
+      setCurrentTaskId((prev) => (prev === delegationId ? undefined : prev));
+    };
+
+    agentLoopProp.on("delegationStart", handleDelegationStart);
+    agentLoopProp.on("delegationComplete", handleDelegationComplete);
+
+    return () => {
+      agentLoopProp.off("delegationStart", handleDelegationStart);
+      agentLoopProp.off("delegationComplete", handleDelegationComplete);
+    };
+  }, [agentLoopProp, upsertTaskChainNode]);
+
+  useEffect(() => {
+    const orchestrator = agentLoopProp?.getConfig().orchestrator;
+    if (!orchestrator) {
+      return;
+    }
+
+    const handleSpawned = (event: { data?: { taskId?: string; agentSlug?: string } }) => {
+      if (!event.data?.taskId) return;
+      upsertTaskChainNode(event.data.taskId, event.data.agentSlug, "running");
+      setCurrentTaskId(event.data.taskId);
+    };
+
+    const handleCompleted = (event: { data?: { taskId?: string; agentSlug?: string } }) => {
+      if (!event.data?.taskId) return;
+      upsertTaskChainNode(event.data.taskId, event.data.agentSlug, "completed");
+      setCurrentTaskId((prev) => (prev === event.data?.taskId ? undefined : prev));
+    };
+
+    const handleFailed = (event: { data?: { taskId?: string; agentSlug?: string } }) => {
+      if (!event.data?.taskId) return;
+      upsertTaskChainNode(event.data.taskId, event.data.agentSlug, "failed");
+      setCurrentTaskId((prev) => (prev === event.data?.taskId ? undefined : prev));
+    };
+
+    const handleStarted = (event: { data?: { taskId?: string; agentSlug?: string } }) => {
+      if (!event.data?.taskId) return;
+      upsertTaskChainNode(event.data.taskId, event.data.agentSlug, "running");
+      setCurrentTaskId(event.data.taskId);
+    };
+
+    orchestrator.on("subagent_spawned", handleSpawned);
+    orchestrator.on("task_started", handleStarted);
+    orchestrator.on("task_completed", handleCompleted);
+    orchestrator.on("task_failed", handleFailed);
+    orchestrator.on("subagent_cancelled", handleFailed);
+
+    return () => {
+      orchestrator.off("subagent_spawned", handleSpawned);
+      orchestrator.off("task_started", handleStarted);
+      orchestrator.off("task_completed", handleCompleted);
+      orchestrator.off("task_failed", handleFailed);
+      orchestrator.off("subagent_cancelled", handleFailed);
+    };
+  }, [agentLoopProp, upsertTaskChainNode]);
+
   // ==========================================================================
   // Core Services - Tools, Credentials, Sessions
   // ==========================================================================
@@ -897,6 +1054,7 @@ function AppContent({
 
   const storageManagerRef = useRef<StorageManager | null>(null);
   const sessionListServiceRef = useRef<SessionListService | null>(null);
+  const searchServiceRef = useRef<SearchService | null>(null);
   const sessionCacheRef = useRef<Session | null>(null);
   const [storageReady, setStorageReady] = useState(false);
 
@@ -907,10 +1065,13 @@ function AppContent({
       try {
         const manager = await StorageManager.create();
         const listService = new SessionListService(manager);
+        const searchService = new SearchService(manager);
+        await searchService.initialize();
 
         if (!cancelled) {
           storageManagerRef.current = manager;
           sessionListServiceRef.current = listService;
+          searchServiceRef.current = searchService;
           setStorageReady(true);
         }
       } catch (error) {
@@ -948,6 +1109,12 @@ function AppContent({
   const [showSessionManager, setShowSessionManager] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showApprovalQueue, setShowApprovalQueue] = useState(false);
+  const [checkpointDiff, setCheckpointDiff] = useState<{
+    content: string;
+    snapshotHash?: string;
+    isLoading: boolean;
+    isVisible: boolean;
+  }>({ content: "", isLoading: false, isVisible: false });
 
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -958,6 +1125,10 @@ function AppContent({
   // Model selection state (moved earlier for onboarding config loading)
   const [currentModel, setCurrentModel] = useState(model);
   const [currentProvider, setCurrentProvider] = useState(provider);
+
+  // Agent task chain state for AgentProgress display
+  const [taskChain, setTaskChain] = useState<TaskChain | null>(null);
+  const [currentTaskId, setCurrentTaskId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     currentModeRef.current = currentMode;
@@ -1301,6 +1472,21 @@ function AppContent({
   // ==========================================================================
 
   const { executions, pendingApproval, approveExecution, rejectExecution, approveAll } = useTools();
+  const pendingApprovalCountRef = useRef(pendingApproval.length);
+
+  useEffect(() => {
+    const previousCount = pendingApprovalCountRef.current;
+    const currentCount = pendingApproval.length;
+    pendingApprovalCountRef.current = currentCount;
+
+    if (currentCount > 1 && previousCount <= 1) {
+      setShowApprovalQueue(true);
+    }
+
+    if (currentCount <= 1 && showApprovalQueue) {
+      setShowApprovalQueue(false);
+    }
+  }, [pendingApproval.length, showApprovalQueue]);
 
   const loadTodos = useCallback(async (): Promise<readonly TodoItemData[]> => {
     const todoFilePath = join(process.cwd(), ".vellum", "todos.json");
@@ -1482,6 +1668,34 @@ function AppContent({
   // ==========================================================================
 
   const snapshots = useSnapshots();
+
+  const openCheckpointDiff = useCallback(
+    async (hash: string) => {
+      setCheckpointDiff({ content: "", snapshotHash: hash, isLoading: true, isVisible: true });
+
+      try {
+        const diff = await snapshots.diff(hash);
+        setCheckpointDiff({
+          content: diff,
+          snapshotHash: hash,
+          isLoading: false,
+          isVisible: true,
+        });
+      } catch (error) {
+        setCheckpointDiff({
+          content: `Failed to load diff: ${error instanceof Error ? error.message : String(error)}`,
+          snapshotHash: hash,
+          isLoading: false,
+          isVisible: true,
+        });
+      }
+    },
+    [snapshots]
+  );
+
+  const closeCheckpointDiff = useCallback(() => {
+    setCheckpointDiff((prev) => ({ ...prev, isVisible: false }));
+  }, []);
 
   // Cost tracking state for CostWarning component
   const [costWarningState, setCostWarningState] = useState<{
@@ -1739,7 +1953,7 @@ function AppContent({
     }
   }, [messages, pushBacktrack]);
 
-  // Mode shortcuts hook (Ctrl+1/2/3)
+  // Mode shortcuts hook (Alt+1/2/3)
   useModeShortcuts({
     modeManager,
     enabled:
@@ -1823,32 +2037,16 @@ function AppContent({
     const hotkeys: HotkeyDefinition[] = [
       {
         key: "m",
-        ctrl: true,
+        alt: true,
         handler: () => setShowModeSelector((prev) => !prev),
         description: "Toggle mode selector",
         scope: "global",
       },
-      // Alt+M alternative for VS Code terminal compatibility
-      {
-        key: "m",
-        alt: true,
-        handler: () => setShowModeSelector((prev) => !prev),
-        description: "Toggle mode selector (Alt)",
-        scope: "global",
-      },
       {
         key: "k",
-        ctrl: true,
+        alt: true,
         handler: () => setShowSidebar((prev) => !prev),
         description: "Toggle sidebar",
-        scope: "global",
-      },
-      // Alt+K alternative for VS Code terminal compatibility
-      {
-        key: "k",
-        alt: true,
-        handler: () => setShowSidebar((prev) => !prev),
-        description: "Toggle sidebar (Alt)",
         scope: "global",
       },
       {
@@ -1874,7 +2072,7 @@ function AppContent({
       },
       {
         key: "p",
-        ctrl: true,
+        alt: true,
         handler: () => {
           setShowSidebar(true);
           setSidebarContent("memory");
@@ -1882,20 +2080,9 @@ function AppContent({
         description: "Show memory panel",
         scope: "global",
       },
-      // Alt+P alternative for VS Code terminal compatibility
-      {
-        key: "p",
-        alt: true,
-        handler: () => {
-          setShowSidebar(true);
-          setSidebarContent("memory");
-        },
-        description: "Show memory panel (Alt)",
-        scope: "global",
-      },
       {
         key: "g",
-        ctrl: true,
+        alt: true,
         handler: () => {
           setShowSidebar(true);
           setSidebarContent("tools");
@@ -1903,20 +2090,9 @@ function AppContent({
         description: "Show tools panel",
         scope: "global",
       },
-      // Alt+G alternative for VS Code terminal compatibility
-      {
-        key: "g",
-        alt: true,
-        handler: () => {
-          setShowSidebar(true);
-          setSidebarContent("tools");
-        },
-        description: "Show tools panel (Alt)",
-        scope: "global",
-      },
       {
         key: "o",
-        ctrl: true,
+        alt: true,
         handler: () => {
           setShowSidebar(true);
           setSidebarContent("mcp");
@@ -1924,18 +2100,7 @@ function AppContent({
         description: "Show MCP panel",
         scope: "global",
       },
-      // Alt+O alternative for VS Code terminal compatibility
-      {
-        key: "o",
-        alt: true,
-        handler: () => {
-          setShowSidebar(true);
-          setSidebarContent("mcp");
-        },
-        description: "Show MCP panel (Alt)",
-        scope: "global",
-      },
-      // Snapshots panel (Ctrl+Shift+S or Alt+S)
+      // Snapshots panel (Alt+S)
       {
         key: "s",
         alt: true,
@@ -1951,6 +2116,27 @@ function AppContent({
         ctrl: true,
         handler: () => setShowSessionManager((prev) => !prev),
         description: "Session manager",
+        scope: "global",
+      },
+      {
+        key: "f1",
+        handler: () => setShowHelpModal(true),
+        description: "Show help",
+        scope: "global",
+      },
+      {
+        key: "?",
+        shift: true,
+        handler: () => setShowHelpModal(true),
+        description: "Show help",
+        scope: "global",
+      },
+      {
+        key: "a",
+        ctrl: true,
+        shift: true,
+        handler: () => setShowApprovalQueue((prev) => !prev),
+        description: "Toggle approval queue",
         scope: "global",
       },
       {
@@ -1975,10 +2161,10 @@ function AppContent({
         description: "Redo",
         scope: "global",
       },
-      // Model selector toggle (Ctrl+Shift+M)
+      // Model selector toggle (Alt+Shift+M)
       {
         key: "m",
-        ctrl: true,
+        alt: true,
         shift: true,
         handler: () => {
           setShowModelSelector((prev) => !prev);
@@ -2053,6 +2239,7 @@ function AppContent({
       !showModelSelector &&
       !hasActiveApproval &&
       !showSessionManager &&
+      !showHelpModal &&
       !showOnboarding &&
       !interactivePrompt &&
       !followupPrompt &&
@@ -2319,6 +2506,32 @@ function AppContent({
     } catch (error) {
       console.warn(
         "[commands] Failed to register resume command:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }, [storageReady, commandRegistry, bumpCommandRegistryVersion]);
+
+  // Register search command when storage is ready
+  useEffect(() => {
+    if (!storageReady) {
+      return;
+    }
+
+    const storage = storageManagerRef.current;
+    const searchService = searchServiceRef.current;
+
+    if (!storage || !searchService) {
+      return;
+    }
+
+    try {
+      const searchWithStorage = createSearchCommand(storage, searchService);
+      commandRegistry.unregister(searchWithStorage.name);
+      commandRegistry.register(searchWithStorage);
+      bumpCommandRegistryVersion();
+    } catch (error) {
+      console.warn(
+        "[commands] Failed to register search command:",
         error instanceof Error ? error.message : String(error)
       );
     }
@@ -2736,7 +2949,28 @@ function AppContent({
 
         try {
           agentLoopProp.addMessage(createUserMessage([SessionParts.text(processedText)]));
-          await agentLoopProp.run();
+
+          // Wrap agentLoop.run() with resilience (circuit breaker + rate limiter)
+          if (resilientProvider) {
+            const result = await resilientProvider.execute(currentProvider, () =>
+              agentLoopProp.run()
+            );
+            if (!result.success && result.error) {
+              // Check if circuit is open or rate limited
+              const circuitState = resilientProvider.getCircuitState(currentProvider);
+              if (circuitState === "OPEN") {
+                addMessage({
+                  role: "assistant",
+                  content: `⚠️ Provider ${currentProvider} circuit breaker is open. Too many failures recently.`,
+                });
+              }
+              throw result.error;
+            }
+          } else {
+            // Fallback to direct execution if resilient provider not ready
+            await agentLoopProp.run();
+          }
+
           // Messages are synced via AgentLoop adapter event handlers (handleText)
           // User message was already added via addMessage() above
           // Notify on completion
@@ -2744,6 +2978,11 @@ function AppContent({
           announce("Response received");
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
+          // Log resilience metrics for debugging
+          if (resilientProvider) {
+            const stats = resilientProvider.getRateLimiterStats();
+            console.debug("[Resilience] Stats:", stats);
+          }
           notifyError(errorMsg);
           addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
         } finally {
@@ -2808,6 +3047,7 @@ function AppContent({
       notifyTaskComplete,
       notifyError,
       resolveFollowupResponse,
+      resilientProvider,
     ]
   );
 
@@ -3289,6 +3529,9 @@ function AppContent({
       getLevel3Items={getLevel3Items}
       categoryOrder={categoryOrder}
       categoryLabels={categoryLabels}
+      checkpointDiff={checkpointDiff}
+      closeCheckpointDiff={closeCheckpointDiff}
+      onOpenCheckpointDiff={openCheckpointDiff}
       contextWindow={contextWindow}
       currentMode={currentMode}
       currentModel={currentModel}
@@ -3346,6 +3589,8 @@ function AppContent({
       sidebarContent={sidebarContent}
       specPhase={specPhase}
       themeContext={themeContext}
+      taskChain={taskChain}
+      currentTaskId={currentTaskId}
       todoItems={todoItems}
       refreshTodos={refreshTodos}
       toolRegistry={toolRegistry}
@@ -3368,6 +3613,8 @@ function AppContent({
       providerStatus={providerStatus}
       costWarningState={costWarningState}
       autoApprovalState={autoApprovalState}
+      vimEnabled={vimEnabled}
+      vimMode={vim.mode}
     />
   );
 }
@@ -3402,6 +3649,14 @@ interface AppContentViewProps {
   ) => AutocompleteOption[] | undefined;
   readonly categoryOrder: readonly string[];
   readonly categoryLabels: Record<string, string>;
+  readonly checkpointDiff: {
+    content: string;
+    snapshotHash?: string;
+    isLoading: boolean;
+    isVisible: boolean;
+  };
+  readonly closeCheckpointDiff: () => void;
+  readonly onOpenCheckpointDiff: (hash: string) => void;
   readonly contextWindow: number;
   readonly currentMode: CodingMode;
   readonly currentModel: string;
@@ -3461,6 +3716,8 @@ interface AppContentViewProps {
   readonly sidebarContent: SidebarContent;
   readonly specPhase: number;
   readonly themeContext: ThemeContextValue;
+  readonly taskChain: TaskChain | null;
+  readonly currentTaskId?: string;
   readonly todoItems: readonly TodoItemData[];
   readonly refreshTodos: () => void;
   readonly toolRegistry: ToolRegistry;
@@ -3519,6 +3776,10 @@ interface AppContentViewProps {
     limitReached: boolean;
     limitType?: "requests" | "cost";
   } | null;
+  /** Whether vim mode is enabled */
+  readonly vimEnabled: boolean;
+  /** Current vim mode */
+  readonly vimMode: VimMode;
 }
 
 function renderSidebarContent({
@@ -3531,6 +3792,9 @@ function renderSidebarContent({
   toolRegistry,
   persistence,
   snapshots,
+  taskChain,
+  currentTaskId,
+  onOpenCheckpointDiff,
 }: {
   readonly announce: (message: string) => void;
   readonly showSidebar: boolean;
@@ -3545,6 +3809,9 @@ function renderSidebarContent({
     lastSavedAt: Date | null;
   };
   readonly snapshots: ReturnType<typeof useSnapshots>;
+  readonly taskChain: TaskChain | null;
+  readonly currentTaskId?: string;
+  readonly onOpenCheckpointDiff: (hash: string) => void;
 }): React.ReactNode | undefined {
   if (!showSidebar) return undefined;
 
@@ -3584,8 +3851,7 @@ function renderSidebarContent({
           }
         }}
         onDiff={async (hash) => {
-          const diff = await snapshots.diff(hash);
-          announce(`Diff: ${diff.slice(0, 100)}...`);
+          onOpenCheckpointDiff(hash);
         }}
         onTakeCheckpoint={async () => {
           try {
@@ -3607,6 +3873,18 @@ function renderSidebarContent({
   return (
     <Box flexDirection="column" height="100%">
       <Box flexGrow={1}>{panelContent}</Box>
+      {taskChain && taskChain.nodes.size > 0 && (
+        <Box marginTop={1}>
+          <MaxSizedBox maxHeight={12} truncationIndicator="... (more tasks)">
+            <AgentProgress
+              chain={taskChain}
+              currentTaskId={currentTaskId}
+              showDetails={false}
+              progressBarWidth={12}
+            />
+          </MaxSizedBox>
+        </Box>
+      )}
       <SystemStatusPanel compact={false} persistence={persistence} />
     </Box>
   );
@@ -3616,6 +3894,13 @@ interface AppOverlaysProps {
   readonly activeApproval: ToolApprovalState["activeApproval"];
   readonly activeRiskLevel: ToolApprovalState["activeRiskLevel"];
   readonly activeSessionId: string;
+  readonly checkpointDiff: {
+    content: string;
+    snapshotHash?: string;
+    isLoading: boolean;
+    isVisible: boolean;
+  };
+  readonly closeCheckpointDiff: () => void;
   readonly closeSessionManager: () => void;
   readonly currentMode: CodingMode;
   readonly currentModel: string;
@@ -3652,6 +3937,8 @@ function AppOverlays({
   activeApproval,
   activeRiskLevel,
   activeSessionId,
+  checkpointDiff,
+  closeCheckpointDiff,
   closeSessionManager,
   currentMode,
   currentModel,
@@ -3822,6 +4109,26 @@ function AppOverlays({
           />
         </Box>
       )}
+
+      {checkpointDiff.isVisible && (
+        <Box
+          position="absolute"
+          marginTop={3}
+          marginLeft={5}
+          borderStyle="double"
+          borderColor={themeContext.theme.colors.info}
+          padding={1}
+        >
+          <CheckpointDiffView
+            diffContent={checkpointDiff.content}
+            snapshotHash={checkpointDiff.snapshotHash}
+            isFocused={checkpointDiff.isVisible}
+            isLoading={checkpointDiff.isLoading}
+            maxHeight={24}
+            onClose={closeCheckpointDiff}
+          />
+        </Box>
+      )}
     </>
   );
 }
@@ -3837,6 +4144,11 @@ interface AppHeaderProps {
   readonly initError?: Error;
   readonly redoBacktrack: () => void;
   readonly specPhase: number;
+  readonly tokenUsage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalCost: number;
+  };
   readonly undoBacktrack: () => void;
 }
 
@@ -3851,6 +4163,7 @@ function AppHeader({
   initError,
   redoBacktrack,
   specPhase,
+  tokenUsage,
   undoBacktrack,
 }: AppHeaderProps): React.JSX.Element {
   const fileStats = useFileChangeStats();
@@ -3858,6 +4171,15 @@ function AppHeader({
 
   return (
     <Box flexDirection="column">
+      <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
+        <ModeIndicator mode={currentMode} specPhase={specPhase} compact />
+        <CostDisplay
+          inputTokens={tokenUsage.inputTokens}
+          outputTokens={tokenUsage.outputTokens}
+          totalCost={tokenUsage.totalCost}
+          compact
+        />
+      </Box>
       {initError && <InitErrorBanner error={initError} />}
       {(currentTip || showFileChanges) && (
         <Box flexDirection="row" justifyContent="space-between">
@@ -3915,6 +4237,9 @@ function AppContentView({
   getLevel3Items,
   categoryOrder,
   categoryLabels,
+  checkpointDiff,
+  closeCheckpointDiff,
+  onOpenCheckpointDiff,
   contextWindow,
   currentMode,
   currentModel,
@@ -3968,6 +4293,8 @@ function AppContentView({
   sidebarContent,
   specPhase,
   themeContext,
+  taskChain,
+  currentTaskId,
   todoItems,
   refreshTodos,
   toolRegistry,
@@ -3986,6 +4313,8 @@ function AppContentView({
   providerStatus,
   costWarningState,
   autoApprovalState,
+  vimEnabled,
+  vimMode,
 }: AppContentViewProps): React.JSX.Element {
   const sidebar = renderSidebarContent({
     announce,
@@ -3997,6 +4326,9 @@ function AppContentView({
     toolRegistry,
     persistence,
     snapshots,
+    taskChain,
+    currentTaskId,
+    onOpenCheckpointDiff,
   });
 
   const footer = (
@@ -4095,6 +4427,206 @@ function AppContentView({
     !interactivePrompt &&
     !pendingOperation;
 
+  const headerContent = (
+    <AppHeader
+      backtrackState={backtrackState}
+      branches={branches}
+      currentMode={currentMode}
+      currentTip={currentTip}
+      dismissTip={dismissTip}
+      handleCreateBacktrackBranch={handleCreateBacktrackBranch}
+      handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
+      initError={initError}
+      redoBacktrack={redoBacktrack}
+      specPhase={specPhase}
+      tokenUsage={tokenUsage}
+      undoBacktrack={undoBacktrack}
+    />
+  );
+
+  const layoutBody = (
+    <>
+      <Box flexDirection="column" flexGrow={1}>
+        {/* Thinking content is now integrated into messages via the `thinking` field */}
+        {/* T-VIRTUAL-SCROLL: Pass historyMessages for Static rendering optimization */}
+        <MessageList
+          messages={messages}
+          historyMessages={messages.filter((m) => !m.isStreaming)}
+          pendingMessage={pendingMessage}
+          isLoading={isLoading}
+          useVirtualizedList={true}
+          estimatedItemHeight={4}
+          scrollKeyMode={commandInputFocused ? "page" : "all"}
+          forceFollowOnInput={true}
+          useAltBuffer={alternateBufferEnabled}
+          enableScroll={!alternateBufferEnabled}
+          isFocused={
+            !showModeSelector &&
+            !showModelSelector &&
+            !showSessionManager &&
+            !showHelpModal &&
+            !activeApproval &&
+            !interactivePrompt &&
+            !pendingOperation
+          }
+        />
+      </Box>
+
+      <Box flexShrink={0} flexDirection="column">
+        {/* Followup prompt with suggestions - use OptionSelector for keyboard navigation */}
+        {followupPrompt && followupPrompt.suggestions.length > 0 && (
+          <OptionSelector
+            question={followupPrompt.question}
+            options={followupPrompt.suggestions}
+            onSelect={(option) => {
+              handleMessage(option);
+            }}
+            onCancel={() => {
+              handleMessage("");
+            }}
+            isFocused={commandInputFocused}
+          />
+        )}
+        {/* Followup prompt without suggestions - show simple text prompt */}
+        {followupPrompt && followupPrompt.suggestions.length === 0 && (
+          <Box marginTop={1} flexDirection="column">
+            <Text color={themeContext.theme.semantic.text.secondary}>
+              ↳ {followupPrompt.question}
+            </Text>
+            <Text dimColor>Type your reply and press Enter (Esc to skip)</Text>
+          </Box>
+        )}
+        {interactivePrompt && (
+          <Box
+            borderStyle="round"
+            borderColor={themeContext.theme.colors.warning}
+            paddingX={2}
+            paddingY={1}
+            marginY={1}
+            flexDirection="column"
+          >
+            {/* Title section */}
+            {interactivePrompt.title && (
+              <Box
+                borderStyle="single"
+                borderBottom
+                borderColor={themeContext.theme.colors.warning}
+                marginBottom={1}
+              >
+                <Text bold color={themeContext.theme.colors.warning}>
+                  🔐 {interactivePrompt.title}
+                </Text>
+              </Box>
+            )}
+            {/* Help text section */}
+            {interactivePrompt.helpText && (
+              <Box marginBottom={1}>
+                <Text color={themeContext.theme.semantic.text.muted}>
+                  {interactivePrompt.helpText}
+                </Text>
+              </Box>
+            )}
+            {/* Format hint */}
+            {interactivePrompt.formatHint && (
+              <Text color={themeContext.theme.semantic.text.muted}>
+                📋 Format: {interactivePrompt.formatHint}
+              </Text>
+            )}
+            {/* Documentation URL hint */}
+            {interactivePrompt.documentationUrl && (
+              <Text color={themeContext.theme.semantic.text.muted}>
+                📚 Docs: {interactivePrompt.documentationUrl}
+              </Text>
+            )}
+            {/* Input area with spacing */}
+            <Box flexDirection="column" marginTop={1}>
+              {/* Original message (e.g., "API Key:") */}
+              <Text>{interactivePrompt.message}</Text>
+              {/* Select options */}
+              {interactivePrompt.inputType === "select" && interactivePrompt.options && (
+                <Box flexDirection="column" marginTop={1}>
+                  {interactivePrompt.options.map((option, index) => (
+                    <Text key={option}>{`${index + 1}. ${option}`}</Text>
+                  ))}
+                </Box>
+              )}
+              {/* Input field */}
+              <Box marginTop={1} flexGrow={1}>
+                <Text color={themeContext.theme.semantic.text.muted}>{promptPlaceholder} </Text>
+                <Box flexGrow={1}>
+                  <TextInput
+                    value={promptValue}
+                    onChange={setPromptValue}
+                    onSubmit={handlePromptSubmit}
+                    mask={interactivePrompt.inputType === "password" ? "*" : undefined}
+                    focused={!suppressPromptEnter}
+                    suppressEnter={suppressPromptEnter}
+                    showBorder={false}
+                  />
+                </Box>
+              </Box>
+            </Box>
+            {/* Footer hint */}
+            <Box marginTop={1}>
+              <Text dimColor>Press Enter to submit, Esc to cancel</Text>
+            </Box>
+          </Box>
+        )}
+
+        {/* Focus Debug: logs focus conditions when they change */}
+        <FocusDebugger
+          isLoading={isLoading}
+          showModeSelector={showModeSelector}
+          showModelSelector={showModelSelector}
+          showSessionManager={showSessionManager}
+          showHelpModal={showHelpModal}
+          activeApproval={activeApproval}
+          interactivePrompt={interactivePrompt}
+          pendingOperation={pendingOperation}
+        />
+        {/* Vim mode indicator (shown above input when vim mode is enabled) */}
+        {vimEnabled && (
+          <Box marginBottom={0}>
+            <VimModeIndicator enabled={vimEnabled} mode={vimMode} />
+          </Box>
+        )}
+        <EnhancedCommandInput
+          onMessage={handleMessage}
+          onCommand={handleCommand}
+          commands={commandOptions}
+          getSubcommands={getSubcommands}
+          getLevel3Items={getLevel3Items}
+          groupedCommands={true}
+          categoryOrder={categoryOrder}
+          categoryLabels={categoryLabels}
+          placeholder={commandPlaceholder}
+          disabled={commandInputDisabled}
+          focused={commandInputFocused}
+          historyKey="vellum-command-history"
+          cwd={process.cwd()}
+        />
+      </Box>
+    </>
+  );
+
+  const screenReaderStatus = pendingOperation
+    ? pendingOperation.message
+    : isLoading
+      ? "Thinking..."
+      : "Ready";
+
+  const screenReaderContent = (
+    <Box flexDirection="column">
+      {layoutBody}
+      {showSidebar && sidebar && (
+        <Box marginTop={1} flexDirection="column">
+          <Text color={themeContext.theme.semantic.text.muted}>Sidebar</Text>
+          {sidebar}
+        </Box>
+      )}
+    </Box>
+  );
+
   return (
     <>
       {showOnboarding && (
@@ -4130,6 +4662,8 @@ function AppContentView({
             activeApproval={activeApproval}
             activeRiskLevel={activeRiskLevel}
             activeSessionId={activeSessionId}
+            checkpointDiff={checkpointDiff}
+            closeCheckpointDiff={closeCheckpointDiff}
             closeSessionManager={closeSessionManager}
             currentMode={currentMode}
             currentModel={currentModel}
@@ -4160,186 +4694,26 @@ function AppContentView({
             updateAvailable={updateAvailable}
           />
 
-          <Layout
-            header={
-              <AppHeader
-                backtrackState={backtrackState}
-                branches={branches}
-                currentMode={currentMode}
-                currentTip={currentTip}
-                dismissTip={dismissTip}
-                handleCreateBacktrackBranch={handleCreateBacktrackBranch}
-                handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
-                initError={initError}
-                redoBacktrack={redoBacktrack}
-                specPhase={specPhase}
-                undoBacktrack={undoBacktrack}
-              />
+          <AdaptiveLayout
+            regularLayout={
+              <Layout
+                header={headerContent}
+                footer={extendedFooter}
+                sidebar={sidebar}
+                showSidebar={showSidebar}
+                workspace={workspace}
+                branch={branch ?? undefined}
+                changedFiles={changedFiles}
+              >
+                {layoutBody}
+              </Layout>
             }
+            header={headerContent}
             footer={extendedFooter}
-            sidebar={sidebar}
-            showSidebar={showSidebar}
-            workspace={workspace}
-            branch={branch ?? undefined}
-            changedFiles={changedFiles}
+            status={screenReaderStatus}
           >
-            <Box flexDirection="column" flexGrow={1}>
-              {/* Thinking content is now integrated into messages via the `thinking` field */}
-              {/* T-VIRTUAL-SCROLL: Pass historyMessages for Static rendering optimization */}
-              <MessageList
-                messages={messages}
-                historyMessages={messages.filter((m) => !m.isStreaming)}
-                pendingMessage={pendingMessage}
-                isLoading={isLoading}
-                useVirtualizedList={true}
-                estimatedItemHeight={4}
-                scrollKeyMode={commandInputFocused ? "page" : "all"}
-                forceFollowOnInput={true}
-                useAltBuffer={alternateBufferEnabled}
-                enableScroll={!alternateBufferEnabled}
-                isFocused={
-                  !showModeSelector &&
-                  !showModelSelector &&
-                  !showSessionManager &&
-                  !showHelpModal &&
-                  !activeApproval &&
-                  !interactivePrompt &&
-                  !pendingOperation
-                }
-              />
-            </Box>
-
-            <Box flexShrink={0} flexDirection="column">
-              {/* Followup prompt with suggestions - use OptionSelector for keyboard navigation */}
-              {followupPrompt && followupPrompt.suggestions.length > 0 && (
-                <OptionSelector
-                  question={followupPrompt.question}
-                  options={followupPrompt.suggestions}
-                  onSelect={(option) => {
-                    handleMessage(option);
-                  }}
-                  onCancel={() => {
-                    handleMessage("");
-                  }}
-                  isFocused={commandInputFocused}
-                />
-              )}
-              {/* Followup prompt without suggestions - show simple text prompt */}
-              {followupPrompt && followupPrompt.suggestions.length === 0 && (
-                <Box marginTop={1} flexDirection="column">
-                  <Text color={themeContext.theme.semantic.text.secondary}>
-                    ↳ {followupPrompt.question}
-                  </Text>
-                  <Text dimColor>Type your reply and press Enter (Esc to skip)</Text>
-                </Box>
-              )}
-              {interactivePrompt && (
-                <Box
-                  borderStyle="round"
-                  borderColor={themeContext.theme.colors.warning}
-                  paddingX={2}
-                  paddingY={1}
-                  marginY={1}
-                  flexDirection="column"
-                >
-                  {/* Title section */}
-                  {interactivePrompt.title && (
-                    <Box
-                      borderStyle="single"
-                      borderBottom
-                      borderColor={themeContext.theme.colors.warning}
-                      marginBottom={1}
-                    >
-                      <Text bold color={themeContext.theme.colors.warning}>
-                        🔐 {interactivePrompt.title}
-                      </Text>
-                    </Box>
-                  )}
-                  {/* Help text section */}
-                  {interactivePrompt.helpText && (
-                    <Box marginBottom={1}>
-                      <Text color={themeContext.theme.semantic.text.muted}>
-                        {interactivePrompt.helpText}
-                      </Text>
-                    </Box>
-                  )}
-                  {/* Format hint */}
-                  {interactivePrompt.formatHint && (
-                    <Text color={themeContext.theme.semantic.text.muted}>
-                      📋 Format: {interactivePrompt.formatHint}
-                    </Text>
-                  )}
-                  {/* Documentation URL hint */}
-                  {interactivePrompt.documentationUrl && (
-                    <Text color={themeContext.theme.semantic.text.muted}>
-                      📚 Docs: {interactivePrompt.documentationUrl}
-                    </Text>
-                  )}
-                  {/* Input area with spacing */}
-                  <Box flexDirection="column" marginTop={1}>
-                    {/* Original message (e.g., "API Key:") */}
-                    <Text>{interactivePrompt.message}</Text>
-                    {/* Select options */}
-                    {interactivePrompt.inputType === "select" && interactivePrompt.options && (
-                      <Box flexDirection="column" marginTop={1}>
-                        {interactivePrompt.options.map((option, index) => (
-                          <Text key={option}>{`${index + 1}. ${option}`}</Text>
-                        ))}
-                      </Box>
-                    )}
-                    {/* Input field */}
-                    <Box marginTop={1} flexGrow={1}>
-                      <Text color={themeContext.theme.semantic.text.muted}>
-                        {promptPlaceholder}{" "}
-                      </Text>
-                      <Box flexGrow={1}>
-                        <TextInput
-                          value={promptValue}
-                          onChange={setPromptValue}
-                          onSubmit={handlePromptSubmit}
-                          mask={interactivePrompt.inputType === "password" ? "*" : undefined}
-                          focused={!suppressPromptEnter}
-                          suppressEnter={suppressPromptEnter}
-                          showBorder={false}
-                        />
-                      </Box>
-                    </Box>
-                  </Box>
-                  {/* Footer hint */}
-                  <Box marginTop={1}>
-                    <Text dimColor>Press Enter to submit, Esc to cancel</Text>
-                  </Box>
-                </Box>
-              )}
-
-              {/* Focus Debug: logs focus conditions when they change */}
-              <FocusDebugger
-                isLoading={isLoading}
-                showModeSelector={showModeSelector}
-                showModelSelector={showModelSelector}
-                showSessionManager={showSessionManager}
-                showHelpModal={showHelpModal}
-                activeApproval={activeApproval}
-                interactivePrompt={interactivePrompt}
-                pendingOperation={pendingOperation}
-              />
-              <EnhancedCommandInput
-                onMessage={handleMessage}
-                onCommand={handleCommand}
-                commands={commandOptions}
-                getSubcommands={getSubcommands}
-                getLevel3Items={getLevel3Items}
-                groupedCommands={true}
-                categoryOrder={categoryOrder}
-                categoryLabels={categoryLabels}
-                placeholder={commandPlaceholder}
-                disabled={commandInputDisabled}
-                focused={commandInputFocused}
-                historyKey="vellum-command-history"
-                cwd={process.cwd()}
-              />
-            </Box>
-          </Layout>
+            {screenReaderContent}
+          </AdaptiveLayout>
         </>
       )}
     </>

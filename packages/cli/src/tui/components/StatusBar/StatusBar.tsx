@@ -9,12 +9,15 @@
 
 import type { CodingMode, SandboxPolicy } from "@vellum/core";
 import { Box, Text } from "ink";
+import { useMemo } from "react";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { GradientText } from "../common/GradientText.js";
 import type { AgentLevel } from "./AgentModeIndicator.js";
 import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 import { ModelIndicator } from "./ModelIndicator.js";
 import type { PersistenceStatusIndicatorProps } from "./PersistenceStatusIndicator.js";
+import { ResilienceStatusSegment } from "./ResilienceIndicator.js";
 import { SandboxIndicator } from "./SandboxIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
 import { TokenBreakdown, type TokenStats } from "./TokenBreakdown.js";
@@ -74,8 +77,8 @@ export interface StatusBarProps {
 // Constants
 // =============================================================================
 
-/** Separator between status items */
-const SEPARATOR = " │ ";
+/** Separator between status items (compact, no extra spaces) */
+const SEPARATOR = "│";
 
 /** Mode display configuration */
 const MODES_CONFIG: Array<{ mode: CodingMode; icon: string; label: string }> = [
@@ -191,30 +194,44 @@ export function StatusBar({
     ? MODES_CONFIG
     : MODES_CONFIG.filter((modeConfig) => modeConfig.mode === mode);
 
+  // Mode-specific gradient colors
+  const modeGradients: Record<CodingMode, readonly string[]> = useMemo(
+    () => ({
+      vibe: [theme.colors.success, "#34d399", "#6ee7b7"], // Green gradient
+      plan: [theme.colors.info, "#60a5fa", "#93c5fd"], // Blue gradient
+      spec: [theme.colors.primary, "#8b5cf6", "#a78bfa"], // Purple gradient
+    }),
+    [theme.colors]
+  );
+
   const modeSection = (
-    <Box key="modes" flexDirection="row">
+    <Box key="modes" flexDirection="row" alignItems="center">
       {visibleModes.map((modeConfig, index) => {
         const isActive = modeConfig.mode === mode;
+        const modeText = `${modeConfig.icon} ${modeConfig.label}`;
+
         return (
           <Text key={modeConfig.mode}>
-            {index > 0 && "  "}
-            <Text
-              color={isActive ? theme.brand.primary : theme.semantic.text.muted}
-              bold={isActive}
-              dimColor={!isActive}
-            >
-              {modeConfig.icon} {modeConfig.label}
-            </Text>
+            {index > 0 && " "}
+            {isActive ? (
+              <GradientText text={modeText} colors={modeGradients[modeConfig.mode]} bold />
+            ) : (
+              <Text color={theme.semantic.text.muted} dimColor>
+                {modeText}
+              </Text>
+            )}
           </Text>
         );
       })}
-      {/* Agent level indicator: │ Orch·L0 */}
+      {/* Agent level indicator: │Orch·L0 */}
       {agentAbbrev !== undefined && agentLevel !== undefined && (
         <Text>
-          <Text color={theme.semantic.border.muted}> │ </Text>
-          <Text color={theme.brand.primary} bold>
-            {agentAbbrev}·L{agentLevel}
-          </Text>
+          <Text color={theme.semantic.border.muted}>│</Text>
+          <GradientText
+            text={`${agentAbbrev}·L${agentLevel}`}
+            colors={[theme.brand.primary, theme.brand.secondary]}
+            bold
+          />
         </Text>
       )}
     </Box>
@@ -222,6 +239,11 @@ export function StatusBar({
 
   // Collect right-side indicators
   const rightIndicators: React.ReactNode[] = [];
+
+  // Resilience status (rate limiting, retry) - shown first when active
+  const resilienceSegment = <ResilienceStatusSegment key="resilience" />;
+  // Note: ResilienceStatusSegment returns null when inactive, so we can always include it
+  rightIndicators.push(resilienceSegment);
 
   // Model indicator (compact, name only)
   if (modelName) {
@@ -295,13 +317,13 @@ export function StatusBar({
     rightIndicators.push(
       <Box key="sidebar-hint">
         <Text color={theme.semantic.text.muted} dimColor>
-          Ctrl+K/Alt+K sidebar
+          Alt+K sidebar
         </Text>
       </Box>
     );
   }
 
-  // Render right indicators with separators
+  // Render right indicators with separators (compact layout)
   const renderedRightItems: React.ReactNode[] = [];
   for (let i = 0; i < rightIndicators.length; i++) {
     if (i > 0) {
@@ -337,7 +359,7 @@ export function StatusBar({
       {modeSection}
 
       {/* Right: Model, Context, Cost - with separator from mode section */}
-      <Box flexDirection="row">
+      <Box flexDirection="row" alignItems="center">
         <Text color={theme.semantic.border.muted}>{SEPARATOR}</Text>
         {renderedRightItems}
       </Box>

@@ -2,6 +2,8 @@
  * MCP panel render tests
  *
  * Verifies basic read-only status output for the MCP sidebar panel.
+ *
+ * @vitest-environment node
  */
 
 import { createToolRegistry, type ToolExecutor } from "@vellum/core";
@@ -72,9 +74,9 @@ describe("McpPanel", () => {
     expect(frame).toContain("MCP tools registered: 1");
     expect(frame).toContain("Last error:");
 
-    // Footer hotkey hints (now show Ctrl/Alt alternatives)
-    expect(frame).toContain("Ctrl/Alt+K");
-    expect(frame).toContain("Ctrl/Alt+O");
+    // Footer hotkey hints (Alt primary)
+    expect(frame).toContain("Alt+K");
+    expect(frame).toContain("Alt+O");
     expect(frame).toContain("MCP");
   });
 });

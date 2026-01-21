@@ -1,3 +1,20 @@
+/**
+ * Multi-client manager for handling multiple LSP servers per file.
+ *
+ * TODO: Integration with LspHub
+ * ============================
+ * This class is exported but not yet integrated into LspHub.
+ * Integration path:
+ * 1. LspHub.getConnectionForFile() should return multiple connections
+ * 2. LspHub should use MultiClientManager.mergeDiagnostics() when aggregating
+ * 3. Consider workspace-aware connection pooling (multiple workspaces may share servers)
+ *
+ * Current limitation: Each serverId has only one connection, which means
+ * multiple workspaces cannot have independent LSP sessions for the same server type.
+ *
+ * @module @vellum/lsp/multi-client
+ */
+
 export interface PriorityRule {
   pattern: string;
   servers: string[];

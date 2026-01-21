@@ -199,6 +199,19 @@ export interface AgentLoopConfig {
    */
   costService?: CostService;
   /**
+   * Enable parallel tool execution (T075).
+   * When true, multiple tool calls are executed concurrently.
+   * Note: Tools requiring user permission (ask) will still block.
+   * @default false
+   */
+  parallelToolExecution?: boolean;
+  /**
+   * Maximum number of tools to execute concurrently (T075).
+   * Only applies when parallelToolExecution is true.
+   * @default 5
+   */
+  maxToolConcurrency?: number;
+  /**
    * LLM-based loop verification configuration (T041).
    * When enabled, uses an LLM to verify borderline loop detections.
    */
@@ -342,6 +355,18 @@ export interface AgentLoopEvents {
       limitType?: "requests" | "cost";
     },
   ];
+}
+
+/**
+ * Result of a single tool call execution (T075).
+ * @internal
+ */
+interface SingleToolCallResult {
+  id: string;
+  name: string;
+  result: string;
+  isError: boolean;
+  permissionBlocked: boolean;
 }
 
 /**
@@ -1710,10 +1735,202 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   }
 
   /**
+   * Execute a single tool call with all validation and permission checks.
+   *
+   * @param call - The tool call to execute
+   * @returns Result of the tool execution
+   * @internal
+   */
+  private async executeSingleToolCall(call: {
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+  }): Promise<SingleToolCallResult> {
+    // Check for unknown tool marker from repairToolCall
+    if (call.name.startsWith("__unknown_")) {
+      const originalName = call.name.replace(/^__unknown_|__$/g, "");
+      const error = `LLM requested unknown tool: ${originalName}`;
+      this.emit("error", new VellumError(error, ErrorCode.TOOL_NOT_FOUND));
+      this.emit("toolEnd", call.id, call.name, {
+        result: { success: false, error },
+        timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+        toolName: call.name,
+        callId: call.id,
+      });
+      return {
+        id: call.id,
+        name: call.name,
+        result: error,
+        isError: true,
+        permissionBlocked: false,
+      };
+    }
+
+    // Check AGENTS.md tool allowlist if integration is available
+    if (this.agentsIntegration && this.agentsIntegration.getState() === "ready") {
+      const filter = this.agentsIntegration.getToolFilter();
+      if (!filter.isAllowed(call.name)) {
+        const error = `Tool "${call.name}" is not allowed by AGENTS.md configuration`;
+        this.logger?.warn("Tool blocked by AGENTS.md allowlist", {
+          toolName: call.name,
+          callId: call.id,
+        });
+        this.emit("error", new Error(error));
+        this.emit("toolEnd", call.id, call.name, {
+          result: { success: false, error },
+          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+          toolName: call.name,
+          callId: call.id,
+        });
+        return {
+          id: call.id,
+          name: call.name,
+          result: error,
+          isError: true,
+          permissionBlocked: false,
+        };
+      }
+    }
+
+    // Create tool context
+    const toolContext = this.createToolContext(call.id);
+
+    try {
+      // Tool not found
+      if (!this.toolExecutor.getTool(call.name)) {
+        const error = `Tool not found: ${call.name}`;
+        this.emit("error", new ToolNotFoundError(call.name));
+        this.emit("toolEnd", call.id, call.name, {
+          result: { success: false, error },
+          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+          toolName: call.name,
+          callId: call.id,
+        });
+        return {
+          id: call.id,
+          name: call.name,
+          result: error,
+          isError: true,
+          permissionBlocked: false,
+        };
+      }
+
+      // Check permission before emitting toolStart
+      const permission: PermissionDecision = await this.toolExecutor.checkPermission(
+        call.name,
+        call.input,
+        toolContext
+      );
+
+      if (permission === "deny") {
+        const error = `Permission denied for tool: ${call.name}`;
+        this.emit("permissionDenied", call.id, call.name, error);
+        this.emit("toolEnd", call.id, call.name, {
+          result: { success: false, error },
+          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+          toolName: call.name,
+          callId: call.id,
+        });
+        return {
+          id: call.id,
+          name: call.name,
+          result: error,
+          isError: true,
+          permissionBlocked: false,
+        };
+      }
+
+      if (permission === "ask") {
+        // Handle wait_permission state (T015)
+        // Note: Permission blocking stops auto-continuation
+        await this.handlePermissionRequired(call.id, call.name, call.input);
+        return {
+          id: call.id,
+          name: call.name,
+          result: "",
+          isError: false,
+          permissionBlocked: true,
+        };
+      }
+
+      // Permission allowed - now we can emit toolStart and execute
+      this.emit("toolStart", call.id, call.name, call.input);
+      const executionResult = await this.toolExecutor.execute(call.name, call.input, toolContext);
+      this.emit("toolEnd", call.id, call.name, executionResult);
+
+      // Process tool result through unified signal dispatcher (GAP 1, 2, 5 fix)
+      let resultContent: string;
+      if (executionResult.result.success) {
+        const output = executionResult.result.output;
+        // Use unified signal dispatcher to handle all signal types
+        resultContent = await this.processToolResultSignals(output, call.id, call.name);
+      } else {
+        resultContent = executionResult.result.error ?? "Unknown error";
+      }
+
+      return {
+        id: call.id,
+        name: call.name,
+        result: resultContent,
+        isError: !executionResult.result.success,
+        permissionBlocked: false,
+      };
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+
+      if (err instanceof PermissionDeniedError) {
+        this.emit("permissionDenied", call.id, call.name, err.message);
+        return {
+          id: call.id,
+          name: call.name,
+          result: err.message,
+          isError: true,
+          permissionBlocked: true,
+        };
+      }
+
+      if (err instanceof ToolNotFoundError) {
+        this.emit("error", err);
+        this.emit("toolEnd", call.id, call.name, {
+          result: { success: false, error: err.message },
+          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+          toolName: call.name,
+          callId: call.id,
+        });
+        return {
+          id: call.id,
+          name: call.name,
+          result: err.message,
+          isError: true,
+          permissionBlocked: false,
+        };
+      }
+
+      this.emit("error", err);
+      this.emit("toolEnd", call.id, call.name, {
+        result: { success: false, error: err.message },
+        timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
+        toolName: call.name,
+        callId: call.id,
+      });
+      return {
+        id: call.id,
+        name: call.name,
+        result: err.message,
+        isError: true,
+        permissionBlocked: false,
+      };
+    }
+  }
+
+  /**
    * Execute pending tool calls (T014) with auto-continuation (T058).
    *
    * Executes all pending tool calls, collects results, adds them to message
    * history, and automatically re-invokes the LLM if configured.
+   *
+   * Supports parallel execution (T075) when config.parallelToolExecution is true.
+   * Uses a semaphore to limit concurrency to config.maxToolConcurrency (default 5).
    *
    * @param toolCalls - Array of tool calls from LLM
    */
@@ -1732,143 +1949,97 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // Track if any permission was blocked (stops continuation)
     let permissionBlocked = false;
 
-    for (const call of toolCalls) {
-      // Check for cancellation between tool calls
-      if (this.cancellation.isCancelled) {
-        break;
-      }
+    // T075: Parallel tool execution support
+    const parallelEnabled = this.config.parallelToolExecution ?? false;
+    const maxConcurrency = this.config.maxToolConcurrency ?? 5;
 
-      // Check for unknown tool marker from repairToolCall
-      if (call.name.startsWith("__unknown_")) {
-        const originalName = call.name.replace(/^__unknown_|__$/g, "");
-        const error = `LLM requested unknown tool: ${originalName}`;
-        this.emit("error", new VellumError(error, ErrorCode.TOOL_NOT_FOUND));
-        this.emit("toolEnd", call.id, call.name, {
-          result: { success: false, error },
-          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-          toolName: call.name,
-          callId: call.id,
+    if (parallelEnabled && toolCalls.length > 1) {
+      // Parallel execution with concurrency limit using semaphore pattern
+      this.logger?.debug("Executing tool calls in parallel", {
+        toolCount: toolCalls.length,
+        maxConcurrency,
+      });
+
+      let permits = maxConcurrency;
+      const waiting: Array<() => void> = [];
+
+      const acquire = async (): Promise<void> => {
+        if (permits > 0) {
+          permits--;
+          return;
+        }
+        return new Promise<void>((resolve) => {
+          waiting.push(resolve);
         });
-        toolResults.push({ id: call.id, name: call.name, result: error, isError: true });
-        continue;
-      }
+      };
 
-      // Check AGENTS.md tool allowlist if integration is available
-      if (this.agentsIntegration && this.agentsIntegration.getState() === "ready") {
-        const filter = this.agentsIntegration.getToolFilter();
-        if (!filter.isAllowed(call.name)) {
-          const error = `Tool "${call.name}" is not allowed by AGENTS.md configuration`;
-          this.logger?.warn("Tool blocked by AGENTS.md allowlist", {
-            toolName: call.name,
-            callId: call.id,
-          });
-          this.emit("error", new Error(error));
-          this.emit("toolEnd", call.id, call.name, {
-            result: { success: false, error },
-            timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-            toolName: call.name,
-            callId: call.id,
-          });
-          toolResults.push({ id: call.id, name: call.name, result: error, isError: true });
-          continue; // Skip to next tool call
-        }
-      }
-
-      // Create tool context
-      const toolContext = this.createToolContext(call.id);
-
-      try {
-        // Tool not found
-        if (!this.toolExecutor.getTool(call.name)) {
-          const error = `Tool not found: ${call.name}`;
-          this.emit("error", new ToolNotFoundError(call.name));
-          this.emit("toolEnd", call.id, call.name, {
-            result: { success: false, error },
-            timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-            toolName: call.name,
-            callId: call.id,
-          });
-          toolResults.push({ id: call.id, name: call.name, result: error, isError: true });
-          continue;
-        }
-
-        // Check permission before emitting toolStart
-        const permission: PermissionDecision = await this.toolExecutor.checkPermission(
-          call.name,
-          call.input,
-          toolContext
-        );
-
-        if (permission === "deny") {
-          const error = `Permission denied for tool: ${call.name}`;
-          this.emit("permissionDenied", call.id, call.name, error);
-          this.emit("toolEnd", call.id, call.name, {
-            result: { success: false, error },
-            timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-            toolName: call.name,
-            callId: call.id,
-          });
-          toolResults.push({ id: call.id, name: call.name, result: error, isError: true });
-          continue;
-        }
-
-        if (permission === "ask") {
-          // Handle wait_permission state (T015)
-          // Note: Permission blocking stops auto-continuation
-          permissionBlocked = true;
-          await this.handlePermissionRequired(call.id, call.name, call.input);
-          continue;
-        }
-
-        // Permission allowed - now we can emit toolStart and execute
-        this.emit("toolStart", call.id, call.name, call.input);
-        const executionResult = await this.toolExecutor.execute(call.name, call.input, toolContext);
-        this.emit("toolEnd", call.id, call.name, executionResult);
-
-        // Process tool result through unified signal dispatcher (GAP 1, 2, 5 fix)
-        let resultContent: string;
-        if (executionResult.result.success) {
-          const output = executionResult.result.output;
-          // Use unified signal dispatcher to handle all signal types
-          resultContent = await this.processToolResultSignals(output, call.id, call.name);
+      const release = (): void => {
+        const next = waiting.shift();
+        if (next) {
+          next();
         } else {
-          resultContent = executionResult.result.error ?? "Unknown error";
+          permits++;
+        }
+      };
+
+      // Create execution promises with concurrency control
+      const executionPromises = toolCalls.map(async (call): Promise<void> => {
+        // Check for cancellation before acquiring permit
+        if (this.cancellation.isCancelled) {
+          return;
         }
 
-        toolResults.push({
-          id: call.id,
-          name: call.name,
-          result: resultContent,
-          isError: !executionResult.result.success,
-        });
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        await acquire();
+        try {
+          // Double-check cancellation after acquiring permit
+          if (this.cancellation.isCancelled) {
+            return;
+          }
 
-        if (err instanceof PermissionDeniedError) {
-          this.emit("permissionDenied", call.id, call.name, err.message);
+          const result = await this.executeSingleToolCall(call);
+
+          // Collect result (thread-safe - push is atomic in JS)
+          if (!result.permissionBlocked) {
+            toolResults.push({
+              id: result.id,
+              name: result.name,
+              result: result.result,
+              isError: result.isError,
+            });
+          }
+
+          if (result.permissionBlocked) {
+            permissionBlocked = true;
+          }
+        } finally {
+          release();
+        }
+      });
+
+      // Wait for all executions to complete
+      await Promise.all(executionPromises);
+    } else {
+      // Sequential execution (original behavior)
+      for (const call of toolCalls) {
+        // Check for cancellation between tool calls
+        if (this.cancellation.isCancelled) {
+          break;
+        }
+
+        const result = await this.executeSingleToolCall(call);
+
+        if (!result.permissionBlocked) {
+          toolResults.push({
+            id: result.id,
+            name: result.name,
+            result: result.result,
+            isError: result.isError,
+          });
+        }
+
+        if (result.permissionBlocked) {
           permissionBlocked = true;
         }
-
-        if (err instanceof ToolNotFoundError) {
-          this.emit("error", err);
-          this.emit("toolEnd", call.id, call.name, {
-            result: { success: false, error: err.message },
-            timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-            toolName: call.name,
-            callId: call.id,
-          });
-          toolResults.push({ id: call.id, name: call.name, result: err.message, isError: true });
-          continue;
-        }
-
-        this.emit("error", err);
-        this.emit("toolEnd", call.id, call.name, {
-          result: { success: false, error: err.message },
-          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-          toolName: call.name,
-          callId: call.id,
-        });
-        toolResults.push({ id: call.id, name: call.name, result: err.message, isError: true });
       }
     }
 

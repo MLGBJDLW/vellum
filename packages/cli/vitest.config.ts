@@ -25,5 +25,11 @@ export default defineConfig({
       VELLUM_FAKE_RESPONSES: "true",
       VELLUM_ICONS: "unicode", // Force Unicode icons in tests for consistent assertions
     },
+    // Increase timeout for MCP-related tests that involve dynamic imports with vi.mock
+    testTimeout: 10000,
+    // Ensure tests with vi.mock for @vellum/mcp run in sequence to avoid mock conflicts
+    sequence: {
+      shuffle: false,
+    },
   },
 });

@@ -25,8 +25,10 @@ export { detectSystemLocale, parseLocaleString } from "./locale-detection.js";
 // Settings integration
 export {
   clearSavedLanguage,
+  type DiffViewMode,
   getAlternateBufferEnabled,
   getBannerSeen,
+  getDiffViewMode,
   getModeFromSettings,
   getModelSettings,
   getSavedLanguage,
@@ -40,6 +42,7 @@ export {
   saveUserSetting,
   setAlternateBufferEnabled,
   setBannerSeen,
+  setDiffViewMode,
   setModeInSettings,
   setModelSettings,
   setThemeInSettings,

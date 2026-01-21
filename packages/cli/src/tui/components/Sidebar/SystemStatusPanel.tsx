@@ -13,6 +13,7 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { useApp } from "../../context/AppContext.js";
+import { useLspOptional } from "../../context/LspContext.js";
 import { useMcp } from "../../context/McpContext.js";
 import { useTheme } from "../../theme/index.js";
 import {
@@ -116,6 +117,23 @@ function getMcpStatus(
 }
 
 /**
+ * Compute LSP server status display
+ */
+function getLspStatus(
+  lspError: Error | null,
+  isInitialized: boolean,
+  runningCount: number,
+  totalCount: number,
+  colors: ThemeColors
+): StatusDisplay {
+  if (lspError) return ["err", colors.error];
+  if (!isInitialized) return ["off", colors.muted];
+  if (totalCount === 0) return ["–", colors.muted];
+  if (runningCount === totalCount) return [`${runningCount} ✓`, colors.success];
+  return [`${runningCount}/${totalCount}`, colors.warning];
+}
+
+/**
  * Compute rate limit status display
  */
 function getRateStatus(rateLimitPercent: number | undefined, colors: ThemeColors): StatusDisplay {
@@ -166,6 +184,7 @@ export function SystemStatusPanel({
 }: SystemStatusPanelProps): React.JSX.Element {
   const { theme } = useTheme();
   const { hub, isInitialized, isInitializing, error: mcpError } = useMcp();
+  const lsp = useLspOptional();
   const { state } = useApp();
 
   // Build colors object for status helpers
@@ -193,6 +212,13 @@ export function SystemStatusPanel({
     totalCount,
     colors
   );
+  const [lspStatus, lspColor] = getLspStatus(
+    lsp?.error ?? null,
+    lsp?.isInitialized ?? false,
+    lsp?.runningServers ?? 0,
+    lsp?.totalServers ?? 0,
+    colors
+  );
   const [rateStatus, rateColor] = getRateStatus(rateLimitPercent, colors);
   const [updateStatus, updateColor] = getUpdateStatus(updateVersion, compact, colors);
   const [snapStatus, snapColor] = getSnapStatus(snapshotCount, colors);
@@ -204,6 +230,7 @@ export function SystemStatusPanel({
     return (
       <Box flexDirection="row" borderStyle="single" borderColor={borderColor} paddingX={0} gap={1}>
         <StatusItem label="M" value={mcpStatus} color={mcpColor} labelColor={labelColor} compact />
+        <StatusItem label="L" value={lspStatus} color={lspColor} labelColor={labelColor} compact />
         <StatusItem
           label="R"
           value={rateStatus}
@@ -237,6 +264,7 @@ export function SystemStatusPanel({
         Status
       </Text>
       <StatusItem label="MCP" value={mcpStatus} color={mcpColor} labelColor={labelColor} />
+      <StatusItem label="LSP" value={lspStatus} color={lspColor} labelColor={labelColor} />
       <StatusItem label="Rate" value={rateStatus} color={rateColor} labelColor={labelColor} />
       <Box flexDirection="row" gap={1}>
         <StatusItem label="Snap" value={snapStatus} color={snapColor} labelColor={labelColor} />

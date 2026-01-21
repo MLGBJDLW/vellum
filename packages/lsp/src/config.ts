@@ -50,12 +50,26 @@ export type LspServerConfig = z.infer<typeof ServerConfigSchema> & {
 };
 export type LspConfig = z.infer<typeof LspConfigSchema>;
 
+// FIX: Improved error handling to distinguish between file-not-found and parse errors
 async function loadConfigFile(path: string): Promise<Partial<LspConfig> | null> {
   try {
     const content = await readFile(path, "utf-8");
     if (!content.trim()) return null;
-    return JSON.parse(content) as Partial<LspConfig>;
-  } catch {
+    try {
+      return JSON.parse(content) as Partial<LspConfig>;
+    } catch (parseError) {
+      // FIX: Log JSON parse errors so users know their config is invalid
+      console.warn(
+        `[LSP] Failed to parse config file at ${path}: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+      );
+      return null;
+    }
+  } catch (error) {
+    // File not found or permission error - this is expected for optional config files
+    // Only log if it's not ENOENT (file not found)
+    if (error instanceof Error && "code" in error && error.code !== "ENOENT") {
+      console.warn(`[LSP] Could not read config file at ${path}: ${error.message}`);
+    }
     return null;
   }
 }

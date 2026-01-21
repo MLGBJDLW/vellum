@@ -76,13 +76,22 @@ function findLastIndex<T>(
 }
 
 /**
+ * Minimum valid height for any item to prevent invisible/zero-height items
+ */
+const MIN_ITEM_HEIGHT = 1;
+
+/**
  * Get estimated height for an index using the estimator.
+ * FIX: Always returns at least MIN_ITEM_HEIGHT to prevent zero/negative heights
+ * that can cause infinite scroll loops or invisible items.
  */
 function getEstimatedHeight(
   estimator: number | ((index: number) => number),
   index: number
 ): number {
-  return typeof estimator === "function" ? estimator(index) : estimator;
+  const estimated = typeof estimator === "function" ? estimator(index) : estimator;
+  // FIX: Ensure height is always valid (positive integer)
+  return Math.max(MIN_ITEM_HEIGHT, Math.round(estimated));
 }
 
 /**
@@ -148,11 +157,19 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
 
   // Calculate visible range with OVERFLOW GUARD
   // This ensures we NEVER render more items than fit in the viewport
-  const rawStartIndex = Math.max(0, findLastIndex(offsets, (offset) => offset <= scrollTop) - 1);
+  // FIX: Improved off-by-one handling - findLastIndex returns the index where offset <= scrollTop
+  // We don't need to subtract 1; that was causing negative indices and blank areas
+  const foundStartIndex = findLastIndex(offsets, (offset) => offset <= scrollTop);
+  // If no offset found (scrollTop < 0 or empty), start at 0
+  // Otherwise use the found index directly (no -1 subtraction)
+  const rawStartIndex = Math.max(0, foundStartIndex === -1 ? 0 : foundStartIndex);
 
   const endIndexOffset = offsets.findIndex((offset) => offset > scrollTop + safeContainerHeight);
+  // FIX: Handle edge case where no offset exceeds viewport - show all remaining items
   const rawEndIndex =
-    endIndexOffset === -1 ? dataLength - 1 : Math.min(dataLength - 1, endIndexOffset);
+    endIndexOffset === -1
+      ? dataLength - 1
+      : Math.min(dataLength - 1, Math.max(0, endIndexOffset - 1));
 
   // FRAME HEIGHT GUARD: Calculate safe render range to prevent overflow
   // Simplified version: no isOversize (ClippedMessage doesn't exist yet)
@@ -215,15 +232,57 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
     itemRefs.current[index] = el;
   };
 
-  // Measure container and visible items on every render
+  // Track previous values to avoid unnecessary measurements
+  const prevStartIndexRef = useRef(startIndex);
+  const prevEndIndexRef = useRef(endIndex);
+  const prevDataLengthRef = useRef(dataLength);
+
+  // Periodic measurement tick to catch dynamic content height changes
+  // This ensures collapsible content like ThinkingBlock gets re-measured when expanded
+  const [measureTick, setMeasureTick] = useState(0);
+  const REMEASURE_INTERVAL_MS = 250; // Check every 250ms for height changes
+
+  // Set up periodic measurement timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setMeasureTick((t) => t + 1);
+    }, REMEASURE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Measure container and visible items when visible range changes or on periodic tick
+  // FIX: Added proper dependency array to prevent measuring on every single render
+  // which was causing extreme CPU usage and frame drops
+  // FIX2: Added periodic re-measurement to catch dynamic content changes (ThinkingBlock expand/collapse)
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Item measurement logic with height tracking
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measureTick intentionally triggers periodic re-measurement
   useLayoutEffect(() => {
+    // Check if we actually need to re-measure
+    const rangeChanged =
+      prevStartIndexRef.current !== startIndex ||
+      prevEndIndexRef.current !== endIndex ||
+      prevDataLengthRef.current !== dataLength;
+
+    prevStartIndexRef.current = startIndex;
+    prevEndIndexRef.current = endIndex;
+    prevDataLengthRef.current = dataLength;
+
     // Measure container
     if (containerRef.current) {
       const height = Math.round(measureElement(containerRef.current).height);
-      if (measuredContainerHeight !== height) {
+      if (measuredContainerHeight !== height && height > 0) {
         setMeasuredContainerHeight(height);
       }
+    }
+
+    // Measure visible items when:
+    // 1. Range changed (scroll/data update)
+    // 2. Initial mount (heights.length === 0)
+    // 3. measureTick changed (periodic check for dynamic content)
+    // Note: measureTick is in deps, so this runs periodically
+    if (!rangeChanged && heights.length > 0) {
+      // Even if range didn't change, still measure on tick to catch dynamic changes
+      // (like ThinkingBlock expand/collapse)
     }
 
     // Measure visible items
@@ -232,7 +291,8 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
       const itemRef = itemRefs.current[i];
       if (itemRef) {
         const height = Math.round(measureElement(itemRef).height);
-        if (height !== heights[i]) {
+        // Only update if height actually changed and is valid
+        if (height > 0 && height !== heights[i]) {
           if (!newHeights) {
             newHeights = [...heights];
           }
@@ -243,7 +303,7 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
     if (newHeights) {
       setHeights(newHeights);
     }
-  });
+  }, [startIndex, endIndex, dataLength, heights, measuredContainerHeight, measureTick]);
 
   return {
     heights,

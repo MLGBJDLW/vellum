@@ -47,6 +47,15 @@ export {
   usePasteHandler,
 } from "./BracketedPasteContext.js";
 
+// LSP Context
+export {
+  type LspContextState,
+  LspProvider,
+  type LspProviderProps,
+  useLsp,
+  useLspOptional,
+} from "./LspContext.js";
+
 // T047: MCP Context
 export {
   type McpContextState,
@@ -85,6 +94,17 @@ export {
   useOverflow,
   useOverflowOptional,
 } from "./OverflowContext.js";
+// Resilience context (rate limiting, retry feedback)
+export {
+  type ResilienceContextState,
+  ResilienceProvider,
+  type ResilienceProviderProps,
+  type ResilienceStatus,
+  useIsResilienceActive,
+  useResilience,
+  useResilienceOptional,
+  useResilienceStatus,
+} from "./ResilienceContext.js";
 // Root provider composition
 export { RootProvider, type RootProviderProps } from "./RootProvider.js";
 // Scroll state context (ported from Gemini CLI)

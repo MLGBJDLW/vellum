@@ -2,7 +2,7 @@
  * useModeShortcuts Hook (T046)
  *
  * React hook for handling keyboard shortcuts to switch coding modes.
- * Provides Ctrl+1/2/3 shortcuts for quick mode switching.
+ * Provides Alt+1/2/3 shortcuts for quick mode switching.
  *
  * @module tui/hooks/useModeShortcuts
  */
@@ -48,7 +48,7 @@ export interface UseModeShortcutsReturn {
 
 /**
  * Keyboard shortcut mapping for modes.
- * Ctrl+1 = vibe, Ctrl+2 = plan, Ctrl+3 = spec
+ * Alt+1 = vibe, Alt+2 = plan, Alt+3 = spec
  */
 const MODE_SHORTCUTS: Record<string, CodingMode> = {
   "1": "vibe",
@@ -60,9 +60,9 @@ const MODE_SHORTCUTS: Record<string, CodingMode> = {
  * Reverse mapping: mode to shortcut key.
  */
 const SHORTCUT_FOR_MODE: Record<CodingMode, string> = {
-  vibe: "Ctrl+1",
-  plan: "Ctrl+2",
-  spec: "Ctrl+3",
+  vibe: "Alt+1",
+  plan: "Alt+2",
+  spec: "Alt+3",
 } as const;
 
 // =============================================================================
@@ -72,10 +72,10 @@ const SHORTCUT_FOR_MODE: Record<CodingMode, string> = {
 /**
  * useModeShortcuts - Hook for handling mode switching keyboard shortcuts.
  *
- * Provides Ctrl+1/2/3 shortcuts for quick mode switching:
- * - Ctrl+1: Switch to vibe mode (fast autonomous)
- * - Ctrl+2: Switch to plan mode (plan-then-execute)
- * - Ctrl+3: Switch to spec mode (6-phase workflow)
+ * Provides Alt+1/2/3 shortcuts for quick mode switching:
+ * - Alt+1: Switch to vibe mode (fast autonomous)
+ * - Alt+2: Switch to plan mode (plan-then-execute)
+ * - Alt+3: Switch to spec mode (6-phase workflow)
  *
  * @example
  * ```tsx
@@ -160,8 +160,8 @@ export function useModeShortcuts({
   useInput(
     useCallback(
       (input: string, key) => {
-        // Only handle Ctrl+number combinations
-        if (!key.ctrl) return;
+        // Only handle Alt+number combinations
+        if (!key.meta) return;
 
         // Check if input matches a mode shortcut
         const targetMode = MODE_SHORTCUTS[input];

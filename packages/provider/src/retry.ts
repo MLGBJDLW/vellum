@@ -7,6 +7,8 @@
  * @module @vellum/provider/retry
  */
 
+import type { ResilienceEventBus } from "@vellum/core";
+
 import { getRetryDelay, isRetryable } from "./errors.js";
 
 // =============================================================================
@@ -33,12 +35,18 @@ export interface RetryOptions {
   isRetryable?: (error: unknown) => boolean;
   /** AbortSignal to cancel retry attempts */
   signal?: AbortSignal;
+  /** Event bus for emitting retry events */
+  eventBus?: ResilienceEventBus;
+  /** Source identifier for retry events (e.g., provider name) */
+  source?: string;
 }
 
 /**
  * Default retry configuration
  */
-const DEFAULT_RETRY_OPTIONS: Required<Omit<RetryOptions, "onRetry" | "signal" | "isRetryable">> = {
+const DEFAULT_RETRY_OPTIONS: Required<
+  Omit<RetryOptions, "onRetry" | "signal" | "isRetryable" | "eventBus" | "source">
+> = {
   maxRetries: 3,
   initialDelayMs: 1000,
   maxDelayMs: 60000,
@@ -101,7 +109,9 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  */
 function calculateDelay(
   attempt: number,
-  options: Required<Omit<RetryOptions, "onRetry" | "signal" | "isRetryable">>,
+  options: Required<
+    Omit<RetryOptions, "onRetry" | "signal" | "isRetryable" | "eventBus" | "source">
+  >,
   error: unknown
 ): number {
   // Check for Retry-After from the error
@@ -177,8 +187,11 @@ export async function withProviderRetry<T>(
   };
 
   const checkRetryable = opts.isRetryable ?? isRetryable;
+  const eventBus = options.eventBus;
+  const source = options.source ?? "provider";
   let lastError: unknown;
   let attempt = 0;
+  const startTime = Date.now();
 
   while (attempt <= opts.maxRetries) {
     // Check for abort before each attempt
@@ -187,18 +200,52 @@ export async function withProviderRetry<T>(
     }
 
     try {
-      return await fn();
+      const result = await fn();
+      // Emit completed event on success if we had retries
+      if (attempt > 0 && eventBus) {
+        eventBus.emit("retryCompleted", {
+          success: true,
+          totalAttempts: attempt + 1,
+          totalTimeMs: Date.now() - startTime,
+          source,
+          timestamp: Date.now(),
+        });
+      }
+      return result;
     } catch (error) {
       lastError = error;
       attempt++;
 
       // Don't retry if not retryable or max retries reached
       if (!checkRetryable(error) || attempt > opts.maxRetries) {
+        // Emit completed event on final failure
+        if (eventBus) {
+          eventBus.emit("retryCompleted", {
+            success: false,
+            totalAttempts: attempt,
+            totalTimeMs: Date.now() - startTime,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            source,
+            timestamp: Date.now(),
+          });
+        }
         throw error;
       }
 
       // Calculate delay
       const delayMs = calculateDelay(attempt, opts, error);
+
+      // Emit retry attempt event
+      if (eventBus) {
+        eventBus.emit("retryAttempt", {
+          attempt,
+          maxAttempts: opts.maxRetries,
+          delayMs,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          source,
+          timestamp: Date.now(),
+        });
+      }
 
       // Invoke callback if provided
       opts.onRetry?.(attempt, error, delayMs);

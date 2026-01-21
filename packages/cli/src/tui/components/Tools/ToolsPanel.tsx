@@ -13,6 +13,9 @@ import { useTheme } from "../../theme/index.js";
 import { HotkeyHints } from "../common/HotkeyHints.js";
 import { ToolParams } from "./ToolParams.js";
 
+/** Shell tool names that support streaming output */
+const SHELL_TOOLS = new Set(["shell", "bash"]);
+
 export interface ToolsPanelProps {
   /** Whether this panel is currently focused (reserved for future key handling). */
   readonly isFocused?: boolean;
@@ -64,14 +67,11 @@ export function ToolsPanel({ maxItems = 10 }: ToolsPanelProps): React.JSX.Elemen
 
   const hints = useMemo(
     () => [
-      {
-        keys: process.platform === "win32" ? "Ctrl/Alt+K" : "Ctrl+\\ / Alt+K",
-        label: "Sidebar",
-      },
-      { keys: "Ctrl/Alt+G", label: "Tools" },
-      { keys: "Ctrl/Alt+O", label: "MCP" },
-      { keys: "Ctrl/Alt+P", label: "Memory" },
-      { keys: "Ctrl/Alt+T", label: "Todo" },
+      { keys: "Alt+K", label: "Sidebar" },
+      { keys: "Alt+G", label: "Tools" },
+      { keys: "Alt+O", label: "MCP" },
+      { keys: "Alt+P", label: "Memory" },
+      { keys: "Alt+T", label: "Todo" },
       { keys: "Ctrl+S", label: "Sessions" },
       { keys: "Ctrl+Z", label: "Undo" },
       { keys: "Ctrl+Y", label: "Redo" },
@@ -126,6 +126,30 @@ export function ToolsPanel({ maxItems = 10 }: ToolsPanelProps): React.JSX.Elemen
               <ToolParams params={latest.params} collapsed highlightPaths highlightCommands />
             </Box>
           )}
+
+          {/* Shell output streaming preview */}
+          {SHELL_TOOLS.has(latest.toolName) &&
+            latest.status === "running" &&
+            latest.shellOutput &&
+            latest.shellOutput.length > 0 && (
+              <Box marginTop={1} flexDirection="column">
+                <Text color={theme.colors.primary} dimColor>
+                  Output:
+                </Text>
+                <Box
+                  flexDirection="column"
+                  borderStyle="single"
+                  borderColor={theme.colors.secondary}
+                  paddingX={1}
+                >
+                  {latest.shellOutput.slice(-5).map((line, idx) => (
+                    <Text key={`shell-output-${idx}-${line.slice(0, 20)}`} wrap="truncate">
+                      {line}
+                    </Text>
+                  ))}
+                </Box>
+              </Box>
+            )}
 
           {latest.status === "error" && latest.error && (
             <Box marginTop={1}>

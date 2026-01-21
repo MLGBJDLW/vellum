@@ -4,9 +4,8 @@
  * Visual context window usage indicator with progress bar.
  * Shows token usage with color-coded thresholds:
  * - Green (0-50%): Plenty of context
- * - Yellow (50-75%): Moderate usage
- * - Orange (75-90%): High usage
- * - Red (90%+): Critical usage
+ * - Yellow (50-80%): Moderate usage
+ * - Red (80%+): Critical usage
  *
  * @module tui/components/StatusBar/ContextProgress
  */
@@ -37,20 +36,19 @@ export interface ContextProgressProps {
 // Constants
 // =============================================================================
 
-/** Progress bar characters */
-const BAR_FILLED = "█";
+/** Progress bar characters - using half-filled block for visual progress */
+const BAR_FILLED = "▓";
 const BAR_EMPTY = "░";
 
-/** Color thresholds */
+/** Color thresholds for context usage warning */
 const THRESHOLDS = {
-  LOW: 50, // 0-50%: green
-  MEDIUM: 75, // 50-75%: yellow
-  HIGH: 90, // 75-90%: orange
-  // 90%+: red
+  LOW: 50, // 0-50%: green (plenty of context)
+  MEDIUM: 80, // 50-80%: yellow (moderate usage)
+  // 80%+: red (critical usage)
 } as const;
 
 /** Default bar width - compact for status bar usage */
-const DEFAULT_BAR_WIDTH = 8;
+const DEFAULT_BAR_WIDTH = 10;
 
 // =============================================================================
 // Helper Functions
@@ -81,16 +79,17 @@ function calculatePercentage(current: number, max: number): number {
 
 /**
  * Get the color based on usage percentage.
+ * Uses semantic status colors:
+ * - 0-50%: success (green) - plenty of context
+ * - 50-80%: warning (yellow) - moderate usage
+ * - 80-100%: error (red) - critical usage
  */
 function getProgressColor(percentage: number, theme: ReturnType<typeof useTheme>["theme"]): string {
-  if (percentage >= THRESHOLDS.HIGH) {
-    return theme.colors.error; // Red for 90%+
-  }
   if (percentage >= THRESHOLDS.MEDIUM) {
-    return theme.colors.warning; // Orange/yellow for 75-90%
+    return theme.colors.error; // Red for 80%+
   }
   if (percentage >= THRESHOLDS.LOW) {
-    return theme.brand.primary; // Goldenrod for 50-75% (brand color)
+    return theme.colors.warning; // Yellow for 50-80%
   }
   return theme.colors.success; // Green for 0-50%
 }

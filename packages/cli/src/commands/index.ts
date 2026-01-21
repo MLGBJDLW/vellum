@@ -87,13 +87,16 @@ export { languageCommand } from "./language.js";
 
 export {
   createResumeCommand,
+  createSearchCommand,
   findSessionById,
   getMostRecentSession,
   type ResumeSessionEventData,
   resumeCommand,
+  type SearchSessionEventData,
   type SessionLookupOptions,
   type SessionLookupResult,
   SHORT_ID_LENGTH,
+  searchCommand,
 } from "./session/index.js";
 
 // =============================================================================
@@ -374,6 +377,17 @@ export {
 } from "./mode.js";
 
 // =============================================================================
+// Vim Mode Commands (T041)
+// =============================================================================
+
+export {
+  clearVimCallbacks,
+  setVimCallbacks,
+  vimCommand,
+  vimSlashCommands,
+} from "./vim.js";
+
+// =============================================================================
 // Model Commands (Chain 22)
 // =============================================================================
 
@@ -393,6 +407,19 @@ export {
   themeCommand,
   themeSlashCommands,
 } from "./theme.js";
+
+// =============================================================================
+// Diff Mode Commands
+// =============================================================================
+
+export {
+  diffModeCommand,
+  diffModeSlashCommands,
+  getDiffMode,
+  setDiffMode,
+  subscribeDiffMode,
+  toggleDiffMode,
+} from "./diff-mode.js";
 
 // =============================================================================
 // Cost Commands (Phase 35)
@@ -608,3 +635,15 @@ export {
   saveCommand,
   setPersistenceRef,
 } from "./persistence.js";
+
+// =============================================================================
+// Git Commands (UX Improvement)
+// =============================================================================
+
+export { commitCommand } from "./commit.js";
+
+// =============================================================================
+// Usage Commands (UX Improvement)
+// =============================================================================
+
+export { usageCommand } from "./usage.js";

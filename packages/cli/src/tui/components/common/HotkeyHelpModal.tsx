@@ -49,6 +49,7 @@ export interface HotkeyHelpModalProps {
 /** Default hotkeys commonly available in the TUI */
 export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { key: "F1", description: "Show this help", scope: "Global" },
+  { key: "Ctrl+Shift+A", description: "Open approval queue", scope: "Global" },
   { key: "Ctrl+C", description: "Exit application", scope: "Global" },
   { key: "Ctrl+L", description: "Clear screen", scope: "Global" },
   { key: "Esc", description: "Cancel / Close modal", scope: "Global" },

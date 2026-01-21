@@ -238,6 +238,17 @@ export {
   todoManageParamsSchema,
   todoManageTool,
 } from "./todo-manage.js";
+export {
+  type StoredTodoItem,
+  type TodoStatus,
+  TodoStatusSchema,
+  type TodoWriteItem,
+  TodoWriteItemSchema,
+  type TodoWriteOutput,
+  type TodoWriteParams,
+  todoWriteParamsSchema,
+  todoWriteTool,
+} from "./todo-write.js";
 // Network tools
 export {
   type WebFetchOutput,
@@ -306,6 +317,7 @@ export const ALL_BUILTIN_TOOLS = [
   skillTool,
   smartEditTool,
   todoManageTool,
+  todoWriteTool,
   webFetchTool,
   webSearchTool,
   writeFileTool,
@@ -361,6 +373,7 @@ import { shellTool } from "./shell.js";
 import { skillTool } from "./skill-tool.js";
 import { smartEditTool } from "./smart-edit-tool.js";
 import { todoManageTool } from "./todo-manage.js";
+import { todoWriteTool } from "./todo-write.js";
 import { webFetchTool } from "./web-fetch.js";
 import { webSearchTool } from "./web-search.js";
 import { writeFileTool } from "./write-file.js";

@@ -47,6 +47,12 @@ export interface ShellOptions {
     config?: SandboxConfig;
     backend?: SandboxBackend;
   };
+
+  /** Callback for streaming stdout chunks (optional) */
+  onStdout?: (chunk: string) => void;
+
+  /** Callback for streaming stderr chunks (optional) */
+  onStderr?: (chunk: string) => void;
 }
 
 /**
@@ -146,6 +152,8 @@ export async function executeShell(
     maxBuffer = DEFAULT_MAX_BUFFER,
     shell: customShell,
     sandbox,
+    onStdout,
+    onStderr,
   } = options;
 
   const startTime = Date.now();
@@ -244,17 +252,27 @@ export async function executeShell(
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    // Collect stdout
+    // Collect stdout and stream to callback
     childProcess.stdout?.on("data", (data: Buffer) => {
+      const chunk = data.toString();
       if (stdout.length + data.length <= maxBuffer) {
-        stdout += data.toString();
+        stdout += chunk;
+      }
+      // Stream chunk to callback if provided
+      if (onStdout) {
+        onStdout(chunk);
       }
     });
 
-    // Collect stderr
+    // Collect stderr and stream to callback
     childProcess.stderr?.on("data", (data: Buffer) => {
+      const chunk = data.toString();
       if (stderr.length + data.length <= maxBuffer) {
-        stderr += data.toString();
+        stderr += chunk;
+      }
+      // Stream chunk to callback if provided
+      if (onStderr) {
+        onStderr(chunk);
       }
     });
 

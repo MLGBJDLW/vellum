@@ -332,10 +332,14 @@ export function EnhancedCommandInput({
     if (!slashActive || slashOptions.length === 0) return [];
     // Normalize to AutocompleteOption format
     const normalized = slashOptions.map((opt) => (typeof opt === "string" ? { name: opt } : opt));
-    // Filter by prefix
+    // Filter by prefix (check both name and aliases)
     const query = slashQuery.toLowerCase();
     const filtered = query
-      ? normalized.filter((opt) => opt.name.toLowerCase().startsWith(query))
+      ? normalized.filter(
+          (opt) =>
+            opt.name.toLowerCase().startsWith(query) ||
+            opt.aliases?.some((alias) => alias.toLowerCase().startsWith(query))
+        )
       : normalized;
     // Sort alphabetically
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));

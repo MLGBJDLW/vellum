@@ -267,14 +267,11 @@ export function MemoryPanel({
 
   const hints = useMemo(
     () => [
-      {
-        keys: process.platform === "win32" ? "Ctrl/Alt+K" : "Ctrl+\\ / Alt+K",
-        label: "Sidebar",
-      },
-      { keys: "Ctrl/Alt+G", label: "Tools" },
-      { keys: "Ctrl/Alt+O", label: "MCP" },
-      { keys: "Ctrl/Alt+P", label: "Memory" },
-      { keys: "Ctrl/Alt+T", label: "Todo" },
+      { keys: "Alt+K", label: "Sidebar" },
+      { keys: "Alt+G", label: "Tools" },
+      { keys: "Alt+O", label: "MCP" },
+      { keys: "Alt+P", label: "Memory" },
+      { keys: "Alt+T", label: "Todo" },
       { keys: "Ctrl+S", label: "Sessions" },
       { keys: "Ctrl+Z", label: "Undo" },
       { keys: "Ctrl+Y", label: "Redo" },

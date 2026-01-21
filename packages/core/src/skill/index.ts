@@ -6,15 +6,22 @@
 export { BUILTIN_SKILL_NAMES, type BuiltinSkillName } from "./builtin/index.js";
 // Discovery
 export type {
+  CombinedDiscoveryResult,
   ModeSkillDiscoveryOptions,
+  ModeSkillLocation,
   SkillDiscoveryOptions,
   SkillDiscoveryResult,
+  SkillNameValidation,
 } from "./discovery.js";
 export {
   discoverModeSkills,
   ROO_CODE_MODE_MAPPINGS,
+  SKILL_NAME_MAX_LENGTH,
+  SKILL_NAME_MIN_LENGTH,
+  SKILL_NAME_PATTERN,
   SkillDiscovery,
   skillDiscovery,
+  validateSkillName,
 } from "./discovery.js";
 // Loader
 export type { SkillCacheEntry, SkillLoaderOptions } from "./loader.js";

@@ -350,6 +350,12 @@ export class TerminationChecker {
 
     // Priority 5b: Text-only response
     if (this.limits.terminateOnTextOnly && context.hasTextOnly) {
+      // Check if the response indicates continuation intent
+      const lastResponse = context.recentResponses?.[context.recentResponses.length - 1];
+      if (lastResponse && this.detectContinuationIntent(lastResponse)) {
+        // Agent expressed intent to continue - don't terminate
+        return { shouldTerminate: false };
+      }
       return {
         shouldTerminate: true,
         reason: TerminationReason.TEXT_ONLY,
@@ -363,6 +369,22 @@ export class TerminationChecker {
 
     // Continue execution
     return { shouldTerminate: false };
+  }
+
+  /**
+   * Detects if response contains continuation intent phrases.
+   * These phrases indicate the agent plans to take more actions.
+   */
+  private detectContinuationIntent(response: string): boolean {
+    const patterns = [
+      // Chinese patterns
+      /我将继续|接下来我会|让我继续|正在进行|下一步|我会继续|我来|现在我/,
+      // English patterns
+      /i will continue|let me continue|next i'll|proceeding to|moving on to|i'll now|let me now|now i'll|i'm going to/i,
+      // Action verbs indicating continuation
+      /i'll read|i'll check|i'll implement|i'll fix|i'll update|i'll create|i'll run|i'll execute/i,
+    ];
+    return patterns.some((p) => p.test(response));
   }
 
   /**

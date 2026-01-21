@@ -65,6 +65,8 @@ export {
   type ActivityTracker,
   AGENT_MODES,
   AGENT_STATES,
+  // AGENTS.md Directory Scoping (Phase 25)
+  AGENTS_MD_PRIORITY,
   type AgentFactoryOptions,
   type AgentFactoryResult,
   // Agent Level Hierarchy (T001)
@@ -82,6 +84,15 @@ export {
   type AgentState,
   // State Machine
   AgentStateSchema,
+  type AgentsMdFile,
+  AgentsMdIntegration,
+  AgentsMdLoader,
+  type AgentsMdLoaderOptions,
+  AgentsMdResolver,
+  AgentsMdScanner,
+  type AgentsMdScope,
+  type AgentsMdTree,
+  type AgentsMdTreeNode,
   APPROVAL_POLICIES,
   // Coding Modes (Phase 23: T004-T016)
   type ApprovalPolicy,
@@ -119,6 +130,8 @@ export {
   createActivityTracker,
   // Agent Factory (T050, T056)
   createAgentFactory,
+  createAgentsMdIntegration,
+  createAgentsMdLoader,
   createComplexityAnalyzer,
   createContextIntegration,
   createContextIntegrationFromLoopConfig,
@@ -134,9 +147,12 @@ export {
   createSnapshot,
   createStateContext,
   createTerminationContext,
+  DEFAULT_EXCLUDE_DIRS,
   DEFAULT_LOOP_DETECTION_CONFIG,
   // Extended Mode Config (Multi-Agent)
   DEFAULT_MAX_CONCURRENT_SUBAGENTS,
+  DEFAULT_MAX_DEPTH,
+  DEFAULT_PATTERNS,
   DEFAULT_SESSION_DIR,
   DEFAULT_TERMINATION_LIMITS,
   type DetectionResult,
@@ -145,6 +161,7 @@ export {
   // Loop Detection
   detectLoop,
   detectLoopAsync,
+  detectMergeMarker,
   type ExtendedModeConfig,
   ExtendedModeConfigSchema,
   // Legacy Mode Mapping (T049-T053)
@@ -159,6 +176,7 @@ export {
   // State Persistence
   FileStatePersister,
   type FileStatePersisterOptions,
+  findApplicableFiles,
   // Graceful Shutdown
   GracefulShutdownHandler,
   type GracefulShutdownHandlerOptions,
@@ -168,7 +186,10 @@ export {
   getModeConfig,
   getTemperature,
   type HandlerResult,
+  type IAgentsMdLoader,
+  type IntegrationOptions,
   InvalidModeError,
+  injectAgentsMd,
   isLegacyMode,
   isValidCodingMode,
   isValidSnapshot,
@@ -180,7 +201,10 @@ export {
   type LoopDetectionContext,
   type LoopType,
   legacyToNewMode,
+  MAX_AGENTS_MD_LENGTH,
+  MERGE_MARKER_PATTERNS,
   MemoryStatePersister,
+  type MergeMarker,
   MODE_CONFIGS,
   type ModeChangedEvent,
   type ModeConfig,
@@ -200,6 +224,7 @@ export {
   type ModeSwitchResult,
   ModeSwitchResultSchema,
   ModeValidationError,
+  mergeInstructions,
   NoOpActivityTracker,
   type NormalizationResult,
   normalizeMode,
@@ -214,6 +239,7 @@ export {
   SANDBOX_POLICIES,
   type SandboxPolicy,
   SandboxPolicySchema,
+  type ScanResult,
   type SessionSnapshot,
   type ShutdownResult,
   type ShutdownSignal,
@@ -552,6 +578,10 @@ export {
 // Builtin Tools (T117)
 // ============================================
 export * from "./builtin/index.js";
+// ============================================
+// Command (User Command Loader - Phase 16 Extension)
+// ============================================
+export * from "./command/index.js";
 // ============================================
 // Commands (T032)
 // ============================================
@@ -894,6 +924,10 @@ export * from "./telemetry/index.js";
 // Tool Executor (T012-T016)
 // ============================================
 export * from "./tool/index.js";
+// ============================================
+// Tutorial (Phase 38)
+// ============================================
+export * from "./tutorial/index.js";
 // ============================================
 // Types (T001-T024)
 // ============================================

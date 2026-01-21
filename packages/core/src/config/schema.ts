@@ -336,6 +336,18 @@ export const ThinkingConfigSchema = z.object({
 export type ThinkingConfig = z.infer<typeof ThinkingConfigSchema>;
 
 // ============================================
+// Diff View Mode Schema
+// ============================================
+
+/**
+ * Diff view display mode configuration.
+ * Controls how file diffs are displayed in the TUI.
+ */
+export const DiffViewModeSchema = z.enum(["unified", "side-by-side"]);
+
+export type DiffViewMode = z.infer<typeof DiffViewModeSchema>;
+
+// ============================================
 // Complete Configuration Schema
 // ============================================
 
@@ -361,6 +373,8 @@ export const ConfigSchema = z
     theme: z.string().optional(),
     /** Extended thinking configuration */
     thinking: ThinkingConfigSchema.optional(),
+    /** Diff view display mode: "unified" (default) or "side-by-side" */
+    diffViewMode: DiffViewModeSchema.optional().default("unified"),
   })
   .transform((data) => ({
     ...data,

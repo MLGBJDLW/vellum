@@ -11,6 +11,7 @@ import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
 import { useAnimation } from "../../context/AnimationContext.js";
+import { useDiffMode } from "../../hooks/useDiffMode.js";
 import { useTheme } from "../../theme/index.js";
 import { sanitize } from "../../utils/textSanitizer.js";
 import { DiffView } from "./DiffView.js";
@@ -372,6 +373,7 @@ export function MarkdownRenderer({
   cursorBlink = true,
 }: MarkdownRendererProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { mode: diffMode } = useDiffMode();
   const { frame, isPaused } = useAnimation();
 
   // Theme colors
@@ -426,7 +428,7 @@ export function MarkdownRenderer({
             if (isDiffContent(node.content, node.language)) {
               return (
                 <Box key={key} marginTop={compact ? 0 : 1} marginBottom={compact ? 0 : 1}>
-                  <DiffView diff={node.content} compact={compact} />
+                  <DiffView diff={node.content} compact={compact} mode={diffMode} />
                   {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
                 </Box>
               );

@@ -67,7 +67,13 @@ function formatCommandList(registry: CommandRegistry): string {
     }
   }
 
-  lines.push("\n\nUse /help <command> for detailed help on a specific command.");
+  // Add shell mode hint
+  lines.push("\n\n💡 Quick Tips:");
+  lines.push("  • Type !<command> to execute shell commands directly (e.g., !ls, !git status)");
+  lines.push("  • Use @file to mention files in your prompt");
+  lines.push("  • Press Tab for autocomplete");
+
+  lines.push("\nUse /help <command> for detailed help on a specific command.");
   return lines.join("\n");
 }
 

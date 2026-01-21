@@ -24,6 +24,7 @@ import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
 import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
 import { useAnimatedScrollbar } from "../../hooks/useAnimatedScrollbar.js";
+import { useDiffMode } from "../../hooks/useDiffMode.js";
 import { useKeyboardScroll } from "../../hooks/useKeyboardScroll.js";
 import { type ModeControllerConfig, useModeController } from "../../hooks/useModeController.js";
 import { useScrollController } from "../../hooks/useScrollController.js";
@@ -252,6 +253,8 @@ const InlineToolCall = memo(function InlineToolCall({
 }: InlineToolCallProps) {
   // Use animation frame for spinner (only animates when running)
   const frameIndex = useAnimationFrame(SPINNER_FRAMES);
+  // Get current diff view mode
+  const { mode: diffMode } = useDiffMode();
 
   // Determine status indicator and color
   let statusIcon: string;
@@ -314,7 +317,7 @@ const InlineToolCall = memo(function InlineToolCall({
       {hasDiffContent && diffMeta && (
         <Box marginLeft={2} marginTop={1}>
           <MaxSizedBox maxHeight={12} truncationIndicator="... (diff truncated)">
-            <DiffView diff={diffMeta.diff} compact />
+            <DiffView diff={diffMeta.diff} compact mode={diffMode} />
           </MaxSizedBox>
         </Box>
       )}
@@ -333,7 +336,7 @@ const ThinkingIndicator = memo(function ThinkingIndicator() {
   // Use StreamingIndicator for consistent styling
   return (
     <Box marginBottom={1} paddingX={1}>
-      <StreamingIndicator phase="thinking" showPhaseTime narrow />
+      <StreamingIndicator phase="thinking" showPhaseTime narrow showCancelHint />
     </Box>
   );
 });
@@ -560,12 +563,16 @@ const MessageList = memo(function MessageList({
   const showThinkingIndicator = isLoading && !hasPendingContent;
 
   // Get viewport dimensions for adaptive rendering
-  // inputReserve: 5 = minHeight (3) + border (2) for multiline input
-  // Reduced from 7 to give more space to content viewport
+  // FIX: Use consistent inputReserve value matching useAlternateBuffer default (7)
+  // This ensures height calculations are accurate:
+  // - Input minHeight: 5 lines (for multiline input)
+  // - Border: 2 lines (top + bottom)
+  // Total: 7 lines reserved for input area
+  const INPUT_RESERVE_HEIGHT = 7;
   const { availableHeight, width } = useAlternateBuffer({
     withViewport: true,
     enabled: useAltBuffer,
-    inputReserve: 5,
+    inputReserve: INPUT_RESERVE_HEIGHT,
   });
 
   const estimatedContentWidth = Math.max(20, width - 24);
@@ -672,14 +679,19 @@ const MessageList = memo(function MessageList({
     windowSize,
   ]);
 
-  const thinkingIndicatorHeight = showThinkingIndicator ? 2 : 0;
+  // FIX: Improved thinking indicator height estimation
+  // ThinkingIndicator includes: StreamingIndicator (1 line) + marginBottom (1) + paddingX
+  // When expanded, it can be larger. Use a more realistic estimate.
+  const THINKING_INDICATOR_HEIGHT = 3; // Conservative estimate for collapsed state
+  const thinkingIndicatorHeight = showThinkingIndicator ? THINKING_INDICATOR_HEIGHT : 0;
 
   // Scroll viewport height (reserve space for inline indicators when needed)
   // Minimum of 8 lines to prevent degenerate rendering cases
   const MIN_SCROLL_VIEWPORT = 8;
   const scrollViewportHeight = useMemo(() => {
     const base = computedMaxHeight ?? availableHeight ?? 20;
-    return Math.max(MIN_SCROLL_VIEWPORT, base - thinkingIndicatorHeight);
+    // FIX: Ensure we don't go negative and always have minimum viewport
+    return Math.max(MIN_SCROLL_VIEWPORT, Math.max(0, base - thinkingIndicatorHeight));
   }, [computedMaxHeight, availableHeight, thinkingIndicatorHeight]);
 
   // Determine if we're using optimized Static rendering
@@ -687,13 +699,29 @@ const MessageList = memo(function MessageList({
   // NOTE: Static rendering does not support windowed scrolling; fall back when maxHeight is set.
   // T-VIRTUAL-SCROLL: Removed hasToolGroups check - tool groups work fine with Static rendering
   // as they are processed separately during message rendering.
-  // FIX: Disable Static mode when history contains thinking blocks to avoid layout issues
-  // when ThinkingBlock collapses (Ink's <Static> doesn't recalculate height on item changes)
-  const hasThinkingInHistory = historyMessages?.some((m) => m.thinking && m.thinking.length > 0);
+  //
+  // FIX: Improved thinking block handling - only disable Static mode for ACTIVELY STREAMING
+  // thinking blocks, not all completed thinking blocks. Completed thinking blocks have stable
+  // heights (collapsed by default) and work fine with Static.
+  // This significantly improves performance for conversations with thinking content.
+  const hasActiveStreamingThinking = useMemo(() => {
+    // Only disable Static if there's currently streaming thinking content
+    // that could change height during rendering
+    if (
+      pendingMessage?.thinking &&
+      pendingMessage.isStreaming &&
+      !pendingMessage.isThinkingComplete
+    ) {
+      return true;
+    }
+    // History messages with thinking are safe (collapsed by default, stable height)
+    return false;
+  }, [pendingMessage?.thinking, pendingMessage?.isStreaming, pendingMessage?.isThinkingComplete]);
+
   const useStaticRendering =
     historyMessages !== undefined &&
     !computedMaxHeight &&
-    !hasThinkingInHistory &&
+    !hasActiveStreamingThinking &&
     (mode === "static" || !adaptive);
 
   // ==========================================================================
@@ -1215,6 +1243,11 @@ const MessageList = memo(function MessageList({
     [onScrollChange]
   );
 
+  // Track sync direction to prevent circular updates
+  // FIX: Enhanced circular sync prevention with debouncing and direction tracking
+  const syncDirectionRef = useRef<"toController" | "toList" | null>(null);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Sync VirtualizedList scroll position into scroll controller (for ScrollIndicator)
   const handleVirtualizedScrollTopChange = useCallback(
     (nextScrollTop: number) => {
@@ -1222,9 +1255,14 @@ const MessageList = memo(function MessageList({
       const list = virtualizedListRef.current;
       if (!list) return;
 
+      // FIX: Skip if we're currently syncing from controller to list
+      if (syncDirectionRef.current === "toList") {
+        return;
+      }
+
       const expectedScrollTop = expectedScrollTopRef.current;
       if (isApplyingControllerScrollRef.current && expectedScrollTop !== null) {
-        if (Math.abs(nextScrollTop - expectedScrollTop) <= 1) {
+        if (Math.abs(nextScrollTop - expectedScrollTop) <= 2) {
           isApplyingControllerScrollRef.current = false;
           expectedScrollTopRef.current = null;
           return;
@@ -1236,15 +1274,25 @@ const MessageList = memo(function MessageList({
       const offsetFromBottom = Math.max(0, maxOffset - nextScrollTop);
 
       const lastMetrics = lastScrollMetricsRef.current;
+      // FIX: Increased tolerance to prevent micro-updates causing loops
       if (
         scrollHeight === lastMetrics.scrollHeight &&
         innerHeight === lastMetrics.innerHeight &&
-        Math.abs(offsetFromBottom - lastMetrics.offsetFromBottom) <= 1
+        Math.abs(offsetFromBottom - lastMetrics.offsetFromBottom) <= 2
       ) {
         return;
       }
 
       lastScrollMetricsRef.current = { scrollHeight, innerHeight, offsetFromBottom };
+
+      // Mark sync direction and clear after a frame
+      syncDirectionRef.current = "toController";
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+      syncTimeoutRef.current = setTimeout(() => {
+        syncDirectionRef.current = null;
+      }, 16); // One frame at 60fps
 
       scrollActions.setTotalHeight(scrollHeight);
       scrollActions.setViewportHeight(innerHeight);
@@ -1259,11 +1307,26 @@ const MessageList = memo(function MessageList({
     const list = virtualizedListRef.current;
     if (!list) return;
 
+    // FIX: Skip if we're currently syncing from list to controller
+    if (syncDirectionRef.current === "toController") {
+      return;
+    }
+
     const { scrollHeight, innerHeight, scrollTop } = list.getScrollState();
     const maxOffset = Math.max(0, scrollHeight - innerHeight);
     const targetScrollTop = Math.max(0, maxOffset - scrollState.offsetFromBottom);
 
-    if (Math.abs(scrollTop - targetScrollTop) > 1) {
+    // FIX: Increased tolerance to prevent jitter from small differences
+    if (Math.abs(scrollTop - targetScrollTop) > 2) {
+      // Mark sync direction
+      syncDirectionRef.current = "toList";
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+      syncTimeoutRef.current = setTimeout(() => {
+        syncDirectionRef.current = null;
+      }, 16);
+
       isApplyingControllerScrollRef.current = true;
       expectedScrollTopRef.current = targetScrollTop;
       list.scrollTo(targetScrollTop);
@@ -1535,11 +1598,12 @@ const MessageList = memo(function MessageList({
   // ==========================================================================
   // Legacy Rendering (when historyMessages not provided)
   // ==========================================================================
+  // FIX: Removed the empty <Box flexGrow={1} /> spacer that was pushing messages up
+  // and leaving large blank spaces at the bottom. Messages now flow naturally
+  // from top to bottom, consistent with Static mode behavior.
+  // The spacer was causing the "large blank spaces" bug reported by users.
   return (
-    <Box flexDirection="column" flexGrow={1}>
-      {/* Spacer pushes messages toward Input at bottom */}
-      <Box flexGrow={1} />
-
+    <Box flexDirection="column" flexGrow={1} justifyContent="flex-end">
       {/* Scroll up indicator (legacy) */}
       {!enableScroll && showScrollUp && (
         <Box justifyContent="center" borderBottom borderColor={borderColor}>

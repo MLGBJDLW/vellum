@@ -107,6 +107,8 @@ export const bashTool = defineTool({
         abortSignal: ctx.abortSignal,
         shell: "/bin/bash",
         sandbox: sandboxOptions,
+        onStdout: ctx.onStdout,
+        onStderr: ctx.onStderr,
       });
 
       return ok({

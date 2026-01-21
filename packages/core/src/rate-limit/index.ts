@@ -34,3 +34,26 @@ export {
 
 export { createRateLimiter, RateLimiter } from "./rate-limiter.js";
 export { TokenBucket } from "./token-bucket.js";
+
+// =============================================================================
+// Resilience Events (Phase 34+)
+// =============================================================================
+
+export {
+  createResilienceEventBus,
+  getResilienceEventBus,
+  type RateLimitExceededEvent,
+  RateLimitExceededEventSchema,
+  type RateLimitThrottleEvent,
+  RateLimitThrottleEventSchema,
+  ResilienceEventBus,
+  type ResilienceEventListener,
+  type ResilienceEventPayloads,
+  type ResilienceEventType,
+  type ResilienceSubscribeOptions,
+  type RetryAttemptEvent,
+  RetryAttemptEventSchema,
+  type RetryCompletedEvent,
+  RetryCompletedEventSchema,
+  resetGlobalResilienceEventBus,
+} from "./events.js";

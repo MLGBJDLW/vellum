@@ -68,3 +68,5 @@ export {
   type UpdateBannerInlineProps,
   type UpdateBannerProps,
 } from "./UpdateBanner.js";
+// Vim mode indicator (T041)
+export { VimModeIndicator, type VimModeIndicatorProps } from "./VimModeIndicator.js";

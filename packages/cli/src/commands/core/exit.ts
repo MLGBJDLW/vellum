@@ -24,11 +24,11 @@ import { success } from "../types.js";
  * Emits 'app:exit' event and returns success.
  */
 export const exitCommand: SlashCommand = {
-  name: "exit",
+  name: "exit(quit)",
   description: "Exit the application",
   kind: "builtin",
   category: "system",
-  aliases: ["quit", "q"],
+  aliases: ["exit", "quit", "q"],
   examples: [
     "/exit - Exit the application",
     "/quit - Exit the application",

@@ -2,6 +2,8 @@
  * Tools panel hotkey hint render tests
  *
  * Ensures the sidebar footer hint bar is present so users can discover shortcuts.
+ *
+ * @vitest-environment node
  */
 
 import { createToolRegistry, type ToolExecutor } from "@vellum/core";
@@ -28,12 +30,12 @@ describe("ToolsPanel", () => {
 
     expect(frame).toContain("Tools");
 
-    // Footer hotkey hints (now show Ctrl/Alt alternatives)
+    // Footer hotkey hints (Alt primary)
     // Note: Only check the first few hints as remaining may be truncated by terminal width
-    expect(frame).toContain("Ctrl/Alt+K");
-    expect(frame).toContain("Ctrl/Alt+G");
-    expect(frame).toContain("Ctrl/Alt+O");
-    expect(frame).toContain("Ctrl/Alt+P");
-    expect(frame).toContain("Ctrl/Alt+T");
+    expect(frame).toContain("Alt+K");
+    expect(frame).toContain("Alt+G");
+    expect(frame).toContain("Alt+O");
+    expect(frame).toContain("Alt+P");
+    expect(frame).toContain("Alt+T");
   });
 });

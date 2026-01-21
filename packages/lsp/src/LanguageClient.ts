@@ -42,6 +42,8 @@ interface DiagnosticsWaiter {
   resolve: (diags: Diagnostic[]) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
+  /** Flag to prevent race between timeout and resolve */
+  settled: boolean;
 }
 
 export class LanguageClient implements LspConnection {
@@ -181,13 +183,21 @@ export class LanguageClient implements LspConnection {
     if (cached) return [...cached];
 
     return new Promise<Diagnostic[]>((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const waiter: DiagnosticsWaiter = {
+        resolve,
+        reject,
+        timeout: undefined as unknown as ReturnType<typeof setTimeout>,
+        settled: false,
+      };
+      waiter.timeout = setTimeout(() => {
+        if (waiter.settled) return;
+        waiter.settled = true;
         this.removeDiagnosticsWaiter(uri, resolve, reject);
         reject(timeoutError(this.serverId, "textDocument/publishDiagnostics", timeoutMs));
       }, timeoutMs);
 
       const waiters = this.diagnosticsWaiters.get(uri) ?? [];
-      waiters.push({ resolve, reject, timeout });
+      waiters.push(waiter);
       this.diagnosticsWaiters.set(uri, waiters);
     });
   }
@@ -391,6 +401,8 @@ export class LanguageClient implements LspConnection {
       const waiters = this.diagnosticsWaiters.get(uri);
       if (waiters) {
         for (const waiter of waiters) {
+          if (waiter.settled) continue;
+          waiter.settled = true;
           clearTimeout(waiter.timeout);
           waiter.resolve(diagnostics);
         }
@@ -417,6 +429,8 @@ export class LanguageClient implements LspConnection {
   private rejectPendingDiagnostics(error: Error): void {
     for (const waiters of this.diagnosticsWaiters.values()) {
       for (const waiter of waiters) {
+        if (waiter.settled) continue;
+        waiter.settled = true;
         clearTimeout(waiter.timeout);
         waiter.reject(error);
       }
@@ -424,6 +438,7 @@ export class LanguageClient implements LspConnection {
     this.diagnosticsWaiters.clear();
   }
 
+  // FIX: Properly cancel timeout on success to prevent memory leaks
   private async sendRequest<T>(
     method: string,
     params: unknown,
@@ -432,13 +447,29 @@ export class LanguageClient implements LspConnection {
     const timeoutMs = this.options.requestTimeoutMs ?? 30_000;
     const requestPromise = connection.sendRequest(method, params) as Promise<T>;
 
+    // FIX: Store timeout ID so we can clear it on success
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         reject(timeoutError(this.serverId, method, timeoutMs));
       }, timeoutMs);
     });
 
-    return Promise.race([requestPromise, timeoutPromise]);
+    try {
+      const result = await Promise.race([requestPromise, timeoutPromise]);
+      // FIX: Clear timeout on success to prevent memory leak
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      return result;
+    } catch (error) {
+      // FIX: Also clear timeout on error (in case request failed before timeout)
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      throw error;
+    }
   }
 }
 

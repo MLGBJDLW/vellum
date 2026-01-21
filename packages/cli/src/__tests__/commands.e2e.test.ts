@@ -144,7 +144,7 @@ describe("E2E: /help command", () => {
       expect(result.message).toContain("Available Commands");
       expect(result.message).toContain("/help");
       expect(result.message).toContain("/clear");
-      expect(result.message).toContain("/exit");
+      expect(result.message).toContain("/exit(quit)");
     }
   });
 
@@ -154,7 +154,7 @@ describe("E2E: /help command", () => {
     expect(result.kind).toBe("success");
     if (result.kind === "success") {
       expect(result.message).toBeDefined();
-      expect(result.message).toContain("/exit");
+      expect(result.message).toContain("/exit(quit)");
       expect(result.message).toContain("Exit the application");
     }
   });
@@ -407,13 +407,13 @@ describe("E2E: unknown command handling", () => {
     }
   });
 
-  it("should suggest /exit for /exti typo", async () => {
+  it("should suggest /exit(quit) for /exti typo", async () => {
     const result = await harness.execute("/exti");
 
     expect(result.kind).toBe("error");
     if (result.kind === "error") {
       expect(result.suggestions).toBeDefined();
-      expect(result.suggestions).toContain("/exit");
+      expect(result.suggestions).toContain("/exit(quit)");
     }
   });
 
@@ -522,7 +522,7 @@ describe("E2E: autocomplete flow", () => {
 
     expect(state.candidates.length).toBeGreaterThan(0);
     const names = state.candidates.map((c) => c.command.name);
-    expect(names).toContain("exit");
+    expect(names).toContain("exit(quit)");
   });
 });
 

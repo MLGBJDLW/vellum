@@ -17,3 +17,10 @@ export {
   type SessionLookupResult,
   SHORT_ID_LENGTH,
 } from "./resume.js";
+
+// Search Command
+export {
+  createSearchCommand,
+  type SearchSessionEventData,
+  searchCommand,
+} from "./search.js";

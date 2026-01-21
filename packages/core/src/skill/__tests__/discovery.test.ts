@@ -7,7 +7,13 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SkillDiscovery } from "../discovery.js";
+import {
+  SKILL_NAME_MAX_LENGTH,
+  SKILL_NAME_MIN_LENGTH,
+  SKILL_NAME_PATTERN,
+  SkillDiscovery,
+  validateSkillName,
+} from "../discovery.js";
 import { SKILL_SOURCE_PRIORITY, type SkillLocation } from "../types.js";
 
 // =============================================================================
@@ -47,6 +53,121 @@ function createMockStat(isDir: boolean = true, isFile: boolean = false): any {
 
 // =============================================================================
 // Tests
+// =============================================================================
+
+// =============================================================================
+// Skill Name Validation Tests
+// =============================================================================
+
+describe("validateSkillName", () => {
+  describe("valid names", () => {
+    it("should accept lowercase letters", () => {
+      expect(validateSkillName("myskill")).toEqual({ valid: true });
+    });
+
+    it("should accept lowercase letters with hyphens", () => {
+      expect(validateSkillName("my-skill")).toEqual({ valid: true });
+    });
+
+    it("should accept numbers", () => {
+      expect(validateSkillName("skill123")).toEqual({ valid: true });
+    });
+
+    it("should accept numbers with hyphens", () => {
+      expect(validateSkillName("skill-123-test")).toEqual({ valid: true });
+    });
+
+    it("should accept single character", () => {
+      expect(validateSkillName("a")).toEqual({ valid: true });
+    });
+
+    it("should accept 64 character name", () => {
+      const name = "a".repeat(64);
+      expect(validateSkillName(name)).toEqual({ valid: true });
+    });
+
+    it("should accept complex valid names", () => {
+      expect(validateSkillName("typescript-best-practices")).toEqual({ valid: true });
+      expect(validateSkillName("react-hooks-guide")).toEqual({ valid: true });
+      expect(validateSkillName("code-review-v2")).toEqual({ valid: true });
+    });
+  });
+
+  describe("invalid names", () => {
+    it("should reject empty string", () => {
+      const result = validateSkillName("");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("required");
+    });
+
+    it("should reject names over 64 characters", () => {
+      const name = "a".repeat(65);
+      const result = validateSkillName(name);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("at most 64");
+    });
+
+    it("should reject uppercase letters", () => {
+      const result = validateSkillName("MySkill");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("lowercase");
+    });
+
+    it("should reject names starting with hyphen", () => {
+      const result = validateSkillName("-myskill");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("start or end with hyphen");
+    });
+
+    it("should reject names ending with hyphen", () => {
+      const result = validateSkillName("myskill-");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("start or end with hyphen");
+    });
+
+    it("should reject consecutive hyphens", () => {
+      const result = validateSkillName("my--skill");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("consecutive hyphens");
+    });
+
+    it("should reject underscores", () => {
+      const result = validateSkillName("my_skill");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("only lowercase");
+    });
+
+    it("should reject spaces", () => {
+      const result = validateSkillName("my skill");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("only lowercase");
+    });
+
+    it("should reject special characters", () => {
+      const result = validateSkillName("my@skill");
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("only lowercase");
+    });
+  });
+});
+
+describe("Skill Name Constants", () => {
+  it("should have correct min length", () => {
+    expect(SKILL_NAME_MIN_LENGTH).toBe(1);
+  });
+
+  it("should have correct max length", () => {
+    expect(SKILL_NAME_MAX_LENGTH).toBe(64);
+  });
+
+  it("should have correct pattern", () => {
+    expect(SKILL_NAME_PATTERN.test("valid-name")).toBe(true);
+    expect(SKILL_NAME_PATTERN.test("INVALID")).toBe(false);
+  });
+});
+
+// =============================================================================
+// SkillDiscovery Tests
 // =============================================================================
 
 describe("SkillDiscovery", () => {
@@ -154,6 +275,8 @@ describe("SkillDiscovery", () => {
         return [];
       });
 
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
+
       const result = await discovery.discoverAll();
 
       expect(result.locations.length).toBe(3);
@@ -226,13 +349,15 @@ describe("SkillDiscovery", () => {
 
       vi.mocked(fs.readdir).mockResolvedValue([createDirent("my-skill", "dir")]);
 
-      const locations = await discovery.discoverSource("workspace");
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
 
-      expect(locations).toHaveLength(1);
-      expect(locations[0]?.source).toBe("workspace");
-      expect(locations[0]?.priority).toBe(SKILL_SOURCE_PRIORITY.workspace);
-      expect(locations[0]?.path).toContain("my-skill");
-      expect(locations[0]?.manifestPath).toContain("SKILL.md");
+      const result = await discovery.discoverSource("workspace");
+
+      expect(result.locations).toHaveLength(1);
+      expect(result.locations[0]?.source).toBe("workspace");
+      expect(result.locations[0]?.priority).toBe(SKILL_SOURCE_PRIORITY.workspace);
+      expect(result.locations[0]?.path).toContain("my-skill");
+      expect(result.locations[0]?.manifestPath).toContain("SKILL.md");
     });
 
     it("should discover user skills", async () => {
@@ -254,11 +379,13 @@ describe("SkillDiscovery", () => {
 
       vi.mocked(fs.readdir).mockResolvedValue([createDirent("user-skill", "dir")]);
 
-      const locations = await discovery.discoverSource("user");
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
 
-      expect(locations).toHaveLength(1);
-      expect(locations[0]?.source).toBe("user");
-      expect(locations[0]?.priority).toBe(SKILL_SOURCE_PRIORITY.user);
+      const result = await discovery.discoverSource("user");
+
+      expect(result.locations).toHaveLength(1);
+      expect(result.locations[0]?.source).toBe("user");
+      expect(result.locations[0]?.priority).toBe(SKILL_SOURCE_PRIORITY.user);
     });
 
     it("should discover global skills (.github/skills)", async () => {
@@ -280,28 +407,30 @@ describe("SkillDiscovery", () => {
 
       vi.mocked(fs.readdir).mockResolvedValue([createDirent("global-skill", "dir")]);
 
-      const locations = await discovery.discoverSource("global");
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
 
-      expect(locations).toHaveLength(1);
-      expect(locations[0]?.source).toBe("global");
-      expect(locations[0]?.priority).toBe(SKILL_SOURCE_PRIORITY.global);
+      const result = await discovery.discoverSource("global");
+
+      expect(result.locations).toHaveLength(1);
+      expect(result.locations[0]?.source).toBe("global");
+      expect(result.locations[0]?.priority).toBe(SKILL_SOURCE_PRIORITY.global);
     });
 
     it("should return empty array for builtin source", async () => {
       discovery = new SkillDiscovery({ workspacePath: WORKSPACE_PATH });
 
-      const locations = await discovery.discoverSource("builtin");
+      const result = await discovery.discoverSource("builtin");
 
       // Builtin skills are not discovered from filesystem
-      expect(locations).toHaveLength(0);
+      expect(result.locations).toHaveLength(0);
     });
 
     it("should return empty array when workspace path not set", async () => {
       discovery = new SkillDiscovery(); // No workspace path
 
-      const locations = await discovery.discoverSource("workspace");
+      const result = await discovery.discoverSource("workspace");
 
-      expect(locations).toHaveLength(0);
+      expect(result.locations).toHaveLength(0);
     });
 
     it("should skip hidden directories", async () => {
@@ -328,10 +457,12 @@ describe("SkillDiscovery", () => {
         // biome-ignore lint/suspicious/noExplicitAny: Mock fs.Dirent[] for testing
       ] as any);
 
-      const locations = await discovery.discoverSource("workspace");
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
 
-      expect(locations).toHaveLength(1);
-      expect(locations[0]?.path).toContain("visible-skill");
+      const result = await discovery.discoverSource("workspace");
+
+      expect(result.locations).toHaveLength(1);
+      expect(result.locations[0]?.path).toContain("visible-skill");
     });
 
     it("should skip directories without SKILL.md", async () => {
@@ -351,9 +482,11 @@ describe("SkillDiscovery", () => {
 
       vi.mocked(fs.readdir).mockResolvedValue([createDirent("no-manifest", "dir")]);
 
-      const locations = await discovery.discoverSource("workspace");
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
 
-      expect(locations).toHaveLength(0);
+      const result = await discovery.discoverSource("workspace");
+
+      expect(result.locations).toHaveLength(0);
     });
 
     it("should follow symbolic links when enabled", async () => {
@@ -378,9 +511,11 @@ describe("SkillDiscovery", () => {
 
       vi.mocked(fs.readdir).mockResolvedValue([createDirent("symlink-skill", "symlink")]);
 
-      const locations = await discovery.discoverSource("workspace");
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
 
-      expect(locations).toHaveLength(1);
+      const result = await discovery.discoverSource("workspace");
+
+      expect(result.locations).toHaveLength(1);
     });
   });
 
@@ -509,10 +644,12 @@ describe("SkillDiscovery", () => {
 
       vi.mocked(fs.readdir).mockResolvedValue([createDirent("custom-skill", "dir")]);
 
-      const locations = await discovery.discoverSource("workspace");
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
 
-      expect(locations).toHaveLength(1);
-      expect(locations[0]?.path).toContain("custom-skill");
+      const result = await discovery.discoverSource("workspace");
+
+      expect(result.locations).toHaveLength(1);
+      expect(result.locations[0]?.path).toContain("custom-skill");
     });
   });
 
@@ -531,6 +668,226 @@ describe("SkillDiscovery", () => {
       expect(SKILL_SOURCE_PRIORITY.workspace).toBeGreaterThan(SKILL_SOURCE_PRIORITY.user);
       expect(SKILL_SOURCE_PRIORITY.user).toBeGreaterThan(SKILL_SOURCE_PRIORITY.global);
       expect(SKILL_SOURCE_PRIORITY.global).toBeGreaterThan(SKILL_SOURCE_PRIORITY.builtin);
+    });
+  });
+
+  // ===========================================================================
+  // Name Validation in Discovery Tests
+  // ===========================================================================
+
+  describe("name validation in discovery", () => {
+    it("should reject skills with invalid names", async () => {
+      discovery = new SkillDiscovery({ workspacePath: WORKSPACE_PATH });
+
+      const skillsPath = path.normalize(path.join(WORKSPACE_PATH, ".vellum", "skills"));
+      const validSkillPath = path.normalize(path.join(skillsPath, "valid-skill"));
+      const invalidSkillPath = path.normalize(path.join(skillsPath, "Invalid-Skill"));
+
+      vi.mocked(fs.stat).mockImplementation(async (p) => {
+        const pathStr = path.normalize(p.toString());
+        if (pathStr.endsWith("SKILL.md")) {
+          return createMockStat(false, true);
+        }
+        if (pathStr === skillsPath || pathStr === validSkillPath || pathStr === invalidSkillPath) {
+          return createMockStat(true, false);
+        }
+        throw new Error("ENOENT");
+      });
+
+      vi.mocked(fs.readdir).mockResolvedValue([
+        createDirent("valid-skill", "dir"),
+        createDirent("Invalid-Skill", "dir"), // uppercase - invalid
+      ]);
+
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
+
+      const result = await discovery.discoverAll();
+
+      expect(result.locations).toHaveLength(1);
+      expect(result.locations[0]?.path).toContain("valid-skill");
+      expect(result.validationErrors).toHaveLength(1);
+      expect(result.validationErrors[0]?.name).toBe("Invalid-Skill");
+      expect(result.validationErrors[0]?.error).toContain("lowercase");
+    });
+
+    it("should skip validation when validateNames is false", async () => {
+      discovery = new SkillDiscovery({
+        workspacePath: WORKSPACE_PATH,
+        validateNames: false,
+      });
+
+      const skillsPath = path.normalize(path.join(WORKSPACE_PATH, ".vellum", "skills"));
+      const invalidSkillPath = path.normalize(path.join(skillsPath, "Invalid-Skill"));
+
+      vi.mocked(fs.stat).mockImplementation(async (p) => {
+        const pathStr = path.normalize(p.toString());
+        if (pathStr.endsWith("SKILL.md")) {
+          return createMockStat(false, true);
+        }
+        if (pathStr === skillsPath || pathStr === invalidSkillPath) {
+          return createMockStat(true, false);
+        }
+        throw new Error("ENOENT");
+      });
+
+      vi.mocked(fs.readdir).mockResolvedValue([createDirent("Invalid-Skill", "dir")]);
+
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
+
+      const result = await discovery.discoverAll();
+
+      expect(result.locations).toHaveLength(1);
+      expect(result.validationErrors).toHaveLength(0);
+    });
+  });
+
+  // ===========================================================================
+  // Mode-Specific Discovery Tests
+  // ===========================================================================
+
+  describe("discoverForMode", () => {
+    it("should discover mode-specific and general skills", async () => {
+      discovery = new SkillDiscovery({ workspacePath: WORKSPACE_PATH });
+
+      const generalSkillsPath = path.normalize(path.join(WORKSPACE_PATH, ".vellum", "skills"));
+      const modeSkillsPath = path.normalize(path.join(WORKSPACE_PATH, ".vellum", "skills-code"));
+      const generalSkillPath = path.normalize(path.join(generalSkillsPath, "general-skill"));
+      const modeSkillPath = path.normalize(path.join(modeSkillsPath, "code-specific"));
+
+      vi.mocked(fs.stat).mockImplementation(async (p) => {
+        const pathStr = path.normalize(p.toString());
+        if (pathStr.endsWith("SKILL.md")) {
+          return createMockStat(false, true);
+        }
+        if (
+          pathStr === generalSkillsPath ||
+          pathStr === modeSkillsPath ||
+          pathStr === generalSkillPath ||
+          pathStr === modeSkillPath
+        ) {
+          return createMockStat(true, false);
+        }
+        throw new Error("ENOENT");
+      });
+
+      vi.mocked(fs.readdir).mockImplementation(async (p) => {
+        const pathStr = path.normalize(p.toString());
+        if (pathStr === modeSkillsPath) {
+          return [createDirent("code-specific", "dir")];
+        }
+        if (pathStr === generalSkillsPath) {
+          return [createDirent("general-skill", "dir")];
+        }
+        return [];
+      });
+
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
+
+      const result = await discovery.discoverForMode("code");
+
+      expect(result.locations.length).toBe(2);
+      expect(result.deduplicated.length).toBe(2);
+
+      // Mode-specific skill should have mode set
+      const modeSkill = result.locations.find((l) => l.path.includes("code-specific"));
+      expect(modeSkill?.mode).toBe("code");
+
+      // General skill should not have mode set
+      const generalSkill = result.locations.find((l) => l.path.includes("general-skill"));
+      expect(generalSkill?.mode).toBeUndefined();
+    });
+
+    it("should override general skill with mode-specific skill of same name", async () => {
+      discovery = new SkillDiscovery({ workspacePath: WORKSPACE_PATH });
+
+      const generalSkillsPath = path.normalize(path.join(WORKSPACE_PATH, ".vellum", "skills"));
+      const modeSkillsPath = path.normalize(path.join(WORKSPACE_PATH, ".vellum", "skills-code"));
+      const generalSharedPath = path.normalize(path.join(generalSkillsPath, "shared-skill"));
+      const modeSharedPath = path.normalize(path.join(modeSkillsPath, "shared-skill"));
+
+      vi.mocked(fs.stat).mockImplementation(async (p) => {
+        const pathStr = path.normalize(p.toString());
+        if (pathStr.endsWith("SKILL.md")) {
+          return createMockStat(false, true);
+        }
+        if (
+          pathStr === generalSkillsPath ||
+          pathStr === modeSkillsPath ||
+          pathStr === generalSharedPath ||
+          pathStr === modeSharedPath
+        ) {
+          return createMockStat(true, false);
+        }
+        throw new Error("ENOENT");
+      });
+
+      vi.mocked(fs.readdir).mockImplementation(async (p) => {
+        const pathStr = path.normalize(p.toString());
+        if (pathStr === modeSkillsPath) {
+          return [createDirent("shared-skill", "dir")];
+        }
+        if (pathStr === generalSkillsPath) {
+          return [createDirent("shared-skill", "dir")];
+        }
+        return [];
+      });
+
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
+
+      const result = await discovery.discoverForMode("code");
+
+      // Should find in both locations
+      expect(result.locations.length).toBe(2);
+
+      // But only 1 deduplicated (mode-specific wins due to priority boost)
+      expect(result.deduplicated.length).toBe(1);
+      expect(result.deduplicated[0]?.mode).toBe("code");
+    });
+
+    it("should prioritize workspace over user skills", async () => {
+      discovery = new SkillDiscovery({ workspacePath: WORKSPACE_PATH });
+
+      const workspaceModeSkillsPath = path.normalize(
+        path.join(WORKSPACE_PATH, ".vellum", "skills-code")
+      );
+      const userModeSkillsPath = path.normalize(path.join(HOME_DIR, ".vellum", "skills-code"));
+      const workspaceSkillPath = path.normalize(path.join(workspaceModeSkillsPath, "my-skill"));
+      const userSkillPath = path.normalize(path.join(userModeSkillsPath, "my-skill"));
+
+      vi.mocked(fs.stat).mockImplementation(async (p) => {
+        const pathStr = path.normalize(p.toString());
+        if (pathStr.endsWith("SKILL.md")) {
+          return createMockStat(false, true);
+        }
+        if (
+          pathStr === workspaceModeSkillsPath ||
+          pathStr === userModeSkillsPath ||
+          pathStr === workspaceSkillPath ||
+          pathStr === userSkillPath
+        ) {
+          return createMockStat(true, false);
+        }
+        throw new Error("ENOENT");
+      });
+
+      vi.mocked(fs.readdir).mockImplementation(async (p) => {
+        const pathStr = path.normalize(p.toString());
+        if (pathStr === workspaceModeSkillsPath || pathStr === userModeSkillsPath) {
+          return [createDirent("my-skill", "dir")];
+        }
+        return [];
+      });
+
+      vi.mocked(fs.realpath).mockImplementation(async (p) => p.toString());
+
+      const result = await discovery.discoverForMode("code");
+
+      // Should find in both locations
+      expect(result.locations.length).toBe(2);
+
+      // But deduplicated to workspace (higher priority)
+      expect(result.deduplicated.length).toBe(1);
+      expect(result.deduplicated[0]?.source).toBe("workspace");
     });
   });
 });

@@ -160,7 +160,8 @@ export class PromptLoader {
    */
   constructor(options: PromptLoaderOptions = {}) {
     this.discovery = new PromptDiscovery(options.discovery);
-    this.parser = options.parser ?? new PromptParser();
+    // Default parser throws on YAML errors for strict validation
+    this.parser = options.parser ?? new PromptParser({ throwOnError: true });
     this.cache = new Map();
     this.maxCacheSize = options.maxCacheSize ?? DEFAULT_MAX_CACHE_SIZE;
     this.cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;

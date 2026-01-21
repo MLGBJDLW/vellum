@@ -133,6 +133,12 @@ export interface ToolContext {
   sandboxConfig?: Partial<SandboxConfig>;
   /** Skip sandbox execution (typically only for yolo mode) */
   bypassSandbox?: boolean;
+
+  // Streaming output callbacks (for shell/bash tools)
+  /** Callback for streaming stdout chunks during shell execution */
+  onStdout?: (chunk: string) => void;
+  /** Callback for streaming stderr chunks during shell execution */
+  onStderr?: (chunk: string) => void;
 }
 
 // =============================================================================

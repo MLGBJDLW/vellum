@@ -30,6 +30,11 @@ export {
   type PersistenceStatusIndicatorProps,
 } from "./PersistenceStatusIndicator.js";
 export {
+  ResilienceIndicator,
+  type ResilienceIndicatorProps,
+  ResilienceStatusSegment,
+} from "./ResilienceIndicator.js";
+export {
   SandboxIndicator,
   type SandboxIndicatorProps,
 } from "./SandboxIndicator.js";

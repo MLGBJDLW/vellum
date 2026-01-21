@@ -181,6 +181,35 @@ export interface ToolRegistryLike {
   unregister?: (name: string) => void;
 }
 
+/**
+ * Configuration for multi-client mode file rules.
+ * Determines which servers handle specific file patterns.
+ */
+export interface MultiClientFileRule {
+  /** Glob pattern to match file paths */
+  readonly pattern: string;
+  /** Server IDs in priority order */
+  readonly servers: readonly string[];
+}
+
+/**
+ * Configuration for multi-client mode.
+ */
+export interface MultiClientOptions {
+  /** Maximum number of LSP connections per file (default: 3) */
+  readonly maxConnectionsPerFile?: number;
+  /** File-specific server rules */
+  readonly fileRules?: readonly MultiClientFileRule[];
+}
+
+/**
+ * Result of aggregated diagnostics from multiple LSP servers.
+ */
+export interface MergedDiagnostics {
+  readonly diagnostics: Diagnostic[];
+  readonly sources: readonly string[];
+}
+
 export interface LspHubOptions {
   getGlobalConfigPath: () => Promise<string>;
   getProjectConfigPath?: () => Promise<string | undefined>;
@@ -194,6 +223,10 @@ export interface LspHubOptions {
   maxRestartAttempts?: number;
   enableDiagnosticsDebounce?: boolean;
   diagnosticsDebounceMs?: number;
+  /** Enable multi-client mode (default: true) */
+  enableMultiClient?: boolean;
+  /** Multi-client configuration */
+  multiClientConfig?: MultiClientOptions;
 }
 
 export interface LspHubEvents {
@@ -226,5 +259,9 @@ export interface LspHubEvents {
   };
   "config:reloaded": {
     readonly serverIds: readonly string[];
+  };
+  // FIX: Added config:error event for config-related errors
+  "config:error": {
+    readonly error: Error;
   };
 }

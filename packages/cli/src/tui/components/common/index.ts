@@ -20,6 +20,12 @@ export {
   type CostWarningProps,
   type CostWarningSeverity,
 } from "./CostWarning.js";
+// DynamicShortcutHints (UX improvement - context-aware shortcuts)
+export {
+  DynamicShortcutHints,
+  type DynamicShortcutHintsProps,
+  type UIState,
+} from "./DynamicShortcutHints.js";
 // EnhancedLoadingIndicator (Enhanced loading with elapsed time & cancel hints)
 export {
   EnhancedLoadingIndicator,
@@ -30,6 +36,14 @@ export {
 } from "./EnhancedLoadingIndicator.js";
 // ErrorBoundary (Chain 20)
 export { ErrorBoundary, type ErrorBoundaryProps } from "./ErrorBoundary.js";
+// GradientText (Terminal gradient text component)
+export {
+  GRADIENT_PRESETS,
+  type GradientDirection,
+  type GradientPreset,
+  GradientText,
+  type GradientTextProps,
+} from "./GradientText.js";
 // HotkeyHelpModal (Chain 24)
 export {
   DEFAULT_HOTKEYS,
@@ -77,7 +91,6 @@ export {
   type StreamingPhase,
   useStreamingPhase,
 } from "./StreamingIndicator.js";
-
 // VirtualizedList (Ported from Gemini CLI)
 export {
   type HeightCache,

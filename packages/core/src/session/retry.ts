@@ -12,6 +12,7 @@
  */
 
 import { isRetryableError, VellumError } from "../errors/index.js";
+import type { ResilienceEventBus } from "../rate-limit/events.js";
 
 /**
  * Options for session retry operations.
@@ -29,12 +30,18 @@ export interface SessionRetryOptions {
   shouldRetry?: (error: unknown) => boolean;
   /** Callback called before each retry attempt */
   onRetry?: (error: unknown, attempt: number, delay: number) => void;
+  /** Event bus for emitting retry events */
+  eventBus?: ResilienceEventBus;
+  /** Source identifier for retry events (e.g., 'session', 'provider') */
+  source?: string;
 }
 
 /**
  * Default retry options.
  */
-const DEFAULT_OPTIONS: Required<Omit<SessionRetryOptions, "signal" | "shouldRetry" | "onRetry">> = {
+const DEFAULT_OPTIONS: Required<
+  Omit<SessionRetryOptions, "signal" | "shouldRetry" | "onRetry" | "eventBus" | "source">
+> = {
   maxAttempts: 3,
   baseDelay: 1000,
   maxDelay: 30000,
@@ -167,10 +174,13 @@ export async function withSessionRetry<T>(
 
   const shouldRetryFn = options?.shouldRetry ?? isRetryableError;
   const onRetryFn = options?.onRetry;
+  const eventBus = options?.eventBus;
+  const source = options?.source ?? "session";
   const signal = options?.signal;
 
   let lastError: unknown;
   let attempt = 0;
+  const startTime = Date.now();
 
   while (attempt < opts.maxAttempts) {
     // Check if aborted before each attempt
@@ -179,13 +189,35 @@ export async function withSessionRetry<T>(
     }
 
     try {
-      return await fn();
+      const result = await fn();
+      // Emit completed event on success if we had retries
+      if (attempt > 0 && eventBus) {
+        eventBus.emit("retryCompleted", {
+          success: true,
+          totalAttempts: attempt + 1,
+          totalTimeMs: Date.now() - startTime,
+          source,
+          timestamp: Date.now(),
+        });
+      }
+      return result;
     } catch (error) {
       lastError = error;
       attempt++;
 
       // Check if we should retry
       if (attempt >= opts.maxAttempts || !shouldRetryFn(error)) {
+        // Emit completed event on final failure
+        if (eventBus) {
+          eventBus.emit("retryCompleted", {
+            success: false,
+            totalAttempts: attempt,
+            totalTimeMs: Date.now() - startTime,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            source,
+            timestamp: Date.now(),
+          });
+        }
         throw error;
       }
 
@@ -196,6 +228,20 @@ export async function withSessionRetry<T>(
 
       // Calculate delay for this retry
       const delay = calculateRetryDelay(attempt, opts.baseDelay, opts.maxDelay, error);
+
+      // Emit retry attempt event
+      if (eventBus) {
+        const errorCode = error instanceof VellumError ? String(error.code) : undefined;
+        eventBus.emit("retryAttempt", {
+          attempt,
+          maxAttempts: opts.maxAttempts,
+          delayMs: delay,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorCode,
+          source,
+          timestamp: Date.now(),
+        });
+      }
 
       // Call onRetry callback if provided
       if (onRetryFn) {

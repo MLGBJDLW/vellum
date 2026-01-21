@@ -907,16 +907,19 @@ function TextInputComponent({
         paddingX={1}
         minHeight={effectiveMinHeight + 2} // +2 for top/bottom border
       >
-        <Text color={theme.semantic.text.muted}>
-          {focused ? (
-            <>
-              <Text inverse>{placeholder[0] || " "}</Text>
-              {placeholder.slice(1)}
-            </>
-          ) : (
-            placeholder
-          )}
-        </Text>
+        <Box flexDirection="row">
+          <Text color={theme.semantic.text.primary}>{"❯ "}</Text>
+          <Text color={theme.semantic.text.muted}>
+            {focused ? (
+              <>
+                <Text inverse>{placeholder[0] || " "}</Text>
+                {placeholder.slice(1)}
+              </>
+            ) : (
+              placeholder
+            )}
+          </Text>
+        </Box>
         {/* Add empty lines to maintain minHeight - these are static decorative elements */}
         {Array.from({ length: emptyLinesForPlaceholder }).map((_, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: Static placeholder lines don't reorder
@@ -930,11 +933,17 @@ function TextInputComponent({
   if (!multiline) {
     const content = renderLineWithCursor(displayValue, 0);
     if (!showBorder) {
-      return <Box flexDirection="row">{content}</Box>;
+      return (
+        <Box flexDirection="row">
+          <Text color={theme.semantic.text.primary}>{"❯ "}</Text>
+          {content}
+        </Box>
+      );
     }
     return (
-      <Box borderStyle="round" borderColor={borderColor} paddingX={1}>
-        {content}
+      <Box borderStyle="round" borderColor={borderColor} paddingX={1} flexDirection="row">
+        <Text color={theme.semantic.text.primary}>{"❯ "}</Text>
+        <Box flexGrow={1}>{content}</Box>
       </Box>
     );
   }
@@ -948,8 +957,16 @@ function TextInputComponent({
       paddingX={1}
       minHeight={effectiveMinHeight + 2} // +2 for top/bottom border
     >
-      {lineData.map(({ line, startPos, key }) => (
-        <Box key={key}>{renderLineWithCursor(line, startPos)}</Box>
+      {lineData.map(({ line, startPos, key }, index) => (
+        <Box key={key} flexDirection="row">
+          {/* Show prompt prefix on first line only */}
+          {index === 0 ? (
+            <Text color={theme.semantic.text.primary}>{"❯ "}</Text>
+          ) : (
+            <Text>{"  "}</Text>
+          )}
+          <Box flexGrow={1}>{renderLineWithCursor(line, startPos)}</Box>
+        </Box>
       ))}
       {/* Add empty lines to maintain minHeight - these are static decorative elements */}
       {Array.from({ length: paddingLinesNeeded }).map((_, i) => (

@@ -27,6 +27,8 @@ export {
 } from "./agent-factory.js";
 // Agent Registry (T003)
 export { AgentRegistry, DuplicateAgentError } from "./agent-registry.js";
+// AGENTS.md Directory Scoping (Phase 25)
+export * from "./agents-md/index.js";
 export {
   type CancelCallback,
   CancellationToken,
@@ -128,6 +130,8 @@ export {
   type LoopDetectionContext,
   type LoopType,
 } from "./loop-detection.js";
+// File Memory Manager (Phase 2a)
+export * from "./memory/index.js";
 // Mode Detection (T028, T029)
 export {
   ComplexityAnalyzer,

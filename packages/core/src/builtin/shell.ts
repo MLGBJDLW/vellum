@@ -115,6 +115,8 @@ export const shellTool = defineTool({
         timeout: input.timeout,
         abortSignal: ctx.abortSignal,
         sandbox: sandboxOptions,
+        onStdout: ctx.onStdout,
+        onStderr: ctx.onStderr,
       });
 
       return ok({

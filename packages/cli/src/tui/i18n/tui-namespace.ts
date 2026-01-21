@@ -155,7 +155,7 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
     noApiKeyNeeded: "(local, no key needed)",
     selectMode: "Choose Your Coding Mode:",
     modeNav: "Use ↑/↓ to navigate, Enter to select",
-    modeSwitchHint: "Tip: Use /mode command or Ctrl+1/2/3 to switch modes later",
+    modeSwitchHint: "Tip: Use /mode command or Alt+1/2/3 to switch modes later",
   },
   providers: {
     anthropic: {
@@ -324,7 +324,7 @@ const ZH_TRANSLATIONS: Record<string, unknown> = {
     noApiKeyNeeded: "(本地运行，无需密钥)",
     selectMode: "选择编码模式：",
     modeNav: "使用 ↑/↓ 导航，Enter 选择",
-    modeSwitchHint: "提示：之后可使用 /mode 命令或 Ctrl+1/2/3 快捷键切换模式",
+    modeSwitchHint: "提示：之后可使用 /mode 命令或 Alt+1/2/3 快捷键切换模式",
   },
   providers: {
     anthropic: {

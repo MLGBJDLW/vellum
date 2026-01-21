@@ -59,6 +59,8 @@ export interface ToolExecution {
   readonly startedAt?: Date;
   /** Timestamp when execution completed */
   readonly completedAt?: Date;
+  /** Shell output lines for streaming display (max 10 lines) */
+  readonly shellOutput?: readonly string[];
 }
 
 /**
@@ -337,6 +339,8 @@ export interface ToolsContextValue {
   readonly approveAll: () => void;
   /** Update an existing tool execution */
   readonly updateExecution: (id: string, updates: Partial<ToolExecution>) => void;
+  /** Update shell output for streaming display (appends new content, keeps last 10 lines) */
+  readonly updateShellOutput: (id: string, chunk: string) => void;
   /** Clear all tool executions */
   readonly clearExecutions: () => void;
 }
@@ -624,6 +628,35 @@ export function ToolsProvider({
     dispatch({ type: "CLEAR_EXECUTIONS" });
   }, []);
 
+  /** Maximum number of shell output lines to keep */
+  const MAX_SHELL_OUTPUT_LINES = 10;
+
+  /**
+   * Update shell output for streaming display
+   * Appends new content and keeps only the last MAX_SHELL_OUTPUT_LINES lines
+   */
+  const updateShellOutput = useCallback(
+    (id: string, chunk: string): void => {
+      // Get current execution to read existing output
+      const execution = state.executions.find((e) => e.id === id);
+      const currentLines = execution?.shellOutput ?? [];
+
+      // Split chunk into lines and append
+      const newLines = chunk.split("\n").filter((line) => line.length > 0);
+      const allLines = [...currentLines, ...newLines];
+
+      // Keep only last MAX_SHELL_OUTPUT_LINES lines
+      const trimmedLines = allLines.slice(-MAX_SHELL_OUTPUT_LINES);
+
+      dispatch({
+        type: "UPDATE_EXECUTION",
+        id,
+        updates: { shellOutput: trimmedLines },
+      });
+    },
+    [state.executions]
+  );
+
   /**
    * Memoized context value
    */
@@ -641,6 +674,7 @@ export function ToolsProvider({
       permissionAskHandler,
       approveAll,
       updateExecution,
+      updateShellOutput,
       clearExecutions,
     }),
     [
@@ -653,6 +687,7 @@ export function ToolsProvider({
       permissionAskHandler,
       approveAll,
       updateExecution,
+      updateShellOutput,
       clearExecutions,
     ]
   );

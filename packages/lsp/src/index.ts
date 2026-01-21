@@ -35,5 +35,8 @@ export type {
   LspServerCapabilities,
   LspServerStatus,
   LspTransportType,
+  MergedDiagnostics,
+  MultiClientFileRule,
+  MultiClientOptions,
   ToolRegistryLike,
 } from "./types.js";

@@ -47,6 +47,18 @@ export {
 } from "./worker-executor.js";
 
 // ============================================
+// Worker Tool Bridge
+// ============================================
+
+export type { BridgeValidationResult, WorkerToolBridgeConfig } from "./worker-tool-bridge.js";
+
+export {
+  createWorkerToolBridge,
+  createWorkerToolExecutor,
+  WorkerToolBridge,
+} from "./worker-tool-bridge.js";
+
+// ============================================
 // Builtin Workers Registry
 // ============================================
 

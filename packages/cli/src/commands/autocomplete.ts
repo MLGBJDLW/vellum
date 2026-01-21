@@ -295,23 +295,26 @@ function computeCandidates(
 
     // Also check aliases for better matching
     if (command.aliases) {
+      let bestAliasResult: FuzzyScoreResult | null = null;
+
       for (const alias of command.aliases) {
         const aliasResult = fuzzyScore(query, alias);
-        if (aliasResult && aliasResult.score > (result?.score ?? 0)) {
-          // Better alias match - update candidate
-          const existing = candidates.find((c) => c.command === command);
-          if (existing) {
-            // Remove existing and add better one
-            const index = candidates.indexOf(existing);
-            candidates.splice(index, 1);
-          }
-          candidates.push({
-            command,
-            score: aliasResult.score,
-            matchRanges: aliasResult.ranges,
-          });
-          break;
+        if (aliasResult && aliasResult.score > (bestAliasResult?.score ?? result?.score ?? 0)) {
+          bestAliasResult = aliasResult;
         }
+      }
+
+      if (bestAliasResult && bestAliasResult.score > (result?.score ?? 0)) {
+        const existing = candidates.find((c) => c.command === command);
+        if (existing) {
+          const index = candidates.indexOf(existing);
+          candidates.splice(index, 1);
+        }
+        candidates.push({
+          command,
+          score: bestAliasResult.score,
+          matchRanges: bestAliasResult.ranges,
+        });
       }
     }
   }

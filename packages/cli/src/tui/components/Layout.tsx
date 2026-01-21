@@ -199,7 +199,8 @@ function HeaderRegion({
 
 /**
  * Footer region of the layout.
- * Uses double-line separator above for visual emphasis.
+ * Uses single-line separator above (double caused visual confusion with progress bars).
+ * Footer has flexShrink={0} to prevent compression.
  */
 interface FooterRegionProps {
   readonly children: React.ReactNode;
@@ -208,8 +209,8 @@ interface FooterRegionProps {
 
 function FooterRegion({ children, borderColor }: FooterRegionProps): React.JSX.Element {
   return (
-    <Box flexDirection="column" width="100%">
-      <Separator color={borderColor} style="double" />
+    <Box flexDirection="column" width="100%" flexShrink={0}>
+      <Separator color={borderColor} style="single" />
       <Box paddingX={1}>{children}</Box>
     </Box>
   );
@@ -406,7 +407,7 @@ export function Layout({
       )}
 
       {/* Middle Section: Content + Sidebar (sidebar on right) */}
-      <Box flexDirection="row" flexGrow={1} minHeight={0}>
+      <Box flexDirection="row" flexGrow={1} flexShrink={1} minHeight={0}>
         {/* Content Region */}
         <ContentRegion>{children}</ContentRegion>
 

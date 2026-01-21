@@ -186,10 +186,13 @@ export function estimateMessageHeight(message: Message, options: HeightEstimator
 
   // Add tool call lines if enabled and present (UPPER BOUND per tool)
   if (includeToolCalls && toolCalls.length > 0) {
-    lines += 2; // margin + separator before tool calls
+    lines += 1; // separator before tool calls (margin already counted)
     lines += toolCalls.reduce((sum, call) => sum + getToolCallUpperBound(call), 0);
   }
 
-  // Add safety margin and ensure minimum height
-  return Math.max(MIN_MESSAGE_HEIGHT, lines + marginLines + HEIGHT_SAFETY_MARGIN);
+  // FIX: Simplified height calculation to avoid double-counting margins
+  // Previous version added marginLines (2) + HEIGHT_SAFETY_MARGIN (2) = 4 extra lines
+  // which caused over-estimation and blank spaces in virtualized list
+  // Now we only add a single safety buffer
+  return Math.max(MIN_MESSAGE_HEIGHT, lines + HEIGHT_SAFETY_MARGIN);
 }

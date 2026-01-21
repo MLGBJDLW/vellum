@@ -121,16 +121,34 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
   const isInitialScrollSet = useRef(false);
 
   // Convert scroll position to anchor
+  // FIX: Added bounds validation to prevent invalid anchor indices
   const getAnchorForScrollTop = useCallback(
     (scrollTop: number): ScrollAnchor => {
+      // Handle edge cases
+      if (dataLength === 0) {
+        return { index: 0, offset: 0 };
+      }
+      if (scrollTop <= 0) {
+        return { index: 0, offset: 0 };
+      }
+
       const index = findLastIndex(offsets, (offset) => offset <= scrollTop);
       if (index === -1) {
         return { index: 0, offset: 0 };
       }
-      const offsetValue = offsets[index] ?? 0;
-      return { index, offset: scrollTop - offsetValue };
+
+      // FIX: Ensure index is within valid bounds
+      const safeIndex = Math.max(0, Math.min(dataLength - 1, index));
+      const offsetValue = offsets[safeIndex] ?? 0;
+      const itemHeight = heights[safeIndex] ?? 0;
+
+      // FIX: Clamp offset to be within the item's height
+      const rawOffset = scrollTop - offsetValue;
+      const safeOffset = Math.max(0, Math.min(itemHeight, rawOffset));
+
+      return { index: safeIndex, offset: safeOffset };
     },
-    [offsets]
+    [offsets, dataLength, heights]
   );
 
   // Compute pixel scroll position from anchor

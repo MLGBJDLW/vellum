@@ -10,11 +10,19 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
+import type { DiffViewMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { getTerminalWidth } from "../../utils/ui-sizing.js";
 
 // =============================================================================
 // Types
 // =============================================================================
+
+/**
+ * Minimum terminal width required for side-by-side mode.
+ * Below this, automatically degrades to unified mode.
+ */
+const SIDE_BY_SIDE_MIN_WIDTH = 100;
 
 /**
  * Props for the DiffView component.
@@ -28,6 +36,8 @@ export interface DiffViewProps {
   readonly showLineNumbers?: boolean;
   /** Reduce spacing for compact display (default: false) */
   readonly compact?: boolean;
+  /** Display mode: "unified" or "side-by-side" (default: "unified") */
+  readonly mode?: DiffViewMode;
 }
 
 /**
@@ -189,6 +199,17 @@ interface DiffLineRendererProps {
   readonly lineNumberWidth: number;
 }
 
+/**
+ * Enhanced diff line styling configuration
+ */
+interface DiffLineStyle {
+  readonly textColor: string;
+  readonly bgColor?: string;
+  readonly symbol: string;
+  readonly bold: boolean;
+  readonly dimContent: boolean;
+}
+
 function DiffLineRenderer({
   line,
   showLineNumbers,
@@ -197,42 +218,52 @@ function DiffLineRenderer({
   const { theme } = useTheme();
   const diffColors = theme.semantic.diff;
 
-  // Determine colors based on line type
-  const getLineStyle = (): { bgColor?: string; textColor: string; prefix: string } => {
+  // Enhanced style configuration with better visual distinction
+  const getLineStyle = (): DiffLineStyle => {
     switch (line.type) {
       case "added":
         return {
+          textColor: theme.colors.success,
           bgColor: diffColors.added,
-          textColor: diffColors.added,
-          prefix: "+",
+          symbol: "▶",
+          bold: true,
+          dimContent: false,
         };
       case "removed":
         return {
+          textColor: theme.colors.error,
           bgColor: diffColors.removed,
-          textColor: diffColors.removed,
-          prefix: "-",
+          symbol: "◀",
+          bold: true,
+          dimContent: false,
         };
       case "hunk":
         return {
           textColor: theme.colors.info,
-          prefix: "",
+          symbol: "≡",
+          bold: false,
+          dimContent: false,
         };
       case "header":
         return {
           textColor: theme.semantic.text.muted,
-          prefix: "",
+          symbol: "",
+          bold: false,
+          dimContent: true,
         };
       default:
         return {
-          textColor: theme.semantic.text.primary,
-          prefix: " ",
+          textColor: theme.semantic.text.secondary,
+          symbol: " ",
+          bold: false,
+          dimContent: false,
         };
     }
   };
 
   const style = getLineStyle();
 
-  // Format line numbers
+  // Format line numbers with proper alignment
   const formatLineNumber = (num: number | undefined): string => {
     if (num === undefined) {
       return "".padStart(lineNumberWidth, " ");
@@ -246,40 +277,271 @@ function DiffLineRenderer({
       ? line.content.slice(1)
       : line.content;
 
-  return (
-    <Box>
-      {showLineNumbers &&
-        (line.type === "added" || line.type === "removed" || line.type === "context") && (
-          <Box marginRight={1}>
-            <Text color={theme.semantic.text.muted} dimColor>
-              {formatLineNumber(line.oldLineNumber)}
-            </Text>
-            <Text color={theme.semantic.border.muted}> </Text>
-            <Text color={theme.semantic.text.muted} dimColor>
-              {formatLineNumber(line.newLineNumber)}
-            </Text>
-            <Text color={theme.semantic.border.muted}>│</Text>
-          </Box>
-        )}
-      {showLineNumbers && (line.type === "hunk" || line.type === "header") && (
+  // Render line numbers section
+  const renderLineNumbers = (): React.ReactElement | null => {
+    if (!showLineNumbers) return null;
+
+    if (line.type === "hunk" || line.type === "header") {
+      return (
         <Box marginRight={1}>
           <Text color={theme.semantic.text.muted}>{"".padStart(lineNumberWidth * 2 + 2, " ")}</Text>
           <Text color={theme.semantic.border.muted}>│</Text>
         </Box>
-      )}
+      );
+    }
+
+    if (line.type === "added" || line.type === "removed" || line.type === "context") {
+      return (
+        <Box marginRight={1}>
+          {/* Old line number - dimmed for removed lines */}
+          <Text
+            color={line.type === "removed" ? theme.colors.error : theme.semantic.text.muted}
+            dimColor={line.type !== "removed"}
+          >
+            {formatLineNumber(line.oldLineNumber)}
+          </Text>
+          <Text color={theme.semantic.border.muted}> </Text>
+          {/* New line number - highlighted for added lines */}
+          <Text
+            color={line.type === "added" ? theme.colors.success : theme.semantic.text.muted}
+            dimColor={line.type !== "added"}
+          >
+            {formatLineNumber(line.newLineNumber)}
+          </Text>
+          <Text color={theme.semantic.border.muted}>│</Text>
+        </Box>
+      );
+    }
+
+    return null;
+  };
+
+  // Render the symbol prefix with enhanced visibility
+  const renderSymbol = (): React.ReactElement | null => {
+    if (line.type === "header") return null;
+
+    return (
+      <Text color={style.textColor} bold={style.bold}>
+        {style.symbol}
+      </Text>
+    );
+  };
+
+  return (
+    <Box>
+      {renderLineNumbers()}
       <Box flexGrow={1}>
-        {line.type === "added" && (
-          <Text color={style.textColor} bold>
-            +
+        {renderSymbol()}
+        {style.symbol && <Text> </Text>}
+        <Text
+          color={style.textColor}
+          bold={style.bold && (line.type === "added" || line.type === "removed")}
+          dimColor={style.dimContent}
+        >
+          {displayContent}
+        </Text>
+      </Box>
+    </Box>
+  );
+}
+
+// =============================================================================
+// Side-by-Side Types and Helpers
+// =============================================================================
+
+/**
+ * A paired line for side-by-side display.
+ * Left is the old version, right is the new version.
+ * Either side can be empty (for additions/deletions).
+ */
+interface SideBySideLine {
+  readonly left: ParsedLine | null;
+  readonly right: ParsedLine | null;
+}
+
+/**
+ * Convert parsed diff lines to side-by-side pairs.
+ * Matches removed and added lines, and preserves context on both sides.
+ */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Diff pairing logic requires multiple state transitions
+function toSideBySidePairs(lines: ParsedLine[]): SideBySideLine[] {
+  const result: SideBySideLine[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line) break;
+
+    // Headers and hunks span both columns
+    if (line.type === "header" || line.type === "hunk") {
+      result.push({ left: line, right: line });
+      i++;
+      continue;
+    }
+
+    // Context lines appear on both sides
+    if (line.type === "context") {
+      result.push({ left: line, right: line });
+      i++;
+      continue;
+    }
+
+    // Collect consecutive removed lines
+    const removedLines: ParsedLine[] = [];
+    while (i < lines.length) {
+      const current = lines[i];
+      if (!current || current.type !== "removed") break;
+      removedLines.push(current);
+      i++;
+    }
+
+    // Collect consecutive added lines
+    const addedLines: ParsedLine[] = [];
+    while (i < lines.length) {
+      const current = lines[i];
+      if (!current || current.type !== "added") break;
+      addedLines.push(current);
+      i++;
+    }
+
+    // Pair removed and added lines
+    const maxLen = Math.max(removedLines.length, addedLines.length);
+    for (let j = 0; j < maxLen; j++) {
+      const leftLine = removedLines[j];
+      const rightLine = addedLines[j];
+      result.push({
+        left: leftLine ?? null,
+        right: rightLine ?? null,
+      });
+    }
+  }
+
+  return result;
+}
+
+// =============================================================================
+// Side-by-Side Renderer
+// =============================================================================
+
+/**
+ * Render a single side-by-side row.
+ */
+interface SideBySideRowProps {
+  readonly pair: SideBySideLine;
+  readonly showLineNumbers: boolean;
+  readonly lineNumberWidth: number;
+  readonly columnWidth: number;
+}
+
+function SideBySideRow({
+  pair,
+  showLineNumbers,
+  lineNumberWidth,
+  columnWidth,
+}: SideBySideRowProps): React.ReactElement {
+  const { theme } = useTheme();
+
+  // Format line number
+  const formatLineNumber = (num: number | undefined): string => {
+    if (num === undefined) {
+      return "".padStart(lineNumberWidth, " ");
+    }
+    return String(num).padStart(lineNumberWidth, " ");
+  };
+
+  // Get content (remove prefix char for display)
+  const getContent = (line: ParsedLine | null): string => {
+    if (!line) return "";
+    if (line.type === "added" || line.type === "removed" || line.type === "context") {
+      return line.content.slice(1);
+    }
+    return line.content;
+  };
+
+  // Truncate content to fit column width
+  const truncateContent = (content: string, maxWidth: number): string => {
+    if (content.length <= maxWidth) {
+      return content;
+    }
+    return `${content.slice(0, maxWidth - 1)}…`;
+  };
+
+  // For headers/hunks, span both columns with enhanced styling
+  if (pair.left?.type === "header" || pair.left?.type === "hunk") {
+    const isHunk = pair.left.type === "hunk";
+    return (
+      <Box>
+        {isHunk && (
+          <Text color={theme.colors.info} bold>
+            ≡{" "}
           </Text>
         )}
-        {line.type === "removed" && (
-          <Text color={style.textColor} bold>
-            -
+        <Text color={isHunk ? theme.colors.info : theme.semantic.text.muted} dimColor={!isHunk}>
+          {pair.left.content}
+        </Text>
+      </Box>
+    );
+  }
+
+  // Calculate content width per column
+  const lineNumSpace = showLineNumbers ? lineNumberWidth + 2 : 0;
+  const contentWidth = columnWidth - lineNumSpace - 3; // -3 for symbol, space, and padding
+
+  // Render left side (old/removed) with enhanced colors
+  const leftContent = getContent(pair.left);
+  const leftColor =
+    pair.left?.type === "removed" ? theme.colors.error : theme.semantic.text.secondary;
+  const leftSymbol = pair.left?.type === "removed" ? "◀" : pair.left ? " " : " ";
+  const leftIsBold = pair.left?.type === "removed";
+
+  // Render right side (new/added) with enhanced colors
+  const rightContent = getContent(pair.right);
+  const rightColor =
+    pair.right?.type === "added" ? theme.colors.success : theme.semantic.text.secondary;
+  const rightSymbol = pair.right?.type === "added" ? "▶" : pair.right ? " " : " ";
+  const rightIsBold = pair.right?.type === "added";
+
+  return (
+    <Box>
+      {/* Left column (old/removed) */}
+      <Box width={columnWidth}>
+        {showLineNumbers && (
+          <Text
+            color={pair.left?.type === "removed" ? theme.colors.error : theme.semantic.text.muted}
+            dimColor={pair.left?.type !== "removed"}
+          >
+            {formatLineNumber(pair.left?.oldLineNumber)}
           </Text>
         )}
-        {line.type === "context" && <Text color={style.textColor}> </Text>}
-        <Text color={style.textColor}>{displayContent}</Text>
+        {showLineNumbers && <Text color={theme.semantic.border.muted}>│</Text>}
+        <Text color={leftColor} bold={leftIsBold}>
+          {leftSymbol}{" "}
+        </Text>
+        <Text color={leftColor} bold={leftIsBold}>
+          {truncateContent(leftContent, contentWidth)}
+        </Text>
+      </Box>
+
+      {/* Center divider */}
+      <Text color={theme.semantic.border.default}>║</Text>
+
+      {/* Right column (new/added) */}
+      <Box width={columnWidth}>
+        {showLineNumbers && (
+          <Text
+            color={pair.right?.type === "added" ? theme.colors.success : theme.semantic.text.muted}
+            dimColor={pair.right?.type !== "added"}
+          >
+            {formatLineNumber(pair.right?.newLineNumber)}
+          </Text>
+        )}
+        {showLineNumbers && <Text color={theme.semantic.border.muted}>│</Text>}
+        <Text color={rightColor} bold={rightIsBold}>
+          {rightSymbol}{" "}
+        </Text>
+        <Text color={rightColor} bold={rightIsBold}>
+          {truncateContent(rightContent, contentWidth)}
+        </Text>
       </Box>
     </Box>
   );
@@ -290,7 +552,8 @@ function DiffLineRenderer({
 // =============================================================================
 
 /**
- * DiffView displays a unified diff with proper styling.
+ * DiffView displays a diff with proper styling.
+ * Supports both unified and side-by-side display modes.
  *
  * @example
  * ```tsx
@@ -298,6 +561,7 @@ function DiffLineRenderer({
  *   diff={unifiedDiff}
  *   fileName="src/index.ts"
  *   showLineNumbers
+ *   mode="side-by-side"
  * />
  * ```
  */
@@ -306,8 +570,15 @@ export function DiffView({
   fileName,
   showLineNumbers = false,
   compact = false,
+  mode = "unified",
 }: DiffViewProps): React.ReactElement {
   const { theme } = useTheme();
+
+  // Get terminal width for auto-degradation and column calculation
+  const terminalWidth = getTerminalWidth();
+
+  // Auto-degrade to unified mode if terminal is too narrow
+  const effectiveMode = terminalWidth < SIDE_BY_SIDE_MIN_WIDTH ? "unified" : mode;
 
   // Parse the diff
   const parsedLines = useMemo(() => parseDiff(diff), [diff]);
@@ -338,6 +609,51 @@ export function DiffView({
     return `${line.type}-${oldNum}-${newNum}-${position}`;
   };
 
+  // Calculate column width for side-by-side mode
+  // Account for: borders (4), divider (1), padding (2)
+  const columnWidth = Math.floor((terminalWidth - 7) / 2);
+
+  // Convert to side-by-side pairs if needed
+  const sideBySidePairs = useMemo(
+    () => (effectiveMode === "side-by-side" ? toSideBySidePairs(displayLines) : []),
+    [displayLines, effectiveMode]
+  );
+
+  // Render unified mode
+  if (effectiveMode === "unified") {
+    return (
+      <Box flexDirection="column">
+        {fileName && <FileHeader fileName={fileName} />}
+        <Box
+          flexDirection="column"
+          borderStyle="single"
+          borderColor={theme.semantic.border.default}
+          paddingX={compact ? 0 : 1}
+          paddingY={compact ? 0 : 0}
+        >
+          {displayLines.map((line, position) => (
+            <DiffLineRenderer
+              key={getLineKey(line, position)}
+              line={line}
+              showLineNumbers={showLineNumbers}
+              lineNumberWidth={lineNumberWidth}
+            />
+          ))}
+        </Box>
+      </Box>
+    );
+  }
+
+  // Generate stable key for side-by-side rows
+  const getSideBySideKey = (pair: SideBySideLine, position: number): string => {
+    const leftNum = pair.left?.oldLineNumber ?? pair.left?.newLineNumber ?? "x";
+    const rightNum = pair.right?.newLineNumber ?? pair.right?.oldLineNumber ?? "x";
+    const leftType = pair.left?.type ?? "empty";
+    const rightType = pair.right?.type ?? "empty";
+    return `sbs-${leftType}-${leftNum}-${rightType}-${rightNum}-${position}`;
+  };
+
+  // Render side-by-side mode
   return (
     <Box flexDirection="column">
       {fileName && <FileHeader fileName={fileName} />}
@@ -348,12 +664,13 @@ export function DiffView({
         paddingX={compact ? 0 : 1}
         paddingY={compact ? 0 : 0}
       >
-        {displayLines.map((line, position) => (
-          <DiffLineRenderer
-            key={getLineKey(line, position)}
-            line={line}
+        {sideBySidePairs.map((pair, index) => (
+          <SideBySideRow
+            key={getSideBySideKey(pair, index)}
+            pair={pair}
             showLineNumbers={showLineNumbers}
             lineNumberWidth={lineNumberWidth}
+            columnWidth={columnWidth}
           />
         ))}
       </Box>

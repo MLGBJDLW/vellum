@@ -66,7 +66,8 @@ export function createDiagnosticsTool(hub: LspHub) {
 
       try {
         const filePath = resolve(ctx.workingDir, input.path);
-        const diagnostics = (await hub.diagnostics(filePath)) as Diagnostic[];
+        const result = await hub.diagnostics(filePath);
+        const diagnostics = result.diagnostics;
         const filtered = input.severity
           ? diagnostics.filter((diag) => severityName(diag.severity) === input.severity)
           : diagnostics;

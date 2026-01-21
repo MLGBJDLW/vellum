@@ -353,9 +353,10 @@ describe("exitCommand", () => {
   });
 
   it("should have correct metadata", () => {
-    expect(exitCommand.name).toBe("exit");
+    expect(exitCommand.name).toBe("exit(quit)");
     expect(exitCommand.kind).toBe("builtin");
     expect(exitCommand.category).toBe("system");
+    expect(exitCommand.aliases).toContain("exit");
     expect(exitCommand.aliases).toContain("quit");
     expect(exitCommand.aliases).toContain("q");
   });

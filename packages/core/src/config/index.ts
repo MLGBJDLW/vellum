@@ -75,6 +75,9 @@ export {
   CredentialSourceSchema,
   type CredentialType,
   CredentialTypeSchema,
+  // Diff view mode config
+  type DiffViewMode,
+  DiffViewModeSchema,
   // Limits config
   type LimitsConfig,
   LimitsConfigSchema,

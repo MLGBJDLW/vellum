@@ -2,7 +2,7 @@
  * WorkspaceIndicator Component
  *
  * Displays the current workspace directory name with a folder icon.
- * Uses dim styling to avoid competing with main content.
+ * Uses gradient styling for visual emphasis while maintaining readability.
  *
  * @module tui/components/StatusBar/WorkspaceIndicator
  */
@@ -14,6 +14,7 @@ import { useMemo } from "react";
 import { useWorkspace } from "../../hooks/useWorkspace.js";
 import { useTheme } from "../../theme/index.js";
 import { truncateToDisplayWidth } from "../../utils/index.js";
+import { GradientText } from "../common/GradientText.js";
 
 // =============================================================================
 // Types
@@ -25,6 +26,8 @@ import { truncateToDisplayWidth } from "../../utils/index.js";
 export interface WorkspaceIndicatorProps {
   /** Maximum width for the workspace name (truncates if exceeded) */
   readonly maxWidth?: number;
+  /** Whether to use gradient styling (default: true) */
+  readonly useGradient?: boolean;
 }
 
 // =============================================================================
@@ -35,15 +38,22 @@ export interface WorkspaceIndicatorProps {
  * WorkspaceIndicator displays the current workspace directory.
  *
  * Uses Nerd Font  icon or Unicode/ASCII fallback.
+ * Applies gradient styling for visual emphasis (configurable).
  * Truncates long names with ellipsis if maxWidth is specified.
  *
  * @example
  * ```tsx
  * <WorkspaceIndicator maxWidth={20} />
- * // Output:  vellum
+ * // Output:  vellum (with gradient)
+ *
+ * <WorkspaceIndicator useGradient={false} />
+ * // Output:  vellum (muted)
  * ```
  */
-export function WorkspaceIndicator({ maxWidth = 20 }: WorkspaceIndicatorProps): React.JSX.Element {
+export function WorkspaceIndicator({
+  maxWidth = 20,
+  useGradient = true,
+}: WorkspaceIndicatorProps): React.JSX.Element {
   const { theme } = useTheme();
   const { name } = useWorkspace();
   const icons = getIcons();
@@ -52,6 +62,21 @@ export function WorkspaceIndicator({ maxWidth = 20 }: WorkspaceIndicatorProps): 
     // Truncate with ellipsis using string-width for CJK/Emoji handling
     return truncateToDisplayWidth(name, maxWidth);
   }, [name, maxWidth]);
+
+  // Workspace gradient: subtle gold tones
+  const workspaceGradient = useMemo(
+    () => [theme.brand.primary, theme.brand.secondary, theme.brand.mid] as const,
+    [theme.brand]
+  );
+
+  if (useGradient) {
+    return (
+      <Text>
+        <Text color={theme.brand.primary}>{icons.folder} </Text>
+        <GradientText text={displayName} colors={workspaceGradient} bold />
+      </Text>
+    );
+  }
 
   return (
     <Text color={theme.semantic.text.muted}>

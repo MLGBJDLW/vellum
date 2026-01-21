@@ -4,6 +4,7 @@
 
 import { RateLimitError } from "../errors/web.js";
 
+import type { ResilienceEventBus } from "./events.js";
 import { TokenBucket } from "./token-bucket.js";
 import {
   DEFAULT_BUCKET_CONFIG,
@@ -71,8 +72,9 @@ export class RateLimiter {
   private totalRequests: number = 0;
   private throttledRequests: number = 0;
   private rejectedRequests: number = 0;
+  private readonly eventBus: ResilienceEventBus | null = null;
 
-  constructor(config: RateLimiterConfig = {}) {
+  constructor(config: RateLimiterConfig = {}, eventBus?: ResilienceEventBus) {
     this.config = {
       defaultBucket: config.defaultBucket ?? DEFAULT_RATE_LIMITER_CONFIG.defaultBucket,
       buckets: config.buckets ?? {},
@@ -80,6 +82,7 @@ export class RateLimiter {
       maxWaitMs: config.maxWaitMs ?? DEFAULT_RATE_LIMITER_CONFIG.maxWaitMs,
       cleanupInterval: config.cleanupInterval ?? DEFAULT_RATE_LIMITER_CONFIG.cleanupInterval,
     };
+    this.eventBus = eventBus ?? null;
 
     this.startCleanupTimer();
   }
@@ -107,10 +110,18 @@ export class RateLimiter {
 
     try {
       const waitTime = entry.bucket.calculateWaitTime(tokens);
+      const bucketConfig = this.getBucketConfig(key);
 
       // Check if we should throw instead of wait
       if (waitTime > 0 && this.config.throwOnExceeded) {
         this.rejectedRequests++;
+        // Emit rate limit exceeded event
+        this.eventBus?.emit("rateLimitExceeded", {
+          key,
+          reason: "exceeded",
+          waitTimeMs: waitTime,
+          timestamp: Date.now(),
+        });
         throw new RateLimitError(
           `Rate limit exceeded for key '${key}'. Retry after ${waitTime}ms`,
           waitTime
@@ -120,6 +131,14 @@ export class RateLimiter {
       // Check if wait would exceed max
       if (waitTime > this.config.maxWaitMs) {
         this.rejectedRequests++;
+        // Emit rate limit exceeded event with max_wait reason
+        this.eventBus?.emit("rateLimitExceeded", {
+          key,
+          reason: "max_wait",
+          waitTimeMs: waitTime,
+          maxWaitMs: this.config.maxWaitMs,
+          timestamp: Date.now(),
+        });
         throw new RateLimitError(
           `Rate limit wait time (${waitTime}ms) exceeds maximum (${this.config.maxWaitMs}ms)`,
           waitTime
@@ -128,6 +147,14 @@ export class RateLimiter {
 
       if (waitTime > 0) {
         this.throttledRequests++;
+        // Emit throttle event
+        this.eventBus?.emit("rateLimitThrottle", {
+          key,
+          waitTimeMs: waitTime,
+          availableTokens: entry.bucket.getAvailableTokens(),
+          capacity: bucketConfig.capacity,
+          timestamp: Date.now(),
+        });
       }
 
       await entry.bucket.waitForTokens(tokens, signal);
@@ -396,6 +423,7 @@ export class RateLimiter {
  * Create a new rate limiter instance.
  *
  * @param config - Optional configuration
+ * @param eventBus - Optional event bus for emitting rate limit events
  * @returns RateLimiter instance
  *
  * @example
@@ -403,7 +431,8 @@ export class RateLimiter {
  * // Default rate limiter
  * const limiter = createRateLimiter();
  *
- * // Custom configuration
+ * // Custom configuration with event bus
+ * const eventBus = getResilienceEventBus();
  * const limiter = createRateLimiter({
  *   defaultBucket: { capacity: 60, refillRate: 1 },
  *   buckets: {
@@ -411,9 +440,12 @@ export class RateLimiter {
  *     'api:openai': { capacity: 500, refillRate: 8.33 },
  *   },
  *   throwOnExceeded: true,
- * });
+ * }, eventBus);
  * ```
  */
-export function createRateLimiter(config?: RateLimiterConfig): RateLimiter {
-  return new RateLimiter(config);
+export function createRateLimiter(
+  config?: RateLimiterConfig,
+  eventBus?: ResilienceEventBus
+): RateLimiter {
+  return new RateLimiter(config, eventBus);
 }

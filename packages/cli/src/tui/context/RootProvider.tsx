@@ -16,9 +16,11 @@ import { ThemeProvider } from "../theme/provider.js";
 import { AnimationProvider } from "./AnimationContext.js";
 import { AppProvider, type AppState } from "./AppContext.js";
 import { BracketedPasteProvider } from "./BracketedPasteContext.js";
+import { LspProvider } from "./LspContext.js";
 import { McpProvider } from "./McpContext.js";
 import { type Message, MessagesProvider } from "./MessagesContext.js";
 import { OverflowProvider } from "./OverflowContext.js";
+import { ResilienceProvider } from "./ResilienceContext.js";
 import { ScrollProvider } from "./ScrollContext.js";
 import { ToolsProvider } from "./ToolsContext.js";
 
@@ -115,11 +117,15 @@ export function RootProvider({
           <OverflowProvider>
             <ScrollProvider autoScrollToBottom>
               <AppProvider initialState={initialAppState}>
-                <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
-                  <MessagesProvider initialMessages={initialMessages}>
-                    <ToolsProvider>{children}</ToolsProvider>
-                  </MessagesProvider>
-                </McpProvider>
+                <ResilienceProvider>
+                  <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
+                    <LspProvider>
+                      <MessagesProvider initialMessages={initialMessages}>
+                        <ToolsProvider>{children}</ToolsProvider>
+                      </MessagesProvider>
+                    </LspProvider>
+                  </McpProvider>
+                </ResilienceProvider>
               </AppProvider>
             </ScrollProvider>
           </OverflowProvider>

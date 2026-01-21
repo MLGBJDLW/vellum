@@ -4,6 +4,8 @@
  * Ensures that the TUI-level McpProvider (via RootProvider) receives the shared
  * ToolRegistry and ToolExecutor so MCP tools are registered into the same
  * running tool system as the agent.
+ *
+ * @vitest-environment node
  */
 
 import { createToolRegistry, type ToolExecutor, type ToolRegistry } from "@vellum/core";

@@ -39,6 +39,11 @@ export interface ModelSettings {
 }
 
 /**
+ * Diff view display mode configuration.
+ */
+export type DiffViewMode = "unified" | "side-by-side";
+
+/**
  * Settings file structure.
  */
 export interface VellumSettings {
@@ -49,6 +54,7 @@ export interface VellumSettings {
   theme?: string;
   model?: ModelSettings;
   mode?: string; // "vibe" | "plan" | "spec"
+  diffViewMode?: DiffViewMode;
   [key: string]: unknown;
 }
 
@@ -449,6 +455,51 @@ export function setModelSettings(model: ModelSettings): void {
   const newSettings: VellumSettings = {
     ...existingSettings,
     model,
+  };
+  writeSettings(newSettings);
+}
+
+// =============================================================================
+// Diff View Mode Settings
+// =============================================================================
+
+/**
+ * Get the saved diff view mode preference.
+ *
+ * @returns Diff view mode ("unified" or "side-by-side"), or undefined if not saved
+ *
+ * @example
+ * ```typescript
+ * const mode = getDiffViewMode();
+ * // mode is "unified" | "side-by-side" | undefined
+ * ```
+ */
+export function getDiffViewMode(): DiffViewMode | undefined {
+  const settings = readSettings();
+  const mode = settings?.diffViewMode;
+  // Validate the value
+  if (mode === "unified" || mode === "side-by-side") {
+    return mode;
+  }
+  return undefined;
+}
+
+/**
+ * Save diff view mode preference.
+ *
+ * @param mode - Diff view mode to save ("unified" or "side-by-side")
+ *
+ * @example
+ * ```typescript
+ * setDiffViewMode("side-by-side");
+ * // Now getDiffViewMode() returns "side-by-side"
+ * ```
+ */
+export function setDiffViewMode(mode: DiffViewMode): void {
+  const existingSettings = readSettings() ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    diffViewMode: mode,
   };
   writeSettings(newSettings);
 }

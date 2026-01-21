@@ -579,4 +579,213 @@ describe("AgentLoop Integration (T034)", () => {
       expect(ctx.recentResponses).toHaveLength(0);
     });
   });
+
+  describe("Parallel Tool Execution (T075)", () => {
+    it("executes tools sequentially by default", async () => {
+      // Create a test executor and register tools
+      const testExecutor = new ToolExecutor({
+        permissionChecker: mockPermissionChecker,
+      });
+
+      testExecutor.registerTool({
+        definition: {
+          name: "tool_a",
+          description: "Tool A",
+          parameters: z.object({}),
+          kind: "read",
+        },
+        execute: async () => {
+          await new Promise((r) => setTimeout(r, 10));
+          return { success: true as const, output: "A done" };
+        },
+      });
+      testExecutor.registerTool({
+        definition: {
+          name: "tool_b",
+          description: "Tool B",
+          parameters: z.object({}),
+          kind: "read",
+        },
+        execute: async () => {
+          await new Promise((r) => setTimeout(r, 10));
+          return { success: true as const, output: "B done" };
+        },
+      });
+
+      const events = [
+        {
+          type: "toolCall",
+          id: "call-a",
+          name: "tool_a",
+          input: {},
+        },
+        {
+          type: "toolCall",
+          id: "call-b",
+          name: "tool_b",
+          input: {},
+        },
+        { type: "done", stopReason: "tool_use" },
+      ];
+
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream(events) as ReturnType<typeof LLM.stream>
+      );
+
+      const loop = new AgentLoop({
+        ...config,
+        toolExecutor: testExecutor,
+        parallelToolExecution: false, // Explicit sequential
+        continueAfterTools: false,
+      });
+
+      const toolStartOrder: string[] = [];
+      loop.on("toolStart", (_callId, name) => {
+        toolStartOrder.push(name);
+      });
+
+      loop.addMessage(createSessionMessage("user", "Run both tools"));
+      await loop.run();
+
+      expect(toolStartOrder).toEqual(["tool_a", "tool_b"]);
+    });
+
+    it("executes tools in parallel when enabled", async () => {
+      // Track execution timing
+      const executionLog: Array<{ name: string; phase: "start" | "end"; time: number }> = [];
+      const startTime = Date.now();
+
+      const testExecutor = new ToolExecutor({
+        permissionChecker: mockPermissionChecker,
+      });
+
+      testExecutor.registerTool({
+        definition: {
+          name: "parallel_a",
+          description: "Parallel Tool A",
+          parameters: z.object({}),
+          kind: "read",
+        },
+        execute: async () => {
+          executionLog.push({ name: "parallel_a", phase: "start", time: Date.now() - startTime });
+          await new Promise((r) => setTimeout(r, 50));
+          executionLog.push({ name: "parallel_a", phase: "end", time: Date.now() - startTime });
+          return { success: true as const, output: "A done" };
+        },
+      });
+      testExecutor.registerTool({
+        definition: {
+          name: "parallel_b",
+          description: "Parallel Tool B",
+          parameters: z.object({}),
+          kind: "read",
+        },
+        execute: async () => {
+          executionLog.push({ name: "parallel_b", phase: "start", time: Date.now() - startTime });
+          await new Promise((r) => setTimeout(r, 50));
+          executionLog.push({ name: "parallel_b", phase: "end", time: Date.now() - startTime });
+          return { success: true as const, output: "B done" };
+        },
+      });
+
+      const events = [
+        {
+          type: "toolCall",
+          id: "call-pa",
+          name: "parallel_a",
+          input: {},
+        },
+        {
+          type: "toolCall",
+          id: "call-pb",
+          name: "parallel_b",
+          input: {},
+        },
+        { type: "done", stopReason: "tool_use" },
+      ];
+
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream(events) as ReturnType<typeof LLM.stream>
+      );
+
+      const loop = new AgentLoop({
+        ...config,
+        toolExecutor: testExecutor,
+        parallelToolExecution: true,
+        maxToolConcurrency: 5,
+        continueAfterTools: false,
+      });
+
+      loop.addMessage(createSessionMessage("user", "Run both tools in parallel"));
+      await loop.run();
+
+      // In parallel execution, both tools should start before either ends
+      const startEvents = executionLog.filter((e) => e.phase === "start");
+      const endEvents = executionLog.filter((e) => e.phase === "end");
+
+      expect(startEvents.length).toBe(2);
+      expect(endEvents.length).toBe(2);
+
+      // Both starts should happen before any end (parallel behavior)
+      const latestStart = Math.max(...startEvents.map((e) => e.time));
+      const earliestEnd = Math.min(...endEvents.map((e) => e.time));
+      expect(latestStart).toBeLessThan(earliestEnd);
+    });
+
+    it("respects maxToolConcurrency limit", async () => {
+      let currentConcurrency = 0;
+      let maxObservedConcurrency = 0;
+
+      const testExecutor = new ToolExecutor({
+        permissionChecker: mockPermissionChecker,
+      });
+
+      // Create 4 tools that track concurrency
+      for (let i = 1; i <= 4; i++) {
+        const toolIndex = i; // Capture for closure
+        testExecutor.registerTool({
+          definition: {
+            name: `conc_tool_${toolIndex}`,
+            description: `Concurrency Tool ${toolIndex}`,
+            parameters: z.object({}),
+            kind: "read",
+          },
+          execute: async () => {
+            currentConcurrency++;
+            maxObservedConcurrency = Math.max(maxObservedConcurrency, currentConcurrency);
+            await new Promise((r) => setTimeout(r, 30));
+            currentConcurrency--;
+            return { success: true as const, output: `Tool ${toolIndex} done` };
+          },
+        });
+      }
+
+      const events = [
+        { type: "toolCall", id: "c1", name: "conc_tool_1", input: {} },
+        { type: "toolCall", id: "c2", name: "conc_tool_2", input: {} },
+        { type: "toolCall", id: "c3", name: "conc_tool_3", input: {} },
+        { type: "toolCall", id: "c4", name: "conc_tool_4", input: {} },
+        { type: "done", stopReason: "tool_use" },
+      ];
+
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream(events) as ReturnType<typeof LLM.stream>
+      );
+
+      const loop = new AgentLoop({
+        ...config,
+        toolExecutor: testExecutor,
+        parallelToolExecution: true,
+        maxToolConcurrency: 2, // Limit to 2 concurrent
+        continueAfterTools: false,
+      });
+
+      loop.addMessage(createSessionMessage("user", "Run all 4 tools"));
+      await loop.run();
+
+      // Should never exceed the concurrency limit
+      expect(maxObservedConcurrency).toBeLessThanOrEqual(2);
+      expect(maxObservedConcurrency).toBeGreaterThan(0);
+    });
+  });
 });

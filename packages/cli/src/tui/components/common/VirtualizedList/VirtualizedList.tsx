@@ -74,7 +74,16 @@ function VirtualizedListInner<T>(
   // Note: theme reserved for future scrollbar styling
   // const { theme } = useTheme();
 
-  const [containerHeight, setContainerHeight] = useState(24);
+  // FIX: Initialize container height dynamically from terminal dimensions
+  // instead of hardcoded 24 lines. This prevents incorrect scroll calculations
+  // on first render when terminal size differs from the default.
+  const [containerHeight, setContainerHeight] = useState(() => {
+    // Use actual terminal rows if available, with fallback to reasonable default
+    const terminalRows = process.stdout.rows;
+    // Reserve some space for UI elements (header, input, status)
+    const reservedLines = 10;
+    return Math.max(8, (terminalRows || 24) - reservedLines);
+  });
 
   // Initial virtualization pass with estimated heights
   const initialVirtualization = useVirtualization({
@@ -121,15 +130,41 @@ function VirtualizedListInner<T>(
     containerHeight,
   });
 
+  // FIX: Debounce container height updates to prevent rapid state changes
+  // that can cause rendering race conditions and jittery UI
+  const containerHeightUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastValidHeightRef = useRef(containerHeight);
+
   useEffect(() => {
     if (measuredContainerHeight > 0) {
       const rows = process.stdout.rows || 24;
-      const safeHeight = Math.min(measuredContainerHeight, rows);
-      if (safeHeight !== containerHeight) {
-        setContainerHeight(safeHeight);
+      // FIX: Use a more conservative minimum (8 lines) to prevent degenerate cases
+      const MIN_CONTAINER_HEIGHT = 8;
+      const safeHeight = Math.max(MIN_CONTAINER_HEIGHT, Math.min(measuredContainerHeight, rows));
+
+      // Only update if the change is significant (more than 1 line difference)
+      // This prevents micro-updates from causing layout thrashing
+      if (Math.abs(safeHeight - lastValidHeightRef.current) > 1) {
+        // Clear any pending update
+        if (containerHeightUpdateTimeoutRef.current) {
+          clearTimeout(containerHeightUpdateTimeoutRef.current);
+        }
+
+        // Debounce the update to batch rapid changes
+        containerHeightUpdateTimeoutRef.current = setTimeout(() => {
+          lastValidHeightRef.current = safeHeight;
+          setContainerHeight(safeHeight);
+        }, 16); // One frame at 60fps
       }
     }
-  }, [measuredContainerHeight, containerHeight]);
+
+    // Cleanup on unmount
+    return () => {
+      if (containerHeightUpdateTimeoutRef.current) {
+        clearTimeout(containerHeightUpdateTimeoutRef.current);
+      }
+    };
+  }, [measuredContainerHeight]);
 
   // Batched scroll for smooth updates
   const { getScrollTop, setPendingScrollTop } = useBatchedScroll(scrollTop);
