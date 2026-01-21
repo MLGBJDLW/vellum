@@ -7,7 +7,7 @@
  * @see REQ-COST-005 - Cost limits and guardrails
  */
 
-import type { TokenUsage } from "@vellum/provider";
+import type { TokenUsage } from "@vellum/shared";
 import {
   CostLimitHandler,
   type CostLimitReachedEvent,

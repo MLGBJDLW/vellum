@@ -107,6 +107,8 @@ export type { Message, MessageRole } from "./types/message.js";
  * @deprecated Import ProviderConfig from @vellum/core instead.
  */
 export type { ModelInfo, ProviderConfig } from "./types/provider.js";
+// Resilience interface (used by provider retry to avoid circular dep with core)
+export type { ResilienceEventBusInterface } from "./types/resilience.js";
 export type { Result } from "./types/result.js";
 // Result type (shared to avoid circular deps between core and provider)
 export {
@@ -124,6 +126,8 @@ export {
   unwrap,
   unwrapOr,
 } from "./types/result.js";
+// Token usage (shared to avoid circular deps between core and provider)
+export type { TokenUsage } from "./types/token.js";
 /**
  * @deprecated Import Tool and defineTool from @vellum/core instead.
  * The new Tool interface supports Zod validation, permissions, and typed results.

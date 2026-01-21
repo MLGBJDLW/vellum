@@ -8,7 +8,7 @@
  * - State transitions
  */
 
-import type { TokenUsage } from "@vellum/provider";
+import type { TokenUsage } from "@vellum/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";

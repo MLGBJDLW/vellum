@@ -3,7 +3,8 @@
 // ============================================
 
 import { EventEmitter } from "node:events";
-import type { StreamEvent, TokenUsage, ToolDefinition } from "@vellum/provider";
+import type { StreamEvent, ToolDefinition } from "@vellum/provider";
+import type { TokenUsage } from "@vellum/shared";
 import type { OrchestratorCore, SubagentHandle } from "../agents/orchestrator/core.js";
 import type { SubsessionManager } from "../agents/session/subsession-manager.js";
 import type { UserPromptSignal } from "../builtin/ask-followup.js";

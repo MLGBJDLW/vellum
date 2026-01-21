@@ -7,7 +7,7 @@
  * @module @vellum/provider/retry
  */
 
-import type { ResilienceEventBus } from "@vellum/core";
+import type { ResilienceEventBusInterface } from "@vellum/shared";
 
 import { getRetryDelay, isRetryable } from "./errors.js";
 
@@ -36,7 +36,7 @@ export interface RetryOptions {
   /** AbortSignal to cancel retry attempts */
   signal?: AbortSignal;
   /** Event bus for emitting retry events */
-  eventBus?: ResilienceEventBus;
+  eventBus?: ResilienceEventBusInterface;
   /** Source identifier for retry events (e.g., provider name) */
   source?: string;
 }

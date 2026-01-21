@@ -10,6 +10,10 @@
  */
 export type LanguageModel = never;
 
+// Import and re-export TokenUsage from shared to avoid circular deps with core
+import type { TokenUsage as TokenUsageFromShared } from "@vellum/shared";
+export type TokenUsage = TokenUsageFromShared;
+
 // =============================================================================
 // Provider Types
 // =============================================================================
@@ -204,31 +208,8 @@ export interface CompletionParams {
 // T004: Token Usage and Completion Result
 // =============================================================================
 
-/**
- * Token usage statistics from a completion
- *
- * @example
- * ```typescript
- * const usage: TokenUsage = {
- *   inputTokens: 150,
- *   outputTokens: 250,
- *   thinkingTokens: 500,
- * };
- * console.log(`Total: ${usage.inputTokens + usage.outputTokens} tokens`);
- * ```
- */
-export interface TokenUsage {
-  /** Number of tokens in the input/prompt */
-  inputTokens: number;
-  /** Number of tokens in the output/completion */
-  outputTokens: number;
-  /** Number of tokens used for thinking/reasoning (if applicable) */
-  thinkingTokens?: number;
-  /** Number of tokens in cached input (if applicable) */
-  cacheReadTokens?: number;
-  /** Number of tokens written to cache (if applicable) */
-  cacheWriteTokens?: number;
-}
+// TokenUsage is re-exported from @vellum/shared at the top of this file
+// to avoid circular dependencies with @vellum/core
 
 /**
  * Stop reasons for completion termination
