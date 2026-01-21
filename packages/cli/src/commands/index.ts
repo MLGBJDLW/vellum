@@ -647,3 +647,39 @@ export { commitCommand } from "./commit.js";
 // =============================================================================
 
 export { usageCommand } from "./usage.js";
+
+// =============================================================================
+// Settings Commands (Settings System)
+// =============================================================================
+
+export {
+  type SettingsCategory,
+  settingsCommand,
+  settingsSlashCommands,
+} from "./settings.js";
+
+// =============================================================================
+// Config Commands (Config File Management)
+// =============================================================================
+
+export {
+  configCommand,
+  configSlashCommands,
+} from "./config.js";
+
+// =============================================================================
+// Prompt Priority Commands (Prompt Source Management)
+// =============================================================================
+
+export {
+  getPromptPriorityConfig,
+  type PromptPriorityConfig,
+  type PromptSource,
+  promptPriorityCommand,
+  promptPrioritySlashCommands,
+  resetPromptPriority,
+  setPromptPriorityOrder,
+  setSourceEnabled,
+  setSourcePriority,
+  subscribePromptPriority,
+} from "./prompt-priority.js";

@@ -630,6 +630,9 @@ export {
   // T024 - Deprecation warnings
   checkDeprecatedApiKeyUsage,
   clearDeprecationWarningsCache,
+  // Diff view mode config
+  type DiffViewMode,
+  DiffViewModeSchema,
   deepMerge,
   findProjectConfig,
   // Config value resolution

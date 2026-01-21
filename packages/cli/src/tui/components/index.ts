@@ -49,6 +49,13 @@ export {
   ScreenReaderLayout,
   type ScreenReaderLayoutProps,
 } from "./ScreenReaderLayout.js";
+// Settings Panel (Settings System)
+export {
+  type SettingCategory,
+  type SettingItem,
+  SettingsPanel,
+  type SettingsPanelProps,
+} from "./SettingsPanel.js";
 // Sidebar components
 export * from "./Sidebar/index.js";
 // Status components (provider health)
