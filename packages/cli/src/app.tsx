@@ -45,6 +45,7 @@ import {
   CommandRegistry,
   clearCommand,
   condenseCommand,
+  configSlashCommands,
   costCommand,
   costResetCommand,
   createBatchCommand,
@@ -66,6 +67,7 @@ import {
   modelCommand,
   onboardCommand,
   persistenceCommands,
+  promptPrioritySlashCommands,
   type ResumeSessionEventData,
   registerUserCommands,
   setCondenseCommandLoop,
@@ -75,6 +77,7 @@ import {
   setModelCommandConfig,
   setPersistenceRef,
   setThemeContext,
+  settingsSlashCommands,
   setVimCallbacks,
   subscribeToThinkingState,
   themeSlashCommands,
@@ -480,6 +483,19 @@ function createCommandRegistry(): CommandRegistry {
 
   // Register persistence commands
   for (const cmd of persistenceCommands) {
+    registry.register(cmd);
+  }
+
+  // Register settings system commands
+  for (const cmd of settingsSlashCommands) {
+    registry.register(cmd);
+  }
+
+  for (const cmd of configSlashCommands) {
+    registry.register(cmd);
+  }
+
+  for (const cmd of promptPrioritySlashCommands) {
     registry.register(cmd);
   }
 
