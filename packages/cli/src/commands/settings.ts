@@ -306,8 +306,8 @@ export const settingsCommand: SlashCommand = {
       name: cat,
       description: CATEGORY_INFO[cat].description,
     })),
-    { name: "theme", description: "Set theme (e.g., dark, light, dracula)" },
-    { name: "mode", description: "Set coding mode (vibe, plan, spec)" },
+    // Note: 'theme' and 'mode' are already included via VALID_CATEGORIES
+    // Additional settable keys that aren't categories:
     { name: "diff-mode", description: "Set diff view mode (unified, side-by-side)" },
     { name: "think.enabled", description: "Enable/disable extended thinking" },
     { name: "think.budget", description: "Set thinking budget tokens" },

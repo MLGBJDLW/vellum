@@ -476,7 +476,7 @@ function AutocompleteComponent({
         const matchLength = input.length;
 
         return (
-          <Box key={opt.name} flexDirection="row">
+          <Box key={`${opt.name}-${displayIdx}`} flexDirection="row">
             {isSelected ? (
               <Text inverse>
                 <Text color={highlightColor} bold>
