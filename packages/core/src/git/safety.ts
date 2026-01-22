@@ -154,9 +154,17 @@ export function checkProtectedPath(targetPath: string): Result<true, VellumError
   // Check for root-level operations on Unix
   if (process.platform !== "win32") {
     const rootProtected = ["/etc", "/usr", "/bin", "/sbin", "/var", "/root"];
-    for (const rootPath of rootProtected) {
-      if (normalizedTarget === rootPath || normalizedTarget.startsWith(rootPath + path.sep)) {
-        return Err(gitProtectedPathError(targetPath));
+
+    // Allow temp directories (os.tmpdir() is /var/folders/... on macOS)
+    const tempDir = normalizePath(os.tmpdir());
+    const isInTempDir =
+      normalizedTarget === tempDir || normalizedTarget.startsWith(tempDir + path.sep);
+
+    if (!isInTempDir) {
+      for (const rootPath of rootProtected) {
+        if (normalizedTarget === rootPath || normalizedTarget.startsWith(rootPath + path.sep)) {
+          return Err(gitProtectedPathError(targetPath));
+        }
       }
     }
   }

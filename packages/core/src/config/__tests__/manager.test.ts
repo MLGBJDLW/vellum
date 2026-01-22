@@ -324,10 +324,15 @@ model = "gpt-4o"
 `;
         fs.writeFileSync(configPath, newContent);
 
-        // Wait for debounce and fs.watch to trigger
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        // Wait for debounce and fs.watch to trigger - use longer timeout for CI
+        // File watchers can be slow in CI environments
+        await vi.waitFor(
+          () => {
+            expect(changeHandler).toHaveBeenCalled();
+          },
+          { timeout: 2000, interval: 100 }
+        );
 
-        expect(changeHandler).toHaveBeenCalled();
         if (changeHandler.mock.calls.length > 0) {
           const newConfig = changeHandler.mock.calls[0]?.[0] as Config | undefined;
           expect(newConfig?.llm.provider).toBe("openai");
@@ -391,11 +396,15 @@ model = "test"
 `
         );
 
-        // Wait for debounce
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        // Wait for debounce - use longer timeout for CI
+        await vi.waitFor(
+          () => {
+            expect(errorHandler).toHaveBeenCalled();
+          },
+          { timeout: 2000, interval: 100 }
+        );
 
         // Should emit error, not change
-        expect(errorHandler).toHaveBeenCalled();
         expect(changeHandler).not.toHaveBeenCalled();
 
         manager.dispose();

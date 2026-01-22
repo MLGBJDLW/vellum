@@ -105,7 +105,9 @@ export class SkillLoadError extends Error {
  * ```
  */
 export function extractNameFromDir(dirPath: string): string {
-  return path.basename(dirPath);
+  // Normalize Windows paths to work cross-platform
+  const normalizedPath = dirPath.replace(/\\/g, "/");
+  return path.basename(normalizedPath);
 }
 
 /**

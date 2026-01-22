@@ -164,8 +164,9 @@ describe("E2E: Full Workflow", () => {
       expect(agent).toBeDefined();
       expect(agent?.definition.slug).toBe(customSlug);
       expect(agent?.definition.name).toBe("React Specialist");
-      // Source is USER because temp dir is under user home but not cwd/.vellum
-      expect(agent?.source).toBe(DiscoverySource.USER);
+      // Source is SYSTEM because temp dir (os.tmpdir()) is not under user home or cwd
+      // This is the default for explicit paths that don't match known locations
+      expect(agent?.source).toBe(DiscoverySource.SYSTEM);
 
       // 4. ROUTE: Test routing by context
       const registry = new CustomAgentRegistry();

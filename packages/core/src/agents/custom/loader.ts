@@ -322,7 +322,9 @@ export function isSupportedAgentFile(filePath: string): boolean {
  * @returns Inferred slug from filename
  */
 export function getSlugFromFilePath(filePath: string): string {
-  const basename = path.basename(filePath);
+  // Normalize Windows paths to work cross-platform
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  const basename = path.basename(normalizedPath);
   const ext = path.extname(basename);
   return basename.slice(0, -ext.length);
 }

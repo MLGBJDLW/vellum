@@ -86,7 +86,9 @@ const frontmatterParser = new FrontmatterParser(AgentFrontmatterSchema, {
  * ```
  */
 export function extractNameFromPath(filePath: string): string {
-  const basename = path.basename(filePath);
+  // Normalize Windows paths to work cross-platform
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  const basename = path.basename(normalizedPath);
   return basename.replace(/\.md$/i, "");
 }
 

@@ -111,7 +111,8 @@ describe("findProjectConfig", () => {
 
     process.chdir(tempDir);
     const found = findProjectConfig();
-    expect(found).toBe(configPath);
+    // Use realpathSync to handle macOS /var -> /private/var symlink
+    expect(found ? fs.realpathSync(found) : found).toBe(fs.realpathSync(configPath));
   });
 
   it("ignores directories named like config files", () => {
