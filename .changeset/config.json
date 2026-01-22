@@ -7,13 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [
-    "@vellum/core",
-    "@vellum/provider",
-    "@vellum/shared",
-    "@vellum/lsp",
-    "@vellum/mcp",
-    "@vellum/plugin",
-    "@vellum/sandbox"
-  ]
+  "ignore": []
 }
