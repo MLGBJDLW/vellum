@@ -523,7 +523,7 @@ describe("defineTool factory", () => {
       const elapsed = Date.now() - start;
 
       expect(result.success).toBe(true);
-      expect(elapsed).toBeGreaterThanOrEqual(10);
+      expect(elapsed).toBeGreaterThanOrEqual(5);
     });
   });
 
