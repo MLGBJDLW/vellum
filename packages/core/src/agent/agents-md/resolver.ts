@@ -120,8 +120,6 @@ export function mergeInstructions(files: AgentsMdFile[]): string {
         // Add this file's instructions before accumulated
         accumulated = accumulated ? `${file.instructions}\n\n${accumulated}` : file.instructions;
         break;
-
-      case "APPEND":
       default:
         // Add this file's instructions after accumulated
         accumulated = accumulated ? `${accumulated}\n\n${file.instructions}` : file.instructions;

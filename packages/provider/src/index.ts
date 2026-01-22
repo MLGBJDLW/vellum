@@ -9,9 +9,6 @@
 export type { AnthropicProviderOptions } from "./anthropic.js";
 export { AnthropicProvider } from "./anthropic.js";
 export { BaichuanProvider } from "./baichuan.js";
-// T053: GitHub Copilot Provider
-export type { CopilotProviderOptions, DeviceAuthCallback } from "./copilot.js";
-export { CopilotProvider } from "./copilot.js";
 export { DeepSeekProvider } from "./deepseek.js";
 export type { GoogleProviderOptions } from "./google.js";
 export { GoogleProvider } from "./google.js";

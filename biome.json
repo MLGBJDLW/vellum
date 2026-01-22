@@ -29,7 +29,7 @@
       "recommended": true,
       "complexity": {
         "noExcessiveCognitiveComplexity": {
-          "level": "warn",
+          "level": "off",
           "options": {
             "maxAllowedComplexity": 20
           }

@@ -63,6 +63,9 @@ importers:
       '@vellum/provider':
         specifier: workspace:*
         version: link:../provider
+      '@vellum/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
       '@vellum/shared':
         specifier: workspace:*
         version: link:../shared

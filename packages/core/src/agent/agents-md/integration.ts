@@ -131,8 +131,7 @@ export class AgentsMdIntegration {
 
     // Truncate if necessary
     if (content.length > this.options.maxLength) {
-      content =
-        content.slice(0, this.options.maxLength - 50) + `\n\n${this.options.truncationIndicator}`;
+      content = `${content.slice(0, this.options.maxLength - 50)}\n\n${this.options.truncationIndicator}`;
     }
 
     // Add attribution if enabled

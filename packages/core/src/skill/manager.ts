@@ -227,7 +227,7 @@ export class SkillManager {
     });
 
     // Truncate and add marker
-    return content.slice(0, MAX_SKILL_SECTION_LENGTH - 20) + "\n...[truncated]";
+    return `${content.slice(0, MAX_SKILL_SECTION_LENGTH - 20)}\n...[truncated]`;
   }
 
   /**

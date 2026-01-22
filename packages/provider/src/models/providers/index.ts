@@ -7,7 +7,6 @@
 export { ANTHROPIC_MODELS } from "./anthropic.js";
 export { BAICHUAN_MODELS } from "./baichuan.js";
 // Additional cloud providers
-export { COPILOT_MODELS } from "./copilot.js";
 export { DEEPSEEK_MODELS } from "./deepseek.js";
 export { DOUBAO_MODELS } from "./doubao.js";
 export { GOOGLE_MODELS } from "./google.js";

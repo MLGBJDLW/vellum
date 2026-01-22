@@ -8,7 +8,6 @@ import type { ProviderType } from "../types.js";
 import {
   ANTHROPIC_MODELS,
   BAICHUAN_MODELS,
-  COPILOT_MODELS,
   DEEPSEEK_MODELS,
   DOUBAO_MODELS,
   GOOGLE_MODELS,
@@ -34,7 +33,6 @@ export const MODEL_CATALOG: Map<ProviderType, ModelInfo[]> = new Map([
   ["anthropic", ANTHROPIC_MODELS],
   ["openai", OPENAI_MODELS],
   ["google", GOOGLE_MODELS],
-  ["copilot", COPILOT_MODELS],
   ["deepseek", DEEPSEEK_MODELS],
   ["groq", GROQ_MODELS],
   ["xai", XAI_MODELS],
@@ -58,7 +56,6 @@ export const ALL_MODELS: ModelInfo[] = [
   ...ANTHROPIC_MODELS,
   ...OPENAI_MODELS,
   ...GOOGLE_MODELS,
-  ...COPILOT_MODELS,
   ...DEEPSEEK_MODELS,
   ...GROQ_MODELS,
   ...XAI_MODELS,

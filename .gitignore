@@ -47,7 +47,16 @@ AGENTS.md
 .ouroboros
 .github/agents
 .github/prompts
-copilot*
+copilot-*
 skills
 .serena
 .claude
+
+# Tool outputs
+autocommit_results.json
+lint-errors.txt
+temp-lint.txt
+biome-report.json
+
+# Local config
+.vellum/

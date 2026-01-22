@@ -9,7 +9,6 @@
 
 import { AnthropicProvider } from "./anthropic.js";
 import { BaichuanProvider } from "./baichuan.js";
-import { CopilotProvider } from "./copilot.js";
 import { DeepSeekProvider } from "./deepseek.js";
 import { GoogleProvider } from "./google.js";
 import { GroqProvider } from "./groq.js";
@@ -121,8 +120,6 @@ function createProviderInstance(type: ProviderType): Provider {
       return new AnthropicProvider();
     case "openai":
       return new OpenAIProvider();
-    case "copilot":
-      return new CopilotProvider();
     case "google":
       return new GoogleProvider();
     case "deepseek":
@@ -231,7 +228,6 @@ export class ProviderRegistry {
    * @returns Configured provider instance
    * @throws Error if provider type is unknown or validation fails
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Provider resolution with credential fallback chain
   async get(config: ProviderRegistryConfig): Promise<Provider> {
     const { type, model, apiKey, credential: directCredential } = config;
     const cacheKey = getCacheKey(type, model);

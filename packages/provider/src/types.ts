@@ -24,7 +24,6 @@ export type TokenUsage = TokenUsageFromShared;
 export type ProviderType =
   | "anthropic"
   | "openai"
-  | "copilot"
   | "google"
   | "deepseek"
   | "qwen"
