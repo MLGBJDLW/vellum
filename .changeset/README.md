@@ -28,20 +28,88 @@ When your PR is merged to `main`:
    - Generated `CHANGELOG.md` entries
 3. When that PR is merged, packages are published automatically
 
-## Changeset types
+## Version Strategy (0.x.x Phase)
 
-- **patch** (0.0.X): Bug fixes, documentation updates
-- **minor** (0.X.0): New features, non-breaking changes  
-- **major** (X.0.0): Breaking changes
+> **Important:** Vellum is in early development (0.x.x). We follow a conservative versioning strategy.
 
-## Example changeset
+### Changeset Types
+
+| Type | Version Bump | When to Use | Examples |
+|------|-------------|-------------|----------|
+| `patch` | 0.0.X | Bug fixes, small improvements, docs | Fix crash, typo fix, perf tweak |
+| `minor` | 0.X.0 | New features, non-breaking changes | New command, new option, UI improvement |
+| `major` | X.0.0 | **RESERVED** - See below | 1.0.0 stable release only |
+
+### ⚠️ Major Version Rules
+
+**DO NOT use `major` during 0.x.x phase** unless:
+- Preparing the 1.0.0 stable release
+- After 1.0.0: Only for breaking API/CLI changes
+
+**Why?** In semver, 0.x.x versions can have breaking changes in minor versions. We use `minor` for breaking changes during this phase.
+
+### Decision Tree
+
+```
+Is this a bug fix or docs-only change?
+  └─ YES → patch
+  └─ NO → Is this a new feature or improvement?
+       └─ YES → minor
+       └─ NO → Is this a breaking change?
+            └─ YES (0.x.x phase) → minor (with [BREAKING] in summary)
+            └─ YES (1.x.x phase) → major
+```
+
+### Breaking Change Format (0.x.x)
+
+For breaking changes during 0.x.x, use `minor` with clear documentation:
 
 ```markdown
 ---
-"vellum": minor
+"@vellum/cli": minor
 ---
 
-Added new `--interactive` flag for step-by-step mode
+[BREAKING] Renamed `--quiet` flag to `--silent`
+
+Migration: Replace `--quiet` with `--silent` in your scripts.
+```
+
+## When NOT to Add a Changeset
+
+- CI/workflow changes only
+- Documentation-only changes (unless user-facing docs)
+- Refactoring with no user impact
+- Test-only changes
+
+## Example Changesets
+
+**Bug fix (patch):**
+```markdown
+---
+"@vellum/cli": patch
+---
+
+Fixed crash when config file is missing
+```
+
+**New feature (minor):**
+```markdown
+---
+"@vellum/cli": minor
+---
+
+Added `--interactive` flag for step-by-step mode
+```
+
+**Breaking change in 0.x.x (minor with notice):**
+```markdown
+---
+"@vellum/core": minor
+---
+
+[BREAKING] Changed `Agent.run()` to return `Promise<Result>` instead of `void`
+
+Migration: Await the result - `const result = await agent.run()`
 ```
 
 For more information, see [changesets documentation](https://github.com/changesets/changesets).
