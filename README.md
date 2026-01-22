@@ -1,12 +1,39 @@
-# Vellum
+<div align="center">
 
-[![npm version](https://img.shields.io/npm/v/@butlerw/vellum?style=flat-square&logo=npm&color=CB3837)](https://www.npmjs.com/package/@butlerw/vellum)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
+```
+██╗   ██╗███████╗██╗     ██╗     ██╗   ██╗███╗   ███╗
+██║   ██║██╔════╝██║     ██║     ██║   ██║████╗ ████║
+██║   ██║█████╗  ██║     ██║     ██║   ██║██╔████╔██║
+╚██╗ ██╔╝██╔══╝  ██║     ██║     ██║   ██║██║╚██╔╝██║
+ ╚████╔╝ ███████╗███████╗███████╗╚██████╔╝██║ ╚═╝ ██║
+  ╚═══╝  ╚══════╝╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝
+```
 
-> Next-generation AI coding assistant CLI
+**🪶 Next-generation AI coding assistant for the terminal**
+
+*Write code with AI — powered by 17+ LLM providers, intelligent LSP, and extensible skills*
+
+<br/>
+
+[![npm version](https://img.shields.io/npm/v/@butlerw/vellum?style=for-the-badge&logo=npm&color=CB3837)](https://www.npmjs.com/package/@butlerw/vellum)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge)](CONTRIBUTING.md)
+
+<br/>
+
+[Getting Started](#-quick-start) •
+[Features](#-features) •
+[Modes](#-coding-modes) •
+[Documentation](docs/) •
+[Contributing](CONTRIBUTING.md)
+
+<br/>
+
+</div>
+
+---
 
 ## ✨ Features
 
