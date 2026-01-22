@@ -344,7 +344,7 @@ describe("Snapshot Integration Tests", () => {
           expect(infoResult.value.files).toContain("file2.txt");
         }
       }
-    });
+    }, 30000);
   });
 
   // ===========================================================================

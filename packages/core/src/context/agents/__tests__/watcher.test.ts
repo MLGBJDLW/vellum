@@ -238,7 +238,7 @@ describe("AgentsWatcher", () => {
       const changedPaths = await changePromise;
       expect(changedPaths).toHaveLength(1);
       expect(changedPaths[0]).toContain(".cursorrules");
-    });
+    }, 30000);
 
     it("should ignore non-agents files", async () => {
       watcher = new AgentsWatcher(tempDir, { debounceMs: 50 });

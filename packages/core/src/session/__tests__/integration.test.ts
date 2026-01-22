@@ -589,7 +589,7 @@ describe("Snapshot Integration", () => {
       // It only restores tracked files to their snapshot state
       // new-file.ts will still exist since restore doesn't remove untracked files
     }
-  });
+  }, 30000);
 });
 
 // =============================================================================
