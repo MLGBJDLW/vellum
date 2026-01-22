@@ -889,12 +889,12 @@ describe("EncryptedFileStore", () => {
 
   describe("Error Handling Edge Cases", () => {
     it("should handle IO error when directory cannot be created", async () => {
-      // Use an invalid path that can't be created
-      // Avoid non-existent drive letters on Windows as they can cause hangs
+      // Use a path under /sys on Linux or a protected Windows path
+      // These should fail permission checks quickly without hanging
       const invalidPath =
         process.platform === "win32"
-          ? "C:\\Windows\\System32\\config\\systemprofile\\invalid\\cred.enc"
-          : "/proc/invalid/path/cred.enc";
+          ? "C:\\Windows\\System32\\drivers\\etc\\invalid\\cred.enc"
+          : "/sys/invalid/path/cred.enc";
 
       const store = new EncryptedFileStore({
         filePath: invalidPath,
@@ -903,10 +903,10 @@ describe("EncryptedFileStore", () => {
 
       const result = await store.isAvailable();
 
-      // Should return error (on most systems)
+      // Should return error due to permission/path issues
       // On some systems this might succeed, so we just check it doesn't crash
       expect(result.ok).toBeDefined();
-    }, 10000);
+    });
 
     it("should handle non-Error thrown during file read", async () => {
       // This is hard to test directly, but we ensure the code path exists
