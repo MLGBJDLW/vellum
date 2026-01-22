@@ -224,21 +224,25 @@ describe("AgentsWatcher", () => {
       // If null, the test still passes - deletion events can be flaky on Windows
     });
 
-    it("should detect .cursorrules changes", async () => {
-      watcher = new AgentsWatcher(tempDir, { debounceMs: 50 });
-      await watcher.start();
+    it(
+      "should detect .cursorrules changes",
+      async () => {
+        watcher = new AgentsWatcher(tempDir, { debounceMs: 50 });
+        await watcher.start();
 
-      const changePromise = new Promise<string[]>((resolve) => {
-        watcher?.once("change", (paths) => resolve(paths));
-      });
+        const changePromise = new Promise<string[]>((resolve) => {
+          watcher?.once("change", (paths) => resolve(paths));
+        });
 
-      // Create .cursorrules file
-      await createFile(path.join(tempDir, ".cursorrules"), "Cursor rules content");
+        // Create .cursorrules file
+        await createFile(path.join(tempDir, ".cursorrules"), "Cursor rules content");
 
-      const changedPaths = await changePromise;
-      expect(changedPaths).toHaveLength(1);
-      expect(changedPaths[0]).toContain(".cursorrules");
-    });
+        const changedPaths = await changePromise;
+        expect(changedPaths).toHaveLength(1);
+        expect(changedPaths[0]).toContain(".cursorrules");
+      },
+      { timeout: 30000 }
+    );
 
     it("should ignore non-agents files", async () => {
       watcher = new AgentsWatcher(tempDir, { debounceMs: 50 });

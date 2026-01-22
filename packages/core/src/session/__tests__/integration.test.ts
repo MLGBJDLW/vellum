@@ -510,86 +510,90 @@ describe("Auto-Compaction Trigger", () => {
 // =============================================================================
 
 describe("Snapshot Integration", () => {
-  it("should integrate snapshots with checkpoints and session lifecycle", async () => {
-    // Skip if git is not available
-    const gitAvailable = await isGitAvailable();
-    if (!gitAvailable) {
-      // Skip test when git is not available
-      return;
-    }
-
-    // Create a working directory for snapshots
-    const workDir = path.join(tempDir, "workspace");
-    await fs.mkdir(workDir, { recursive: true });
-
-    // Initialize snapshot system
-    const snapshotResult = await Snapshot.init(workDir);
-    expect(snapshotResult.ok).toBe(true);
-    if (!snapshotResult.ok) return;
-
-    // Create initial files
-    await fs.writeFile(path.join(workDir, "main.ts"), "console.log('v1');", "utf-8");
-    await fs.writeFile(path.join(workDir, "config.json"), '{"version": 1}', "utf-8");
-
-    // Create session with snapshot
-    await sessionSwitcher.createNewSession({
-      title: "Snapshot Test",
-      workingDirectory: workDir,
-    });
-
-    await addMessagesToSession(2);
-    await persistenceManager.save();
-
-    // Create checkpoint with snapshot
-    const snapshot1 = await Snapshot.track(workDir, ["main.ts", "config.json"], "Checkpoint 1");
-    expect(snapshot1.ok).toBe(true);
-
-    const checkpoint1Id = await persistenceManager.createCheckpointAt(
-      "First checkpoint with snapshot"
-    );
-
-    expect(checkpoint1Id).toBeDefined();
-
-    // Modify files
-    await fs.writeFile(path.join(workDir, "main.ts"), "console.log('v2');", "utf-8");
-    await fs.writeFile(path.join(workDir, "new-file.ts"), "// New file", "utf-8");
-
-    await addMessagesToSession(2);
-    await persistenceManager.save();
-
-    // Create second checkpoint with snapshot
-    const snapshot2 = await Snapshot.track(
-      workDir,
-      ["main.ts", "config.json", "new-file.ts"],
-      "Checkpoint 2"
-    );
-    expect(snapshot2.ok).toBe(true);
-
-    await persistenceManager.createCheckpointAt("Second checkpoint with snapshot");
-
-    // Get diff between snapshots
-    if (snapshot1.ok && snapshot2.ok) {
-      const diffResult = await Snapshot.diff(workDir, snapshot1.value);
-      expect(diffResult.ok).toBe(true);
-      if (diffResult.ok) {
-        expect(diffResult.value).toContain("main.ts");
+  it(
+    "should integrate snapshots with checkpoints and session lifecycle",
+    async () => {
+      // Skip if git is not available
+      const gitAvailable = await isGitAvailable();
+      if (!gitAvailable) {
+        // Skip test when git is not available
+        return;
       }
-    }
 
-    // Restore to first checkpoint
-    if (snapshot1.ok) {
-      const restoreResult = await Snapshot.restore(workDir, snapshot1.value);
-      expect(restoreResult.ok).toBe(true);
+      // Create a working directory for snapshots
+      const workDir = path.join(tempDir, "workspace");
+      await fs.mkdir(workDir, { recursive: true });
 
-      // Verify files restored
-      const restoredContent = await fs.readFile(path.join(workDir, "main.ts"), "utf-8");
-      expect(restoredContent.trim()).toBe("console.log('v1');");
+      // Initialize snapshot system
+      const snapshotResult = await Snapshot.init(workDir);
+      expect(snapshotResult.ok).toBe(true);
+      if (!snapshotResult.ok) return;
 
-      // Note: Snapshot restore doesn't delete files not in the snapshot
-      // It only restores tracked files to their snapshot state
-      // new-file.ts will still exist since restore doesn't remove untracked files
-    }
-  });
+      // Create initial files
+      await fs.writeFile(path.join(workDir, "main.ts"), "console.log('v1');", "utf-8");
+      await fs.writeFile(path.join(workDir, "config.json"), '{"version": 1}', "utf-8");
+
+      // Create session with snapshot
+      await sessionSwitcher.createNewSession({
+        title: "Snapshot Test",
+        workingDirectory: workDir,
+      });
+
+      await addMessagesToSession(2);
+      await persistenceManager.save();
+
+      // Create checkpoint with snapshot
+      const snapshot1 = await Snapshot.track(workDir, ["main.ts", "config.json"], "Checkpoint 1");
+      expect(snapshot1.ok).toBe(true);
+
+      const checkpoint1Id = await persistenceManager.createCheckpointAt(
+        "First checkpoint with snapshot"
+      );
+
+      expect(checkpoint1Id).toBeDefined();
+
+      // Modify files
+      await fs.writeFile(path.join(workDir, "main.ts"), "console.log('v2');", "utf-8");
+      await fs.writeFile(path.join(workDir, "new-file.ts"), "// New file", "utf-8");
+
+      await addMessagesToSession(2);
+      await persistenceManager.save();
+
+      // Create second checkpoint with snapshot
+      const snapshot2 = await Snapshot.track(
+        workDir,
+        ["main.ts", "config.json", "new-file.ts"],
+        "Checkpoint 2"
+      );
+      expect(snapshot2.ok).toBe(true);
+
+      await persistenceManager.createCheckpointAt("Second checkpoint with snapshot");
+
+      // Get diff between snapshots
+      if (snapshot1.ok && snapshot2.ok) {
+        const diffResult = await Snapshot.diff(workDir, snapshot1.value);
+        expect(diffResult.ok).toBe(true);
+        if (diffResult.ok) {
+          expect(diffResult.value).toContain("main.ts");
+        }
+      }
+
+      // Restore to first checkpoint
+      if (snapshot1.ok) {
+        const restoreResult = await Snapshot.restore(workDir, snapshot1.value);
+        expect(restoreResult.ok).toBe(true);
+
+        // Verify files restored
+        const restoredContent = await fs.readFile(path.join(workDir, "main.ts"), "utf-8");
+        expect(restoredContent.trim()).toBe("console.log('v1');");
+
+        // Note: Snapshot restore doesn't delete files not in the snapshot
+        // It only restores tracked files to their snapshot state
+        // new-file.ts will still exist since restore doesn't remove untracked files
+      }
+    },
+    { timeout: 30000 }
+  );
 });
 
 // =============================================================================

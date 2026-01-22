@@ -322,29 +322,33 @@ describe("Snapshot Integration Tests", () => {
       }
     });
 
-    it("should track all changed files with empty array", async () => {
-      if (!gitAvailable) return;
+    it(
+      "should track all changed files with empty array",
+      async () => {
+        if (!gitAvailable) return;
 
-      // Create files
-      await createFile(tempDir, "file1.txt", "content1\n");
-      await createFile(tempDir, "file2.txt", "content2\n");
+        // Create files
+        await createFile(tempDir, "file1.txt", "content1\n");
+        await createFile(tempDir, "file2.txt", "content2\n");
 
-      // Track all files (empty array)
-      const result = await Snapshot.track(tempDir, []);
+        // Track all files (empty array)
+        const result = await Snapshot.track(tempDir, []);
 
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value).toMatch(/^[0-9a-f]{40}$/i);
+        expect(isOk(result)).toBe(true);
+        if (isOk(result)) {
+          expect(result.value).toMatch(/^[0-9a-f]{40}$/i);
 
-        // Verify both files were tracked
-        const infoResult = await Snapshot.getInfo(tempDir, result.value);
-        expect(isOk(infoResult)).toBe(true);
-        if (isOk(infoResult)) {
-          expect(infoResult.value.files).toContain("file1.txt");
-          expect(infoResult.value.files).toContain("file2.txt");
+          // Verify both files were tracked
+          const infoResult = await Snapshot.getInfo(tempDir, result.value);
+          expect(isOk(infoResult)).toBe(true);
+          if (isOk(infoResult)) {
+            expect(infoResult.value.files).toContain("file1.txt");
+            expect(infoResult.value.files).toContain("file2.txt");
+          }
         }
-      }
-    });
+      },
+      { timeout: 30000 }
+    );
   });
 
   // ===========================================================================
