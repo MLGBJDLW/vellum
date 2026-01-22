@@ -293,11 +293,18 @@ describe("AgentsWatcher", () => {
       watcher = new AgentsWatcher(tempDir, { debounceMs: 50 });
       await watcher.start();
 
+      // Wait for watcher to be fully ready on Windows
+      await wait(100);
+
       const startTime = Date.now();
       let emitTime = 0;
 
-      const changePromise = new Promise<void>((resolve) => {
+      const changePromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("Timed out waiting for change event"));
+        }, 3000);
         watcher?.once("change", () => {
+          clearTimeout(timeout);
           emitTime = Date.now();
           resolve();
         });
@@ -311,7 +318,7 @@ describe("AgentsWatcher", () => {
       // Emit should happen after debounce delay
       const elapsed = emitTime - startTime;
       expect(elapsed).toBeGreaterThanOrEqual(40); // Allow some tolerance
-    });
+    }, 10000);
   });
 
   describe("error handling", () => {
