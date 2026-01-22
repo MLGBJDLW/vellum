@@ -30,8 +30,17 @@ export default defineConfig({
     "keytar",
     "fsevents",
 
-    // Node built-ins (handled automatically but explicit for clarity)
+    // Node built-ins - exclude ALL built-in modules
     /^node:/,
+    "fs",
+    "path",
+    "os",
+    "crypto",
+    "stream",
+    "util",
+    "events",
+    "buffer",
+    "process",
 
     // React (peer dependency of ink)
     "react",
