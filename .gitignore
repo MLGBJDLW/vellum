@@ -38,6 +38,7 @@ coverage/
 .cache/
 .test-todo-*/
 temp-check/
+temp-skills-*/
 
 # pre docs
 docs/pre/
@@ -48,7 +49,7 @@ AGENTS.md
 .github/agents
 .github/prompts
 copilot-*
-skills
+.github/skills
 .serena
 .claude
 
