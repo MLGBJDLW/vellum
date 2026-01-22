@@ -3521,9 +3521,11 @@ function AppContent({
 
   // Get agent level from AgentConfig via registry
   const agentName = BUILTIN_CODING_MODES[currentMode].agentName;
+  const agentLevel = currentMode === "spec" ? 0 : currentMode === "plan" ? 1 : 2;
 
   return (
     <AppContentView
+      agentLevel={agentLevel}
       agentName={agentName}
       announce={announce}
       alternateBufferEnabled={alternateBufferEnabled}
@@ -3640,6 +3642,7 @@ type TipValue = ReturnType<typeof useTipEngine>["currentTip"];
 type ToolApprovalState = ReturnType<typeof useToolApprovalController>;
 
 interface AppContentViewProps {
+  readonly agentLevel?: 0 | 1 | 2;
   readonly agentName?: string;
   readonly announce: (message: string) => void;
   readonly alternateBufferEnabled: boolean;
@@ -4232,6 +4235,7 @@ function AppHeader({
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex TUI view with many conditional renders and state handlers
 function AppContentView({
+  agentLevel,
   agentName,
   announce,
   alternateBufferEnabled,
@@ -4351,6 +4355,7 @@ function AppContentView({
     <StatusBar
       mode={currentMode}
       agentName={agentName}
+      agentLevel={agentLevel}
       modelName={currentModel}
       tokens={{
         current: totalTokens,
