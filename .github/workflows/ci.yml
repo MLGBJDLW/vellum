@@ -112,3 +112,67 @@ jobs:
 
       - name: Run tests
         run: pnpm test:run
+
+  # Non-blocking check for changeset presence on PRs
+  changeset-check:
+    name: Changeset Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changeset
+        id: check
+        run: |
+          CHANGESET_COUNT=$(find .changeset -name "*.md" ! -name "README.md" 2>/dev/null | wc -l | tr -d ' ')
+          echo "changeset_count=$CHANGESET_COUNT" >> $GITHUB_OUTPUT
+          if [ "$CHANGESET_COUNT" -eq 0 ]; then
+            echo "::warning::No changeset found. If this PR introduces user-facing changes, please run 'pnpm changeset' to add one."
+            echo "has_changeset=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Found $CHANGESET_COUNT changeset(s)"
+            echo "has_changeset=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR (no changeset)
+        if: steps.check.outputs.has_changeset == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `⚠️ **No changeset detected**
+
+            This PR doesn't include a changeset. If this PR introduces user-facing changes, please add one:
+
+            \`\`\`bash
+            pnpm changeset
+            \`\`\`
+
+            **When to add a changeset:**
+            - ✅ Bug fixes, new features, breaking changes
+            - ❌ CI/docs-only changes, refactoring with no user impact
+
+            See [.changeset/README.md](.changeset/README.md) for guidelines.`;
+
+            // Check if we already commented
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+
+            const botComment = comments.data.find(c =>
+              c.user.type === 'Bot' && c.body.includes('No changeset detected')
+            );
+
+            if (!botComment) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }
