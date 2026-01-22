@@ -5,27 +5,84 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] - 2025-01-22
 
-### Changed
+### Added
 
-- **BREAKING**: Upgraded Zod from v3.25.76 to v4.3.5
-  - Type imports: `ZodTypeAny` → `ZodType` (1 file, 3 occurrences)
-  - JSON schema: Using native `z.toJSONSchema()` instead of `zodToJsonSchema`
-  - Test UUIDs: RFC 4122 compliant format required
-  - Schema defaults: Explicit default handling for partial schemas
-  - Error messages: Updated assertions for Zod v4 error format
-- Upgraded React from 18.3.1 to 19.2.3
-- Upgraded Ink from 5.1.0 to 6.6.0
-- Upgraded @types/react from 18.3.12 to 19.0.0
-- Migrated all context providers to React 19 simplified Context API pattern
-  (removed `.Provider` in favor of direct context component usage)
+#### Core Architecture
+- **Agent Loop** — Event-driven agent execution with streaming support
+- **Multi-Agent Orchestration** — Task delegation, worker pools, and session management
+- **Context Management** — Token-aware context window with automatic summarization
+- **Error Recovery** — Graceful error handling with retry mechanisms
+
+#### LLM Providers (17 providers)
+- **Major Providers**: Anthropic (Claude), OpenAI (GPT), Google (Gemini)
+- **Cloud Providers**: Groq, DeepSeek, Mistral, OpenRouter, xAI
+- **China Providers**: Qwen, Yi, Zhipu, Baichuan, Moonshot, MiniMax
+- **GitHub**: Copilot integration
+- **Local**: Ollama, LMStudio support
+
+#### Coding Modes
+- **Vibe Mode** — Full-auto execution with no approval required
+- **Plan Mode** — Semi-auto with plan approval before execution
+- **Spec Mode** — Guided 6-phase workflow with checkpoints
+
+#### Tool System
+- **Built-in Tools**: File operations, Git, web browsing, code execution
+- **Permission System**: Fine-grained tool access control
+- **Sandbox Execution**: Secure code execution environment
+
+#### MCP Integration
+- **Dynamic MCP System** — Tool filtering and trust mode support
+- **Server Management** — Start, stop, and configure MCP servers
+- **Tool Discovery** — Automatic tool registration from MCP servers
+
+#### Skills System
+- **Skill Discovery** — Automatic skill loading from multiple sources
+- **Skill Matching** — Context-aware skill activation
+- **Plugin Skills** — Skills provided by plugins
+
+#### Custom Agents
+- **Agent Definition** — YAML/Markdown agent configuration
+- **Agent Inheritance** — Extend and customize agent behaviors
+- **Agent Routing** — Automatic agent selection based on context
+
+#### Plugin System
+- **Plugin Loader** — Load plugins from multiple directories
+- **Plugin Trust** — Trust verification for plugin code
+- **Plugin Hooks** — Lifecycle hooks for plugin integration
+
+#### CLI & TUI
+- **Interactive TUI** — Terminal UI with React/Ink
+- **Command System** — Slash commands and user-defined commands
+- **LSP Integration** — 26-language code intelligence
+- **i18n Support** — English and Chinese localization
+
+#### Session Management
+- **Session Persistence** — Save and restore conversation sessions
+- **Git Snapshots** — Automatic code state snapshots
+- **Memory System** — Project-level memory storage
+
+#### Security & Credentials
+- **Keychain Storage** — System keychain for API keys
+- **Credential Migration** — Migrate from environment variables
+- **Path Trust** — Trusted path verification
+
+#### Observability
+- **Logging** — Structured logging with multiple transports
+- **Telemetry** — Usage metrics and performance tracking
+- **Cost Tracking** — Token usage and cost estimation
+- **Rate Limiting** — API rate limit handling
 
 ### Internal
 
-- Updated 5 context provider files to use `<Context value={...}>` pattern:
-  - AppContext.tsx
-  - MessagesContext.tsx
-  - McpContext.tsx
-  - ToolsContext.tsx
-  - theme/provider.tsx
+- Monorepo structure with pnpm workspaces
+- TypeScript 5.x with strict mode
+- Zod v4 for schema validation
+- React 19 with Ink 6 for TUI
+- Biome for linting and formatting
+- Vitest for testing
+
+---
+
+[0.1.0]: https://github.com/nicepkg/vellum/releases/tag/v0.1.0

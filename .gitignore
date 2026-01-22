@@ -59,5 +59,10 @@ lint-errors.txt
 temp-lint.txt
 biome-report.json
 
-# Local config
-.vellum/
+# Local config (keep templates)
+.vellum/*
+!.vellum/specs/
+.vellum/specs/*
+!.vellum/specs/templates/
+**/memory.json
+**/todos.json
