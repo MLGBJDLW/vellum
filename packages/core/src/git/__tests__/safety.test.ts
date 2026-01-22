@@ -135,18 +135,15 @@ describe("Safety Module", () => {
         expect(result.ok).toBe(true);
       });
 
-      it("should handle temp directory appropriately per platform", () => {
+      it("should allow temp directory on all platforms", () => {
         const tempPath = path.join(os.tmpdir(), "vellum-test");
         const result = checkProtectedPath(tempPath);
 
-        // On Windows, os.tmpdir() is C:\Users\X\AppData\Local\Temp which is inside AppData (protected)
-        // On Unix, it's typically /tmp which is not protected
-        if (process.platform === "win32") {
-          // Windows temp is in AppData which is protected
-          expect(result.ok).toBe(false);
-        } else {
-          expect(result.ok).toBe(true);
-        }
+        // Temp directories are explicitly allowed on all platforms for testing and operations
+        // On Windows, os.tmpdir() is C:\Users\X\AppData\Local\Temp
+        // On macOS, os.tmpdir() is /var/folders/... (symlinked from /var)
+        // On Linux, it's typically /tmp
+        expect(result.ok).toBe(true);
       });
     });
 

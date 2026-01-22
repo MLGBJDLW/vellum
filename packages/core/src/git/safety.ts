@@ -91,6 +91,17 @@ function normalizePath(p: string): string {
 export function checkProtectedPath(targetPath: string): Result<true, VellumError> {
   const normalizedTarget = normalizePath(targetPath);
   const homeDir = normalizePath(os.homedir());
+  const tempDir = normalizePath(os.tmpdir());
+
+  // Always allow temp directories on all platforms
+  // On Windows: C:\Users\X\AppData\Local\Temp (under protected AppData)
+  // On macOS: /var/folders/... (under protected /var)
+  // On Linux: /tmp
+  const isInTempDir =
+    normalizedTarget === tempDir || normalizedTarget.startsWith(tempDir + path.sep);
+  if (isInTempDir) {
+    return Ok(true);
+  }
 
   // Check if path is exactly the home directory
   if (normalizedTarget === homeDir) {
@@ -155,16 +166,9 @@ export function checkProtectedPath(targetPath: string): Result<true, VellumError
   if (process.platform !== "win32") {
     const rootProtected = ["/etc", "/usr", "/bin", "/sbin", "/var", "/root"];
 
-    // Allow temp directories (os.tmpdir() is /var/folders/... on macOS)
-    const tempDir = normalizePath(os.tmpdir());
-    const isInTempDir =
-      normalizedTarget === tempDir || normalizedTarget.startsWith(tempDir + path.sep);
-
-    if (!isInTempDir) {
-      for (const rootPath of rootProtected) {
-        if (normalizedTarget === rootPath || normalizedTarget.startsWith(rootPath + path.sep)) {
-          return Err(gitProtectedPathError(targetPath));
-        }
+    for (const rootPath of rootProtected) {
+      if (normalizedTarget === rootPath || normalizedTarget.startsWith(rootPath + path.sep)) {
+        return Err(gitProtectedPathError(targetPath));
       }
     }
   }
