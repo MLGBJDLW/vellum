@@ -6,6 +6,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "license": "MIT",
   "type": "module",
   "bin": {
     "vellum": "./dist/index.js"
