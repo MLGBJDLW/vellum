@@ -1,5 +1,5 @@
 ---
-"@butlerw/vellum": minor
+"@butlerw/vellum": patch
 ---
 
 ## New Features
