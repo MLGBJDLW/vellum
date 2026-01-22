@@ -255,6 +255,9 @@ Updated content.`
       hotReload = createHotReload({ onReload });
       hotReload.start();
 
+      // Wait for watcher to be fully ready before making changes
+      await waitForWatcher(100);
+
       // Create then modify a prompt file
       const promptPath = join(tempWorkspace, ".vellum", "prompts", "callback-test.md");
       writeFileSync(
