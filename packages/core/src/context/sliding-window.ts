@@ -98,7 +98,6 @@ const CHARS_PER_TOKEN = 4;
  * // tokens ≈ 4
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Token estimation requires handling multiple content types
 export function estimateTokens(message: ContextMessage): number {
   // If already has token count, use it
   if (message.tokens !== undefined) {
@@ -399,7 +398,6 @@ function calculateTotalTokens(
  * console.log(`Removed ${result.removedCount} messages`);
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Truncation algorithm requires complex priority-based selection logic
 export function truncate(messages: ContextMessage[], options: TruncateOptions): TruncateResult {
   const {
     targetTokens,

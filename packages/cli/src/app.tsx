@@ -1557,7 +1557,6 @@ function AppContent({
     }
   }, []);
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex memory loading from multiple sources
   const loadMemories = useCallback(async (): Promise<MemoryPanelProps["entries"]> => {
     const projectEntries: Array<MemoryPanelProps["entries"][number]> = [];
 
@@ -2375,7 +2374,6 @@ function AppContent({
     let cancelled = false;
     const isDebug = !!process.env.VELLUM_DEBUG;
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: LSP init with conditional logging
     const loadLsp = async () => {
       try {
         const result = await initializeLsp({
@@ -2680,7 +2678,6 @@ function AppContent({
   );
 
   // Handle Ctrl+C and ESC for cancellation
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This handler must process multiple input types in a single callback for proper event handling
   useInput((inputChar, key) => {
     if (interactivePrompt) {
       if (key.escape) {
@@ -2753,21 +2750,15 @@ function AppContent({
       }
     }
 
-    // ESC - cancel operation, exit copy mode, or exit app
+    // ESC - cancel operation only (use Ctrl+C or /exit to quit)
     if (key.escape) {
       if (isLoading && cancellationRef.current) {
         // Cancel running operation
         cancellationRef.current.cancel("user_escape");
         setIsLoading(false);
         addMessage({ role: "assistant", content: "[Operation cancelled]" });
-      } else {
-        // No operation running, exit app
-        addMessage({ role: "assistant", content: "Goodbye! See you next time." });
-        setTimeout(() => {
-          exit();
-          setTimeout(() => process.exit(0), 50);
-        }, 150);
       }
+      // ESC without operation does nothing - use Ctrl+C or /exit to quit
       return;
     }
 
@@ -2839,7 +2830,6 @@ function AppContent({
 
   // Handle message submission (for CommandInput onMessage)
   const handleMessage = useCallback(
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex message handling with multiple code paths
     async (text: string) => {
       if (!text.trim()) return;
 
@@ -3520,7 +3510,10 @@ function AppContent({
   }, [interactivePrompt]);
 
   // Get agent level from AgentConfig via registry
-  const agentName = BUILTIN_CODING_MODES[currentMode].agentName;
+  // Derive active worker agent name from taskChain if available, otherwise use mode's default agent
+  const modeAgentName = BUILTIN_CODING_MODES[currentMode].agentName;
+  const activeWorkerAgent = currentTaskId && taskChain?.nodes.get(currentTaskId)?.agentSlug;
+  const agentName = activeWorkerAgent ?? modeAgentName;
   const agentLevel = currentMode === "spec" ? 0 : currentMode === "plan" ? 1 : 2;
 
   return (
@@ -4233,7 +4226,6 @@ function AppHeader({
   );
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex TUI view with many conditional renders and state handlers
 function AppContentView({
   agentLevel,
   agentName,

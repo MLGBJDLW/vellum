@@ -391,7 +391,6 @@ function validateFile(filePath: string, rootDir: string): ValidationIssue[] {
  * @param options - Command options
  * @returns Validation result
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Validation requires checking multiple rules and fixing issues
 export async function executePromptValidate(
   options: PromptValidateOptions = {}
 ): Promise<PromptValidateResult> {

@@ -332,7 +332,6 @@ export function findCompactedBlocks(messages: readonly ContextMessage[]): Compac
  * }
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Statistics calculation requires comprehensive iteration
 export function getCompactionStats(messages: readonly ContextMessage[]): CompactionStats {
   let totalToolResults = 0;
   let compactedCount = 0;
@@ -436,7 +435,6 @@ function cloneMessage(message: ContextMessage): ContextMessage {
  * const updated = markBlocksAsCompacted(messages, locations);
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Block marking requires comprehensive message/block iteration
 export function markBlocksAsCompacted(
   messages: readonly ContextMessage[],
   blockLocations: ReadonlyArray<{ messageIndex: number; blockIndex: number }>,
@@ -520,7 +518,6 @@ export function markBlocksAsCompacted(
  * const restored = clearBlocksCompaction(messages, locations);
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Block clearing requires comprehensive message/block iteration
 export function clearBlocksCompaction(
   messages: readonly ContextMessage[],
   blockLocations: ReadonlyArray<{ messageIndex: number; blockIndex: number }>

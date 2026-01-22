@@ -220,7 +220,8 @@ const SETTABLE_KEYS: Record<string, (value: string) => CommandResult> = {
     setDiffViewMode(value as DiffViewMode);
     return success(`Diff view mode set to: ${value}`);
   },
-  diffMode: (value: string) => SETTABLE_KEYS["diff-mode"]!(value),
+  diffMode: (value: string) =>
+    (SETTABLE_KEYS["diff-mode"] ?? (() => error("UNKNOWN_ERROR", "Handler not found")))(value),
   "think.enabled": (value: string) => {
     const enabled = value === "true" || value === "on" || value === "1";
     const current = getThinkingSettings();
@@ -229,7 +230,7 @@ const SETTABLE_KEYS: Record<string, (value: string) => CommandResult> = {
   },
   "think.budget": (value: string) => {
     const budget = parseInt(value, 10);
-    if (isNaN(budget) || budget < 1000 || budget > 128000) {
+    if (Number.isNaN(budget) || budget < 1000 || budget > 128000) {
       return error("INVALID_ARGUMENT", "Budget must be a number between 1000 and 128000");
     }
     const current = getThinkingSettings();

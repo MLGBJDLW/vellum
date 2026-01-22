@@ -308,7 +308,6 @@ function mergeToolCalls(
  * @param action - Action to apply
  * @returns New messages state
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Reducer with many action types for message state management
 function messagesReducer(state: MessagesState, action: MessagesAction): MessagesState {
   switch (action.type) {
     case "ADD_MESSAGE": {

@@ -70,6 +70,7 @@ export interface LspServerStatusBroken {
 export interface LspServerCapabilities {
   readonly hoverProvider: boolean;
   readonly definitionProvider: boolean;
+  readonly implementationProvider: boolean;
   readonly referencesProvider: boolean;
   readonly documentSymbolProvider: boolean;
   readonly workspaceSymbolProvider: boolean;
@@ -133,6 +134,7 @@ export interface LspConnection {
   waitForDiagnostics(filePath: string, timeoutMs?: number): Promise<Diagnostic[]>;
   hover(filePath: string, line: number, character: number): Promise<Hover | null>;
   definition(filePath: string, line: number, character: number): Promise<Location[]>;
+  implementation(filePath: string, line: number, character: number): Promise<Location[]>;
   references(
     filePath: string,
     line: number,

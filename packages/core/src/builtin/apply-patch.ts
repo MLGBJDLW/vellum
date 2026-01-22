@@ -186,7 +186,6 @@ export const applyPatchTool = defineTool({
   kind: "write",
   category: "filesystem",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Patch application with comprehensive validation and error handling
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

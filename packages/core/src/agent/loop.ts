@@ -1230,7 +1230,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /**
    * Processes the LLM stream and collects tool calls.
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Core stream processing with many event types
   private async processStreamResponse(
     stream: AsyncIterable<StreamEvent>,
     pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
@@ -1380,7 +1379,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    *
    * Integrates with Logger (T041) and TelemetryInstrumentor (T042).
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Main agent loop with many state transitions and error handling paths
   async run(): Promise<void> {
     // Check for cancellation before starting
     if (this.cancellation.isCancelled) {
@@ -1935,7 +1933,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    *
    * @param toolCalls - Array of tool calls from LLM
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Tool execution requires multiple permission checks, error handling branches, state transitions, and agentic continuation logic
   private async executeToolCalls(
     toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
   ): Promise<void> {
@@ -3023,7 +3020,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * Extracts file paths from tool invocations in messages.
    * Used by buildSkillMatchContext to determine files involved in the session.
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Message traversal requires nested conditionals
   private extractFilePathsFromMessages(): string[] {
     const files: string[] = [];
     for (const msg of this.messages) {

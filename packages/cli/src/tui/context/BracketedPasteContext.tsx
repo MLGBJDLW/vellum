@@ -220,7 +220,6 @@ export function BracketedPasteProvider({ children, enabled = true }: BracketedPa
        * This ensures paste sequences never reach Ink's input handlers.
        */
       // biome-ignore lint/suspicious/noExplicitAny: stdin.emit has complex overloaded signature
-      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Paste sequence state machine with multiple transitions
       (stdin as any).emit = (event: string | symbol, ...args: unknown[]): boolean => {
         // Only intercept 'data' events
         if (event !== "data") {

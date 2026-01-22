@@ -363,7 +363,6 @@ interface SideBySideLine {
  * Convert parsed diff lines to side-by-side pairs.
  * Matches removed and added lines, and preserves context on both sides.
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Diff pairing logic requires multiple state transitions
 function toSideBySidePairs(lines: ParsedLine[]): SideBySideLine[] {
   const result: SideBySideLine[] = [];
   let i = 0;

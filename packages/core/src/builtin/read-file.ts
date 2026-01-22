@@ -104,6 +104,45 @@ function validateLineRange(
 }
 
 /**
+ * Result type for lineRange string parsing
+ */
+type ParsedLineRange = { ok: true; start: number; end: number } | { ok: false; error: string };
+
+/**
+ * Parse a line range string like "100-250" into start and end numbers.
+ *
+ * @param range - Line range string in format "start-end" (e.g., "100-250")
+ * @returns Parsed line range or error
+ *
+ * @example
+ * parseLineRange("100-250") // { ok: true, start: 100, end: 250 }
+ * parseLineRange("1-100")   // { ok: true, start: 1, end: 100 }
+ * parseLineRange("invalid") // { ok: false, error: "..." }
+ */
+function parseLineRange(range: string): ParsedLineRange {
+  const match = range.match(/^(\d+)-(\d+)$/);
+  if (!match || !match[1] || !match[2]) {
+    return {
+      ok: false,
+      error: `Invalid line range format: "${range}". Use format like "100-250" (start-end).`,
+    };
+  }
+
+  const start = parseInt(match[1], 10);
+  const end = parseInt(match[2], 10);
+
+  if (start < 1) {
+    return { ok: false, error: `Line range start must be positive, got ${start}` };
+  }
+
+  if (end < start) {
+    return { ok: false, error: `Line range end (${end}) cannot be less than start (${start})` };
+  }
+
+  return { ok: true, start, end };
+}
+
+/**
  * Schema for read_file tool parameters
  */
 export const readFileParamsSchema = z.object({
@@ -123,6 +162,13 @@ export const readFileParamsSchema = z.object({
     .positive()
     .optional()
     .describe("End line number (1-indexed, inclusive)"),
+  /** Alternative line range as string (takes precedence over startLine/endLine) */
+  lineRange: z
+    .string()
+    .optional()
+    .describe(
+      'Line range as string, e.g., "100-250" (lines 100 to 250). Alternative to startLine/endLine.'
+    ),
 });
 
 /** Inferred type for read_file parameters */
@@ -144,6 +190,12 @@ export interface ReadFileOutput {
   estimatedTokens?: number;
   /** Warning message if file is large but still readable */
   warning?: string;
+  /** Lines read range (for pagination clarity) */
+  linesRead: { start: number; end: number };
+  /** Whether there are more lines after the current read range */
+  hasMoreLines: boolean;
+  /** Next start line for pagination (only present if hasMoreLines is true) */
+  nextStartLine?: number;
 }
 
 /**
@@ -170,7 +222,9 @@ export interface ReadFileOutput {
 export const readFileTool = defineTool({
   name: "read_file",
   description:
-    "Read the contents of a file. Optionally specify a line range to read only part of the file. Line numbers are 1-indexed and inclusive.",
+    "Read a file's content. Can read entire file or specific line range. " +
+    'Use lineRange (e.g., "100-250") or startLine/endLine for partial reads. ' +
+    "Output includes pagination hints (nextStartLine) for continuing to read large files.",
   parameters: readFileParamsSchema,
   kind: "read",
   category: "filesystem",
@@ -201,8 +255,21 @@ export const readFileTool = defineTool({
       const lines = content.split("\n");
       const totalLines = lines.length;
 
+      // Determine effective start/end (lineRange takes precedence)
+      let effectiveStart = input.startLine;
+      let effectiveEnd = input.endLine;
+
+      if (input.lineRange) {
+        const parsed = parseLineRange(input.lineRange);
+        if (!parsed.ok) {
+          return fail(parsed.error);
+        }
+        effectiveStart = parsed.start;
+        effectiveEnd = parsed.end;
+      }
+
       // Validate and normalize line range
-      const lineRange = validateLineRange(input.startLine, input.endLine, totalLines);
+      const lineRange = validateLineRange(effectiveStart, effectiveEnd, totalLines);
       if (!lineRange.ok) {
         return fail(lineRange.error);
       }
@@ -214,6 +281,9 @@ export const readFileTool = defineTool({
       // Calculate token estimate for context budgeting
       const estimatedTokens = Math.ceil(selectedContent.length / CHARS_PER_TOKEN);
 
+      // Calculate pagination hints
+      const hasMoreLines = lineRange.endLine < totalLines;
+
       return ok({
         content: selectedContent,
         path: resolvedPath,
@@ -222,6 +292,10 @@ export const readFileTool = defineTool({
         endLine: lineRange.endLine,
         estimatedTokens,
         ...(sizeCheck.warning && { warning: sizeCheck.warning }),
+        // Pagination hints
+        linesRead: { start: lineRange.startLine, end: lineRange.endLine },
+        hasMoreLines,
+        ...(hasMoreLines && { nextStartLine: lineRange.endLine + 1 }),
       });
     } catch (error) {
       if (error instanceof Error) {

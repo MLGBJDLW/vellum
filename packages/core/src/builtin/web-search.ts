@@ -77,7 +77,6 @@ export interface WebSearchOutput {
 /**
  * Parse DuckDuckGo HTML search results
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: HTML parsing requires comprehensive pattern matching
 function parseDuckDuckGoResults(html: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = [];
 

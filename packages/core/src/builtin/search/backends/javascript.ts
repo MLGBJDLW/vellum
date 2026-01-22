@@ -294,7 +294,6 @@ export class JavaScriptBackend implements SearchBackend {
   /**
    * Recursively search a directory.
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Recursive search with glob matching and context extraction
   private async searchDirectory(
     dirPath: string,
     basePath: string,

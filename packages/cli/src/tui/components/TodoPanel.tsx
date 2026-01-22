@@ -259,7 +259,6 @@ export function TodoPanel({
 
   // Handle keyboard input
   useInput(
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Input handler must process multiple key bindings for navigation and actions
     (input, key) => {
       if (!isFocused) return;
 

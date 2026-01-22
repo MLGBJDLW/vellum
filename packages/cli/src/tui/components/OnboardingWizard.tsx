@@ -24,7 +24,7 @@ import {
   type PROVIDER_INFO,
   OnboardingWizard as WizardCore,
 } from "@vellum/core";
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { useTUITranslation } from "../i18n/index.js";
@@ -378,7 +378,6 @@ export function OnboardingWizard({
   onCancel,
   credentialManager,
 }: OnboardingWizardProps): React.ReactElement {
-  const { exit } = useApp();
   const { theme } = useTheme();
 
   // Initialize wizard
@@ -481,7 +480,6 @@ export function OnboardingWizard({
   );
 
   // Handle step submission
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Wizard step handling requires processing multiple step types with different logic
   const handleSubmit = useCallback(async () => {
     setState((s) => ({ ...s, isLoading: true, error: null }));
 
@@ -576,10 +574,10 @@ export function OnboardingWizard({
   useInput(
     useCallback(
       (_input: string, key) => {
-        // Escape to cancel
+        // Escape to cancel onboarding (don't exit app - use Ctrl+C or /exit)
         if (key.escape) {
           onCancel?.();
-          exit();
+          // Don't exit app - just cancel onboarding, user returns to main app
           return;
         }
 
@@ -601,7 +599,7 @@ export function OnboardingWizard({
           }
         }
       },
-      [state, handleSubmit, onCancel, exit]
+      [state, handleSubmit, onCancel]
     )
   );
 

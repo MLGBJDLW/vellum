@@ -66,7 +66,6 @@ export interface ApplyDiffOutput {
  * @param diff - The unified diff string
  * @returns Array of parsed hunks
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Diff parsing requires comprehensive line-by-line state machine
 export function parseUnifiedDiff(diff: string): DiffHunk[] {
   const hunks: DiffHunk[] = [];
   const lines = diff.split("\n");
@@ -258,7 +257,6 @@ export const applyDiffTool = defineTool({
   kind: "write",
   category: "filesystem",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: File operation with comprehensive validation and error handling
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

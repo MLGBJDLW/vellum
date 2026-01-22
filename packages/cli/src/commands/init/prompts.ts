@@ -131,7 +131,6 @@ function readTemplate(templateName: string): string | null {
  * @param rootDir - Project root directory
  * @returns Created directories and files
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple directory/file creation paths required
 function scaffoldVellumDirectory(rootDir: string): {
   directories: string[];
   files: string[];

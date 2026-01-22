@@ -25,6 +25,7 @@ export const TOOL_GROUP_NAMES = [
   "modes",
   "agent",
   "git",
+  "lsp",
 ] as const;
 
 /**
@@ -135,6 +136,23 @@ export const BUILTIN_TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
       "git_conflict_info",
     ],
     description: "Version control and Git operations",
+  },
+
+  lsp: {
+    tools: [
+      "lsp_diagnostics",
+      "lsp_hover",
+      "lsp_definition",
+      "lsp_references",
+      "lsp_symbols",
+      "lsp_workspace_symbol",
+      "lsp_incoming_calls",
+      "lsp_outgoing_calls",
+      "lsp_code_actions",
+      "lsp_completion",
+      "lsp_format",
+    ],
+    description: "Language Server Protocol tools for code intelligence",
   },
 } as const;
 

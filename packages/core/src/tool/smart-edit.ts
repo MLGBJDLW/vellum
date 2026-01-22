@@ -406,7 +406,6 @@ function computeLineSimilarity(str1: string, str2: string): number {
 /**
  * Compute Levenshtein distance between two strings
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Dynamic programming algorithm requires nested loops
 function levenshteinDistance(str1: string, str2: string): number {
   const m = str1.length;
   const n = str2.length;

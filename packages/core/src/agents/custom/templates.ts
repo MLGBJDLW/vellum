@@ -664,7 +664,6 @@ export function isValidTemplateName(name: string): name is TemplateName {
 /**
  * Get template as Markdown content
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Template serialization requires comprehensive field handling
 export function templateToMarkdown(template: CustomAgentDefinition): string {
   const { systemPrompt, ...frontmatter } = template;
 

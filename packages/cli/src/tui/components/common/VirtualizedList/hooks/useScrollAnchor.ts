@@ -173,7 +173,6 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
   const prevContainerHeight = useRef(containerHeight);
 
   // Handle auto-scroll and anchor adjustments
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Scroll anchor logic with multiple edge cases
   useLayoutEffect(() => {
     const contentPreviouslyFit = prevTotalHeight.current <= prevContainerHeight.current;
     const wasScrolledToBottomPixels =

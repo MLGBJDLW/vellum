@@ -636,11 +636,12 @@ describe("McpHub Tool System", () => {
     ];
 
     // Helper to call private filterTools method
-    // biome-ignore lint/suspicious/noExplicitAny: Need to access private method for testing
-    const callFilterTools = (
+    type FilterTools = (
       tools: McpTool[],
       filter?: { includeTools?: string[]; excludeTools?: string[] }
-    ) => (hub as any).filterTools(tools, filter);
+    ) => McpTool[];
+    const callFilterTools: FilterTools = (tools, filter) =>
+      (hub as unknown as { filterTools: FilterTools }).filterTools(tools, filter);
 
     it("should return all tools when no filter provided", () => {
       expect(callFilterTools(mockTools, undefined)).toHaveLength(4);

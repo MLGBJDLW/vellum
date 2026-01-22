@@ -124,7 +124,6 @@ export const batchCommand: SlashCommand = {
     '/batch --continue-on-error "/cmd1; /cmd2; /cmd3"',
   ],
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Batch command execution requires handling multiple execution modes and error conditions
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
     const { parsedArgs, signal } = ctx;
     const {
@@ -291,7 +290,6 @@ export const batchCommand: SlashCommand = {
 export function createBatchCommand(executor: CommandExecutor): SlashCommand {
   return {
     ...batchCommand,
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Batch command execution requires handling multiple execution modes and error conditions
     execute: async (ctx: CommandContext): Promise<CommandResult> => {
       const { parsedArgs, signal } = ctx;
       const {

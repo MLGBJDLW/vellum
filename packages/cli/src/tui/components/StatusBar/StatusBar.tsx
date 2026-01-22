@@ -10,6 +10,7 @@
 import type { CodingMode, SandboxPolicy } from "@vellum/core";
 import { Box, Text } from "ink";
 import { useMemo } from "react";
+import { useResilienceOptional } from "../../context/ResilienceContext.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { GradientText } from "../common/GradientText.js";
@@ -112,6 +113,37 @@ const AGENT_ABBREVIATIONS: Record<string, string> = {
 };
 
 // =============================================================================
+// Helper Components
+// =============================================================================
+
+/**
+ * Wrapper that conditionally renders resilience segment with separator.
+ * Uses the same context as ResilienceStatusSegment to determine visibility.
+ * Returns null when inactive, avoiding double separators in the status bar.
+ */
+function ResilienceSegmentWithSeparator({
+  hasFollowingItems,
+}: {
+  hasFollowingItems: boolean;
+}): React.JSX.Element | null {
+  const { theme } = useTheme();
+  const context = useResilienceOptional();
+
+  // Same visibility logic as ResilienceStatusSegment
+  if (!context || !context.feedbackEnabled || context.status.type === "idle") {
+    return null;
+  }
+
+  // Render segment with trailing separator when there are following items
+  return (
+    <>
+      <ResilienceStatusSegment />
+      {hasFollowingItems && <Text color={theme.semantic.border.muted}>{SEPARATOR}</Text>}
+    </>
+  );
+}
+
+// =============================================================================
 // Main Component
 // =============================================================================
 
@@ -153,7 +185,6 @@ function formatCost(cost: number): string {
  * />
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: StatusBar displays many dynamic UI elements
 export function StatusBar({
   mode = "vibe",
   agentName,
@@ -238,12 +269,11 @@ export function StatusBar({
   );
 
   // Collect right-side indicators
+  // Note: We only push non-null indicators to avoid double separators
   const rightIndicators: React.ReactNode[] = [];
 
-  // Resilience status (rate limiting, retry) - shown first when active
-  const resilienceSegment = <ResilienceStatusSegment key="resilience" />;
-  // Note: ResilienceStatusSegment returns null when inactive, so we can always include it
-  rightIndicators.push(resilienceSegment);
+  // Resilience status (rate limiting, retry) - NOT pushed to rightIndicators
+  // It's rendered separately with its own conditional separator to avoid double "||" when inactive
 
   // Model indicator (compact, name only)
   if (modelName) {
@@ -324,7 +354,13 @@ export function StatusBar({
   }
 
   // Render right indicators with separators (compact layout)
-  const renderedRightItems: React.ReactNode[] = [];
+  // ResilienceStatusSegment is rendered first with its own conditional separator
+  const renderedRightItems: React.ReactNode[] = [
+    <ResilienceSegmentWithSeparator
+      key="resilience-with-sep"
+      hasFollowingItems={rightIndicators.length > 0}
+    />,
+  ];
   for (let i = 0; i < rightIndicators.length; i++) {
     if (i > 0) {
       renderedRightItems.push(

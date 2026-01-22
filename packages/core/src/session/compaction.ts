@@ -526,7 +526,6 @@ Keep the summary under 200 words.`;
   /**
    * Generates a rule-based summary without LLM.
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Rule-based summary requires comprehensive message analysis
   private generateRuleBasedSummary(
     messages: SessionMessage[],
     checkpoint: SessionCheckpoint

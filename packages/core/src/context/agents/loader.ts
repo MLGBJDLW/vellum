@@ -116,7 +116,6 @@ export class AgentsLoader {
    * @param startPath - Directory to start loading from (defaults to cwd)
    * @returns Load result with merged config, warnings, and cache status
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Loader logic requires sequential steps
   async load(startPath: string = process.cwd()): Promise<AgentsLoadResult> {
     // Normalize path for cache key
     const normalizedPath = path.resolve(startPath);

@@ -255,7 +255,6 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
   // which was causing extreme CPU usage and frame drops
   // FIX2: Added periodic re-measurement to catch dynamic content changes (ThinkingBlock expand/collapse)
   // FIX3: Enhanced detection for significant height changes (>5px threshold) to catch collapsible content
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Item measurement logic with height tracking
   // biome-ignore lint/correctness/useExhaustiveDependencies: measureTick intentionally triggers periodic re-measurement
   useLayoutEffect(() => {
     // Check if we actually need to re-measure

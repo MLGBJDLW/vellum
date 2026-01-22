@@ -119,18 +119,42 @@ export function LspProvider({
     }
   }, []);
 
-  // Initial refresh and interval
+  // Initial refresh and interval (polling as fallback)
   useEffect(() => {
     // Immediate refresh
     refresh();
 
-    // Set up interval for periodic refresh
+    // Set up interval for periodic refresh (fallback for missed events)
     const intervalId = setInterval(refresh, refreshInterval);
 
     return () => {
       clearInterval(intervalId);
     };
   }, [refresh, refreshInterval]);
+
+  // Event-driven updates (primary method - immediate response to LSP events)
+  useEffect(() => {
+    let manager: ReturnType<typeof getLspManager> | null = null;
+
+    try {
+      manager = getLspManager();
+    } catch {
+      // Manager not initialized yet, skip event subscription
+      return;
+    }
+
+    const handleStateChange = () => {
+      refresh();
+    };
+
+    // Subscribe to state changes
+    manager.onStateChanged(handleStateChange);
+
+    return () => {
+      // Unsubscribe on cleanup
+      manager?.offStateChanged(handleStateChange);
+    };
+  }, [refresh]);
 
   // Create context value
   const contextValue = useMemo<LspContextState>(

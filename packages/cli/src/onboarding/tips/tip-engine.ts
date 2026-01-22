@@ -361,7 +361,6 @@ export class TipEngine {
   /**
    * Check if a tip is eligible to be shown
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Tip eligibility check requires evaluating multiple trigger conditions
   private isTipEligible(tip: Tip, context: TipContext): boolean {
     // Check if dismissed
     if (this.dismissedTips.has(tip.id)) {

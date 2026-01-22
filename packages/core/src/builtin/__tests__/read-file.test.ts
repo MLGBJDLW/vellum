@@ -206,6 +206,110 @@ describe("readFileTool", () => {
     });
   });
 
+  describe("lineRange parameter", () => {
+    it('should parse lineRange "100-250" correctly', async () => {
+      // Generate 300 lines
+      const lines = Array.from({ length: 300 }, (_, i) => `line${i + 1}`);
+      vi.mocked(fs.readFile).mockResolvedValue(lines.join("\n"));
+
+      const result = await readFileTool.execute(
+        { path: "test.txt", lineRange: "100-250" },
+        mockContext
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.startLine).toBe(100);
+        expect(result.output.endLine).toBe(250);
+        expect(result.output.content.split("\n").length).toBe(151); // 250 - 100 + 1
+        expect(result.output.content).toContain("line100");
+        expect(result.output.content).toContain("line250");
+      }
+    });
+
+    it('should parse lineRange "1-100" (first 100 lines)', async () => {
+      const lines = Array.from({ length: 200 }, (_, i) => `line${i + 1}`);
+      vi.mocked(fs.readFile).mockResolvedValue(lines.join("\n"));
+
+      const result = await readFileTool.execute(
+        { path: "test.txt", lineRange: "1-100" },
+        mockContext
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.startLine).toBe(1);
+        expect(result.output.endLine).toBe(100);
+        expect(result.output.content.split("\n").length).toBe(100);
+      }
+    });
+
+    it("should take precedence over startLine/endLine if both provided", async () => {
+      const lines = Array.from({ length: 100 }, (_, i) => `line${i + 1}`);
+      vi.mocked(fs.readFile).mockResolvedValue(lines.join("\n"));
+
+      const result = await readFileTool.execute(
+        { path: "test.txt", lineRange: "10-20", startLine: 1, endLine: 5 },
+        mockContext
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // lineRange should take precedence
+        expect(result.output.startLine).toBe(10);
+        expect(result.output.endLine).toBe(20);
+      }
+    });
+
+    it("should fail for invalid lineRange format (no dash)", async () => {
+      const result = await readFileTool.execute(
+        { path: "test.txt", lineRange: "100" },
+        mockContext
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("Invalid line range format");
+      }
+    });
+
+    it("should fail for invalid lineRange format (not numbers)", async () => {
+      const result = await readFileTool.execute(
+        { path: "test.txt", lineRange: "abc-xyz" },
+        mockContext
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("Invalid line range format");
+      }
+    });
+
+    it("should fail for lineRange with end < start", async () => {
+      const result = await readFileTool.execute(
+        { path: "test.txt", lineRange: "100-50" },
+        mockContext
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("cannot be less than start");
+      }
+    });
+
+    it("should fail for lineRange starting at 0", async () => {
+      const result = await readFileTool.execute(
+        { path: "test.txt", lineRange: "0-100" },
+        mockContext
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("must be positive");
+      }
+    });
+  });
+
   describe("shouldConfirm", () => {
     it("should not require confirmation for read operations", () => {
       expect(readFileTool.shouldConfirm?.({ path: "test.txt" }, mockContext)).toBe(false);

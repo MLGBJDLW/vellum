@@ -261,7 +261,6 @@ class ModeRegistryImpl implements ModeRegistry {
     return this.byLevel.get(level) ?? [];
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex spawn rules for multi-agent orchestration
   canSpawn(fromSlug: string, toSlug: string): boolean {
     // Handle custom agent spawning
     const isFromCustom = fromSlug.startsWith(CUSTOM_AGENT_PREFIX);

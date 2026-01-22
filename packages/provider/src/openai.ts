@@ -713,7 +713,6 @@ export class OpenAIProvider {
   /**
    * Normalize OpenAI response to our CompletionResult format
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Response normalization requires handling O-series reasoning and tool calls
   protected normalizeResponse(response: ChatCompletion, isOSeries: boolean): CompletionResult {
     const choice = response.choices[0];
     if (!choice) {
@@ -797,7 +796,6 @@ export class OpenAIProvider {
   /**
    * Process streaming response and yield normalized events
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Stream processing requires handling multiple delta types and tool call accumulation
   protected async *processStream(
     stream: AsyncIterable<ChatCompletionChunk>
   ): AsyncIterable<StreamEvent> {

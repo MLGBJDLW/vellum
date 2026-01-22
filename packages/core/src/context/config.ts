@@ -330,7 +330,6 @@ export function createConfig(
  * }
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Config validation requires comprehensive field checking
 export function validateConfig(config: ContextManagerConfig): ConfigValidationResult {
   const errors: string[] = [];
 
