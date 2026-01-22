@@ -164,6 +164,7 @@ describe("AgentsWatcher", () => {
 
       watcher = new AgentsWatcher(tempDir, { debounceMs: 50, watchParents: false });
       await watcher.start();
+      await wait(100); // Wait for watcher to stabilize
 
       const changePromise = new Promise<string[]>((resolve) => {
         watcher?.once("change", (paths) => resolve(paths));
