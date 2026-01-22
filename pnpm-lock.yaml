@@ -365,9 +365,6 @@ importers:
       '@google/genai':
         specifier: ^1.34.0
         version: 1.34.0(@modelcontextprotocol/sdk@1.25.1(hono@4.11.2)(zod@4.3.5))
-      '@vellum/core':
-        specifier: workspace:*
-        version: link:../core
       '@vellum/shared':
         specifier: workspace:*
         version: link:../shared
