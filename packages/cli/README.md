@@ -5,7 +5,7 @@
 ## Installation
 
 ```bash
-pnpm add @vellum/cli
+npm install -g @butlerw/vellum
 ```
 
 ## Usage

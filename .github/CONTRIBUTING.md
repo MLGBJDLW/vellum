@@ -23,7 +23,7 @@ When making changes that should be released:
 
 | Method | Command |
 |--------|---------|
-| npm | `npm install -g vellum` |
+| npm | `npm install -g @butlerw/vellum` |
 | npx | `npx vellum` |
 | pnpm | `pnpm add -g vellum` |
 | Homebrew | `brew install your-org/vellum/vellum` |
