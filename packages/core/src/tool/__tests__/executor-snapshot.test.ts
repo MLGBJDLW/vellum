@@ -469,8 +469,9 @@ describe("ToolExecutor Snapshot Hooks", () => {
 
       // Tool should complete (including snapshot overhead)
       expect(result.result.success).toBe(true);
-      // Should take at least 100ms (track + patch delays)
-      expect(elapsedTime).toBeGreaterThanOrEqual(100);
+      // Should take at least ~100ms (track + patch delays)
+      // Use 90ms threshold to account for timer imprecision on CI
+      expect(elapsedTime).toBeGreaterThanOrEqual(90);
     });
   });
 
