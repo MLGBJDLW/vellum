@@ -171,9 +171,9 @@ Quick mode switching with keyboard shortcuts:
 
 | Shortcut | Mode | Description |
 |----------|------|-------------|
-| `Ctrl+1` | vibe | Fast autonomous coding |
-| `Ctrl+2` | plan | Plan-then-execute |
-| `Ctrl+3` | spec | 6-phase workflow |
+| `Alt+1` | vibe | Fast autonomous coding |
+| `Alt+2` | plan | Plan-then-execute |
+| `Alt+3` | spec | 6-phase workflow |
 
 Shortcuts work when the TUI is focused and not in text input mode.
 

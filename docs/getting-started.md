@@ -86,9 +86,9 @@ Inside the TUI, use slash commands:
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+1` | Switch to vibe mode |
-| `Ctrl+2` | Switch to plan mode |
-| `Ctrl+3` | Switch to spec mode |
+| `Alt+1` | Switch to vibe mode |
+| `Alt+2` | Switch to plan mode |
+| `Alt+3` | Switch to spec mode |
 | `Ctrl+C` | Cancel current operation |
 | `Esc` | Exit or cancel |
 
