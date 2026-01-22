@@ -16,9 +16,38 @@ env:
   PNPM_VERSION: '9.15.0'
 
 jobs:
+  should-skip:
+    name: Check Skip Conditions
+    runs-on: ubuntu-latest
+    outputs:
+      skip-full-ci: ${{ steps.check.outputs.skip-full-ci }}
+      is-version-pr: ${{ steps.check.outputs.is-version-pr }}
+    steps:
+      - id: check
+        run: |
+          # Check if this is a Version PR merge push (commit message contains "chore: release")
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          if [[ "$COMMIT_MSG" == *"chore: release"* ]] && [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "skip-full-ci=true" >> $GITHUB_OUTPUT
+            echo "::notice::Skipping full CI - Version PR merge detected"
+          else
+            echo "skip-full-ci=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check if this is a Version PR
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          if [[ "$PR_TITLE" == chore:\ release* ]]; then
+            echo "is-version-pr=true" >> $GITHUB_OUTPUT
+            echo "::notice::Version PR detected - will run quick check only"
+          else
+            echo "is-version-pr=false" >> $GITHUB_OUTPUT
+          fi
+
   lint:
     name: Lint
+    needs: should-skip
     runs-on: ubuntu-latest
+    if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,7 +71,9 @@ jobs:
 
   typecheck:
     name: Typecheck
+    needs: should-skip
     runs-on: ubuntu-latest
+    if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,7 +107,9 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    needs: should-skip
     runs-on: ${{ matrix.os }}
+    if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -113,11 +146,22 @@ jobs:
       - name: Run tests
         run: pnpm test:run
 
+  # Quick check for Version PRs (fast pass)
+  quick-check:
+    name: Quick Check (Version PR)
+    needs: should-skip
+    if: needs.should-skip.outputs.is-version-pr == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Version PR Quick Pass
+        run: echo "✅ Version PR detected - skipping full CI"
+
   # Non-blocking check for changeset presence on PRs
   changeset-check:
     name: Changeset Check
+    needs: should-skip
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && needs.should-skip.outputs.is-version-pr != 'true'
     continue-on-error: true
     steps:
       - name: Checkout

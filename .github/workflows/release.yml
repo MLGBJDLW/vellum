@@ -122,25 +122,33 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create GitHub Release
+      - name: Get latest tag
+        id: get-tag
         run: |
           TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -n "$TAG" ]; then
-            gh release create "$TAG" --generate-notes || true
-          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "has_tag=$([[ -n \"$TAG\" ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        if: steps.get-tag.outputs.has_tag == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get-tag.outputs.tag }}
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create zip archive
+        if: steps.get-tag.outputs.has_tag == 'true'
         run: |
           mkdir -p dist
-          zip -r dist/vellum-${{ github.sha }}.zip . -x "node_modules/*" -x ".git/*"
+          zip -r dist/vellum-${{ steps.get-tag.outputs.tag }}.zip . -x "node_modules/*" -x ".git/*" -x ".turbo/*" -x "dist/*"
 
-      - name: Upload to Release
-        run: |
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -n "$TAG" ]; then
-            gh release upload "$TAG" dist/vellum-*.zip --clobber || true
-          fi
+      - name: Upload assets to Release
+        if: steps.get-tag.outputs.has_tag == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get-tag.outputs.tag }}
+          files: dist/vellum-*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
