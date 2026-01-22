@@ -161,14 +161,23 @@ describe("AgentsWatcher", () => {
     it("should detect AGENTS.md file modification", async () => {
       // Create file before starting watcher
       await createFile(path.join(tempDir, "AGENTS.md"), "# Instructions\nOriginal content");
+      await wait(150); // Let file system settle before starting watcher
 
       watcher = new AgentsWatcher(tempDir, { debounceMs: 50, watchParents: false });
-      await watcher.start();
-      await wait(100); // Wait for watcher to stabilize
 
-      const changePromise = new Promise<string[]>((resolve) => {
-        watcher?.once("change", (paths) => resolve(paths));
+      // Set up listener BEFORE starting to catch any early events
+      const changePromise = new Promise<string[]>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("Watcher did not trigger change event in time"));
+        }, 3000);
+        watcher?.once("change", (paths) => {
+          clearTimeout(timeout);
+          resolve(paths);
+        });
       });
+
+      await watcher.start();
+      await wait(200); // Wait for watcher to fully stabilize after ready
 
       // Modify the file
       await fs.writeFile(
@@ -345,13 +354,23 @@ describe("AgentsWatcher", () => {
       // Create nested directory
       const nestedDir = path.join(tempDir, "src", "components");
       await fs.mkdir(nestedDir, { recursive: true });
+      await wait(100); // Let directory creation settle
 
       watcher = new AgentsWatcher(nestedDir, { debounceMs: 50 });
-      await watcher.start();
 
-      const changePromise = new Promise<string[]>((resolve) => {
-        watcher?.once("change", (paths) => resolve(paths));
+      // Set up listener BEFORE starting to avoid race conditions
+      const changePromise = new Promise<string[]>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("Watcher did not trigger change event in time"));
+        }, 3000);
+        watcher?.once("change", (paths) => {
+          clearTimeout(timeout);
+          resolve(paths);
+        });
       });
+
+      await watcher.start();
+      await wait(200); // Wait for watcher to fully stabilize (parent watchers need more time)
 
       // Create AGENTS.md in parent directory (src)
       await createFile(path.join(tempDir, "src", "AGENTS.md"), "# Parent content");
