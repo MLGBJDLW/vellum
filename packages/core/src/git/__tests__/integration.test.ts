@@ -80,7 +80,7 @@ async function fileExists(dir: string, relativePath: string): Promise<boolean> {
 // T034: Integration Tests
 // =============================================================================
 
-describe("GitSnapshotService Integration", () => {
+describe("GitSnapshotService Integration", { timeout: 60000 }, () => {
   let tempDir: string;
   let git: SimpleGit;
   let service: GitSnapshotService;

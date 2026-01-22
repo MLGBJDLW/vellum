@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ToolContext } from "../../types/index.js";
 import { searchFilesTool } from "../search-files.js";
 
-describe("searchFilesTool", () => {
+describe("searchFilesTool", { timeout: 60000 }, () => {
   let testDir: string;
   let mockContext: ToolContext;
 

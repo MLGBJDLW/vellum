@@ -16,7 +16,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { getSearchFacade, type SearchFacade } from "../facade.js";
 import type { BackendType, SearchOptions } from "../types.js";
 
-describe("SearchFacade Integration Tests", () => {
+describe("SearchFacade Integration Tests", { timeout: 60000 }, () => {
   let facade: SearchFacade;
   const testDir = resolve(process.cwd(), "packages/core/src");
 

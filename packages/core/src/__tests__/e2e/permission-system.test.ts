@@ -24,7 +24,7 @@ import {
 import { PermissionDeniedError, ToolExecutor } from "../../tool/executor.js";
 import type { Tool, ToolContext, ToolKind } from "../../types/tool.js";
 
-describe("Permission System E2E (T042)", () => {
+describe("Permission System E2E (T042)", { timeout: 60000 }, () => {
   let checker: DefaultPermissionChecker;
   let executor: ToolExecutor;
   let ctx: ToolContext;

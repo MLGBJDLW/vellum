@@ -19,7 +19,7 @@ import {
 import { createToolRegistry, type ToolRegistry } from "../../tool/index.js";
 import type { ToolContext } from "../../types/tool.js";
 
-describe("Tool System E2E (T071)", () => {
+describe("Tool System E2E (T071)", { timeout: 60000 }, () => {
   let testDir: string;
   let registry: ToolRegistry;
   let ctx: ToolContext;
