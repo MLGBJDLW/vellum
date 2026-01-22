@@ -42,9 +42,6 @@
     "zod": "^4.3.5",
     "zod-to-json-schema": "^3.25.1"
   },
-  "optionalDependencies": {
-    "libsecret": "^0.1.0"
-  },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
     "@types/diff": "^5.0.9",
