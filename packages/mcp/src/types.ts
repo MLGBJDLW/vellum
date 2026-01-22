@@ -37,9 +37,10 @@ export interface MCPTool {
  * - stdio: Local process communication (command line tools)
  * - sse: Server-Sent Events (deprecated, use streamableHttp for new servers)
  * - streamableHttp: HTTP with streaming (preferred for remote servers)
+ * - websocket: WebSocket for full-duplex communication
  * - remote: Generic remote transport (auto-detects streamableHttp vs sse)
  */
-export type McpTransportType = "stdio" | "sse" | "streamableHttp" | "remote";
+export type McpTransportType = "stdio" | "sse" | "streamableHttp" | "websocket" | "remote";
 
 // ============================================
 // Server Status Types
@@ -76,6 +77,24 @@ export const McpServerStatusType = {
  */
 export type McpOAuthStatus = "authenticated" | "unauthenticated" | "pending";
 
+/**
+ * Trust levels for MCP servers.
+ * - false: Always confirm tool calls (default, most secure)
+ * - "readonly": Auto-approve read operations, confirm writes
+ * - true: Auto-approve all tool calls (use with caution)
+ */
+export type McpTrustLevel = false | "readonly" | true;
+
+/**
+ * Tool filtering configuration for MCP servers.
+ */
+export interface ToolFilter {
+  /** Tool names to include (whitelist). If set, only these tools are available */
+  includeTools?: string[];
+  /** Tool names to exclude (blacklist). Applied after includeTools */
+  excludeTools?: string[];
+}
+
 // ============================================
 // Server & Connection Types
 // ============================================
@@ -106,6 +125,10 @@ export interface McpServer {
   oauthRequired?: boolean;
   /** Current OAuth authentication status */
   oauthAuthStatus?: McpOAuthStatus;
+  /** Trust level for permission bypass */
+  trustLevel?: McpTrustLevel;
+  /** Tool filter configuration */
+  toolFilter?: ToolFilter;
 }
 
 /**
@@ -308,6 +331,12 @@ export interface McpBaseConfig {
   disabled?: boolean;
   /** Operation timeout in seconds */
   timeout?: number;
+  /** Trust level: false=always confirm, "readonly"=confirm writes, true=auto-approve */
+  trust?: McpTrustLevel;
+  /** Tool names to include (whitelist). If set, only these tools are available */
+  includeTools?: string[];
+  /** Tool names to exclude (blacklist). Applied after includeTools */
+  excludeTools?: string[];
 }
 
 /**
@@ -359,13 +388,23 @@ export interface McpRemoteConfig extends McpBaseConfig {
 }
 
 /**
+ * Configuration for WebSocket transport.
+ */
+export interface McpWebSocketConfig extends McpBaseConfig {
+  type: "websocket";
+  /** WebSocket endpoint URL (ws:// or wss://) */
+  url: string;
+}
+
+/**
  * Union of all MCP server configuration types.
  */
 export type McpServerConfig =
   | McpStdioConfig
   | McpSseConfig
   | McpStreamableHttpConfig
-  | McpRemoteConfig;
+  | McpRemoteConfig
+  | McpWebSocketConfig;
 
 /**
  * CLI-specific configuration options.
@@ -457,6 +496,13 @@ export function isStreamableHttpConfig(config: McpServerConfig): config is McpSt
  */
 export function isRemoteConfig(config: McpServerConfig): config is McpRemoteConfig {
   return config.type === "remote";
+}
+
+/**
+ * Type guard for WebSocket configuration.
+ */
+export function isWebSocketConfig(config: McpServerConfig): config is McpWebSocketConfig {
+  return config.type === "websocket";
 }
 
 /**

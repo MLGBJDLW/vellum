@@ -11,7 +11,10 @@
  * @module cli/commands/mcp
  */
 
-import type { McpHub, McpServer } from "@vellum/mcp";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import type { McpHub, McpServer, McpSettings, McpStdioConfig } from "@vellum/mcp";
 import { ICONS } from "../utils/icons.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, interactive, success } from "./types.js";
@@ -191,6 +194,46 @@ async function handleStatus(ctx: CommandContext): Promise<CommandResult> {
   return success(lines.join("\n"));
 }
 
+// =============================================================================
+// Config File Helpers
+// =============================================================================
+
+/**
+ * Get the global MCP config file path.
+ * Uses ~/.vellum/mcp.json on all platforms.
+ */
+function getGlobalMcpConfigPath(): string {
+  return path.join(os.homedir(), ".vellum", "mcp.json");
+}
+
+/**
+ * Get the project-level MCP config file path.
+ */
+function getProjectMcpConfigPath(): string {
+  return path.join(process.cwd(), ".vellum", "mcp.json");
+}
+
+/**
+ * Read existing MCP config file or return empty config.
+ */
+async function readMcpConfig(configPath: string): Promise<McpSettings> {
+  try {
+    const content = await fs.readFile(configPath, "utf-8");
+    return JSON.parse(content) as McpSettings;
+  } catch {
+    // File doesn't exist or invalid JSON - return empty config
+    return { mcpServers: {} };
+  }
+}
+
+/**
+ * Write MCP config to file, creating directories if needed.
+ */
+async function writeMcpConfig(configPath: string, config: McpSettings): Promise<void> {
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
+}
+
 /**
  * Handle /mcp add - Add a new MCP server (interactive)
  */
@@ -229,27 +272,82 @@ async function handleAdd(_ctx: CommandContext): Promise<CommandResult> {
 
           // Parse command into parts
           const parts = command.trim().split(/\s+/);
-          const cmd = parts[0];
+          const cmd = parts[0] ?? "";
           const args = parts.slice(1);
 
-          const config = {
-            [serverName]: {
-              command: cmd,
-              args: args.length > 0 ? args : undefined,
-            },
+          const serverConfig: McpStdioConfig = {
+            command: cmd,
+            args: args.length > 0 ? args : undefined,
           };
 
-          const configJson = JSON.stringify(config, null, 2);
+          // Ask where to save
+          return interactive({
+            inputType: "select",
+            message: "Where do you want to save this configuration?",
+            options: [
+              "Save to global config (~/.vellum/mcp.json)",
+              "Save to project config (.vellum/mcp.json)",
+              "Just show me the JSON (manual)",
+            ],
+            handler: async (choice: string): Promise<CommandResult> => {
+              // Determine save location based on selection
+              const isGlobal = choice.includes("global");
+              const isProject = choice.includes("project");
+              const isManual = choice.includes("manual") || choice.includes("JSON");
 
-          return success(
-            `${ICONS.success} Server configuration ready!\n\n` +
-              "Add this to your ~/.vellum/mcp.json:\n\n" +
-              "```json\n" +
-              `"mcpServers": ${configJson}\n` +
-              "```\n\n" +
-              "After adding, the server will be auto-detected.\n" +
-              "Or restart Vellum to connect."
-          );
+              // Manual mode - just output JSON (backward compatible)
+              if (isManual) {
+                const configDisplay = {
+                  [serverName]: serverConfig,
+                };
+                const configJson = JSON.stringify(configDisplay, null, 2);
+
+                return success(
+                  `${ICONS.success} Server configuration ready!\n\n` +
+                    "Add this to your ~/.vellum/mcp.json:\n\n" +
+                    "```json\n" +
+                    `"mcpServers": ${configJson}\n` +
+                    "```\n\n" +
+                    "After adding, the server will be auto-detected.\n" +
+                    "Or restart Vellum to connect."
+                );
+              }
+
+              // Determine config path
+              const configPath = isGlobal
+                ? getGlobalMcpConfigPath()
+                : isProject
+                  ? getProjectMcpConfigPath()
+                  : getGlobalMcpConfigPath(); // Default to global
+
+              try {
+                // Read existing config
+                const existingConfig = await readMcpConfig(configPath);
+
+                // Merge new server
+                existingConfig.mcpServers = {
+                  ...existingConfig.mcpServers,
+                  [serverName]: serverConfig,
+                };
+
+                // Write back
+                await writeMcpConfig(configPath, existingConfig);
+
+                return success(
+                  `${ICONS.success} Server "${serverName}" added to ${configPath}\n\n` +
+                    "The server will be auto-detected.\n" +
+                    "Use /mcp status to check connection status."
+                );
+              } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                return error("INTERNAL_ERROR", `Failed to write config file: ${message}`, [
+                  "Check file permissions",
+                  "Try the manual option instead",
+                ]);
+              }
+            },
+            onCancel: () => success("Server addition cancelled."),
+          });
         },
         onCancel: () => success("Server addition cancelled."),
       });

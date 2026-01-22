@@ -97,7 +97,7 @@ export type ShellIntegrationStatusInput = z.input<typeof ShellIntegrationStatusS
 
 export const EnvironmentConfigSchema = z.object({
   cwd: z.string().optional(),
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
 });
 export type EnvironmentConfig = z.infer<typeof EnvironmentConfigSchema>;
 export type EnvironmentConfigInput = z.input<typeof EnvironmentConfigSchema>;

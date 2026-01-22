@@ -64,10 +64,14 @@ export {
   isSSEConfigSchema,
   isStdioConfigSchema,
   isStreamableHttpConfigSchema,
+  isWebSocketConfigSchema,
   type McpSettingsConfig,
   McpSettingsSchema,
   // Validation helpers
   type McpSettingsValidationResult,
+  // Trust level schema
+  type McpTrustLevel,
+  McpTrustLevelSchema,
   type RemoteConfig,
   RemoteConfigSchema,
   requiresUrl,
@@ -80,8 +84,13 @@ export {
   StdioConfigSchema,
   type StreamableHttpConfig,
   StreamableHttpConfigSchema,
+  // Tool filter schema
+  type ToolFilter,
+  ToolFilterSchema,
   validateMcpSettings,
   validateServerConfig,
+  type WebSocketConfig,
+  WebSocketConfigSchema,
 } from "./schemas.js";
 // Transport Adapters
 export {
@@ -93,6 +102,8 @@ export {
   createStdioTransport,
   // Streamable HTTP transport (preferred for remote)
   createStreamableHttpTransport,
+  // WebSocket transport
+  createWebSocketTransport,
   type RemoteTransportOptions,
   type RemoteTransportResult,
   type SSETransportOptions,
@@ -105,6 +116,9 @@ export {
   validateSseConfig,
   validateStdioConfig,
   validateStreamableHttpConfig,
+  validateWebSocketConfig,
+  type WebSocketTransportOptions,
+  type WebSocketTransportResult,
 } from "./transports/index.js";
 // Types
 export {
@@ -115,6 +129,7 @@ export {
   // Type guards
   isStdioConfig,
   isStreamableHttpConfig,
+  isWebSocketConfig,
   // Tool types
   type JsonSchema,
   // Configuration types
@@ -153,6 +168,9 @@ export {
   type McpTransport,
   // Transport types
   type McpTransportType,
+  type McpWebSocketConfig,
+  // Tool filter type from types.ts (interface version)
+  type ToolFilter as McpToolFilter,
 } from "./types.js";
 
 // ============================================

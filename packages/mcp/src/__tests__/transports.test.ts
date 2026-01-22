@@ -56,6 +56,10 @@ import {
   createStreamableHttpTransport,
   validateStreamableHttpConfig,
 } from "../transports/StreamableHttpAdapter.js";
+import {
+  createWebSocketTransport,
+  validateWebSocketConfig,
+} from "../transports/WebSocketAdapter.js";
 
 describe("StdioAdapter", () => {
   beforeEach(() => {
@@ -744,6 +748,102 @@ describe("FallbackTransport", () => {
       });
 
       expect(errors).toContain("Headers must be an object");
+    });
+  });
+});
+
+describe("WebSocketAdapter", () => {
+  describe("validateWebSocketConfig", () => {
+    it("should return empty array for valid ws:// config", () => {
+      const errors = validateWebSocketConfig({
+        type: "websocket",
+        url: "ws://localhost:8080",
+      });
+
+      expect(errors).toEqual([]);
+    });
+
+    it("should return empty array for valid wss:// config", () => {
+      const errors = validateWebSocketConfig({
+        type: "websocket",
+        url: "wss://secure.example.com/ws",
+      });
+
+      expect(errors).toEqual([]);
+    });
+
+    it("should return error for missing URL", () => {
+      const errors = validateWebSocketConfig({
+        type: "websocket",
+        url: "",
+      });
+
+      expect(errors).toContain("URL is required and must be a string");
+    });
+
+    it("should return error for invalid URL", () => {
+      const errors = validateWebSocketConfig({
+        type: "websocket",
+        url: "not-a-url",
+      });
+
+      expect(errors).toContain("URL is not a valid URL");
+    });
+
+    it("should return error for http protocol", () => {
+      const errors = validateWebSocketConfig({
+        type: "websocket",
+        url: "http://example.com",
+      });
+
+      expect(errors).toContain("URL must use ws or wss protocol");
+    });
+
+    it("should return error for https protocol", () => {
+      const errors = validateWebSocketConfig({
+        type: "websocket",
+        url: "https://example.com",
+      });
+
+      expect(errors).toContain("URL must use ws or wss protocol");
+    });
+
+    it("should return error for ftp protocol", () => {
+      const errors = validateWebSocketConfig({
+        type: "websocket",
+        url: "ftp://example.com",
+      });
+
+      expect(errors).toContain("URL must use ws or wss protocol");
+    });
+  });
+
+  describe("createWebSocketTransport", () => {
+    it("should throw McpTransportError for invalid URL protocol", async () => {
+      await expect(
+        createWebSocketTransport(
+          { type: "websocket", url: "http://invalid.com" },
+          { serverName: "test-server" }
+        )
+      ).rejects.toThrow(McpTransportError);
+    });
+
+    it("should throw with descriptive message for invalid protocol", async () => {
+      await expect(
+        createWebSocketTransport(
+          { type: "websocket", url: "http://invalid.com" },
+          { serverName: "test-server" }
+        )
+      ).rejects.toThrow(/ws:\/\/ or wss:\/\//);
+    });
+
+    it("should throw McpTransportError for invalid URL format", async () => {
+      await expect(
+        createWebSocketTransport(
+          { type: "websocket", url: "not-a-valid-url" },
+          { serverName: "test-server" }
+        )
+      ).rejects.toThrow(McpTransportError);
     });
   });
 });

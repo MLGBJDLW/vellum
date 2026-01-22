@@ -30,6 +30,27 @@ export const EnvRecordSchema = z.record(z.string(), z.string());
 export const HeadersRecordSchema = z.record(z.string(), z.string());
 
 /**
+ * Tool filtering configuration for MCP servers.
+ * Allows fine-grained control over which tools are exposed.
+ */
+export const ToolFilterSchema = z.object({
+  /** Tool names to include (whitelist). If set, only these tools are available */
+  includeTools: z.array(z.string()).optional(),
+  /** Tool names to exclude (blacklist). Applied after includeTools */
+  excludeTools: z.array(z.string()).optional(),
+});
+export type ToolFilter = z.infer<typeof ToolFilterSchema>;
+
+/**
+ * Trust level schema for MCP servers.
+ * - false: Always confirm tool calls (default, most secure)
+ * - "readonly": Auto-approve read operations, confirm writes
+ * - true: Auto-approve all tool calls (use with caution)
+ */
+export const McpTrustLevelSchema = z.union([z.boolean(), z.literal("readonly")]).default(false);
+export type McpTrustLevel = z.infer<typeof McpTrustLevelSchema>;
+
+/**
  * Base configuration schema shared by all transport types.
  */
 export const BaseConfigSchema = z.object({
@@ -41,6 +62,12 @@ export const BaseConfigSchema = z.object({
     .min(MIN_MCP_TIMEOUT_SECONDS, `Timeout must be at least ${MIN_MCP_TIMEOUT_SECONDS} second`)
     .optional()
     .default(DEFAULT_MCP_TIMEOUT_SECONDS),
+  /** Trust level: false=always confirm, "readonly"=confirm writes, true=auto-approve */
+  trust: McpTrustLevelSchema.optional(),
+  /** Tool names to include (whitelist). If set, only these tools are available */
+  includeTools: z.array(z.string()).optional(),
+  /** Tool names to exclude (blacklist). Applied after includeTools */
+  excludeTools: z.array(z.string()).optional(),
 });
 
 // ============================================
@@ -86,6 +113,14 @@ export const RemoteConfigSchema = BaseConfigSchema.extend({
 });
 
 /**
+ * Schema for WebSocket transport configuration.
+ */
+export const WebSocketConfigSchema = BaseConfigSchema.extend({
+  type: z.literal("websocket"),
+  url: z.string().url("URL must be a valid URL (ws:// or wss://)"),
+});
+
+/**
  * Union schema for any valid server configuration.
  */
 export const ServerConfigSchema = z
@@ -95,6 +130,7 @@ export const ServerConfigSchema = z
     SSEConfigSchema,
     StreamableHttpConfigSchema,
     RemoteConfigSchema,
+    WebSocketConfigSchema,
   ])
   .or(
     // Allow stdio without type field (default)
@@ -112,6 +148,9 @@ export const ServerConfigSchema = z
           .min(MIN_MCP_TIMEOUT_SECONDS)
           .optional()
           .default(DEFAULT_MCP_TIMEOUT_SECONDS),
+        trust: McpTrustLevelSchema.optional(),
+        includeTools: z.array(z.string()).optional(),
+        excludeTools: z.array(z.string()).optional(),
       })
       .transform((val) => ({ ...val, type: "stdio" as const }))
   );
@@ -170,6 +209,7 @@ export type StdioConfig = z.infer<typeof StdioConfigSchema>;
 export type SSEConfig = z.infer<typeof SSEConfigSchema>;
 export type StreamableHttpConfig = z.infer<typeof StreamableHttpConfigSchema>;
 export type RemoteConfig = z.infer<typeof RemoteConfigSchema>;
+export type WebSocketConfig = z.infer<typeof WebSocketConfigSchema>;
 export type ServerConfig = z.infer<typeof ServerConfigSchema>;
 export type CliConfig = z.infer<typeof CliConfigSchema>;
 export type EnterpriseConfig = z.infer<typeof EnterpriseConfigSchema>;
@@ -276,8 +316,20 @@ export function isRemoteConfigSchema(config: ServerConfig): config is RemoteConf
 }
 
 /**
+ * Check if a configuration is for WebSocket transport.
+ */
+export function isWebSocketConfigSchema(config: ServerConfig): config is WebSocketConfig {
+  return config.type === "websocket";
+}
+
+/**
  * Check if a configuration requires a URL (remote transports).
  */
 export function requiresUrl(config: ServerConfig): boolean {
-  return config.type === "sse" || config.type === "streamableHttp" || config.type === "remote";
+  return (
+    config.type === "sse" ||
+    config.type === "streamableHttp" ||
+    config.type === "websocket" ||
+    config.type === "remote"
+  );
 }

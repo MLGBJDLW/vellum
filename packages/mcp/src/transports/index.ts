@@ -66,3 +66,10 @@ export {
   type StreamableHttpTransportResult,
   validateStreamableHttpConfig,
 } from "./StreamableHttpAdapter.js";
+// WebSocket transport
+export {
+  createWebSocketTransport,
+  validateWebSocketConfig,
+  type WebSocketTransportOptions,
+  type WebSocketTransportResult,
+} from "./WebSocketAdapter.js";

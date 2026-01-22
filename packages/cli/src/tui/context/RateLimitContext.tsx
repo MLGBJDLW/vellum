@@ -6,9 +6,9 @@
  * @module tui/context/RateLimitContext
  */
 
-import type { EventBus, RateLimiterServiceConfig } from "@vellum/core";
+import type { EventBus, RateLimiterConfig } from "@vellum/core";
+import type { JSX } from "react";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
-
 // =============================================================================
 // Types
 // =============================================================================
@@ -52,7 +52,7 @@ const RateLimitContext = createContext<RateLimitContextValue | null>(null);
 
 export interface RateLimitProviderProps {
   children: ReactNode;
-  config?: RateLimiterServiceConfig;
+  config?: RateLimiterConfig;
   eventBus?: EventBus;
 }
 

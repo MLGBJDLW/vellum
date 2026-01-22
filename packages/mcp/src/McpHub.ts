@@ -34,6 +34,7 @@ import type {
   McpStdioConfig,
   McpTool,
   McpToolCallResponse,
+  ToolFilter,
 } from "./types.js";
 
 // ============================================
@@ -424,6 +425,7 @@ export class McpHub {
         statusInfo: { status: "disabled" },
         disabled: true,
         uid: this.getMcpServerKey(name),
+        toolFilter: this.extractToolFilter(config),
       };
 
       // Add as a placeholder connection (no client/transport)
@@ -443,6 +445,7 @@ export class McpHub {
       statusInfo: { status: "connecting" },
       timeout: config.timeout ?? DEFAULT_MCP_TIMEOUT_SECONDS,
       uid: this.getMcpServerKey(name),
+      toolFilter: this.extractToolFilter(config),
     };
 
     this.emitEvent("server:status", { serverName: name, status: server.statusInfo });
@@ -538,16 +541,99 @@ export class McpHub {
         return transport;
       }
 
-      case "sse":
-      case "streamableHttp":
+      case "sse": {
+        const sseConfig = config as import("./types.js").McpSseConfig;
+        const { createSSETransport } = await import("./transports/SSEAdapter.js");
+        const { transport } = await createSSETransport(sseConfig, {
+          serverName: name,
+          authProvider: this.oauthManager?.getProvider(name, sseConfig.url),
+        });
+        return transport;
+      }
+
+      case "streamableHttp": {
+        const httpConfig = config as import("./types.js").McpStreamableHttpConfig;
+        const { createStreamableHttpTransport } = await import(
+          "./transports/StreamableHttpAdapter.js"
+        );
+        const { transport } = await createStreamableHttpTransport(httpConfig, {
+          serverName: name,
+          authProvider: this.oauthManager?.getProvider(name, httpConfig.url),
+        });
+        return transport;
+      }
+
+      case "websocket": {
+        const wsConfig = config as import("./types.js").McpWebSocketConfig;
+        const { createWebSocketTransport } = await import("./transports/WebSocketAdapter.js");
+        const { transport } = await createWebSocketTransport(wsConfig, {
+          serverName: name,
+        });
+        return transport;
+      }
+
       case "remote": {
-        // TODO: Implement remote transports in Phase 3 (T016-T023)
-        throw new McpConnectionError(`Remote transport "${configType}" not yet implemented`, name);
+        const remoteConfig = config as import("./types.js").McpRemoteConfig;
+        const { createRemoteTransport } = await import("./transports/FallbackTransport.js");
+        const { transport } = await createRemoteTransport(remoteConfig, {
+          serverName: name,
+          authProvider: this.oauthManager?.getProvider(name, remoteConfig.url),
+        });
+        return transport;
       }
 
       default:
         throw new McpConnectionError(`Unknown transport type: ${configType}`, name);
     }
+  }
+
+  /**
+   * Extract tool filter configuration from server config.
+   * Creates a ToolFilter object if includeTools or excludeTools are specified.
+   *
+   * @param config - Server configuration
+   * @returns ToolFilter or undefined if no filtering configured
+   */
+  private extractToolFilter(config: McpServerConfig): ToolFilter | undefined {
+    if (config.includeTools?.length || config.excludeTools?.length) {
+      return {
+        includeTools: config.includeTools,
+        excludeTools: config.excludeTools,
+      };
+    }
+    return undefined;
+  }
+
+  /**
+   * Filter tools based on server's include/exclude configuration.
+   * This is a pure function with no side effects.
+   *
+   * Filtering order:
+   * 1. Apply includeTools whitelist first (if specified)
+   * 2. Apply excludeTools blacklist second (if specified)
+   *
+   * @param tools - Array of discovered MCP tools
+   * @param filter - Tool filter configuration from server config
+   * @returns Filtered array of tools (returns all if no filter)
+   */
+  private filterTools(tools: McpTool[], filter?: ToolFilter): McpTool[] {
+    if (!filter) return tools;
+
+    let filtered = tools;
+
+    // Apply whitelist first
+    if (filter.includeTools?.length) {
+      const includeSet = new Set(filter.includeTools);
+      filtered = filtered.filter((tool) => includeSet.has(tool.name));
+    }
+
+    // Apply blacklist second
+    if (filter.excludeTools?.length) {
+      const excludeSet = new Set(filter.excludeTools);
+      filtered = filtered.filter((tool) => !excludeSet.has(tool.name));
+    }
+
+    return filtered;
   }
 
   /**
@@ -559,11 +645,14 @@ export class McpHub {
     try {
       // Discover tools
       const toolsResponse = await client.listTools();
-      server.tools = toolsResponse.tools.map((tool) => ({
+      const allTools: McpTool[] = toolsResponse.tools.map((tool) => ({
         name: tool.name,
         description: tool.description,
         inputSchema: tool.inputSchema as McpTool["inputSchema"],
       }));
+
+      // Apply tool filter (whitelist/blacklist)
+      server.tools = this.filterTools(allTools, server.toolFilter);
 
       // Discover resources
       try {

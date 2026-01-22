@@ -81,8 +81,7 @@ export type {
   // T001: LLMProvider interface
   LLMProvider,
   MessageRole,
-  // T005: Model info
-  ModelInfo,
+  // T005: ModelInfo - exported via models/index.js (Zod-based, richer type)
   Provider,
   ProviderCredential,
   // T002: Provider options and completion params

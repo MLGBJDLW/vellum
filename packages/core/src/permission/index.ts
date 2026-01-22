@@ -97,6 +97,16 @@ export {
   TrustChangedEventSchema,
 } from "./event-bus.js";
 // ============================================
+// MCP Permission Bridge
+// ============================================
+export {
+  getTrustLevelDescription,
+  hasTrustEnabled,
+  inferReadOperation,
+  type McpTrustLevel,
+  shouldBypassPermission,
+} from "./mcp-permission-bridge.js";
+// ============================================
 // Protected Files Manager
 // ============================================
 export {

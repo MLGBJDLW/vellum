@@ -626,4 +626,64 @@ describe("McpHub Tool System", () => {
       expect(result[1]?.serverName).toBe("server2");
     });
   });
+
+  describe("filterTools", () => {
+    const mockTools: McpTool[] = [
+      { name: "read_file", description: "Read" },
+      { name: "write_file", description: "Write" },
+      { name: "search", description: "Search" },
+      { name: "execute", description: "Execute" },
+    ];
+
+    // Helper to call private filterTools method
+    // biome-ignore lint/suspicious/noExplicitAny: Need to access private method for testing
+    const callFilterTools = (
+      tools: McpTool[],
+      filter?: { includeTools?: string[]; excludeTools?: string[] }
+    ) => (hub as any).filterTools(tools, filter);
+
+    it("should return all tools when no filter provided", () => {
+      expect(callFilterTools(mockTools, undefined)).toHaveLength(4);
+    });
+
+    it("should apply includeTools whitelist", () => {
+      const result = callFilterTools(mockTools, { includeTools: ["read_file", "search"] });
+      expect(result).toHaveLength(2);
+      expect(result.map((t: McpTool) => t.name)).toEqual(["read_file", "search"]);
+    });
+
+    it("should apply excludeTools blacklist", () => {
+      const result = callFilterTools(mockTools, { excludeTools: ["execute"] });
+      expect(result).toHaveLength(3);
+      expect(result.map((t: McpTool) => t.name)).not.toContain("execute");
+    });
+
+    it("should apply includeTools first, then excludeTools", () => {
+      const result = callFilterTools(mockTools, {
+        includeTools: ["read_file", "write_file", "search"],
+        excludeTools: ["write_file"],
+      });
+      expect(result).toHaveLength(2);
+      expect(result.map((t: McpTool) => t.name)).toEqual(["read_file", "search"]);
+    });
+
+    it("should handle empty includeTools array (no filtering, returns all)", () => {
+      // Empty includeTools array is treated as "no filter" (not "include nothing")
+      expect(callFilterTools(mockTools, { includeTools: [] })).toHaveLength(4);
+    });
+
+    it("should handle empty excludeTools array (returns all tools)", () => {
+      expect(callFilterTools(mockTools, { excludeTools: [] })).toHaveLength(4);
+    });
+
+    it("should handle non-matching includeTools gracefully", () => {
+      const result = callFilterTools(mockTools, { includeTools: ["nonexistent_tool"] });
+      expect(result).toHaveLength(0);
+    });
+
+    it("should handle non-matching excludeTools gracefully", () => {
+      const result = callFilterTools(mockTools, { excludeTools: ["nonexistent_tool"] });
+      expect(result).toHaveLength(4);
+    });
+  });
 });
