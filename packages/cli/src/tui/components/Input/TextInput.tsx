@@ -619,7 +619,6 @@ function TextInputComponent({
    * Returns true if the key was handled.
    */
   const processKeyEvent = useCallback(
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Key event handler with many key combinations
     (input: string, key: Key): boolean => {
       // Navigation and editing keys
       if (key.backspace) {
@@ -715,7 +714,6 @@ function TextInputComponent({
 
   // Handle keyboard input with immediate display for single chars, buffering for paste
   useInput(
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Keyboard input handler with many key combinations
     (input, key) => {
       if (disabled) return;
 

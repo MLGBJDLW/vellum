@@ -129,7 +129,6 @@ export function useKeyboardScroll(options: UseKeyboardScrollOptions): UseKeyboar
    * Handle a keyboard input, returning true if handled
    */
   const handleKey = useMemo(() => {
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Keyboard handler needs many key combinations
     return (input: string, key: Key): boolean => {
       // Arrow up or vim 'k'
       if (key.upArrow || (vimKeys && input === "k")) {

@@ -173,7 +173,6 @@ export const readManyFilesTool = defineTool({
   kind: "read",
   category: "filesystem",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Batch file reading with glob expansion and error handling
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

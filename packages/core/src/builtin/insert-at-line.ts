@@ -87,7 +87,6 @@ export const insertAtLineTool = defineTool({
   kind: "write",
   category: "filesystem",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: File editing with validation and error handling
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

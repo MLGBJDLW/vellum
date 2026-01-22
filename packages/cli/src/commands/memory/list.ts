@@ -201,7 +201,6 @@ export async function executeMemoryList(
 /**
  * Parse list command arguments.
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Argument parsing requires handling many flag combinations
 function parseListArgs(args: string[]): MemoryListOptions {
   const options: MemoryListOptions = {};
 

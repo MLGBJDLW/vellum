@@ -237,7 +237,6 @@ export function CheckpointDiffView({
 
   // Handle keyboard input
   useInput(
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Input handler must process multiple key bindings for navigation
     (input, key) => {
       if (!isFocused) return;
 

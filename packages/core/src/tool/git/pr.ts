@@ -325,7 +325,6 @@ export function createGitGeneratePrTool(gitOpsFactory: typeof createGitOps = cre
     kind: "read",
     category: "git",
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: PR generation requires processing commits, files, and generating structured output
     async execute(
       input,
       ctx

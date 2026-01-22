@@ -294,7 +294,6 @@ function createTerminalRenderer(
                       ? colorFn.listBullet(`${nestedIndex + 1}.`)
                       : colorFn.listBullet("◦");
                     const nestedContent = nestedItem.tokens
-                      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Nested list rendering requires this complexity
                       .map((t) => {
                         if (t.type === "text") {
                           if ("tokens" in t && Array.isArray(t.tokens)) {

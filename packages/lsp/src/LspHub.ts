@@ -331,10 +331,11 @@ export class LspHub {
    */
   async getConnectionForFile(filePath: string): Promise<LanguageClient> {
     const connections = await this.getConnectionsForFile(filePath);
-    if (connections.length === 0) {
+    const first = connections[0];
+    if (!first) {
       throw new Error(`No language server available for file: ${filePath}`);
     }
-    return connections[0]!;
+    return first;
   }
 
   /**

@@ -193,7 +193,6 @@ export const copyCommand: SlashCommand = {
     "/copy file src/index.ts",
   ],
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Command handler requires comprehensive target validation
   async execute(ctx: CommandContext): Promise<CommandResult> {
     const { parsedArgs, session } = ctx;
     const target = parsedArgs.positional[0] as string | undefined;

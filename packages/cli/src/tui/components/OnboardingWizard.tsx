@@ -481,7 +481,6 @@ export function OnboardingWizard({
   );
 
   // Handle step submission
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Wizard step handling requires processing multiple step types with different logic
   const handleSubmit = useCallback(async () => {
     setState((s) => ({ ...s, isLoading: true, error: null }));
 

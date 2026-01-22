@@ -418,7 +418,6 @@ export const thinkCommand: SlashCommand = {
     "/think mode compact - Show compact thinking header only",
   ],
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Command handler with multiple state transitions
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
     const stateArg = ctx.parsedArgs.positional[0] as string | undefined;
     const budgetArg = ctx.parsedArgs.named.budget as string | number | undefined;

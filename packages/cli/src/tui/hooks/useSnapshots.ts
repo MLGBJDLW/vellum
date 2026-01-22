@@ -134,7 +134,6 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
   /**
    * Refresh the list of snapshots.
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Snapshot refresh requires multiple state checks and error handling paths
   const refresh = useCallback(async (): Promise<void> => {
     if (!mountedRef.current) return;
 

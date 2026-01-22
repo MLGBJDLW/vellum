@@ -108,7 +108,6 @@ export function sanitizeData(
 /**
  * Internal recursive sanitization helper.
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Recursive sanitization requires comprehensive type handling
 function sanitizeRecursive(
   data: unknown,
   currentDepth: number,

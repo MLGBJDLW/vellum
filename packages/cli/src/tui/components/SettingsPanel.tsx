@@ -501,7 +501,10 @@ export function SettingsPanel({
     } else if (item.type === "select" && item.options) {
       const currentIdx = item.options.indexOf(String(item.value));
       const nextIdx = (currentIdx + 1) % item.options.length;
-      item.onChange(item.options[nextIdx]!);
+      const nextValue = item.options[nextIdx];
+      if (nextValue !== undefined) {
+        item.onChange(nextValue);
+      }
     }
   }, [items, selectedIndex]);
 

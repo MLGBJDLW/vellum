@@ -381,7 +381,6 @@ class GitGrepStateTracker {
    * Handle a line of git grep output.
    * @returns true to continue, false to stop
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Parsing git grep output with context handling
   handleLine(line: string): boolean {
     // Skip empty lines
     if (!line.trim()) {

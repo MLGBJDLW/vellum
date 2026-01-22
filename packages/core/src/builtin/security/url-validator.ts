@@ -90,7 +90,6 @@ function isInRange(ip: string, start: string, end: string): boolean {
  * @param ip - IP address string (IPv4 or IPv6)
  * @returns true if the IP is private/reserved and should be blocked
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: IP range checking requires comprehensive CIDR validation
 export function isPrivateIP(ip: string): boolean {
   if (!ip) return false;
 
@@ -345,7 +344,6 @@ export interface CloudMetadataCheckResult {
  * @param url - URL to check (can be string or URL object)
  * @returns Check result with provider info if blocked
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Cloud provider metadata detection requires comprehensive pattern matching
 export function isCloudMetadata(url: string | URL): CloudMetadataCheckResult {
   let parsed: URL;
   try {

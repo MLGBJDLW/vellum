@@ -247,7 +247,6 @@ export function createGitLogTool(gitOpsFactory: typeof createGitOps = createGitO
     kind: "read",
     category: "git",
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git log requires handling multiple filtering options and output parsing
     async execute(
       input,
       ctx

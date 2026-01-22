@@ -148,7 +148,6 @@ export const gitStashTool = defineTool({
     return input.action === "drop" || input.action === "clear";
   },
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git stash requires handling push/pop/apply/drop/list/clear/show operations
   async execute(input, ctx): Promise<ToolResult<GitStashResult>> {
     const cwd = input.cwd ?? ctx.workingDir;
     const git = createGitOps(cwd);
@@ -347,7 +346,6 @@ export function createGitStashTool(gitOpsFactory: typeof createGitOps = createGi
       return input.action === "drop" || input.action === "clear";
     },
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git stash requires handling push/pop/apply/drop/list/clear/show operations
     async execute(input, ctx): Promise<ToolResult<GitStashResult>> {
       const cwd = input.cwd ?? ctx.workingDir;
       const git = gitOpsFactory(cwd);

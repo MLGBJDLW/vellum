@@ -553,7 +553,6 @@ const MessageItem = memo(function MessageItem({
  * />
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex component with multiple rendering modes (virtualized, static, legacy) and scroll management
 const MessageList = memo(function MessageList({
   messages,
   historyMessages,
@@ -932,7 +931,6 @@ const MessageList = memo(function MessageList({
 
   // Helper: Handle virtualized list keyboard navigation
   const handleVirtualizedNavigation = useCallback(
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex keyboard navigation with many key combinations
     (input: string, key: Key, list: VirtualizedListRef<Message>): boolean => {
       const scrollState = list.getScrollState();
       if (scrollState.scrollHeight <= scrollState.innerHeight) {

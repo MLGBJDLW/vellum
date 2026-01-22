@@ -645,7 +645,7 @@ export class UserCommandLoader {
       ...base,
       type: "yaml",
       commandType: "prompt",
-      prompt: cmd.prompt!,
+      prompt: cmd.prompt ?? "",
     };
   }
 

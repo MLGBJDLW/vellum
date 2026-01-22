@@ -237,7 +237,6 @@ function determineChangeType(oldPath: string, newPath: string, lines: string[]):
  * // ]
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Diff parsing requires comprehensive line-by-line analysis
 export function formatFileDiff(diffText: string): FormattedDiff {
   const lines = diffText.split("\n");
 

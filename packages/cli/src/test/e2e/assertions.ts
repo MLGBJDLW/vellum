@@ -9,7 +9,6 @@ import type { AssertionFailure, CLIResult, OutputMatcher } from "./types.js";
 /**
  * Assert CLI output against expected matchers
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Assertion function needs to check multiple output conditions
 export function assertOutput(result: CLIResult, expected: OutputMatcher): AssertionFailure[] {
   const failures: AssertionFailure[] = [];
 

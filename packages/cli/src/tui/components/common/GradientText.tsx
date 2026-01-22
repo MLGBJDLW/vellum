@@ -95,7 +95,9 @@ function getVerticalColors(colors: readonly string[]): readonly string[] {
     return colors;
   }
   // For vertical, alternate between start and end colors
-  return [colors[0]!, colors[colors.length - 1]!];
+  const firstColor = colors[0];
+  const lastColor = colors[colors.length - 1];
+  return firstColor && lastColor ? [firstColor, lastColor] : colors;
 }
 
 // =============================================================================

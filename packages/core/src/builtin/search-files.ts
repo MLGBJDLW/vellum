@@ -133,7 +133,6 @@ export const searchFilesTool = defineTool({
   kind: "read",
   category: "search",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Search with multiple backends and result aggregation
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

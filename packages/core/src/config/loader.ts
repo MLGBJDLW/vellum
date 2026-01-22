@@ -596,7 +596,6 @@ function readTomlFile(filePath: string): Result<Record<string, unknown>, ConfigE
  * });
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Config loading requires comprehensive source merging
 export function loadConfig(options: LoadConfigOptions = {}): Result<Config, ConfigError> {
   const {
     cwd,
@@ -809,7 +808,6 @@ export interface LoadConfigWithCredentialsResult {
  * }
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Credential loading requires comprehensive provider handling
 export async function loadConfigWithCredentials(
   options: LoadConfigOptions = {}
 ): Promise<Result<LoadConfigWithCredentialsResult, ConfigError>> {

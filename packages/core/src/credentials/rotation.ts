@@ -142,7 +142,6 @@ export class RotationManager {
    * @param options - Rotation options
    * @returns Result with rotation details
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Credential rotation requires comprehensive error handling and rollback logic
   async rotate(
     provider: string,
     newValue: string,
@@ -337,7 +336,6 @@ export class RotationManager {
    * @param options - Rotation options
    * @returns Result with rotation details
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Credential rotation requires comprehensive error handling and rollback logic
   async rotateWithInput(
     input: CredentialInput,
     key?: string,

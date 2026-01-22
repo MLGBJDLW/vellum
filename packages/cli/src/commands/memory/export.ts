@@ -155,7 +155,6 @@ function getTypeEmoji(type: MemoryEntryType): string {
 /**
  * Export entries to Markdown format.
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Markdown export requires handling multiple content sections and formatting options
 function exportToMarkdown(
   entries: MemoryEntry[],
   projectPath: string,
@@ -289,7 +288,6 @@ export async function executeMemoryExport(
 /**
  * Parse export command arguments.
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Argument parsing requires handling many flag combinations
 function parseExportArgs(args: string[]): MemoryExportOptions {
   const options: MemoryExportOptions = {};
 

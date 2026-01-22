@@ -148,7 +148,6 @@ function getPreview(content: string, maxLines: number, maxChars: number): string
  * />
  * ```
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: ThinkingBlock UI inherently complex due to multiple render modes
 export function ThinkingBlock({
   content,
   durationMs,

@@ -302,7 +302,6 @@ export const gitFetchTool = defineTool({
   kind: "read",
   category: "git",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git fetch requires handling multiple remote options and branch filtering
   async execute(input, ctx): Promise<ToolResult<GitFetchResult>> {
     const cwd = input.cwd ?? ctx.workingDir;
     const git = createGitOps(cwd);
@@ -391,7 +390,6 @@ export const gitPullTool = defineTool({
   kind: "write",
   category: "git",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git pull requires handling rebase, merge conflicts, and authentication
   async execute(input, ctx): Promise<ToolResult<GitPullResult>> {
     const cwd = input.cwd ?? ctx.workingDir;
     const git = createGitOps(cwd);
@@ -508,7 +506,6 @@ export const gitPushTool = defineTool({
     return input.force === true;
   },
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git push requires handling force push, upstream tracking, and authentication
   async execute(input, ctx): Promise<ToolResult<GitPushResult>> {
     const cwd = input.cwd ?? ctx.workingDir;
     const git = createGitOps(cwd);
@@ -607,7 +604,6 @@ export const gitRemoteTool = defineTool({
     return input.action === "remove";
   },
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git remote requires handling add/remove/list/rename operations
   async execute(input, ctx): Promise<ToolResult<GitRemoteResult>> {
     const cwd = input.cwd ?? ctx.workingDir;
     const git = createGitOps(cwd);
@@ -753,7 +749,6 @@ export function createGitFetchTool(gitOpsFactory: typeof createGitOps = createGi
     kind: "read",
     category: "git",
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git fetch requires handling multiple remote options and branch filtering
     async execute(input, ctx): Promise<ToolResult<GitFetchResult>> {
       const cwd = input.cwd ?? ctx.workingDir;
       const git = gitOpsFactory(cwd);
@@ -844,7 +839,6 @@ export function createGitPullTool(
     kind: "write",
     category: "git",
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git pull requires handling rebase, merge conflicts, and authentication
     async execute(input, ctx): Promise<ToolResult<GitPullResult>> {
       const cwd = input.cwd ?? ctx.workingDir;
       const git = gitOpsFactory(cwd);
@@ -962,7 +956,6 @@ export function createGitPushTool(gitOpsFactory: typeof createGitOps = createGit
       return input.force === true;
     },
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git push requires handling force push, upstream tracking, and authentication
     async execute(input, ctx): Promise<ToolResult<GitPushResult>> {
       const cwd = input.cwd ?? ctx.workingDir;
       const git = gitOpsFactory(cwd);
@@ -1058,7 +1051,6 @@ export function createGitRemoteTool(gitOpsFactory: typeof createGitOps = createG
       return input.action === "remove";
     },
 
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Git remote requires handling add/remove/list/rename operations
     async execute(input, ctx): Promise<ToolResult<GitRemoteResult>> {
       const cwd = input.cwd ?? ctx.workingDir;
       const git = gitOpsFactory(cwd);

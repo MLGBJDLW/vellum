@@ -211,7 +211,6 @@ export class BatchExecutor {
    * @param config - Batch execution configuration
    * @returns Batch execution result
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Core batch execution logic requires sequential processing
   async execute(script: string, config: BatchConfig = {}): Promise<BatchResult> {
     const {
       continueOnError = false,

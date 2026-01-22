@@ -353,7 +353,6 @@ export class GitSnapshotService implements IGitSnapshotService {
    * }
    * ```
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Diff processing requires comprehensive file content handling
   async diffFull(from: string, to?: string): Promise<Result<GitFileDiff[], VellumError>> {
     if (!this.config.enabled) {
       return Err(gitSnapshotDisabledError());

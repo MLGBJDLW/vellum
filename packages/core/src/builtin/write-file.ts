@@ -67,7 +67,6 @@ export const writeFileTool = defineTool({
   kind: "write",
   category: "filesystem",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: File write with permission checks, backup, and diff generation
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

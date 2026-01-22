@@ -211,7 +211,6 @@ export const multiEditTool = defineTool({
   kind: "write",
   category: "filesystem",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Atomic multi-edit with validation and rollback support
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

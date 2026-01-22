@@ -125,7 +125,6 @@ function clampOffset(offset: number, totalHeight: number, viewportHeight: number
 /**
  * Reducer for scroll state management
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Reducer with many action cases is inherently complex
 function scrollReducer(state: InternalState, action: ScrollAction): InternalState {
   switch (action.type) {
     case "SCROLL_UP": {

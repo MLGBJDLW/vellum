@@ -83,7 +83,7 @@ function getEditorCommand(): string {
 async function openInEditor(filePath: string): Promise<void> {
   const editorCmd = getEditorCommand();
   const parts = editorCmd.split(" ");
-  const cmd = parts[0]!;
+  const cmd = parts[0] ?? "vi";
   const args = [...parts.slice(1), filePath];
 
   return new Promise((resolve, reject) => {

@@ -101,7 +101,6 @@ export const smartEditTool = defineTool({
   kind: "write",
   category: "filesystem",
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multi-strategy text matching and replacement
   async execute(input, ctx) {
     // Check for cancellation
     if (ctx.abortSignal.aborted) {

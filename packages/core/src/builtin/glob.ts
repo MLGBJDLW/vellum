@@ -70,7 +70,6 @@ export interface GlobOutput {
 /**
  * Recursively walk a directory and collect all file paths
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Recursive directory traversal with multiple filter conditions
 async function walkDirectory(
   dir: string,
   baseDir: string,
