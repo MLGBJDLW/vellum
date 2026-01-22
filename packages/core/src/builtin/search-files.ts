@@ -59,6 +59,11 @@ export const searchFilesParamsSchema = z.object({
     .optional()
     .default(CONTEXT_LINES)
     .describe("Context lines before/after match (0-10, default: 2)"),
+  /** Glob pattern to filter files */
+  fileGlob: z
+    .string()
+    .optional()
+    .describe("Glob pattern to filter files, e.g., '*.ts', '*.{js,jsx}', 'src/**/*.py'"),
 });
 
 /** Inferred type for search_files parameters */
@@ -128,7 +133,7 @@ export interface SearchFilesOutput {
 export const searchFilesTool = defineTool({
   name: "search_files",
   description:
-    "Search for a pattern across files in a directory. Supports regex, case sensitivity options, and respects .gitignore patterns. Uses fastest available backend (ripgrep > git-grep > javascript).",
+    "Search for a pattern across files in a directory. Supports regex, case sensitivity options, file type filtering via fileGlob (e.g., '*.ts', '*.{js,jsx}'), and respects .gitignore patterns. Uses fastest available backend (ripgrep > git-grep > javascript).",
   parameters: searchFilesParamsSchema,
   kind: "read",
   category: "search",
@@ -169,6 +174,7 @@ export const searchFilesTool = defineTool({
         contextLines: input.contextLines ?? CONTEXT_LINES,
         maxResults: input.maxResults,
         caseSensitive: input.caseSensitive,
+        globs: input.fileGlob ? [input.fileGlob] : undefined,
       };
 
       let result: SearchResult | undefined;

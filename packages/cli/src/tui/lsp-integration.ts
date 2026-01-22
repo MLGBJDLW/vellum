@@ -8,6 +8,7 @@
  * @module cli/tui/lsp-integration
  */
 
+import { EventEmitter } from "node:events";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -108,6 +109,20 @@ export interface LspIntegrationState {
   toolsRegistered: boolean;
 }
 
+/**
+ * Events emitted by LspIntegrationManager
+ */
+export interface LspManagerEvents {
+  /** Emitted when LSP state changes (server start/stop/error, etc.) */
+  "state:changed": [];
+  /** Emitted when a server's status changes */
+  "server:status": [serverId: string, status: string];
+  /** Emitted when diagnostics are updated */
+  "diagnostics:updated": [serverId: string, uri: string];
+  /** Emitted when config is reloaded */
+  "config:reloaded": [serverIds: string[]];
+}
+
 // =============================================================================
 // LSP Integration Manager
 // =============================================================================
@@ -136,11 +151,38 @@ export interface LspIntegrationState {
  * await lspManager.dispose();
  * ```
  */
-export class LspIntegrationManager {
+export class LspIntegrationManager extends EventEmitter {
   private hub: LspHub | null = null;
   private toolRegistry: ToolRegistryLike | null = null;
   private initialized = false;
   private options: LspIntegrationOptions = {};
+
+  constructor() {
+    super();
+    // Set a reasonable max listeners to avoid memory leak warnings
+    this.setMaxListeners(20);
+  }
+
+  /**
+   * Type-safe event emission for LSP manager events
+   */
+  emitStateChanged(): void {
+    this.emit("state:changed");
+  }
+
+  /**
+   * Type-safe listener registration for state changes
+   */
+  onStateChanged(listener: () => void): this {
+    return this.on("state:changed", listener);
+  }
+
+  /**
+   * Type-safe listener removal for state changes
+   */
+  offStateChanged(listener: () => void): this {
+    return this.off("state:changed", listener);
+  }
 
   /**
    * Initialize LSP integration
@@ -153,12 +195,35 @@ export class LspIntegrationManager {
     const workspaceRoot = options.workspaceRoot ?? process.cwd();
 
     try {
-      // Create LspHub instance
+      // Create LspHub instance with event forwarding
       this.hub = LspHubClass.getInstance({
         getGlobalConfigPath: async () => join(homedir(), ".vellum", "lsp.json"),
         getProjectConfigPath: async () => join(resolve(workspaceRoot), ".vellum", "lsp.json"),
         toolRegistry: options.toolRegistry,
-        onEvent: options.onEvent ? (event, data) => options.onEvent?.(event, data) : undefined,
+        onEvent: (event, data) => {
+          // Emit state:changed for any LSP event to trigger UI refresh
+          this.emitStateChanged();
+
+          // Emit typed events for specific event types
+          if (
+            event === "server:starting" ||
+            event === "server:running" ||
+            event === "server:stopped" ||
+            event === "server:error"
+          ) {
+            const serverData = data as { serverId: string };
+            this.emit("server:status", serverData.serverId, event.replace("server:", ""));
+          } else if (event === "diagnostics:updated") {
+            const diagData = data as { serverId: string; uri: string };
+            this.emit("diagnostics:updated", diagData.serverId, diagData.uri);
+          } else if (event === "config:reloaded") {
+            const configData = data as { serverIds: string[] };
+            this.emit("config:reloaded", configData.serverIds);
+          }
+
+          // Forward to user-provided callback if present
+          options.onEvent?.(event, data);
+        },
         logger: options.logger,
         autoInstall: options.autoInstall ?? false,
         idleTimeoutMs: options.idleTimeoutMs ?? 300000,

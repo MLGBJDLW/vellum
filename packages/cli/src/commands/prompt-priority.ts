@@ -344,7 +344,7 @@ export const promptPriorityCommand: SlashCommand = {
         }
         const priority =
           typeof priorityArg === "number" ? priorityArg : parseInt(String(priorityArg), 10);
-        if (isNaN(priority) || priority < 1 || priority > validSources.length) {
+        if (Number.isNaN(priority) || priority < 1 || priority > validSources.length) {
           return error(
             "INVALID_ARGUMENT",
             `Priority must be a number between 1 and ${validSources.length}`

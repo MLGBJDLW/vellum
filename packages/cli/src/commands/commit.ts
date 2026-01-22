@@ -156,7 +156,7 @@ export const commitCommand: SlashCommand = {
     }
 
     const message = ctx.parsedArgs.positional[0] as string | undefined;
-    const amend = ctx.parsedArgs.named["amend"] as boolean | undefined;
+    const amend = ctx.parsedArgs.named.amend as boolean | undefined;
     const noStage = ctx.parsedArgs.named["no-stage"] as boolean | undefined;
 
     // Stage all changes unless --no-stage is specified

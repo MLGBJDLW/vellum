@@ -513,7 +513,7 @@ describe("Edge Cases", () => {
   });
 
   it("should handle very long skill descriptions", () => {
-    const longDescription = "A".repeat(1000) + " description";
+    const longDescription = `${"A".repeat(1000)} description`;
     const pluginSkill = createMockPluginSkill("long-desc", longDescription);
 
     const scan = createSkillScan(pluginSkill, "test-plugin");

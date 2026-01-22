@@ -59,6 +59,7 @@ export class LanguageClient implements LspConnection {
   private capabilitiesInternal: LspServerCapabilities = {
     hoverProvider: false,
     definitionProvider: false,
+    implementationProvider: false,
     referencesProvider: false,
     documentSymbolProvider: false,
     workspaceSymbolProvider: false,
@@ -211,6 +212,13 @@ export class LanguageClient implements LspConnection {
 
   async definition(filePath: string, line: number, character: number): Promise<Location[]> {
     return this.sendRequest("textDocument/definition", {
+      textDocument: { uri: pathToFileURL(filePath).toString() },
+      position: { line, character },
+    });
+  }
+
+  async implementation(filePath: string, line: number, character: number): Promise<Location[]> {
+    return this.sendRequest("textDocument/implementation", {
       textDocument: { uri: pathToFileURL(filePath).toString() },
       position: { line, character },
     });
@@ -383,6 +391,7 @@ export class LanguageClient implements LspConnection {
     return {
       hoverProvider: Boolean(caps.hoverProvider),
       definitionProvider: Boolean(caps.definitionProvider),
+      implementationProvider: Boolean(caps.implementationProvider),
       referencesProvider: Boolean(caps.referencesProvider),
       documentSymbolProvider: Boolean(caps.documentSymbolProvider),
       workspaceSymbolProvider: Boolean(caps.workspaceSymbolProvider),

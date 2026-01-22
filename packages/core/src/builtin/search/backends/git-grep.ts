@@ -228,6 +228,14 @@ export class GitGrepBackend implements SearchBackend {
       args.push(...options.paths);
     }
 
+    // Add include globs as pathspecs
+    // Git uses pathspec patterns for matching: '*.ts', 'src/**/*.js'
+    if (options.globs?.length) {
+      for (const glob of options.globs) {
+        args.push(glob);
+      }
+    }
+
     // Add exclude pathspecs
     // Git uses pathspec patterns: ':!pattern' or ':(exclude)pattern'
     if (options.excludes?.length) {

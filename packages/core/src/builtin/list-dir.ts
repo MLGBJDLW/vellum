@@ -8,6 +8,7 @@
 
 import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import picomatch from "picomatch";
 import { z } from "zod";
 
 import { ProtectedFilesManager } from "../permission/index.js";
@@ -43,6 +44,17 @@ export const listDirParamsSchema = z.object({
     .optional()
     .default(DEFAULT_MAX_DEPTH)
     .describe("Maximum recursion depth (1-10, default: 3)"),
+  /** Glob patterns to ignore */
+  ignorePatterns: z
+    .array(z.string())
+    .optional()
+    .describe("Glob patterns to ignore, e.g., ['node_modules', '*.log', '.git']"),
+  /** Output format */
+  format: z
+    .enum(["flat", "tree"])
+    .optional()
+    .default("flat")
+    .describe("Output format: 'flat' (default list) or 'tree' (hierarchical tree view)"),
 });
 
 /** Inferred type for list_dir parameters */
@@ -78,6 +90,8 @@ export interface ListDirOutput {
   truncated: boolean;
   /** Whether any protected files were found in the listing */
   hasProtectedFiles: boolean;
+  /** Tree format output string (only when format="tree") */
+  tree?: string;
 }
 
 /** Maximum entries to return (to prevent memory issues) */
@@ -91,6 +105,92 @@ function isHidden(name: string): boolean {
 }
 
 /**
+ * Check if a path matches any ignore pattern
+ */
+function shouldIgnore(
+  name: string,
+  relativePath: string,
+  ignoreMatcher: picomatch.Matcher | null
+): boolean {
+  if (!ignoreMatcher) return false;
+  // Match against both the name and the relative path
+  return ignoreMatcher(name) || ignoreMatcher(relativePath);
+}
+
+/**
+ * Generate ASCII tree representation of directory entries
+ */
+function generateTree(entries: DirEntry[], basePath: string): string {
+  // Build a hierarchical structure
+  interface TreeNode {
+    name: string;
+    type: "file" | "directory";
+    children: Map<string, TreeNode>;
+  }
+
+  const root: TreeNode = { name: basePath, type: "directory", children: new Map() };
+
+  // Sort entries by relativePath to ensure proper tree building
+  const sortedEntries = [...entries].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+
+  for (const entry of sortedEntries) {
+    const parts = entry.relativePath.split(/[\\/]/);
+    let current = root;
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!;
+      const isLast = i === parts.length - 1;
+
+      if (!current.children.has(part)) {
+        current.children.set(part, {
+          name: part,
+          type: isLast ? entry.type : "directory",
+          children: new Map(),
+        });
+      }
+      current = current.children.get(part)!;
+    }
+  }
+
+  // Render tree to string
+  const lines: string[] = [];
+
+  function renderNode(node: TreeNode, prefix: string, isLast: boolean, isRoot: boolean): void {
+    if (!isRoot) {
+      const connector = isLast ? "└── " : "├── ";
+      const displayName = node.type === "directory" ? `${node.name}/` : node.name;
+      lines.push(`${prefix}${connector}${displayName}`);
+    }
+
+    const children = Array.from(node.children.values()).sort((a, b) => {
+      // Directories first, then alphabetically
+      if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const childPrefix = isRoot ? "" : prefix + (isLast ? "    " : "│   ");
+
+    children.forEach((child, index) => {
+      const isLastChild = index === children.length - 1;
+      renderNode(child, childPrefix, isLastChild, false);
+    });
+  }
+
+  // Start rendering from root's children
+  const rootChildren = Array.from(root.children.values()).sort((a, b) => {
+    if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  rootChildren.forEach((child, index) => {
+    const isLastChild = index === rootChildren.length - 1;
+    renderNode(child, "", isLastChild, false);
+  });
+
+  return lines.join("\n");
+}
+
+/**
  * Recursively list directory contents
  */
 async function listDirectory(
@@ -100,6 +200,7 @@ async function listDirectory(
     recursive: boolean;
     includeHidden: boolean;
     maxDepth: number;
+    ignoreMatcher: picomatch.Matcher | null;
   },
   currentDepth: number,
   entries: DirEntry[],
@@ -143,6 +244,11 @@ async function listDirectory(
 
     const entryPath = join(fullPath, name);
     const relativePath = currentPath ? join(currentPath, name) : name;
+
+    // Skip entries matching ignore patterns
+    if (shouldIgnore(name, relativePath, options.ignoreMatcher)) {
+      continue;
+    }
 
     try {
       const stats = await stat(entryPath);
@@ -204,7 +310,7 @@ async function listDirectory(
 export const listDirTool = defineTool({
   name: "list_dir",
   description:
-    "List the contents of a directory. Optionally include subdirectories recursively and hidden files.",
+    "List the contents of a directory. Optionally include subdirectories recursively, hidden files, ignore patterns, and tree format output.",
   parameters: listDirParamsSchema,
   kind: "read",
   category: "filesystem",
@@ -232,6 +338,12 @@ export const listDirTool = defineTool({
 
       const entries: DirEntry[] = [];
 
+      // Create ignore pattern matcher if patterns provided
+      const ignoreMatcher =
+        input.ignorePatterns && input.ignorePatterns.length > 0
+          ? picomatch(input.ignorePatterns, { dot: true })
+          : null;
+
       await listDirectory(
         resolvedPath,
         "",
@@ -239,6 +351,7 @@ export const listDirTool = defineTool({
           recursive: input.recursive,
           includeHidden: input.includeHidden,
           maxDepth: input.maxDepth,
+          ignoreMatcher,
         },
         1,
         entries,
@@ -257,6 +370,9 @@ export const listDirTool = defineTool({
       const dirCount = entries.filter((e) => e.type === "directory").length;
       const hasProtectedFiles = entries.some((e) => e.isProtected === true);
 
+      // Generate tree output if requested
+      const tree = input.format === "tree" ? generateTree(entries, input.path) : undefined;
+
       return ok({
         path: resolvedPath,
         entries,
@@ -264,6 +380,7 @@ export const listDirTool = defineTool({
         dirCount,
         truncated: entries.length >= MAX_ENTRIES,
         hasProtectedFiles,
+        ...(tree !== undefined && { tree }),
       });
     } catch (error) {
       if (error instanceof Error) {

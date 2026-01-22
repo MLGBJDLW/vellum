@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+
 import {
   AgentLoop,
   APPROVAL_POLICIES,
@@ -14,6 +17,7 @@ import {
   type SandboxPolicy,
   UnifiedToolContainer,
 } from "@vellum/core";
+import { createLspTools, LspHub } from "@vellum/lsp";
 import { ProviderRegistry } from "@vellum/provider";
 import { createId } from "@vellum/shared";
 import { Command } from "commander";
@@ -298,6 +302,37 @@ program
         cwd: process.cwd(),
       });
       toolContainer.registerBuiltins();
+
+      // Initialize LSP and register LSP tools to UnifiedToolContainer
+      // This ensures Agent has access to LSP tools (lsp_diagnostics, lsp_hover, etc.)
+      try {
+        const workspaceRoot = process.cwd();
+        const lspHub = LspHub.getInstance({
+          getGlobalConfigPath: async () => join(homedir(), ".vellum", "lsp.json"),
+          getProjectConfigPath: async () => join(resolve(workspaceRoot), ".vellum", "lsp.json"),
+          autoInstall: false,
+          idleTimeoutMs: 300000,
+          maxRestartAttempts: 3,
+        });
+        await lspHub.initialize();
+
+        // Create LSP tools and register to container
+        // Type assertion needed: LSP package uses `kind: string` but we know it's "lsp"
+        const lspTools = createLspTools(lspHub);
+        for (const tool of lspTools) {
+          toolContainer.registerTool(tool as Parameters<typeof toolContainer.registerTool>[0]);
+        }
+
+        // Compose LSP cleanup with existing shutdown cleanup
+        const previousCleanup = getShutdownCleanup();
+        setShutdownCleanup(async () => {
+          previousCleanup?.();
+          await lspHub.dispose();
+        });
+      } catch {
+        // LSP initialization is non-critical - agent still works without LSP tools
+        // Tools from the "lsp" group simply won't be available
+      }
 
       // Create AgentLoop with PromptBuilder and unified tool container
       agentLoop = new AgentLoop({

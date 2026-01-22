@@ -27,7 +27,7 @@ The CLI provides a rich Terminal User Interface (TUI) built with React Ink. The 
 
 ### Architecture
 
-```
+```markdown
 tui/
 ├── components/    # UI components
 ├── context/       # React context providers

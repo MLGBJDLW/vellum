@@ -6,6 +6,7 @@ import { createDefinitionTool } from "./definition.js";
 import { createDiagnosticsTool } from "./diagnostics.js";
 import { createFormatTool } from "./format.js";
 import { createHoverTool } from "./hover.js";
+import { createImplementationTool } from "./implementation.js";
 import { createReferencesTool } from "./references.js";
 import { createDocumentSymbolsTool, createWorkspaceSymbolsTool } from "./symbols.js";
 
@@ -14,6 +15,7 @@ export function createLspTools(hub: LspHub) {
     createDiagnosticsTool(hub),
     createHoverTool(hub),
     createDefinitionTool(hub),
+    createImplementationTool(hub),
     createReferencesTool(hub),
     createDocumentSymbolsTool(hub),
     createWorkspaceSymbolsTool(hub),

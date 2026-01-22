@@ -2750,21 +2750,15 @@ function AppContent({
       }
     }
 
-    // ESC - cancel operation, exit copy mode, or exit app
+    // ESC - cancel operation only (use Ctrl+C or /exit to quit)
     if (key.escape) {
       if (isLoading && cancellationRef.current) {
         // Cancel running operation
         cancellationRef.current.cancel("user_escape");
         setIsLoading(false);
         addMessage({ role: "assistant", content: "[Operation cancelled]" });
-      } else {
-        // No operation running, exit app
-        addMessage({ role: "assistant", content: "Goodbye! See you next time." });
-        setTimeout(() => {
-          exit();
-          setTimeout(() => process.exit(0), 50);
-        }, 150);
       }
+      // ESC without operation does nothing - use Ctrl+C or /exit to quit
       return;
     }
 

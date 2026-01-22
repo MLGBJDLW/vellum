@@ -66,6 +66,10 @@ export class LspHub {
   private startingServers = new Set<string>();
   // Multi-client manager for handling multiple LSP servers per file
   private multiClientManager: MultiClientManager | null = null;
+  // Diagnostic debounce timers per URI
+  private diagnosticTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  // Pending diagnostics waiting to be emitted after debounce
+  private pendingDiagnostics = new Map<string, { serverId: string; diagnostics: Diagnostic[] }>();
 
   constructor(options: LspHubOptions) {
     this.options = options;
@@ -472,6 +476,7 @@ export class LspHub {
 
     const allDiagnosticLists: Diagnostic[][] = [];
     const sources: string[] = [];
+    const uri = pathToFileURL(filePath).toString();
 
     await Promise.all(
       connections.map(async (conn) => {
@@ -480,11 +485,9 @@ export class LspHub {
           const diags = await conn.waitForDiagnostics(filePath);
           allDiagnosticLists.push(diags);
           sources.push(conn.serverId);
-          this.emitEvent("diagnostics:updated", {
-            serverId: conn.serverId,
-            uri: pathToFileURL(filePath).toString(),
-            diagnostics: diags,
-          });
+
+          // Emit with debounce if enabled
+          this.emitDiagnosticsDebounced(conn.serverId, uri, diags);
         } catch (error) {
           // Single server failure should not affect others
           this.options.logger?.warn?.(`Diagnostics failed for ${conn.serverId}:`, {
@@ -505,6 +508,59 @@ export class LspHub {
 
     this.cache.set(cacheKey, result);
     return result;
+  }
+
+  /**
+   * Emit diagnostics event with debouncing.
+   * When multiple updates come in rapid succession for the same URI,
+   * only the last one will be emitted after the debounce period (150ms).
+   */
+  private emitDiagnosticsDebounced(serverId: string, uri: string, diagnostics: Diagnostic[]): void {
+    const debounceMs = this.options.diagnosticsDebounceMs ?? 150;
+    const shouldDebounce = this.options.enableDiagnosticsDebounce !== false;
+
+    if (!shouldDebounce) {
+      // Emit immediately without debouncing
+      this.emitEvent("diagnostics:updated", { serverId, uri, diagnostics });
+      return;
+    }
+
+    // Clear existing timer for this URI
+    const existingTimer = this.diagnosticTimers.get(uri);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Store the pending diagnostics
+    this.pendingDiagnostics.set(uri, { serverId, diagnostics });
+
+    // Set new debounced timer
+    const timer = setTimeout(() => {
+      this.diagnosticTimers.delete(uri);
+      const pending = this.pendingDiagnostics.get(uri);
+      if (pending) {
+        this.pendingDiagnostics.delete(uri);
+        this.emitEvent("diagnostics:updated", {
+          serverId: pending.serverId,
+          uri,
+          diagnostics: pending.diagnostics,
+        });
+      }
+    }, debounceMs);
+
+    this.diagnosticTimers.set(uri, timer);
+  }
+
+  /**
+   * Clear all diagnostic debounce timers.
+   * Called during disposal to prevent memory leaks.
+   */
+  private clearDiagnosticTimers(): void {
+    for (const timer of this.diagnosticTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.diagnosticTimers.clear();
+    this.pendingDiagnostics.clear();
   }
 
   /**
@@ -554,6 +610,36 @@ export class LspHub {
           allResults.push(...result);
         } catch (error) {
           this.options.logger?.warn?.(`Definition failed for ${conn.serverId}:`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })
+    );
+
+    this.cache.set(cacheKey, allResults);
+    return allResults;
+  }
+
+  /**
+   * Get implementations from all servers and merge results.
+   * Finds concrete implementations of interfaces, abstract methods, or types.
+   */
+  async implementation(filePath: string, line: number, character: number): Promise<unknown[]> {
+    const cacheKey = `implementation:${filePath}:${line}:${character}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached) return cached as unknown[];
+
+    const connections = await this.getConnectionsForFile(filePath);
+    const allResults: unknown[] = [];
+
+    await Promise.all(
+      connections.map(async (conn) => {
+        try {
+          await conn.touchFile(filePath);
+          const result = await conn.implementation(filePath, line, character);
+          allResults.push(...result);
+        } catch (error) {
+          this.options.logger?.warn?.(`Implementation failed for ${conn.serverId}:`, {
             error: error instanceof Error ? error.message : String(error),
           });
         }
@@ -839,6 +925,9 @@ export class LspHub {
     }
     this.servers.clear();
     this.startingServers.clear();
+
+    // Clear diagnostic debounce timers
+    this.clearDiagnosticTimers();
 
     // FIX: Remove all event listeners before closing watcher to prevent memory leaks
     if (this.watcher) {

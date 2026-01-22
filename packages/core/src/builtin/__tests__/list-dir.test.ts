@@ -50,7 +50,7 @@ describe("listDirTool", () => {
   describe("execute", () => {
     it("should list empty directory", async () => {
       const result = await listDirTool.execute(
-        { path: ".", recursive: false, includeHidden: false, maxDepth: 3 },
+        { path: ".", recursive: false, includeHidden: false, maxDepth: 3, format: "flat" },
         mockContext
       );
 
@@ -69,7 +69,7 @@ describe("listDirTool", () => {
       await mkdir(join(testDir, "subdir"));
 
       const result = await listDirTool.execute(
-        { path: ".", recursive: false, includeHidden: false, maxDepth: 3 },
+        { path: ".", recursive: false, includeHidden: false, maxDepth: 3, format: "flat" },
         mockContext
       );
 
@@ -88,12 +88,12 @@ describe("listDirTool", () => {
       await writeFile(join(testDir, "visible.txt"), "visible content");
 
       const withoutHidden = await listDirTool.execute(
-        { path: ".", recursive: false, includeHidden: false, maxDepth: 3 },
+        { path: ".", recursive: false, includeHidden: false, maxDepth: 3, format: "flat" },
         mockContext
       );
 
       const withHidden = await listDirTool.execute(
-        { path: ".", recursive: false, includeHidden: true, maxDepth: 3 },
+        { path: ".", recursive: false, includeHidden: true, maxDepth: 3, format: "flat" },
         mockContext
       );
 
@@ -112,12 +112,12 @@ describe("listDirTool", () => {
       await writeFile(join(testDir, "subdir", "nested.txt"), "nested");
 
       const nonRecursive = await listDirTool.execute(
-        { path: ".", recursive: false, includeHidden: false, maxDepth: 3 },
+        { path: ".", recursive: false, includeHidden: false, maxDepth: 3, format: "flat" },
         mockContext
       );
 
       const recursive = await listDirTool.execute(
-        { path: ".", recursive: true, includeHidden: false, maxDepth: 3 },
+        { path: ".", recursive: true, includeHidden: false, maxDepth: 3, format: "flat" },
         mockContext
       );
 
@@ -135,12 +135,12 @@ describe("listDirTool", () => {
       await writeFile(join(testDir, "level1", "level2", "level3", "deep.txt"), "deep");
 
       const shallow = await listDirTool.execute(
-        { path: ".", recursive: true, includeHidden: false, maxDepth: 2 },
+        { path: ".", recursive: true, includeHidden: false, maxDepth: 2, format: "flat" },
         mockContext
       );
 
       const deep = await listDirTool.execute(
-        { path: ".", recursive: true, includeHidden: false, maxDepth: 5 },
+        { path: ".", recursive: true, includeHidden: false, maxDepth: 5, format: "flat" },
         mockContext
       );
 
@@ -156,7 +156,13 @@ describe("listDirTool", () => {
 
     it("should fail for non-existent directory", async () => {
       const result = await listDirTool.execute(
-        { path: "nonexistent", recursive: false, includeHidden: false, maxDepth: 3 },
+        {
+          path: "nonexistent",
+          recursive: false,
+          includeHidden: false,
+          maxDepth: 3,
+          format: "flat",
+        },
         mockContext
       );
 
@@ -170,7 +176,7 @@ describe("listDirTool", () => {
       await writeFile(join(testDir, "file.txt"), "content");
 
       const result = await listDirTool.execute(
-        { path: "file.txt", recursive: false, includeHidden: false, maxDepth: 3 },
+        { path: "file.txt", recursive: false, includeHidden: false, maxDepth: 3, format: "flat" },
         mockContext
       );
 
@@ -182,7 +188,7 @@ describe("listDirTool", () => {
 
     it("should fail on path traversal", async () => {
       const result = await listDirTool.execute(
-        { path: "../..", recursive: false, includeHidden: false, maxDepth: 3 },
+        { path: "../..", recursive: false, includeHidden: false, maxDepth: 3, format: "flat" },
         mockContext
       );
 
@@ -194,7 +200,7 @@ describe("listDirTool", () => {
       abortController.abort();
 
       const result = await listDirTool.execute(
-        { path: ".", recursive: false, includeHidden: false, maxDepth: 3 },
+        { path: ".", recursive: false, includeHidden: false, maxDepth: 3, format: "flat" },
         { ...mockContext, abortSignal: abortController.signal }
       );
 
@@ -203,13 +209,103 @@ describe("listDirTool", () => {
         expect(result.error).toContain("cancelled");
       }
     });
+
+    it("should filter entries with ignorePatterns", async () => {
+      await writeFile(join(testDir, "app.ts"), "app");
+      await writeFile(join(testDir, "app.log"), "log");
+      await writeFile(join(testDir, "debug.log"), "log");
+      await mkdir(join(testDir, "node_modules"));
+      await writeFile(join(testDir, "node_modules", "pkg.js"), "pkg");
+
+      const result = await listDirTool.execute(
+        {
+          path: ".",
+          recursive: true,
+          includeHidden: false,
+          maxDepth: 3,
+          format: "flat",
+          ignorePatterns: ["*.log", "node_modules"],
+        },
+        mockContext
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Should only have app.ts (node_modules dir and *.log files filtered)
+        expect(result.output.entries.length).toBe(1);
+        expect(result.output.entries[0]?.name).toBe("app.ts");
+      }
+    });
+
+    it("should generate tree output when format is tree", async () => {
+      await mkdir(join(testDir, "src"));
+      await writeFile(join(testDir, "src", "index.ts"), "index");
+      await writeFile(join(testDir, "src", "utils.ts"), "utils");
+      await writeFile(join(testDir, "README.md"), "readme");
+
+      const result = await listDirTool.execute(
+        { path: ".", recursive: true, includeHidden: false, maxDepth: 3, format: "tree" },
+        mockContext
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.tree).toBeDefined();
+        expect(result.output.tree).toContain("src/");
+        expect(result.output.tree).toContain("index.ts");
+        expect(result.output.tree).toContain("utils.ts");
+        expect(result.output.tree).toContain("README.md");
+        // Check tree characters
+        expect(result.output.tree).toMatch(/[├└]/);
+      }
+    });
+
+    it("should not include tree when format is flat", async () => {
+      await writeFile(join(testDir, "file.txt"), "content");
+
+      const result = await listDirTool.execute(
+        { path: ".", recursive: false, includeHidden: false, maxDepth: 3, format: "flat" },
+        mockContext
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.tree).toBeUndefined();
+      }
+    });
+
+    it("should combine ignorePatterns with tree format", async () => {
+      await mkdir(join(testDir, "src"));
+      await writeFile(join(testDir, "src", "app.ts"), "app");
+      await mkdir(join(testDir, "dist"));
+      await writeFile(join(testDir, "dist", "app.js"), "compiled");
+
+      const result = await listDirTool.execute(
+        {
+          path: ".",
+          recursive: true,
+          includeHidden: false,
+          maxDepth: 3,
+          format: "tree",
+          ignorePatterns: ["dist"],
+        },
+        mockContext
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.tree).toBeDefined();
+        expect(result.output.tree).toContain("src/");
+        expect(result.output.tree).not.toContain("dist");
+      }
+    });
   });
 
   describe("shouldConfirm", () => {
     it("should not require confirmation for read operations", () => {
       expect(
         listDirTool.shouldConfirm?.(
-          { path: ".", recursive: false, includeHidden: false, maxDepth: 3 },
+          { path: ".", recursive: false, includeHidden: false, maxDepth: 3, format: "flat" },
           mockContext
         )
       ).toBe(false);
