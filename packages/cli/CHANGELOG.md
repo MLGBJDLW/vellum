@@ -1,5 +1,11 @@
 # @butlerw/vellum
 
+## 0.1.4
+
+### Patch Changes
+
+- [`20a1a99`](https://github.com/MLGBJDLW/vellum/commit/20a1a99d0fcf23b2f48ddb8bcc474488264b8835) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - Fix CI release workflow to properly detect new tags and skip GitHub release creation when no new packages are published.
+
 ## 0.1.3
 
 ### Patch Changes
