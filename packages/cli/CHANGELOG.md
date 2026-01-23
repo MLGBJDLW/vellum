@@ -1,5 +1,13 @@
 # @butlerw/vellum
 
+## 0.1.7
+
+### Patch Changes
+
+- [`b290aeb`](https://github.com/MLGBJDLW/vellum/commit/b290aebd8759996278f82cb82d6294acbe9ced9f) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - Generate GitHub release notes from commit history with grouped sections and bot filtering.
+
+- [`7ad5b3c`](https://github.com/MLGBJDLW/vellum/commit/7ad5b3c9cbaee0557ec1a86fe11a4a911bf9794c) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - Ensure onboarding runs when config is missing and align CLI onboarding checks.
+
 ## 0.1.6
 
 ### Patch Changes
