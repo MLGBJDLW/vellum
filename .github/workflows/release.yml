@@ -128,7 +128,7 @@ jobs:
         run: |
           # Read version from CLI package (the only public package)
           CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
-          TAG_NAME="@butlerw/vellum@${CLI_VERSION}"
+          TAG_NAME="v${CLI_VERSION}"
           echo "Package version: $CLI_VERSION"
           echo "Tag name: $TAG_NAME"
 
@@ -161,7 +161,7 @@ jobs:
 
           CURRENT_TAG="${{ steps.create-tags.outputs.latest_tag }}"
           CLI_VERSION="${{ steps.create-tags.outputs.cli_version }}"
-          PREV_TAG=$(git tag --list '@butlerw/vellum@*' --sort=-v:refname | sed -n '2p' || true)
+          PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | sed -n '2p' || true)
 
           echo "# vellum v${CLI_VERSION}" > dist/release-notes.md
           echo "" >> dist/release-notes.md
