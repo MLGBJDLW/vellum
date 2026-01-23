@@ -2,7 +2,7 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   entry: ["src/index.tsx"],
-  format: ["cjs"],
+  format: ["esm"],
   dts: false,
   clean: true,
   target: "node20",
@@ -11,9 +11,13 @@ export default defineConfig({
   sourcemap: false,
   minify: false,
   treeshake: true,
-  shims: false,
+  shims: true,
   outExtension() {
-    return { js: ".cjs" };
+    return { js: ".mjs" };
+  },
+  banner: {
+    // Provide CJS compatibility for bundled dependencies that use require()
+    js: `import { createRequire } from 'module';const require = createRequire(import.meta.url);`,
   },
 
   // Bundle ALL workspace packages into the CLI
