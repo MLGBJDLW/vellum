@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Context Compaction System** — LLM-powered 6-section summarization for context management
+- **Multi-Model Fallback Chain** — Resilient summarization with automatic failover between models
+- **DeepSeek Reasoning Block Support** — Synthetic `<thinking>` blocks for CoT models
+- **Protected Tools Configuration** — Prevent pruning of critical tool outputs
+- **Profile-Specific Compaction Thresholds** — `autoCondensePercent` for conservative/balanced/aggressive profiles
+- **Token Counting Accuracy** — Integration with js-tiktoken for precise token counts
+- **ContextGrowthValidator** — Prevents compression from increasing context size
+- **CompactionError** — Typed errors with codes for compaction failures
+
+### Changed
+
+- `AutoContextManager` now tracks compaction count and emits warnings on repeated compressions
+- Summary messages use structured 6-section format for better context preservation
+
+### Fixed
+
+- Tool pairs (tool_use/tool_result) now stay together during compression
+- Image token calculation accuracy improved for all providers
+
 ## [0.1.0] - 2025-01-22
 
 ### Added

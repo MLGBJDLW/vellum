@@ -69,8 +69,9 @@ function formatTokenUsage(usage: MessageTokenUsage): string {
   if (usage.thinkingTokens && usage.thinkingTokens > 0) {
     parts.push(`think=${formatTokens(usage.thinkingTokens)}`);
   }
-  if (usage.cacheReadTokens && usage.cacheReadTokens > 0) {
-    parts.push(`cache=${formatTokens(usage.cacheReadTokens)}`);
+  const cacheTokens = (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
+  if (cacheTokens > 0) {
+    parts.push(`cache=${formatTokens(cacheTokens)}`);
   }
   return `[tokens: ${parts.join(" ")}]`;
 }

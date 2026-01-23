@@ -9,6 +9,9 @@
  * - REQ-INT-002: Automatic state transitions based on token usage
  * - REQ-INT-003: Recovery strategies for overflow situations
  * - REQ-CFG-001: useAutoCondense flag respected
+ * - REQ-002: Accurate token counting via provider-native SDK or tiktoken
+ * - REQ-010: Profile-specific thresholds (autoCondensePercent)
+ * - REQ-013: Sliding window fallback after ALL_MODELS_FAILED
  *
  * @module @vellum/core/context/auto-manager
  */
@@ -16,6 +19,7 @@
 import { CheckpointManager } from "./checkpoint.js";
 import type { CompressionLLMClient } from "./compression.js";
 import { NonDestructiveCompressor } from "./compression.js";
+import { CompactionError } from "./errors.js";
 import { estimateTokens, truncate } from "./sliding-window.js";
 import { getThresholdConfig } from "./threshold.js";
 import { calculateTokenBudget, getModelContextWindow } from "./token-budget.js";
@@ -82,6 +86,25 @@ export interface AutoContextManagerConfig {
   /**
    * Tokenizer function for counting tokens.
    * If not provided, uses rough estimation (chars / 4).
+   *
+   * For accurate counting, use the provider's native tokenizer:
+   * - Anthropic: Use `createAnthropicTokenizer(client)` from `@vellum/provider`
+   * - OpenAI: Use `createTiktokenTokenizer(model)` from `@vellum/provider`
+   * - Google: Use `createGoogleTokenizer(client)` from `@vellum/provider`
+   *
+   * @example
+   * ```typescript
+   * import { createTiktokenTokenizer } from '@vellum/provider';
+   *
+   * const tiktoken = createTiktokenTokenizer('gpt-4o');
+   * const manager = new AutoContextManager({
+   *   model: 'gpt-4o',
+   *   tokenizer: async (text) => {
+   *     const result = await tiktoken.countTokens(text);
+   *     return result.tokens;
+   *   },
+   * });
+   * ```
    */
   tokenizer?: (text: string) => number;
 
@@ -120,6 +143,50 @@ export interface AutoContextManagerConfig {
    * @default 0.3
    */
   compressionTargetRatio?: number;
+
+  /**
+   * Profile-specific auto-condense threshold (REQ-010).
+   * Overrides the default critical threshold for triggering auto-compression.
+   * Value should be between 0 and 1 (e.g., 0.8 = 80% of budget).
+   *
+   * When set, compression is triggered at this threshold instead of the
+   * model's default critical threshold.
+   *
+   * @example
+   * ```typescript
+   * // Compress earlier (at 70% budget usage)
+   * const config: AutoContextManagerConfig = {
+   *   model: 'gpt-4o',
+   *   autoCondensePercent: 0.7,
+   * };
+   * ```
+   */
+  autoCondensePercent?: number;
+
+  /**
+   * Callback for logging warnings (REQ-013).
+   * Called when fallback to sliding window truncation occurs.
+   */
+  onFallbackWarning?: (message: string) => void;
+
+  /**
+   * Callback for compaction warnings (REQ-011).
+   * Called when compaction count exceeds 2 in a session.
+   *
+   * @param count - Current compaction count
+   * @param totalTokensCompressed - Total tokens compressed in this session
+   *
+   * @example
+   * ```typescript
+   * const config: AutoContextManagerConfig = {
+   *   model: 'gpt-4o',
+   *   onCompactionWarning: (count, tokens) => {
+   *     console.warn(`Compaction #${count}: ${tokens} tokens compressed total`);
+   *   },
+   * };
+   * ```
+   */
+  onCompactionWarning?: (count: number, totalTokensCompressed: number) => void;
 }
 
 /**
@@ -183,6 +250,12 @@ interface ResolvedConfig {
   recentCount: number;
   systemReserve: number;
   compressionTargetRatio: number;
+  /** Profile-specific auto-condense threshold (REQ-010) */
+  autoCondensePercent: number | null;
+  /** Callback for logging warnings (REQ-013) */
+  onFallbackWarning: ((message: string) => void) | null;
+  /** Callback for compaction warnings (REQ-011) */
+  onCompactionWarning?: ((count: number, totalTokensCompressed: number) => void) | null;
 }
 
 /**
@@ -203,6 +276,9 @@ function resolveConfig(config: AutoContextManagerConfig): ResolvedConfig {
     recentCount: config.recentCount ?? DEFAULT_RECENT_COUNT,
     systemReserve: config.systemReserve ?? DEFAULT_SYSTEM_RESERVE,
     compressionTargetRatio: config.compressionTargetRatio ?? DEFAULT_COMPRESSION_RATIO,
+    autoCondensePercent: config.autoCondensePercent ?? null,
+    onFallbackWarning: config.onFallbackWarning ?? null,
+    onCompactionWarning: config.onCompactionWarning ?? null,
   };
 }
 
@@ -235,12 +311,20 @@ function resolveConfig(config: AutoContextManagerConfig): ResolvedConfig {
  * }
  * ```
  */
+/** Compaction warning threshold (REQ-011) */
+const COMPACTION_WARNING_THRESHOLD = 2;
+
 export class AutoContextManager {
   private readonly config: ResolvedConfig;
   private readonly checkpointManager: CheckpointManager;
   private readonly compressor: NonDestructiveCompressor | null;
   private readonly thresholds: ThresholdConfig;
   private readonly budget: TokenBudget;
+
+  /** Track compaction count in session (REQ-011) */
+  private compactionCount = 0;
+  /** Track total tokens compressed in session (REQ-011) */
+  private totalTokensCompressed = 0;
 
   /**
    * Create a new AutoContextManager.
@@ -267,9 +351,17 @@ export class AutoContextManager {
 
     // Get model-specific thresholds with user overrides
     const baseThresholds = getThresholdConfig(this.config.model);
+
+    // Apply profile-specific autoCondensePercent if provided (REQ-010)
+    // This overrides the critical threshold for triggering compression
+    const criticalThreshold =
+      this.config.autoCondensePercent !== null
+        ? this.config.autoCondensePercent
+        : (config.thresholds?.critical ?? baseThresholds.critical);
+
     this.thresholds = {
       warning: config.thresholds?.warning ?? baseThresholds.warning,
-      critical: config.thresholds?.critical ?? baseThresholds.critical,
+      critical: criticalThreshold,
       overflow: config.thresholds?.overflow ?? baseThresholds.overflow,
     };
 
@@ -585,6 +677,14 @@ export class AutoContextManager {
       const tokensAfter = this.countTokens(newMessages);
       const tokensSaved = tokensBefore - tokensAfter;
 
+      // T026/T027: Track compaction count and emit warning (REQ-011)
+      this.compactionCount++;
+      this.totalTokensCompressed += tokensSaved;
+
+      if (this.compactionCount > COMPACTION_WARNING_THRESHOLD && this.config.onCompactionWarning) {
+        this.config.onCompactionWarning(this.compactionCount, this.totalTokensCompressed);
+      }
+
       return {
         messages: newMessages,
         actions: [
@@ -594,7 +694,28 @@ export class AutoContextManager {
         tokensSaved,
       };
     } catch (error) {
-      // Compression failed - return original messages
+      // Check if this is ALL_MODELS_FAILED error (REQ-013)
+      if (CompactionError.isCompactionError(error) && error.code === "ALL_MODELS_FAILED") {
+        // Log warning via callback if provided
+        const warningMsg = `Compression failed (ALL_MODELS_FAILED): falling back to sliding window truncation`;
+        if (this.config.onFallbackWarning) {
+          this.config.onFallbackWarning(warningMsg);
+        }
+
+        // Fallback to sliding window truncation (REQ-013)
+        const truncateFallbackResult = await this.executeSlidingWindowFallback(messages);
+        return {
+          messages: truncateFallbackResult.messages,
+          actions: [
+            `compress:failed - ALL_MODELS_FAILED`,
+            `compress:fallback to sliding window truncation`,
+            ...truncateFallbackResult.actions,
+          ],
+          tokensSaved: truncateFallbackResult.tokensSaved,
+        };
+      }
+
+      // Other compression failures - return original messages
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
       return {
         messages,
@@ -602,6 +723,64 @@ export class AutoContextManager {
         tokensSaved: 0,
       };
     }
+  }
+
+  /**
+   * Fallback to sliding window truncation when compression fails (REQ-013).
+   *
+   * Called when ALL_MODELS_FAILED error occurs during compression.
+   * Uses aggressive truncation to reduce context size.
+   * Messages are marked with truncationParent instead of condenseParent (T030).
+   *
+   * @param messages - Current messages
+   * @returns Truncated messages and actions taken
+   */
+  private async executeSlidingWindowFallback(messages: ContextMessage[]): Promise<{
+    messages: ContextMessage[];
+    actions: string[];
+    tokensSaved: number;
+  }> {
+    const tokensBefore = this.countTokens(messages);
+
+    // Target: warning threshold to ensure we're back in safe zone
+    const targetTokens = Math.floor(this.budget.historyBudget * this.thresholds.warning);
+
+    const truncateResult = truncate(messages, {
+      targetTokens,
+      recentCount: this.config.recentCount,
+      preserveToolPairs: true,
+      tokenizer: this.messageTokenizer.bind(this),
+    });
+
+    // T030: Mark truncation fallback messages with truncationParent (REQ-013)
+    // Generate unique truncation ID
+    const truncationId = `trunc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const markedMessages: ContextMessage[] = truncateResult.messages.map((msg) => {
+      // Only mark retained messages that were present before truncation
+      // Skip system messages and the summary placeholder (if any)
+      if (msg.role === "system" || msg.isSummary) {
+        return msg;
+      }
+      return {
+        ...msg,
+        truncationParent: truncationId,
+      };
+    });
+
+    const tokensSaved = tokensBefore - truncateResult.tokenCount;
+
+    const actions: string[] = [];
+    if (truncateResult.removedCount > 0) {
+      actions.push(`fallback-truncate:${truncateResult.removedCount} messages removed`);
+      actions.push(`fallback-truncate:${tokensSaved} tokens saved`);
+      actions.push(`fallback-truncate:marked with truncationParent=${truncationId}`);
+    }
+
+    return {
+      messages: markedMessages,
+      actions,
+      tokensSaved,
+    };
   }
 
   /**
@@ -736,6 +915,32 @@ export class AutoContextManager {
    */
   getBudget(): Readonly<TokenBudget> {
     return { ...this.budget };
+  }
+
+  /**
+   * Get compaction count for this session (REQ-011).
+   *
+   * @returns Number of compactions performed
+   */
+  getCompactionCount(): number {
+    return this.compactionCount;
+  }
+
+  /**
+   * Get total tokens compressed in this session (REQ-011).
+   *
+   * @returns Total tokens saved via compression
+   */
+  getTotalTokensCompressed(): number {
+    return this.totalTokensCompressed;
+  }
+
+  /**
+   * Reset compaction statistics (useful for testing or session reset).
+   */
+  resetCompactionStats(): void {
+    this.compactionCount = 0;
+    this.totalTokensCompressed = 0;
   }
 
   /**

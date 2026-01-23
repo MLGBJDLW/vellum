@@ -381,6 +381,7 @@ describe("AgentsWatcher", () => {
       // Create nested directory
       const nestedDir = path.join(tempDir, "src", "components");
       await fs.mkdir(nestedDir, { recursive: true });
+      await createFile(path.join(tempDir, "package.json"), "{}\n");
       await wait(100); // Let directory creation settle
 
       watcher = new AgentsWatcher(nestedDir, { debounceMs: 50 });

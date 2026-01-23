@@ -36,11 +36,35 @@ export type {
 export { DEFAULT_PRIORITY, DEFAULT_THRESHOLDS, MessagePriority } from "./types.js";
 
 // ============================================================================
+// Errors
+// ============================================================================
+
+export type { CompactionErrorOptions } from "./errors.js";
+export { CompactionError, CompactionErrorCode } from "./errors.js";
+
+// ============================================================================
 // Configuration
 // ============================================================================
 
-export type { ConfigValidationResult, ContextManagerConfig } from "./config.js";
-export { createConfig, DEFAULT_CONFIG, validateConfig } from "./config.js";
+export type {
+  ConfigValidationResult,
+  ContextManagerConfig,
+  CustomThresholds,
+  ProtectedTools,
+  SummaryModelFallback,
+  TruncationPolicy,
+} from "./config.js";
+export {
+  // Zod schemas (REQ-008)
+  ContextManagerConfigSchema,
+  CustomThresholdsSchema,
+  createConfig,
+  DEFAULT_CONFIG,
+  ProtectedToolsSchema,
+  SummaryModelFallbackSchema,
+  TruncationPolicySchema,
+  validateConfig,
+} from "./config.js";
 
 // ============================================================================
 // Token Budget Calculation
@@ -85,12 +109,15 @@ export {
 
 export type { OrphanedBlock, ToolPair, ToolPairAnalysis } from "./tool-pairing.js";
 export {
+  adjustRangeForToolPairs,
   analyzeToolPairs,
   areInSameToolPair,
   extractToolResultBlocks,
   extractToolUseBlocks,
+  getKeepMessagesWithToolBlocks,
   getLinkedIndices,
   hasToolBlocks,
+  isRangeToolPairSafe,
 } from "./tool-pairing.js";
 
 // ============================================================================
@@ -101,6 +128,7 @@ export type { TruncateOptions, TruncateResult, TruncationCandidate } from "./sli
 export {
   assignPriorities,
   calculatePriority,
+  estimateBytes,
   estimateTokens,
   fitsInBudget,
   getTruncationCandidates,
@@ -135,8 +163,11 @@ export type {
   CompressionOptions,
   CompressionRange,
   CompressionResult,
+  CondensedMessageEntry,
+  RecoveryResult,
 } from "./compression.js";
 export {
+  CondensedMessageStore,
   calculateCompressionSavings,
   DEFAULT_SUMMARY_PROMPT,
   estimateCompressionTokens,
@@ -145,7 +176,46 @@ export {
   isSummaryMessage,
   linkCompressedMessages,
   NonDestructiveCompressor,
+  recoverCondensed,
 } from "./compression.js";
+
+// ============================================================================
+// Context Growth Validation (REQ-005)
+// ============================================================================
+
+export type { GrowthValidationResult, GrowthValidatorOptions } from "./context-growth-check.js";
+export { ContextGrowthValidator } from "./context-growth-check.js";
+
+// ============================================================================
+// Reasoning Block Handler (REQ-004)
+// ============================================================================
+
+export type {
+  ExtractedReasoning,
+  ReasoningBlockOptions,
+  ReasoningBlockResult,
+  ReasoningModelFamily,
+} from "./reasoning-block.js";
+export {
+  addReasoningBlock,
+  createReasoningBlockHandler,
+  extractReasoningContent,
+  ReasoningBlockHandler,
+  requiresReasoningBlock,
+} from "./reasoning-block.js";
+
+// ============================================================================
+// Fallback Chain (REQ-009)
+// ============================================================================
+
+export type {
+  FallbackAttempt,
+  FallbackChainOptions,
+  FallbackModelConfig,
+  ModelClientFactory,
+  SummaryFallbackResult,
+} from "./fallback-chain.js";
+export { createFallbackChain, FallbackChain } from "./fallback-chain.js";
 
 // ============================================================================
 // Checkpointing

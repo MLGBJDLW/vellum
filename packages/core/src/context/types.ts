@@ -171,6 +171,28 @@ export interface ContextMessage {
   readonly truncationParent?: string;
   /** Timestamp when message was created */
   readonly createdAt?: number;
+  /**
+   * Reasoning content from models that support chain-of-thought (REQ-003).
+   *
+   * Contains the model's internal reasoning/thinking process when using
+   * models like Claude with extended thinking or o1 with reasoning tokens.
+   * This is separate from the main content to allow for:
+   * - Separate token accounting
+   * - Selective truncation (reasoning can be trimmed first)
+   * - Debugging/transparency of model reasoning
+   *
+   * @example
+   * ```typescript
+   * const message: ContextMessage = {
+   *   id: 'msg-123',
+   *   role: 'assistant',
+   *   content: 'The answer is 42.',
+   *   reasoningContent: 'Let me think through this step by step...',
+   *   priority: MessagePriority.NORMAL,
+   * };
+   * ```
+   */
+  readonly reasoningContent?: string;
   /** Additional metadata for extensibility */
   readonly metadata?: Record<string, unknown>;
 }

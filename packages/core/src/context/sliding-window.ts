@@ -11,6 +11,8 @@
  * @module @vellum/core/context/sliding-window
  */
 
+import { estimateTokenCount as providerEstimateTokenCount } from "@vellum/provider";
+
 import { analyzeToolPairs, getLinkedIndices, type ToolPairAnalysis } from "./tool-pairing.js";
 import { type ContextMessage, MessagePriority } from "./types.js";
 
@@ -33,6 +35,15 @@ export interface TruncateOptions {
 
   /** Custom tokenizer function (default: estimate) */
   readonly tokenizer?: (message: ContextMessage) => number;
+
+  /**
+   * Truncation mode (REQ-008).
+   * - 'tokens': Use token count for budget calculations (default)
+   * - 'bytes': Use byte count for budget calculations (useful for byte-limited APIs)
+   *
+   * @default 'tokens'
+   */
+  readonly mode?: "tokens" | "bytes";
 }
 
 /**
@@ -73,9 +84,6 @@ export interface TruncationCandidate {
 /** Default number of recent messages to protect */
 const DEFAULT_RECENT_COUNT = 3;
 
-/** Estimated characters per token for rough estimation */
-const CHARS_PER_TOKEN = 4;
-
 // ============================================================================
 // Token Estimation
 // ============================================================================
@@ -106,33 +114,36 @@ export function estimateTokens(message: ContextMessage): number {
 
   const content = message.content;
 
-  // String content: estimate based on character count
+  // String content: use provider's intelligent estimation (supports code/CJK detection)
   if (typeof content === "string") {
-    return Math.ceil(content.length / CHARS_PER_TOKEN);
+    return providerEstimateTokenCount(content);
   }
 
-  // Array content: sum up all blocks
-  let totalChars = 0;
+  // Array content: sum up all blocks using provider's estimation
+  let totalTokens = 0;
 
   for (const block of content) {
     switch (block.type) {
       case "text":
-        totalChars += block.text.length;
+        totalTokens += providerEstimateTokenCount(block.text);
         break;
-      case "tool_use":
+      case "tool_use": {
         // Tool name + serialized input
-        totalChars += block.name.length + JSON.stringify(block.input).length;
+        const inputJson = JSON.stringify(block.input);
+        totalTokens +=
+          providerEstimateTokenCount(block.name) + providerEstimateTokenCount(inputJson);
         break;
+      }
       case "tool_result": {
         // Tool result content
         const resultContent = block.content;
         if (typeof resultContent === "string") {
-          totalChars += resultContent.length;
+          totalTokens += providerEstimateTokenCount(resultContent);
         } else {
           // Nested content blocks - recursive estimation
           for (const nested of resultContent) {
             if (nested.type === "text") {
-              totalChars += nested.text.length;
+              totalTokens += providerEstimateTokenCount(nested.text);
             }
           }
         }
@@ -142,16 +153,55 @@ export function estimateTokens(message: ContextMessage): number {
         // Images: rough estimate based on dimensions or fixed cost
         if (block.width && block.height) {
           // Anthropic-style: pixels / 750
-          totalChars += Math.ceil((block.width * block.height) / 750) * CHARS_PER_TOKEN;
+          totalTokens += Math.ceil((block.width * block.height) / 750);
         } else {
-          // Fixed estimate for unknown size
-          totalChars += 258 * CHARS_PER_TOKEN; // Gemini-style fixed cost
+          // Fixed estimate for unknown size (Gemini-style)
+          totalTokens += 258;
         }
         break;
     }
   }
 
-  return Math.ceil(totalChars / CHARS_PER_TOKEN);
+  return totalTokens;
+}
+
+/**
+ * Estimate bytes for a message (REQ-008).
+ * Used when mode is 'bytes' for APIs with byte-based limits.
+ *
+ * @param message - The context message to estimate bytes for
+ * @returns Estimated byte count
+ *
+ * @example
+ * ```typescript
+ * const bytes = estimateBytes({
+ *   id: '1',
+ *   role: 'user',
+ *   content: 'Hello, world!',
+ *   priority: MessagePriority.NORMAL,
+ * });
+ * // bytes ≈ 13
+ * ```
+ */
+export function estimateBytes(message: ContextMessage): number {
+  const content = message.content;
+
+  // String content: calculate byte length
+  if (typeof content === "string") {
+    return new TextEncoder().encode(content).length;
+  }
+
+  // Array content: sum up all blocks as JSON
+  let totalBytes = 0;
+
+  for (const block of content) {
+    const blockJson = JSON.stringify(block);
+    totalBytes += new TextEncoder().encode(blockJson).length;
+  }
+
+  // Add overhead for message metadata (role, id, etc.)
+  const metadataOverhead = 50; // Approximate JSON overhead
+  return totalBytes + metadataOverhead;
 }
 
 // ============================================================================
@@ -384,16 +434,25 @@ function calculateTotalTokens(
  * 3. Remove lowest priority messages until under budget
  * 4. Never split tool pairs (REQ-WIN-002)
  *
+ * Supports both token-based and byte-based budgets (REQ-008).
+ *
  * @param messages - Array of context messages to truncate
  * @param options - Truncation options
  * @returns Result containing truncated messages and removal info
  *
  * @example
  * ```typescript
+ * // Token-based truncation (default)
  * const result = truncate(messages, {
  *   targetTokens: 10000,
  *   recentCount: 3,
  *   preserveToolPairs: true,
+ * });
+ *
+ * // Byte-based truncation
+ * const result = truncate(messages, {
+ *   targetTokens: 50000, // Actually bytes when mode='bytes'
+ *   mode: 'bytes',
  * });
  * console.log(`Removed ${result.removedCount} messages`);
  * ```
@@ -404,7 +463,11 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
     recentCount = DEFAULT_RECENT_COUNT,
     preserveToolPairs = true,
     tokenizer = estimateTokens,
+    mode = "tokens",
   } = options;
+
+  // Select the appropriate estimator based on mode (REQ-008)
+  const sizeEstimator = mode === "bytes" ? estimateBytes : tokenizer;
 
   // Empty or already fitting
   if (messages.length === 0) {
@@ -416,8 +479,8 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
     };
   }
 
-  // Calculate current token count
-  let currentTokens = calculateTotalTokens(messages, tokenizer);
+  // Calculate current size (tokens or bytes based on mode)
+  let currentTokens = calculateTotalTokens(messages, sizeEstimator);
 
   // Already within budget?
   if (currentTokens <= targetTokens) {
@@ -463,7 +526,7 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
           if (!indicesToRemove.has(idx)) {
             const msg = messages[idx];
             if (msg) {
-              pairTokens += tokenizer(msg);
+              pairTokens += sizeEstimator(msg);
               if (msg.id) {
                 pairIds.push(msg.id);
               }

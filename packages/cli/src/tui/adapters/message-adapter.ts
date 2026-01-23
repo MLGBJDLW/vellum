@@ -132,6 +132,15 @@ export function toUIMessage(sessionMessage: SessionMessage): Message {
   const reasoningContent = extractReasoningContent(sessionMessage.parts);
   const toolCalls = extractToolCalls(sessionMessage.parts);
   const toolResults = extractToolResults(sessionMessage.parts);
+  const tokenUsage = sessionMessage.metadata.tokens
+    ? {
+        inputTokens: sessionMessage.metadata.tokens.input,
+        outputTokens: sessionMessage.metadata.tokens.output,
+        thinkingTokens: sessionMessage.metadata.tokens.reasoning,
+        cacheReadTokens: sessionMessage.metadata.tokens.cacheRead,
+        cacheWriteTokens: sessionMessage.metadata.tokens.cacheWrite,
+      }
+    : undefined;
 
   // Combine tool calls and tool results
   const allToolCalls = [...toolCalls, ...toolResults];
@@ -152,6 +161,7 @@ export function toUIMessage(sessionMessage: SessionMessage): Message {
     isStreaming: false,
     toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
     ...(reasoningContent ? { thinking: reasoningContent } : {}),
+    ...(tokenUsage ? { tokenUsage } : {}),
   };
 }
 
@@ -189,6 +199,22 @@ export function toUIMessages(sessionMessages: readonly SessionMessage[]): readon
  */
 export function toSessionMessage(uiMessage: Message): SessionMessage {
   const parts: SessionMessagePart[] = [];
+
+  const tokens = uiMessage.tokenUsage
+    ? {
+        input: uiMessage.tokenUsage.inputTokens,
+        output: uiMessage.tokenUsage.outputTokens,
+        ...(uiMessage.tokenUsage.thinkingTokens !== undefined
+          ? { reasoning: uiMessage.tokenUsage.thinkingTokens }
+          : {}),
+        ...(uiMessage.tokenUsage.cacheReadTokens !== undefined
+          ? { cacheRead: uiMessage.tokenUsage.cacheReadTokens }
+          : {}),
+        ...(uiMessage.tokenUsage.cacheWriteTokens !== undefined
+          ? { cacheWrite: uiMessage.tokenUsage.cacheWriteTokens }
+          : {}),
+      }
+    : undefined;
 
   if (uiMessage.thinking) {
     parts.push({
@@ -236,6 +262,7 @@ export function toSessionMessage(uiMessage: Message): SessionMessage {
     metadata: {
       createdAt: uiMessage.timestamp.getTime(),
       completedAt: uiMessage.isStreaming ? undefined : uiMessage.timestamp.getTime(),
+      ...(tokens ? { tokens } : {}),
     },
   };
 }

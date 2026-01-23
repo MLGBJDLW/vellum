@@ -239,9 +239,13 @@ export class StreamCollector {
         this.usage = {
           inputTokens: event.inputTokens,
           outputTokens: event.outputTokens,
-          thinkingTokens: event.thinkingTokens,
-          cacheReadTokens: event.cacheReadTokens,
-          cacheWriteTokens: event.cacheWriteTokens,
+          ...(event.thinkingTokens !== undefined ? { thinkingTokens: event.thinkingTokens } : {}),
+          ...(event.cacheReadTokens !== undefined
+            ? { cacheReadTokens: event.cacheReadTokens }
+            : {}),
+          ...(event.cacheWriteTokens !== undefined
+            ? { cacheWriteTokens: event.cacheWriteTokens }
+            : {}),
         };
         return { type: "none" };
 

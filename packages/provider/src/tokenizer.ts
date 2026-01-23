@@ -7,6 +7,7 @@
  * @module @vellum/provider/tokenizer
  */
 
+import { getEncoding, type TiktokenEncoding } from "js-tiktoken";
 import type { CompletionMessage, ProviderType } from "./types.js";
 
 // =============================================================================
@@ -228,42 +229,24 @@ export function createAnthropicTokenizer(client: {
 }
 
 /**
- * Create OpenAI tokenizer using tiktoken estimation.
- * Note: For exact counts, use the tiktoken library directly.
+ * Create OpenAI tokenizer using tiktoken for accurate token counting.
  *
- * @returns Tokenizer instance with estimation
+ * This is the recommended tokenizer for OpenAI models as it provides
+ * exact token counts using the same algorithm as the OpenAI API.
+ *
+ * @param model - Optional model name for encoding selection
+ * @returns Tokenizer instance with accurate counting
  *
  * @example
  * ```typescript
- * const tokenizer = createOpenAITokenizer();
+ * const tokenizer = createOpenAITokenizer('gpt-4o');
  * const result = await tokenizer.countTokens('Hello, world!');
+ * console.log(result.tokens); // Exact token count
  * ```
  */
-export function createOpenAITokenizer(): Tokenizer {
-  // OpenAI models use ~4 chars per token for English
-  // For accurate counting, integrate tiktoken library
-  return {
-    async countTokens(text: string): Promise<TokenCountResult> {
-      return {
-        tokens: estimateTokenCount(text),
-        isEstimate: true,
-        method: "fallback",
-      };
-    },
-
-    async countMessageTokens(messages: CompletionMessage[]): Promise<TokenCountResult> {
-      // OpenAI has additional overhead per message
-      // ~3 tokens per message for structure
-      const structureOverhead = messages.length * 3;
-      const contentTokens = messages.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
-
-      return {
-        tokens: contentTokens + structureOverhead,
-        isEstimate: true,
-        method: "fallback",
-      };
-    },
-  };
+export function createOpenAITokenizer(model: string = "gpt-4o"): Tokenizer {
+  // Use tiktoken for accurate token counting
+  return createTiktokenTokenizer(model);
 }
 
 /**
@@ -346,6 +329,239 @@ export function createFallbackTokenizer(): Tokenizer {
         isEstimate: true,
         method: "fallback",
       };
+    },
+  };
+}
+
+// =============================================================================
+// Tiktoken-Based Tokenizer (REQ-002)
+// =============================================================================
+
+/**
+ * Model to encoding mapping for OpenAI models.
+ * Reference: https://github.com/openai/tiktoken/blob/main/tiktoken/model.py
+ */
+const MODEL_TO_ENCODING: Record<string, TiktokenEncoding> = {
+  // GPT-4o family (cl100k_base)
+  "gpt-4o": "cl100k_base",
+  "gpt-4o-mini": "cl100k_base",
+  "gpt-4o-2024-05-13": "cl100k_base",
+  "gpt-4o-2024-08-06": "cl100k_base",
+  "gpt-4o-mini-2024-07-18": "cl100k_base",
+
+  // GPT-4 family (cl100k_base)
+  "gpt-4": "cl100k_base",
+  "gpt-4-32k": "cl100k_base",
+  "gpt-4-turbo": "cl100k_base",
+  "gpt-4-turbo-preview": "cl100k_base",
+  "gpt-4-1106-preview": "cl100k_base",
+  "gpt-4-0125-preview": "cl100k_base",
+  "gpt-4-vision-preview": "cl100k_base",
+
+  // GPT-3.5 family (cl100k_base)
+  "gpt-3.5-turbo": "cl100k_base",
+  "gpt-3.5-turbo-16k": "cl100k_base",
+  "gpt-3.5-turbo-instruct": "cl100k_base",
+  "gpt-3.5-turbo-0125": "cl100k_base",
+  "gpt-3.5-turbo-1106": "cl100k_base",
+
+  // o1 family (o200k_base)
+  o1: "o200k_base",
+  "o1-mini": "o200k_base",
+  "o1-preview": "o200k_base",
+  "o3-mini": "o200k_base",
+  o3: "o200k_base",
+  "o4-mini": "o200k_base",
+
+  // GPT-4.1 family (o200k_base)
+  "gpt-4.1": "o200k_base",
+  "gpt-4.1-mini": "o200k_base",
+  "gpt-4.1-nano": "o200k_base",
+
+  // GPT-5 family (o200k_base - newer encoding for advanced models)
+  "gpt-5": "o200k_base",
+  "gpt-5.1": "o200k_base",
+  "gpt-5.2": "o200k_base",
+  "gpt-5-mini": "o200k_base",
+
+  // GPT-5 Codex family
+  "gpt-5.1-codex": "o200k_base",
+  "gpt-5.1-codex-max": "o200k_base",
+  "gpt-5.1-codex-mini": "o200k_base",
+  "gpt-5.2-codex": "o200k_base",
+  "gpt-5-nano": "o200k_base",
+  "gpt-5-codex": "o200k_base",
+
+  // Embedding models (cl100k_base)
+  "text-embedding-ada-002": "cl100k_base",
+  "text-embedding-3-small": "cl100k_base",
+  "text-embedding-3-large": "cl100k_base",
+};
+
+/**
+ * Get the tiktoken encoding for a model name.
+ *
+ * @param model - The model name (e.g., 'gpt-4o', 'gpt-3.5-turbo')
+ * @returns The tiktoken encoding name
+ */
+function getEncodingForModel(model: string): TiktokenEncoding {
+  // Direct mapping
+  const directMapping = MODEL_TO_ENCODING[model];
+  if (directMapping !== undefined) {
+    return directMapping;
+  }
+
+  // Pattern matching for model families
+  if (model.startsWith("gpt-4o") || model.includes("gpt-4o")) {
+    return "cl100k_base";
+  }
+  if (model.startsWith("gpt-4") || model.includes("gpt-4")) {
+    return "cl100k_base";
+  }
+  if (model.startsWith("gpt-3.5") || model.includes("gpt-3.5")) {
+    return "cl100k_base";
+  }
+  if (model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4")) {
+    return "o200k_base";
+  }
+
+  // GPT-5 family
+  if (model.startsWith("gpt-5") || model.includes("gpt-5")) {
+    return "o200k_base";
+  }
+
+  // Default to cl100k_base (most common for modern models)
+  return "cl100k_base";
+}
+
+/**
+ * Cache for tiktoken encoders to avoid repeated initialization.
+ */
+const encoderCache = new Map<TiktokenEncoding, ReturnType<typeof getEncoding>>();
+
+/**
+ * Get or create a cached tiktoken encoder.
+ *
+ * @param encoding - The encoding name
+ * @returns The tiktoken encoder instance
+ */
+function getCachedEncoder(encoding: TiktokenEncoding): ReturnType<typeof getEncoding> {
+  let encoder = encoderCache.get(encoding);
+  if (!encoder) {
+    encoder = getEncoding(encoding);
+    encoderCache.set(encoding, encoder);
+  }
+  return encoder;
+}
+
+/**
+ * Create a tiktoken-based tokenizer for OpenAI models.
+ *
+ * Provides accurate token counting using the js-tiktoken library,
+ * which implements the same tokenization algorithm used by OpenAI.
+ *
+ * @param defaultModel - Default model to use for encoding selection
+ * @returns Tokenizer instance with accurate token counting
+ *
+ * @example
+ * ```typescript
+ * const tokenizer = createTiktokenTokenizer('gpt-4o');
+ * const result = await tokenizer.countTokens('Hello, world!');
+ * console.log(result.tokens); // Exact token count
+ * console.log(result.isEstimate); // false
+ * console.log(result.method); // 'tiktoken'
+ * ```
+ */
+export function createTiktokenTokenizer(defaultModel: string = "gpt-4o"): Tokenizer {
+  return {
+    async countTokens(text: string, options?: TokenCountOptions): Promise<TokenCountResult> {
+      const model = options?.model ?? defaultModel;
+      try {
+        const encoding = getEncodingForModel(model);
+        const encoder = getCachedEncoder(encoding);
+        const tokens = encoder.encode(text);
+
+        return {
+          tokens: tokens.length,
+          isEstimate: false,
+          method: "tiktoken",
+        };
+      } catch {
+        // Fall back to estimation on any error
+        return {
+          tokens: estimateTokenCount(text),
+          isEstimate: true,
+          method: "fallback",
+        };
+      }
+    },
+
+    async countMessageTokens(
+      messages: CompletionMessage[],
+      options?: TokenCountOptions
+    ): Promise<TokenCountResult> {
+      const model = options?.model ?? defaultModel;
+      try {
+        const encoding = getEncodingForModel(model);
+        const encoder = getCachedEncoder(encoding);
+
+        // OpenAI message format overhead:
+        // - Each message: ~3 tokens for structure (<|start|>role<|end|>)
+        // - Reply prompt: ~3 tokens (<|start|>assistant<|end|>)
+        const perMessageOverhead = 3;
+        const replyOverhead = 3;
+
+        let totalTokens = 0;
+
+        for (const message of messages) {
+          totalTokens += perMessageOverhead;
+
+          // Count role tokens
+          totalTokens += encoder.encode(message.role).length;
+
+          // Count content tokens
+          if (typeof message.content === "string") {
+            totalTokens += encoder.encode(message.content).length;
+          } else {
+            // For array content, handle each part
+            for (const part of message.content) {
+              if (part.type === "text") {
+                totalTokens += encoder.encode(part.text).length;
+              } else if (part.type === "tool_use") {
+                // Tool use includes name and JSON input
+                totalTokens += encoder.encode(part.name).length;
+                totalTokens += encoder.encode(JSON.stringify(part.input)).length;
+              } else if (part.type === "tool_result") {
+                const content =
+                  typeof part.content === "string" ? part.content : JSON.stringify(part.content);
+                totalTokens += encoder.encode(content).length;
+              }
+              // Images are handled separately (fixed token cost per image)
+              else if (part.type === "image") {
+                // Low-res images: ~85 tokens, high-res: ~170 tokens base + tiles
+                totalTokens += 85;
+              }
+            }
+          }
+        }
+
+        // Add reply prompt overhead
+        totalTokens += replyOverhead;
+
+        return {
+          tokens: totalTokens,
+          isEstimate: false,
+          method: "tiktoken",
+        };
+      } catch {
+        // Fall back to estimation on any error
+        const tokens = messages.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+        return {
+          tokens,
+          isEstimate: true,
+          method: "fallback",
+        };
+      }
     },
   };
 }
