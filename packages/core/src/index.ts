@@ -937,15 +937,6 @@ export * from "./tutorial/index.js";
 // Types (T001-T024)
 // ============================================
 export * from "./types/index.js";
-export type {
-  AgentOptions,
-  CompleteEvent,
-  ErrorEvent,
-  LoopEvent,
-  MessageEvent,
-  ToolCallEvent,
-  ToolResultEvent,
-} from "./types.js";
 // ============================================
 // Auto Update (Phase 39)
 // ============================================
