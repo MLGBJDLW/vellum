@@ -1,3 +1,5 @@
+import { cpSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig } from "tsup";
 
 export default defineConfig({
@@ -18,6 +20,13 @@ export default defineConfig({
   banner: {
     // Provide CJS compatibility for bundled dependencies that use require()
     js: `import { createRequire } from 'module';const require = createRequire(import.meta.url);`,
+  },
+  async onSuccess() {
+    // Copy prompts from @vellum/core to dist/markdown for runtime discovery
+    const promptsSrc = resolve(__dirname, "../core/src/prompts/markdown");
+    const promptsDest = resolve(__dirname, "dist/markdown");
+    cpSync(promptsSrc, promptsDest, { recursive: true });
+    console.log("Copied prompts to dist/markdown");
   },
 
   // Bundle ALL workspace packages into the CLI

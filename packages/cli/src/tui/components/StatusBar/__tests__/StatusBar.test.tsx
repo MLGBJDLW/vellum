@@ -685,44 +685,15 @@ describe("StatusBar", () => {
       });
     });
 
-    describe("T017: Deprecation Warning", () => {
-      let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
-      const originalNodeEnv = process.env.NODE_ENV;
-
-      beforeEach(() => {
-        consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        // Set to development mode for deprecation warnings
-        process.env.NODE_ENV = "development";
-      });
-
-      afterEach(() => {
-        consoleWarnSpy.mockRestore();
-        process.env.NODE_ENV = originalNodeEnv;
-      });
-
-      it("should log deprecation warning when agentLevel prop is provided", () => {
-        renderWithTheme(<StatusBar mode="spec" modelName="claude-3" agentLevel={1} />);
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("DEPRECATION WARNING"));
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("agentLevel"));
-      });
-
-      it("should NOT log deprecation warning when agentLevel prop is not provided", () => {
-        renderWithTheme(<StatusBar mode="spec" modelName="claude-3" />);
-        expect(consoleWarnSpy).not.toHaveBeenCalled();
-      });
-
-      it("should log deprecation warning for all agentLevel values", () => {
-        for (const level of [0, 1, 2] as const) {
-          consoleWarnSpy.mockClear();
-          renderWithTheme(<StatusBar mode="spec" modelName="claude-3" agentLevel={level} />);
-          expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
-        }
-      });
-
-      it("should NOT log deprecation warning in production mode", () => {
-        process.env.NODE_ENV = "production";
-        renderWithTheme(<StatusBar mode="spec" modelName="claude-3" agentLevel={1} />);
-        expect(consoleWarnSpy).not.toHaveBeenCalled();
+    // T017: agentLevel prop is deprecated but silently ignored (no warning logged)
+    // The prop is kept for API compatibility
+    describe("T017: Deprecated agentLevel prop", () => {
+      it("should accept agentLevel prop without error", () => {
+        // agentLevel is deprecated but should not cause errors
+        const { lastFrame } = renderWithTheme(
+          <StatusBar mode="spec" modelName="claude-3" agentLevel={1} />
+        );
+        expect(lastFrame()).toBeDefined();
       });
     });
   });

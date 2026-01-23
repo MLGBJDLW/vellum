@@ -204,13 +204,9 @@ export function StatusBar({
   const { theme } = useTheme();
   const { t } = useTUITranslation();
 
-  // Log deprecation warning for agentLevel prop (T017)
-  if (agentLevel !== undefined && process.env.NODE_ENV !== "production") {
-    console.warn(
-      "DEPRECATION WARNING: The 'agentLevel' prop is deprecated in StatusBar. " +
-        "Agent level is now derived from agent state in spec mode workflows."
-    );
-  }
+  // Note: agentLevel prop is deprecated (T017)
+  // Agent level is now derived from agent state in spec mode workflows
+  void agentLevel; // Silence unused variable warning
 
   // Use primary/accent color for status bar border
   const borderColor = theme.colors.primary;

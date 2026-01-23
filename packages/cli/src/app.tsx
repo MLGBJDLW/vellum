@@ -385,30 +385,6 @@ function FocusDebugger({
     !interactivePrompt &&
     !pendingOperation;
 
-  useEffect(() => {
-    console.log("[Focus Debug]", {
-      isLoading,
-      showModeSelector,
-      showModelSelector,
-      showSessionManager,
-      showHelpModal,
-      activeApproval: !!activeApproval,
-      interactivePrompt: !!interactivePrompt,
-      pendingOperation: !!pendingOperation,
-      shouldFocus,
-    });
-  }, [
-    shouldFocus,
-    isLoading,
-    showModeSelector,
-    showModelSelector,
-    showSessionManager,
-    showHelpModal,
-    activeApproval,
-    interactivePrompt,
-    pendingOperation,
-  ]);
-
   return null;
 }
 
