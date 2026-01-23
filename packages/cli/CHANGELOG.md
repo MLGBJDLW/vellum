@@ -1,5 +1,11 @@
 # @butlerw/vellum
 
+## 0.1.3
+
+### Patch Changes
+
+- [`1c71975`](https://github.com/MLGBJDLW/vellum/commit/1c71975798a89f9f9265561b682eb98c9f4711cd) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - Fix CLI build output to CJS to avoid dynamic require errors on Node.js 22.
+
 ## 0.1.2
 
 ### Patch Changes
