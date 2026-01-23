@@ -291,6 +291,23 @@ export class StreamProcessor {
           await this.hooks.onChunk?.(result.value);
         }
 
+        if (result.value.type === "usage") {
+          const usage: Usage = {
+            inputTokens: result.value.inputTokens,
+            outputTokens: result.value.outputTokens,
+            ...(result.value.thinkingTokens !== undefined
+              ? { thinkingTokens: result.value.thinkingTokens }
+              : {}),
+            ...(result.value.cacheReadTokens !== undefined
+              ? { cacheReadTokens: result.value.cacheReadTokens }
+              : {}),
+            ...(result.value.cacheWriteTokens !== undefined
+              ? { cacheWriteTokens: result.value.cacheWriteTokens }
+              : {}),
+          };
+          await this.dispatchUiEvent({ type: "usage", usage });
+        }
+
         // Process the event through collector and handle resulting action
         await this.processEvent(result.value);
 
@@ -586,8 +603,13 @@ export async function processMultiBlockStream(
         usage = {
           inputTokens: event.inputTokens,
           outputTokens: event.outputTokens,
-          cacheReadTokens: event.cacheReadTokens,
-          cacheWriteTokens: event.cacheWriteTokens,
+          ...(event.thinkingTokens !== undefined ? { thinkingTokens: event.thinkingTokens } : {}),
+          ...(event.cacheReadTokens !== undefined
+            ? { cacheReadTokens: event.cacheReadTokens }
+            : {}),
+          ...(event.cacheWriteTokens !== undefined
+            ? { cacheWriteTokens: event.cacheWriteTokens }
+            : {}),
         };
         break;
 

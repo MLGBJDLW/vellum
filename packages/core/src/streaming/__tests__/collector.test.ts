@@ -395,9 +395,9 @@ describe("StreamCollector", () => {
         expect(result.value.usage).toEqual({
           inputTokens: 150,
           outputTokens: 200,
-          cacheReadTokens: undefined,
-          cacheWriteTokens: undefined,
         });
+        expect(result.value.usage?.cacheReadTokens).toBeUndefined();
+        expect(result.value.usage?.cacheWriteTokens).toBeUndefined();
       }
     });
 
@@ -896,8 +896,8 @@ describe("StreamCollector", () => {
           inputTokens: 100,
           outputTokens: 200,
           cacheReadTokens: 50,
-          cacheWriteTokens: undefined,
         });
+        expect(message.usage?.cacheWriteTokens).toBeUndefined();
 
         // Check stopReason
         expect(message.stopReason).toBe("tool_use");

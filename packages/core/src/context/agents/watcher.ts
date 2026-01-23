@@ -5,9 +5,14 @@
 // Implements REQ-017 (file watching), REQ-018 (debounce).
 
 import { EventEmitter } from "node:events";
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type FSWatcher, watch } from "chokidar";
-import { AGENTS_FILE_PATTERNS, type AgentsFilePattern } from "./discovery.js";
+import {
+  AGENTS_FILE_PATTERNS,
+  type AgentsFilePattern,
+  DEFAULT_STOP_BOUNDARIES,
+} from "./discovery.js";
 
 // ============================================
 // Types
@@ -134,7 +139,7 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
       throw new Error("AgentsWatcher is already running");
     }
 
-    const watchPaths = this.buildWatchPaths();
+    const watchPaths = await this.buildWatchPaths();
 
     this.watcher = watch(watchPaths, {
       persistent: true,
@@ -236,9 +241,11 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
   /**
    * Builds the list of paths to watch.
    */
-  private buildWatchPaths(): string[] {
+  private async buildWatchPaths(): Promise<string[]> {
     const paths: string[] = [];
     const patterns = this.getFilePatterns();
+    const watchRoot = await this.findWatchRoot();
+    const canWatchParents = this.watchParents && watchRoot !== this.startPath;
 
     // Watch patterns in start directory
     for (const pattern of patterns) {
@@ -246,7 +253,7 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
     }
 
     // Watch patterns in parent directories
-    if (this.watchParents) {
+    if (canWatchParents) {
       let currentDir = this.startPath;
       let depth = 0;
 
@@ -263,6 +270,10 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
           paths.push(path.join(parentDir, pattern));
         }
 
+        if (parentDir === watchRoot) {
+          break;
+        }
+
         currentDir = parentDir;
         depth++;
       }
@@ -274,6 +285,51 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
     }
 
     return paths;
+  }
+
+  /**
+   * Find the nearest parent directory containing a stop boundary.
+   * If none found within maxParentDepth, fall back to startPath.
+   */
+  private async findWatchRoot(): Promise<string> {
+    if (!this.watchParents) {
+      return this.startPath;
+    }
+
+    let currentDir = this.startPath;
+    let depth = 0;
+
+    while (depth < this.maxParentDepth) {
+      if (await this.isBoundary(currentDir)) {
+        return currentDir;
+      }
+
+      const parentDir = path.dirname(currentDir);
+      if (parentDir === currentDir) {
+        break;
+      }
+
+      currentDir = parentDir;
+      depth++;
+    }
+
+    return this.startPath;
+  }
+
+  /**
+   * Check if a directory contains any stop boundary markers.
+   */
+  private async isBoundary(dirPath: string): Promise<boolean> {
+    for (const boundary of DEFAULT_STOP_BOUNDARIES) {
+      const boundaryPath = path.join(dirPath, boundary);
+      try {
+        await fs.access(boundaryPath);
+        return true;
+      } catch {
+        // Boundary marker doesn't exist, continue checking
+      }
+    }
+    return false;
   }
 
   /**

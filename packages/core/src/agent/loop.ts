@@ -26,6 +26,7 @@ import {
   LLM,
   type LLMStreamEvent,
   type SessionMessage,
+  type SessionMessageMetadata,
   SessionParts,
   toModelMessages,
 } from "../session/index.js";
@@ -400,6 +401,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private cancellation: CancellationToken;
   private messages: SessionMessage[] = [];
   private abortController: AbortController | null = null;
+  private lastTurnUsage: TokenUsage | null = null;
 
   /** Tool executor instance (T014) */
   private readonly toolExecutor: ToolExecutor;
@@ -978,6 +980,73 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     };
   }
 
+  private normalizeUsage(usage: TokenUsage): TokenUsage {
+    const normalized: TokenUsage = {
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+    };
+
+    if (usage.thinkingTokens !== undefined) {
+      normalized.thinkingTokens = usage.thinkingTokens;
+    }
+    if (usage.cacheReadTokens !== undefined) {
+      normalized.cacheReadTokens = usage.cacheReadTokens;
+    }
+    if (usage.cacheWriteTokens !== undefined) {
+      normalized.cacheWriteTokens = usage.cacheWriteTokens;
+    }
+
+    return normalized;
+  }
+
+  private recordUsage(rawUsage: TokenUsage): void {
+    const usage = this.normalizeUsage(rawUsage);
+
+    this.lastTurnUsage = usage;
+    this.updateTokenUsage(usage);
+
+    // Emit usage statistics (including thinkingTokens for extended thinking models)
+    this.emit("usage", usage);
+
+    // Track usage with cost limit integration (Phase 35+)
+    if (this.costLimitIntegration) {
+      const costResult = this.costLimitIntegration.trackUsage(usage);
+      this.logger?.debug("Cost limit check after usage", {
+        withinLimits: costResult.limits.withinLimits,
+        percentUsed: costResult.limits.percentUsed.toFixed(1),
+        awaitingApproval: costResult.awaitingApproval,
+      });
+    }
+  }
+
+  private buildAssistantMetadata(): Partial<Omit<SessionMessageMetadata, "createdAt">> {
+    const metadata: Partial<Omit<SessionMessageMetadata, "createdAt">> = {
+      model: this.config.model,
+      provider: this.config.providerType,
+    };
+
+    if (this.lastTurnUsage) {
+      const tokens: NonNullable<SessionMessageMetadata["tokens"]> = {
+        input: this.lastTurnUsage.inputTokens,
+        output: this.lastTurnUsage.outputTokens,
+      };
+
+      if (this.lastTurnUsage.thinkingTokens !== undefined) {
+        tokens.reasoning = this.lastTurnUsage.thinkingTokens;
+      }
+      if (this.lastTurnUsage.cacheReadTokens !== undefined) {
+        tokens.cacheRead = this.lastTurnUsage.cacheReadTokens;
+      }
+      if (this.lastTurnUsage.cacheWriteTokens !== undefined) {
+        tokens.cacheWrite = this.lastTurnUsage.cacheWriteTokens;
+      }
+
+      metadata.tokens = tokens;
+    }
+
+    return metadata;
+  }
+
   /**
    * Records a tool call for loop detection (T021).
    */
@@ -1393,6 +1462,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.streamHasToolCalls = false;
     this.accumulatedText = "";
     this.accumulatedReasoning = "";
+    this.lastTurnUsage = null;
 
     // Check max iterations limit (T058)
     if (this.iterationCount >= this.maxIterations) {
@@ -1523,10 +1593,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
               SessionParts.text(`${this.accumulatedText}\n[Interrupted: Loop detected]`)
             );
           }
-          const assistantMessage = createAssistantMessage(assistantParts, {
-            model: this.config.model,
-            provider: this.config.providerType,
-          });
+          const assistantMessage = createAssistantMessage(
+            assistantParts,
+            this.buildAssistantMetadata()
+          );
           this.messages.push(assistantMessage);
         }
 
@@ -1609,10 +1679,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           assistantParts.push(SessionParts.text(this.accumulatedText));
         }
         if (assistantParts.length > 0) {
-          const assistantMessage = createAssistantMessage(assistantParts, {
-            model: this.config.model,
-            provider: this.config.providerType,
-          });
+          const assistantMessage = createAssistantMessage(
+            assistantParts,
+            this.buildAssistantMetadata()
+          );
           this.messages.push(assistantMessage);
         }
         // Reset accumulators
@@ -2052,10 +2122,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     const assistantParts = toolCalls.map((call) =>
       SessionParts.tool(call.id, call.name, call.input)
     );
-    const assistantMessage = createAssistantMessage(assistantParts, {
-      model: this.config.model,
-      provider: this.config.providerType,
-    });
+    const assistantMessage = createAssistantMessage(assistantParts, this.buildAssistantMetadata());
     this.messages.push(assistantMessage);
 
     // Add tool results to message history (T058)
@@ -2764,26 +2831,18 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         break;
 
       case "usage": {
-        const usageData = {
-          inputTokens: event.inputTokens,
-          outputTokens: event.outputTokens,
-          thinkingTokens: event.thinkingTokens,
-          cacheReadTokens: event.cacheReadTokens,
-          cacheWriteTokens: event.cacheWriteTokens,
-        };
+        const usagePayload =
+          "usage" in event && event.usage && typeof event.usage === "object"
+            ? (event.usage as TokenUsage)
+            : event;
 
-        // Emit usage statistics (including thinkingTokens for extended thinking models)
-        this.emit("usage", usageData);
-
-        // Track usage with cost limit integration (Phase 35+)
-        if (this.costLimitIntegration) {
-          const costResult = this.costLimitIntegration.trackUsage(usageData);
-          this.logger?.debug("Cost limit check after usage", {
-            withinLimits: costResult.limits.withinLimits,
-            percentUsed: costResult.limits.percentUsed.toFixed(1),
-            awaitingApproval: costResult.awaitingApproval,
-          });
-        }
+        this.recordUsage({
+          inputTokens: usagePayload.inputTokens,
+          outputTokens: usagePayload.outputTokens,
+          thinkingTokens: usagePayload.thinkingTokens,
+          cacheReadTokens: usagePayload.cacheReadTokens,
+          cacheWriteTokens: usagePayload.cacheWriteTokens,
+        });
         break;
       }
 
@@ -2883,8 +2942,13 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           type: "usage",
           inputTokens: event.inputTokens,
           outputTokens: event.outputTokens,
-          cacheReadTokens: event.cacheReadTokens,
-          cacheWriteTokens: event.cacheWriteTokens,
+          ...(event.thinkingTokens !== undefined ? { thinkingTokens: event.thinkingTokens } : {}),
+          ...(event.cacheReadTokens !== undefined
+            ? { cacheReadTokens: event.cacheReadTokens }
+            : {}),
+          ...(event.cacheWriteTokens !== undefined
+            ? { cacheWriteTokens: event.cacheWriteTokens }
+            : {}),
         };
 
       case "error":
@@ -2931,7 +2995,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         break;
 
       case "usage":
-        this.emit("usage", event.usage);
+        this.recordUsage(event.usage);
         break;
 
       case "complete":

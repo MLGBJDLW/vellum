@@ -10,7 +10,7 @@
 import type { AgentLoop, ExecutionResult } from "@vellum/core";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ICONS } from "../../utils/icons.js";
-import type { ToolCallInfo } from "../context/MessagesContext.js";
+import type { MessageTokenUsage, ToolCallInfo } from "../context/MessagesContext.js";
 import { useMessages } from "../context/MessagesContext.js";
 import { useTools } from "../context/ToolsContext.js";
 import { findLastSafeSplitPoint } from "../utils/findLastSafeSplitPoint.js";
@@ -223,6 +223,8 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
   // Map tool call IDs to tool_group message IDs (for inline UI rendering)
   const toolGroupMapRef = useRef<Map<string, string>>(new Map());
 
+  const pendingUsageRef = useRef<MessageTokenUsage | null>(null);
+
   // =============================================================================
   // Thinking Event Handling
   // =============================================================================
@@ -288,12 +290,14 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       if (!streamingMessageRef.current) {
         const pendingToolCalls = flushPendingToolCalls();
         const isContinuation = isContinuationAfterToolGroup();
+        const pendingUsage = pendingUsageRef.current ?? undefined;
         const id = addMessageRef.current({
           role: "assistant",
           content: "",
           isStreaming: true,
           isContinuation,
           toolCalls: pendingToolCalls && pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
+          ...(pendingUsage ? { tokenUsage: pendingUsage } : {}),
         });
         streamingMessageRef.current = {
           id,
@@ -301,6 +305,9 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
           thinking: "",
           hasStarted: true,
         };
+        if (pendingUsage) {
+          pendingUsageRef.current = null;
+        }
       }
       streamingMessageRef.current.thinking += text;
       // Append thinking content to the message via context
@@ -328,12 +335,14 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         // Start a new streaming message if we receive text without a message
         const pendingToolCalls = flushPendingToolCalls();
         const isContinuation = isContinuationAfterToolGroup();
+        const pendingUsage = pendingUsageRef.current ?? undefined;
         const id = addMessageRef.current({
           role: "assistant",
           content: text,
           isStreaming: true,
           isContinuation,
           toolCalls: pendingToolCalls && pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
+          ...(pendingUsage ? { tokenUsage: pendingUsage } : {}),
         });
         streamingMessageRef.current = {
           id,
@@ -341,6 +350,9 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
           thinking: "",
           hasStarted: true,
         };
+        if (pendingUsage) {
+          pendingUsageRef.current = null;
+        }
       } else {
         // Append to existing streaming message
         streaming.content += text;
@@ -386,7 +398,25 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       streamingMessageRef.current = null;
     }
     pendingToolCallsRef.current.clear();
+    pendingUsageRef.current = null;
   }, []); // Empty deps = stable callback
+
+  const handleUsage = useCallback((usage: MessageTokenUsage) => {
+    const tokenUsage: MessageTokenUsage = {
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      ...(usage.thinkingTokens !== undefined ? { thinkingTokens: usage.thinkingTokens } : {}),
+      ...(usage.cacheReadTokens !== undefined ? { cacheReadTokens: usage.cacheReadTokens } : {}),
+      ...(usage.cacheWriteTokens !== undefined ? { cacheWriteTokens: usage.cacheWriteTokens } : {}),
+    };
+
+    pendingUsageRef.current = tokenUsage;
+
+    const streaming = streamingMessageRef.current;
+    if (streaming) {
+      updateMessageRef.current(streaming.id, { tokenUsage });
+    }
+  }, []);
 
   /**
    * Handle error events from AgentLoop
@@ -405,6 +435,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       commitPendingMessageRef.current();
       streamingMessageRef.current = null;
       pendingToolCallsRef.current.clear();
+      pendingUsageRef.current = null;
     } else {
       addMessageRef.current({
         role: "assistant",
@@ -413,6 +444,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       });
     }
     pendingToolCallsRef.current.clear();
+    pendingUsageRef.current = null;
 
     // Log error for debugging (could also emit to a context/store if needed)
     console.error("[AgentAdapter] AgentLoop error:", error.message);
@@ -669,6 +701,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         connectedLoopRef.current.off("thinking", handleThinking);
         connectedLoopRef.current.off("complete", handleComplete);
         connectedLoopRef.current.off("error", handleError);
+        connectedLoopRef.current.off("usage", handleUsage);
         connectedLoopRef.current.off("toolStart", handleToolStart);
         connectedLoopRef.current.off("toolEnd", handleToolEnd);
         connectedLoopRef.current.off("permissionRequired", handlePermissionRequired);
@@ -681,12 +714,14 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       pendingToolCallsRef.current.clear();
       toolIdMapRef.current.clear();
       toolGroupMapRef.current.clear();
+      pendingUsageRef.current = null;
 
       // Subscribe to AgentLoop events
       agentLoop.on("text", handleText);
       agentLoop.on("thinking", handleThinking);
       agentLoop.on("complete", handleComplete);
       agentLoop.on("error", handleError);
+      agentLoop.on("usage", handleUsage);
       agentLoop.on("toolStart", handleToolStart);
       agentLoop.on("toolEnd", handleToolEnd);
       agentLoop.on("permissionRequired", handlePermissionRequired);
@@ -702,6 +737,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       handleThinking,
       handleComplete,
       handleError,
+      handleUsage,
       handleToolStart,
       handleToolEnd,
       handlePermissionRequired,
@@ -722,6 +758,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       connectedLoopRef.current.off("thinking", handleThinking);
       connectedLoopRef.current.off("complete", handleComplete);
       connectedLoopRef.current.off("error", handleError);
+      connectedLoopRef.current.off("usage", handleUsage);
       connectedLoopRef.current.off("toolStart", handleToolStart);
       connectedLoopRef.current.off("toolEnd", handleToolEnd);
       connectedLoopRef.current.off("permissionRequired", handlePermissionRequired);
@@ -737,6 +774,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       pendingToolCallsRef.current.clear();
       toolIdMapRef.current.clear();
       toolGroupMapRef.current.clear();
+      pendingUsageRef.current = null;
 
       // Optionally clear contexts (using refs for stability)
       if (clearOnDisconnect) {
@@ -749,6 +787,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     handleThinking,
     handleComplete,
     handleError,
+    handleUsage,
     handleToolStart,
     handleToolEnd,
     handlePermissionRequired,

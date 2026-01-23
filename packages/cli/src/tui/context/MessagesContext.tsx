@@ -65,6 +65,8 @@ export interface MessageTokenUsage {
   readonly thinkingTokens?: number;
   /** Number of tokens read from cache (if applicable) */
   readonly cacheReadTokens?: number;
+  /** Number of tokens written to cache (if applicable) */
+  readonly cacheWriteTokens?: number;
 }
 
 /**
