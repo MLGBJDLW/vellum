@@ -1,5 +1,15 @@
 # @butlerw/vellum
 
+## 0.1.8
+
+### Patch Changes
+
+- [`ac0d8f8`](https://github.com/MLGBJDLW/vellum/commit/ac0d8f829f32d40f7559f3c946edf9dfa6e9e351) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - fix(ci): improve release workflow zip creation and title formatting
+
+  - Recursively exclude all node_modules directories from release zip (fixes 592MB bloat)
+  - Exclude build artifacts, logs, and temporary files from zip
+  - Fix release notes title to show "vellum v0.1.7" instead of "@butlerw/vellum @butlerw/vellum@0.1.7"
+
 ## 0.1.7
 
 ### Patch Changes
