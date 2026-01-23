@@ -2,10 +2,26 @@ import { AgentLoop, type AgentLoopConfig, type AgentLoopEvents } from "./agent/i
 import { type AgentMode, MODE_CONFIGS } from "./agent/modes.js";
 import type { SessionMessage } from "./session/index.js";
 import { createMessage, type Message, Parts } from "./types/index.js";
-import type { AgentOptions } from "./types.js";
+
 // Note: For new implementations, use Message from "./types/index.js" instead
 // of @vellum/shared. The new Message type provides typed content parts.
 // See migration helpers in "./migration/index.js" for converting legacy messages.
+
+/**
+ * @deprecated Legacy agent options interface.
+ * For new implementations, use AgentLoop directly with AgentLoopConfig.
+ */
+export interface AgentOptions {
+  model: string;
+  provider: string;
+  maxTokens?: number;
+  temperature?: number;
+  systemPrompt?: string;
+  tools?: unknown[];
+  onMessage?: (message: Message) => void;
+  onToolCall?: (toolName: string, params: unknown) => void;
+  onError?: (error: Error) => void;
+}
 
 /**
  * Extended agent options with mode support.

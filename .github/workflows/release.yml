@@ -191,15 +191,15 @@ jobs:
             return 1
           }
 
-          add_section "Features" '^(feat|feature)(\(.+\))?: ' || true
-          add_section "Fixes" '^(fix|bugfix)(\(.+\))?: ' || true
-          add_section "Docs" '^(docs)(\(.+\))?: ' || true
-          add_section "Refactors" '^(refactor)(\(.+\))?: ' || true
-          add_section "Chores" '^(chore|build|ci|deps)(\(.+\))?: ' || true
-          add_section "Tests" '^(test)(\(.+\))?: ' || true
+          add_section "Features" '^- (feat|feature)(\(.+\))?: ' || true
+          add_section "Fixes" '^- (fix|bugfix)(\(.+\))?: ' || true
+          add_section "Docs" '^- (docs)(\(.+\))?: ' || true
+          add_section "Refactors" '^- (refactor)(\(.+\))?: ' || true
+          add_section "Chores" '^- (chore|build|ci|deps)(\(.+\))?: ' || true
+          add_section "Tests" '^- (test)(\(.+\))?: ' || true
 
           other_lines=$(git log "$RANGE" --no-merges --pretty=format:'- %s (%h) by %an' | eval "$FILTER_CMD" \
-            | grep -Ev '^(feat|feature|fix|bugfix|docs|refactor|chore|build|ci|deps|test)(\(.+\))?: ' || true)
+            | grep -Ev '^- (feat|feature|fix|bugfix|docs|refactor|chore|build|ci|deps|test)(\(.+\))?: ' || true)
           if [ -n "$other_lines" ]; then
             echo "## Other Changes" >> dist/release-notes.md
             echo "" >> dist/release-notes.md
