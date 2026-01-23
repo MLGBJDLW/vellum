@@ -370,6 +370,13 @@ const MODEL_TO_ENCODING: Record<string, TiktokenEncoding> = {
   "o1-mini": "o200k_base",
   "o1-preview": "o200k_base",
   "o3-mini": "o200k_base",
+  o3: "o200k_base",
+  "o4-mini": "o200k_base",
+
+  // GPT-4.1 family (o200k_base)
+  "gpt-4.1": "o200k_base",
+  "gpt-4.1-mini": "o200k_base",
+  "gpt-4.1-nano": "o200k_base",
 
   // GPT-5 family (o200k_base - newer encoding for advanced models)
   "gpt-5": "o200k_base",
@@ -382,6 +389,8 @@ const MODEL_TO_ENCODING: Record<string, TiktokenEncoding> = {
   "gpt-5.1-codex-max": "o200k_base",
   "gpt-5.1-codex-mini": "o200k_base",
   "gpt-5.2-codex": "o200k_base",
+  "gpt-5-nano": "o200k_base",
+  "gpt-5-codex": "o200k_base",
 
   // Embedding models (cl100k_base)
   "text-embedding-ada-002": "cl100k_base",
@@ -412,7 +421,7 @@ function getEncodingForModel(model: string): TiktokenEncoding {
   if (model.startsWith("gpt-3.5") || model.includes("gpt-3.5")) {
     return "cl100k_base";
   }
-  if (model.startsWith("o1") || model.startsWith("o3")) {
+  if (model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4")) {
     return "o200k_base";
   }
 
