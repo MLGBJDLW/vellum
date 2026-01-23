@@ -18,7 +18,7 @@
 
 import { render } from "ink-testing-library";
 import type React from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ThemeProvider } from "../../../theme/index.js";
 import { ModelIndicator } from "../ModelIndicator.js";
 import { StatusBar } from "../StatusBar.js";

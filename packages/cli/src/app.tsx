@@ -375,15 +375,16 @@ function FocusDebugger({
   interactivePrompt,
   pendingOperation,
 }: FocusDebuggerProps): null {
-  const shouldFocus =
-    !isLoading &&
-    !showModeSelector &&
-    !showModelSelector &&
-    !showSessionManager &&
-    !showHelpModal &&
-    !activeApproval &&
-    !interactivePrompt &&
-    !pendingOperation;
+  // Note: These props are for debugging focus logic.
+  // The shouldFocus calculation was removed as part of debug cleanup.
+  void isLoading;
+  void showModeSelector;
+  void showModelSelector;
+  void showSessionManager;
+  void showHelpModal;
+  void activeApproval;
+  void interactivePrompt;
+  void pendingOperation;
 
   return null;
 }
