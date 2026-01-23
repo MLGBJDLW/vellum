@@ -11,6 +11,7 @@ import { Box, Text, useStdout } from "ink";
 import Gradient from "ink-gradient";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { version as appVersion } from "../../../version.js";
 import { useTheme } from "../../theme/index.js";
 import { selectAsciiArt } from "./AsciiArt.js";
 import { interpolateColor } from "./ShimmerText.js";
@@ -167,7 +168,7 @@ function VersionDisplay({ version, brand }: VersionDisplayProps): React.JSX.Elem
 export function Banner({
   customArt,
   showVersion = false,
-  version = "0.1.0",
+  version = appVersion,
   // Note: animated, cycleDuration, updateInterval, cycles kept for API compat
   // but shimmer effect is removed - typing goes directly to static gradient
   onComplete,

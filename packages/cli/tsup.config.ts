@@ -1,6 +1,9 @@
-import { cpSync } from "node:fs";
+import { cpSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "tsup";
+
+// Read version from package.json at build time
+const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf-8"));
 
 export default defineConfig({
   entry: ["src/index.tsx"],
@@ -86,5 +89,10 @@ export default defineConfig({
   esbuildOptions(options) {
     options.jsx = "automatic";
     options.jsxImportSource = "react";
+    // Inject version from package.json at build time
+    options.define = {
+      ...options.define,
+      __VERSION__: JSON.stringify(pkg.version),
+    };
   },
 });
