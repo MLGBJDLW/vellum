@@ -97,8 +97,8 @@ async function handleList(options?: ListOptions): Promise<CommandResult> {
       "",
     ];
 
-    for (let i = 0; i < result.items.length; i++) {
-      lines.push(formatSession(result.items[i]!, i));
+    for (const [i, session] of result.items.entries()) {
+      lines.push(formatSession(session, i));
       lines.push("");
     }
 

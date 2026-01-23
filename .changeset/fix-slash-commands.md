@@ -1,5 +1,5 @@
 ---
-"@vellum/cli": patch
+"@butlerw/vellum": patch
 ---
 
 Fix slash commands broken chains and complete implementations
