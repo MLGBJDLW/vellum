@@ -396,11 +396,50 @@ async function handleRemove(ctx: CommandContext): Promise<CommandResult> {
         return success("Removal cancelled.");
       }
 
-      // Note: We can't actually delete from config file here.
-      // User needs to manually edit mcp.json
-      return success(
-        `ℹ️ To remove "${serverName}", delete its entry from ~/.vellum/mcp.json\n\n` +
-          "The server will be disconnected automatically after config change."
+      // Try to remove from both global and project config
+      const globalPath = getGlobalMcpConfigPath();
+      const projectPath = getProjectMcpConfigPath();
+      let removed = false;
+      const removedFrom: string[] = [];
+
+      // Try global config
+      try {
+        const globalConfig = await readMcpConfig(globalPath);
+        if (globalConfig.mcpServers && serverName in globalConfig.mcpServers) {
+          delete globalConfig.mcpServers[serverName];
+          await writeMcpConfig(globalPath, globalConfig);
+          removed = true;
+          removedFrom.push("global (~/.vellum/mcp.json)");
+        }
+      } catch {
+        // Ignore errors reading global config
+      }
+
+      // Try project config
+      try {
+        const projectConfig = await readMcpConfig(projectPath);
+        if (projectConfig.mcpServers && serverName in projectConfig.mcpServers) {
+          delete projectConfig.mcpServers[serverName];
+          await writeMcpConfig(projectPath, projectConfig);
+          removed = true;
+          removedFrom.push("project (.vellum/mcp.json)");
+        }
+      } catch {
+        // Ignore errors reading project config
+      }
+
+      if (removed) {
+        return success(
+          `${ICONS.success} Server "${serverName}" removed from ${removedFrom.join(" and ")}.\n\n` +
+            "The server has been disconnected.\n" +
+            "Restart Vellum to apply changes."
+        );
+      }
+
+      return error(
+        "RESOURCE_NOT_FOUND",
+        `Server "${serverName}" not found in configuration files.`,
+        ["The server may be configured elsewhere", "Check ~/.vellum/mcp.json manually"]
       );
     },
     onCancel: () => success("Removal cancelled."),

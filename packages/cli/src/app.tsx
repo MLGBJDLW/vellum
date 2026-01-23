@@ -41,12 +41,15 @@ import { Box, Text, useApp as useInkApp, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DefaultContextProvider } from "./commands/index.js";
 import {
+  agentSlashCommands,
   agentsCommand,
   CommandExecutor,
   CommandRegistry,
   clearCommand,
+  commitCommand,
   condenseCommand,
   configSlashCommands,
+  copyCommand,
   costCommand,
   costResetCommand,
   createBatchCommand,
@@ -57,35 +60,53 @@ import {
   customAgentsCommand,
   diffModeSlashCommands,
   enhancedAuthCommands,
+  envCommand,
   exitCommand,
   getEffectiveThinkingConfig,
   getThinkingState,
   helpCommand,
+  initPromptsCommand,
   initSlashCommand,
+  installCommand,
   languageCommand,
+  mcpSlashCommands,
   memoryCommand,
   metricsCommands,
+  migratePromptsCommand,
   modelCommand,
   onboardCommand,
+  openCommand,
   persistenceCommands,
+  progressCommand,
   promptPrioritySlashCommands,
+  promptValidateCommand,
   type ResumeSessionEventData,
   registerUserCommands,
+  sandboxCommand,
+  setAgentCommandsManager,
   setCondenseCommandLoop,
+  setCopyCommandLoop,
   setCostCommandsService,
   setHelpRegistry,
+  setMcpCommandsHub,
   setModeCommandsManager,
   setModelCommandConfig,
   setPersistenceRef,
   setThemeContext,
   settingsSlashCommands,
   setVimCallbacks,
+  specSlashCommand,
+  statusCommand,
   subscribeToThinkingState,
   themeSlashCommands,
   thinkSlashCommands,
   toggleThinking,
+  trustSlashCommands,
   tutorialCommand,
+  uninstallCommand,
+  usageCommand,
   vimSlashCommands,
+  workflowCommands,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
@@ -141,6 +162,7 @@ import { PermissionDialog } from "./tui/components/Tools/PermissionDialog.js";
 import { ToolsPanel } from "./tui/components/Tools/ToolsPanel.js";
 import { UpdateBanner } from "./tui/components/UpdateBanner.js";
 import { VimModeIndicator } from "./tui/components/VimModeIndicator.js";
+import { useMcp } from "./tui/context/McpContext.js";
 import type { Message } from "./tui/context/MessagesContext.js";
 import { useMessages } from "./tui/context/MessagesContext.js";
 import { RootProvider } from "./tui/context/RootProvider.js";
@@ -476,6 +498,80 @@ function createCommandRegistry(): CommandRegistry {
   for (const cmd of promptPrioritySlashCommands) {
     registry.register(cmd);
   }
+
+  // ==========================================================================
+  // Register Agent Level Commands (T046c)
+  // ==========================================================================
+  for (const cmd of agentSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // ==========================================================================
+  // Register Trust Commands (T060)
+  // ==========================================================================
+  for (const cmd of trustSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // ==========================================================================
+  // Register MCP Commands (Phase 40)
+  // ==========================================================================
+  for (const cmd of mcpSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // ==========================================================================
+  // Register Workflow Commands (T035)
+  // ==========================================================================
+  for (const cmd of workflowCommands) {
+    registry.register(cmd);
+  }
+
+  // ==========================================================================
+  // Register Clipboard/Copy Command
+  // ==========================================================================
+  registry.register(copyCommand);
+
+  // ==========================================================================
+  // Register Open Command (External file/URL)
+  // ==========================================================================
+  registry.register(openCommand);
+
+  // ==========================================================================
+  // Register Git Commit Command
+  // ==========================================================================
+  registry.register(commitCommand);
+
+  // ==========================================================================
+  // Register Status and Usage Commands
+  // ==========================================================================
+  registry.register(statusCommand);
+  registry.register(usageCommand);
+
+  // ==========================================================================
+  // Register Prompt Management Commands
+  // ==========================================================================
+  registry.register(initPromptsCommand);
+  registry.register(promptValidateCommand);
+  registry.register(migratePromptsCommand);
+
+  // ==========================================================================
+  // Register Environment and Sandbox Commands
+  // ==========================================================================
+  registry.register(envCommand);
+  registry.register(sandboxCommand);
+
+  // ==========================================================================
+  // Register Spec Workflow Command (note: /spec-workflow to avoid conflict with mode /spec)
+  // ==========================================================================
+  registry.register(specSlashCommand);
+
+  // ==========================================================================
+  // Register WIP Commands
+  // ==========================================================================
+  registry.register(progressCommand);
+  registry.register(installCommand);
+  registry.register(uninstallCommand);
 
   //: Plugin commands are registered via registerPluginCommands()
   // after PluginManager initialization in AppContent
@@ -1132,6 +1228,35 @@ function AppContent({
     setModeCommandsManager(modeManager);
     return () => setModeCommandsManager(null);
   }, [modeManager]);
+
+  // ==========================================================================
+  // Wire up Agent Level Commands Manager (T046c)
+  // ==========================================================================
+  useEffect(() => {
+    setAgentCommandsManager(modeManager);
+    return () => setAgentCommandsManager(null);
+  }, [modeManager]);
+
+  // ==========================================================================
+  // Wire up MCP Commands Hub (Phase 40)
+  // ==========================================================================
+  const mcpContext = useMcp();
+  useEffect(() => {
+    if (mcpContext.hub && mcpContext.isInitialized) {
+      setMcpCommandsHub(mcpContext.hub);
+    }
+    return () => setMcpCommandsHub(null);
+  }, [mcpContext.hub, mcpContext.isInitialized]);
+
+  // ==========================================================================
+  // Wire up Copy Command Loop
+  // ==========================================================================
+  useEffect(() => {
+    if (agentLoopProp) {
+      setCopyCommandLoop(agentLoopProp);
+    }
+    return () => setCopyCommandLoop(null);
+  }, [agentLoopProp]);
 
   const bannerOverride = banner ?? false;
   const shouldShowBanner = !showOnboarding && (bannerOverride || !bannerSeen);
