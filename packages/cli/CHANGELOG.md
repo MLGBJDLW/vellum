@@ -1,5 +1,13 @@
 # @butlerw/vellum
 
+## 0.1.5
+
+### Patch Changes
+
+- [`7ef0f35`](https://github.com/MLGBJDLW/vellum/commit/7ef0f351090fafef6ec65feb658b2dbdb8d36392) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - Fix ESM module loading error when running CLI globally
+
+  Changes build output from CJS to ESM format with CJS compatibility banner to properly handle ESM-only dependencies (ink, shiki, etc.) that use top-level await.
+
 ## 0.1.4
 
 ### Patch Changes
