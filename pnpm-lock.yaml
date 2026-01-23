@@ -120,6 +120,10 @@ importers:
       zod:
         specifier: ^4.3.5
         version: 4.3.5
+    optionalDependencies:
+      keytar:
+        specifier: ^7.9.0
+        version: 7.9.0
     devDependencies:
       '@types/blessed':
         specifier: ^0.1.25
