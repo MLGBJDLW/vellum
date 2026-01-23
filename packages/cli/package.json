@@ -8,13 +8,14 @@
   },
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
   "bin": {
-    "vellum": "./dist/index.js"
+    "vellum": "./dist/index.cjs"
   },
   "exports": {
     ".": {
-      "import": "./dist/index.js"
+      "import": "./dist/index.cjs",
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
@@ -25,7 +26,7 @@
     "build": "tsup",
     "dev": "tsx src/index.tsx --banner",
     "dev:blessed": "tsx src/tui-blessed/test.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/index.cjs",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
   },

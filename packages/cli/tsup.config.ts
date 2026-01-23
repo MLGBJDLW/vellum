@@ -2,7 +2,7 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   entry: ["src/index.tsx"],
-  format: ["esm"],
+  format: ["cjs"],
   dts: false,
   clean: true,
   target: "node20",
@@ -12,6 +12,7 @@ export default defineConfig({
   minify: false,
   treeshake: true,
   shims: false,
+  outExtension: { js: ".cjs" },
 
   // Bundle ALL workspace packages into the CLI
   noExternal: [
