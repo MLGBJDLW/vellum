@@ -123,38 +123,56 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create tags for published versions
-        run: pnpm changeset tag
+        id: create-tags
+        run: |
+          # Get list of tags before creating new ones
+          git tag > /tmp/tags-before.txt || true
+
+          # Create tags for published packages
+          pnpm changeset tag
+
+          # Get list of tags after
+          git tag > /tmp/tags-after.txt || true
+
+          # Find new tags
+          NEW_TAGS=$(comm -13 <(sort /tmp/tags-before.txt) <(sort /tmp/tags-after.txt) || echo "")
+          echo "New tags created: $NEW_TAGS"
+
+          # Check if any new tags were created
+          if [ -n "$NEW_TAGS" ]; then
+            echo "has_new_tags=true" >> $GITHUB_OUTPUT
+            # Get the latest new tag
+            LATEST_TAG=$(echo "$NEW_TAGS" | tail -1)
+            echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          else
+            echo "has_new_tags=false" >> $GITHUB_OUTPUT
+            echo "latest_tag=" >> $GITHUB_OUTPUT
+          fi
 
       - name: Push tags
+        if: steps.create-tags.outputs.has_new_tags == 'true'
         run: git push --tags
 
-      - name: Get latest tag
-        id: get-tag
-        run: |
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "has_tag=$([[ -n \"$TAG\" ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-
       - name: Create GitHub Release
-        if: steps.get-tag.outputs.has_tag == 'true'
+        if: steps.create-tags.outputs.has_new_tags == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get-tag.outputs.tag }}
+          tag_name: ${{ steps.create-tags.outputs.latest_tag }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create zip archive
-        if: steps.get-tag.outputs.has_tag == 'true'
+        if: steps.create-tags.outputs.has_new_tags == 'true'
         run: |
           mkdir -p dist
-          zip -r dist/vellum-${{ steps.get-tag.outputs.tag }}.zip . -x "node_modules/*" -x ".git/*" -x ".turbo/*" -x "dist/*"
+          zip -r dist/vellum-${{ steps.create-tags.outputs.latest_tag }}.zip . -x "node_modules/*" -x ".git/*" -x ".turbo/*" -x "dist/*"
 
       - name: Upload assets to Release
-        if: steps.get-tag.outputs.has_tag == 'true'
+        if: steps.create-tags.outputs.has_new_tags == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get-tag.outputs.tag }}
+          tag_name: ${{ steps.create-tags.outputs.latest_tag }}
           files: dist/vellum-*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
