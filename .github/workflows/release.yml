@@ -160,9 +160,10 @@ jobs:
           mkdir -p dist
 
           CURRENT_TAG="${{ steps.create-tags.outputs.latest_tag }}"
+          CLI_VERSION="${{ steps.create-tags.outputs.cli_version }}"
           PREV_TAG=$(git tag --list '@butlerw/vellum@*' --sort=-v:refname | sed -n '2p' || true)
 
-          echo "# @butlerw/vellum ${CURRENT_TAG}" > dist/release-notes.md
+          echo "# vellum v${CLI_VERSION}" > dist/release-notes.md
           echo "" >> dist/release-notes.md
           echo "## ✨ What's Changed" >> dist/release-notes.md
           echo "" >> dist/release-notes.md
@@ -228,7 +229,21 @@ jobs:
         if: steps.create-tags.outputs.has_new_tags == 'true'
         run: |
           mkdir -p dist
-          zip -r dist/vellum.zip . -x "node_modules/*" -x ".git/*" -x ".turbo/*" -x "dist/*"
+          # Exclude all node_modules (recursive), build artifacts, and dev files
+          zip -r dist/vellum.zip . \
+            -x "**/node_modules/*" \
+            -x ".git/*" \
+            -x ".turbo/*" \
+            -x "dist/*" \
+            -x "**/.turbo/*" \
+            -x "**/dist/*" \
+            -x "*.log" \
+            -x "*.tsbuildinfo" \
+            -x ".env*" \
+            -x "coverage/*" \
+            -x "**/coverage/*" \
+            -x ".changeset/*" \
+            -x "*.zip"
 
       - name: Upload assets to Release
         if: steps.create-tags.outputs.has_new_tags == 'true'
