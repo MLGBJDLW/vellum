@@ -88,6 +88,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -126,17 +127,21 @@ jobs:
         id: create-tags
         run: |
           # Get list of tags before creating new ones
-          git tag > /tmp/tags-before.txt || true
+          echo "Tags before:"
+          git tag | tee /tmp/tags-before.txt || true
+          echo "---"
 
           # Create tags for published packages
           pnpm changeset tag
 
           # Get list of tags after
-          git tag > /tmp/tags-after.txt || true
+          echo "Tags after:"
+          git tag | tee /tmp/tags-after.txt || true
+          echo "---"
 
           # Find new tags
           NEW_TAGS=$(comm -13 <(sort /tmp/tags-before.txt) <(sort /tmp/tags-after.txt) || echo "")
-          echo "New tags created: $NEW_TAGS"
+          echo "New tags detected: '$NEW_TAGS'"
 
           # Check if any new tags were created
           if [ -n "$NEW_TAGS" ]; then
@@ -144,9 +149,11 @@ jobs:
             # Get the latest new tag
             LATEST_TAG=$(echo "$NEW_TAGS" | tail -1)
             echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+            echo "Will create release for: $LATEST_TAG"
           else
             echo "has_new_tags=false" >> $GITHUB_OUTPUT
             echo "latest_tag=" >> $GITHUB_OUTPUT
+            echo "::warning::No new tags were created by changeset. Skipping release creation."
           fi
 
       - name: Push tags
