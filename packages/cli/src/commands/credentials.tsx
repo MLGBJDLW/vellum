@@ -15,9 +15,8 @@ import {
   CredentialManager,
   type CredentialRef,
   type CredentialSource,
-  EncryptedFileStore,
   EnvCredentialStore,
-  KeychainStore,
+  HybridCredentialStore,
 } from "@vellum/core";
 import { Box, render, Text, useApp, useInput } from "ink";
 import { useCallback, useEffect, useState } from "react";
@@ -85,16 +84,13 @@ const PROVIDER_ENV_VARS: Record<SupportedProvider, string> = {
 async function createCredentialManager(): Promise<CredentialManager> {
   const stores = [
     new EnvCredentialStore(),
-    new KeychainStore(),
-    new EncryptedFileStore({
+    new HybridCredentialStore({
       filePath: `${process.env.HOME ?? process.env.USERPROFILE}/.vellum/credentials.enc`,
       password: process.env.VELLUM_CREDENTIAL_PASSWORD ?? "vellum-default-key",
     }),
   ];
 
-  return new CredentialManager(stores, {
-    preferredWriteStore: "keychain",
-  });
+  return new CredentialManager(stores);
 }
 
 // =============================================================================

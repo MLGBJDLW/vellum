@@ -3,9 +3,11 @@
 When creating a changeset for `@butlerw/vellum`, use this format:
 
 ## File Location
+
 `.changeset/[descriptive-name].md`
 
 ## Format
+
 ```markdown
 ---
 "@butlerw/vellum": patch | minor | major
@@ -19,6 +21,7 @@ When creating a changeset for `@butlerw/vellum`, use this format:
 ```
 
 ## Version Levels
+
 | Level | When to Use |
 |-------|-------------|
 | `patch` | Bug fixes, cleanup, refactoring, docs |
@@ -26,6 +29,7 @@ When creating a changeset for `@butlerw/vellum`, use this format:
 | `major` | Breaking changes |
 
 ## Conventional Commit Types
+
 | Type | Description |
 |------|-------------|
 | `feat` | New feature |
@@ -37,6 +41,7 @@ When creating a changeset for `@butlerw/vellum`, use this format:
 | `test` | Test changes |
 
 ## Example
+
 ```markdown
 ---
 "@butlerw/vellum": minor
