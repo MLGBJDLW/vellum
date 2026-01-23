@@ -1,5 +1,14 @@
 # @butlerw/vellum
 
+## 0.1.6
+
+### Patch Changes
+
+- [`c7c4670`](https://github.com/MLGBJDLW/vellum/commit/c7c4670c45b896ef7fe5ab96cdc6ad62084cadc8) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - Fix CLI runtime issues:
+  - Include prompt files in npm package (fixes "Prompt base not found" error)
+  - Remove debug console.log statements from production build
+  - Silence deprecation warnings in StatusBar component
+
 ## 0.1.5
 
 ### Patch Changes
