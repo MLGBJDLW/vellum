@@ -12,7 +12,9 @@ export default defineConfig({
   minify: false,
   treeshake: true,
   shims: false,
-  outExtension: { js: ".cjs" },
+  outExtension() {
+    return { js: ".cjs" };
+  },
 
   // Bundle ALL workspace packages into the CLI
   noExternal: [
