@@ -30,15 +30,15 @@ function writeConfig(baseDir: string): void {
 
 describe("Onboarding Wizard integration", () => {
   let tempDir: string;
-  let homedirSpy: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "vellum-onboarding-"));
-    homedirSpy = vi.spyOn(os, "homedir").mockReturnValue(tempDir);
+    vi.stubEnv("HOME", tempDir);
+    vi.stubEnv("USERPROFILE", tempDir);
+    vi.stubEnv("HOMEDRIVE", "C:");
+    vi.stubEnv("HOMEPATH", tempDir.replace(/^[A-Za-z]:/, ""));
   });
 
   afterEach(() => {
-    homedirSpy.mockRestore();
     fs.rmSync(tempDir, { recursive: true, force: true });
     vi.unstubAllEnvs();
   });
