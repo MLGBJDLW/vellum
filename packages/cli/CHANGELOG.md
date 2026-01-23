@@ -1,5 +1,21 @@
 # @butlerw/vellum
 
+## 0.1.10
+
+### Patch Changes
+
+- [#25](https://github.com/MLGBJDLW/vellum/pull/25) [`8c96136`](https://github.com/MLGBJDLW/vellum/commit/8c961369c2340a943408b3fbd312c11f4994a0b8) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### fix(release)
+
+  - Fixed release.yml regex patterns for changelog categorization by adding `^- ` prefix to match git log output format
+
+  ### chore(cleanup)
+
+  - Removed orphaned `RateLimitIndicator.tsx` component (never integrated into TUI)
+  - Removed deprecated `LoopEvent` type from `packages/core/src/types.ts` (inlined into agent.ts)
+  - Removed deprecated type files from `packages/shared/src/types/`:
+    - `agent.ts`, `message.ts`, `provider.ts`, `tool.ts`
+  - Updated barrel exports in `packages/shared/src/index.ts` and `packages/core/src/index.ts`
+
 ## 0.1.9
 
 ### Patch Changes
