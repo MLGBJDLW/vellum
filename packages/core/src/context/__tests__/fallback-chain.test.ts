@@ -351,20 +351,23 @@ describe("FallbackChain", () => {
       });
 
       const resultPromise = chain.summarize(createTestMessages(5), "Summarize");
+      // Attach catch handler immediately to prevent unhandled rejection warning
+      let caughtError: unknown;
+      resultPromise.catch((e) => {
+        caughtError = e;
+      });
       await vi.runAllTimersAsync();
 
+      // Wait for error to be captured
       await expect(resultPromise).rejects.toThrow(CompactionError);
 
-      try {
-        await resultPromise;
-      } catch (error) {
-        expect(CompactionError.isCompactionError(error)).toBe(true);
-        if (CompactionError.isCompactionError(error)) {
-          expect(error.code).toBe(CompactionErrorCode.ALL_MODELS_FAILED);
-          expect(error.context?.attemptedModels).toEqual(["model-a", "model-b"]);
-          expect(error.context?.totalAttempts).toBe(2);
-          expect(error.isRetryable).toBe(false);
-        }
+      expect(caughtError).toBeDefined();
+      expect(caughtError).toBeInstanceOf(CompactionError);
+      if (CompactionError.isCompactionError(caughtError)) {
+        expect(caughtError.code).toBe(CompactionErrorCode.ALL_MODELS_FAILED);
+        expect(caughtError.context?.attemptedModels).toEqual(["model-a", "model-b"]);
+        expect(caughtError.context?.totalAttempts).toBe(2);
+        expect(caughtError.isRetryable).toBe(false);
       }
     });
 
@@ -387,18 +390,25 @@ describe("FallbackChain", () => {
       });
 
       const resultPromise = chain.summarize(createTestMessages(3), "Summarize");
+      // Attach catch handler immediately to prevent unhandled rejection warning
+      let caughtError: unknown;
+      resultPromise.catch((e) => {
+        caughtError = e;
+      });
       await vi.runAllTimersAsync();
 
-      try {
-        await resultPromise;
-        expect.fail("Should have thrown");
-      } catch (error) {
-        if (CompactionError.isCompactionError(error)) {
-          const history = error.context?.attemptHistory as any[];
-          expect(history).toHaveLength(2);
-          expect(history[0]).toMatchObject({ model: "model-a", success: false });
-          expect(history[1]).toMatchObject({ model: "model-b", success: false });
-        }
+      // Wait for error to be captured
+      await expect(resultPromise).rejects.toThrow();
+
+      expect(caughtError).toBeDefined();
+      if (CompactionError.isCompactionError(caughtError)) {
+        const history = caughtError.context?.attemptHistory as Array<{
+          model: string;
+          success: boolean;
+        }>;
+        expect(history).toHaveLength(2);
+        expect(history[0]).toMatchObject({ model: "model-a", success: false });
+        expect(history[1]).toMatchObject({ model: "model-b", success: false });
       }
     });
 
@@ -415,16 +425,20 @@ describe("FallbackChain", () => {
       });
 
       const resultPromise = chain.summarize(createTestMessages(3), "Summarize");
+      // Attach catch handler immediately to prevent unhandled rejection warning
+      let caughtError: unknown;
+      resultPromise.catch((e) => {
+        caughtError = e;
+      });
       await vi.runAllTimersAsync();
 
-      try {
-        await resultPromise;
-        expect.fail("Should have thrown");
-      } catch (error) {
-        if (CompactionError.isCompactionError(error)) {
-          expect(error.context?.totalLatencyMs).toBeDefined();
-          expect(typeof error.context?.totalLatencyMs).toBe("number");
-        }
+      // Wait for error to be captured
+      await expect(resultPromise).rejects.toThrow();
+
+      expect(caughtError).toBeDefined();
+      if (CompactionError.isCompactionError(caughtError)) {
+        expect(caughtError.context?.totalLatencyMs).toBeDefined();
+        expect(typeof caughtError.context?.totalLatencyMs).toBe("number");
       }
     });
   });
@@ -488,17 +502,23 @@ describe("FallbackChain", () => {
       });
 
       const resultPromise = chain.summarize(createTestMessages(3), "Summarize");
+      // Attach catch handler immediately to prevent unhandled rejection warning
+      let caughtError: unknown;
+      resultPromise.catch((e) => {
+        caughtError = e;
+      });
       await vi.advanceTimersByTimeAsync(200);
       await vi.runAllTimersAsync();
 
-      try {
-        await resultPromise;
-        expect.fail("Should have thrown");
-      } catch (error) {
-        if (CompactionError.isCompactionError(error)) {
-          const history = error.context?.attemptHistory as any[];
-          expect(history[0].timedOut).toBe(true);
-        }
+      // Wait for error to be captured
+      await expect(resultPromise).rejects.toThrow();
+
+      expect(caughtError).toBeDefined();
+      if (CompactionError.isCompactionError(caughtError)) {
+        const history = caughtError.context?.attemptHistory as Array<{
+          timedOut: boolean;
+        }>;
+        expect(history[0]?.timedOut).toBe(true);
       }
     });
 
@@ -682,15 +702,15 @@ describe("FallbackChain", () => {
       });
 
       const resultPromise = chain.summarize(createTestMessages(3), "Summarize");
+      // Attach catch handler immediately to prevent unhandled rejection warning
+      resultPromise.catch(() => {
+        // Expected rejection - handled below
+      });
       await vi.runAllTimersAsync();
 
-      try {
-        await resultPromise;
-        expect.fail("Should have thrown");
-      } catch (_error) {
-        // Should only try once (default maxRetries = 1)
-        expect(mock).toHaveBeenCalledTimes(1);
-      }
+      // Should only try once (default maxRetries = 1)
+      await expect(resultPromise).rejects.toThrow();
+      expect(mock).toHaveBeenCalledTimes(1);
     });
   });
 
