@@ -1,6 +1,5 @@
 ---
-"@vellum/cli": patch
-"@vellum/core": patch
+@butlerw/vellum
 ---
 
 fix(credentials): resolve keytar missing package error in npm install
