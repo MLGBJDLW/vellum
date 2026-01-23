@@ -11,6 +11,8 @@
  * @module @vellum/core/context/sliding-window
  */
 
+import { estimateTokenCount as providerEstimateTokenCount } from "@vellum/provider";
+
 import { analyzeToolPairs, getLinkedIndices, type ToolPairAnalysis } from "./tool-pairing.js";
 import { type ContextMessage, MessagePriority } from "./types.js";
 
@@ -82,9 +84,6 @@ export interface TruncationCandidate {
 /** Default number of recent messages to protect */
 const DEFAULT_RECENT_COUNT = 3;
 
-/** Estimated characters per token for rough estimation */
-const CHARS_PER_TOKEN = 4;
-
 // ============================================================================
 // Token Estimation
 // ============================================================================
@@ -115,33 +114,36 @@ export function estimateTokens(message: ContextMessage): number {
 
   const content = message.content;
 
-  // String content: estimate based on character count
+  // String content: use provider's intelligent estimation (supports code/CJK detection)
   if (typeof content === "string") {
-    return Math.ceil(content.length / CHARS_PER_TOKEN);
+    return providerEstimateTokenCount(content);
   }
 
-  // Array content: sum up all blocks
-  let totalChars = 0;
+  // Array content: sum up all blocks using provider's estimation
+  let totalTokens = 0;
 
   for (const block of content) {
     switch (block.type) {
       case "text":
-        totalChars += block.text.length;
+        totalTokens += providerEstimateTokenCount(block.text);
         break;
-      case "tool_use":
+      case "tool_use": {
         // Tool name + serialized input
-        totalChars += block.name.length + JSON.stringify(block.input).length;
+        const inputJson = JSON.stringify(block.input);
+        totalTokens +=
+          providerEstimateTokenCount(block.name) + providerEstimateTokenCount(inputJson);
         break;
+      }
       case "tool_result": {
         // Tool result content
         const resultContent = block.content;
         if (typeof resultContent === "string") {
-          totalChars += resultContent.length;
+          totalTokens += providerEstimateTokenCount(resultContent);
         } else {
           // Nested content blocks - recursive estimation
           for (const nested of resultContent) {
             if (nested.type === "text") {
-              totalChars += nested.text.length;
+              totalTokens += providerEstimateTokenCount(nested.text);
             }
           }
         }
@@ -151,16 +153,16 @@ export function estimateTokens(message: ContextMessage): number {
         // Images: rough estimate based on dimensions or fixed cost
         if (block.width && block.height) {
           // Anthropic-style: pixels / 750
-          totalChars += Math.ceil((block.width * block.height) / 750) * CHARS_PER_TOKEN;
+          totalTokens += Math.ceil((block.width * block.height) / 750);
         } else {
-          // Fixed estimate for unknown size
-          totalChars += 258 * CHARS_PER_TOKEN; // Gemini-style fixed cost
+          // Fixed estimate for unknown size (Gemini-style)
+          totalTokens += 258;
         }
         break;
     }
   }
 
-  return Math.ceil(totalChars / CHARS_PER_TOKEN);
+  return totalTokens;
 }
 
 /**

@@ -14,6 +14,8 @@
  * @module @vellum/core/session/compaction
  */
 
+import { estimateTokenCount as providerEstimateTokenCount } from "@vellum/provider";
+
 import type { SessionMessage, SessionMessagePart, SessionToolResultPart } from "./message.js";
 import { createSystemMessage } from "./message.js";
 import type { Session, SessionCheckpoint } from "./types.js";
@@ -605,30 +607,32 @@ Keep the summary under 200 words.`;
   }
 
   /**
-   * Estimates token count for messages (rough: 4 chars = 1 token).
+   * Estimates token count for messages using provider's intelligent estimation.
+   * Supports code detection and CJK language handling for more accurate counts.
    */
   private estimateTokenCount(messages: SessionMessage[]): number {
-    let totalChars = 0;
+    let totalTokens = 0;
 
     for (const message of messages) {
       for (const part of message.parts) {
         if (part.type === "text") {
-          totalChars += (part as { text: string }).text.length;
+          totalTokens += providerEstimateTokenCount((part as { text: string }).text);
         } else if (part.type === "tool_result") {
           const content = this.getToolResultContent(part as SessionToolResultPart);
-          totalChars += content.length;
+          totalTokens += providerEstimateTokenCount(content);
         } else if (part.type === "reasoning") {
-          totalChars += ((part as { text: string }).text ?? "").length;
+          const text = (part as { text: string }).text ?? "";
+          totalTokens += providerEstimateTokenCount(text);
         } else if (part.type === "tool") {
           // Tool calls include name and stringified input
           const toolPart = part as { name: string; input: unknown };
-          totalChars += toolPart.name.length;
-          totalChars += JSON.stringify(toolPart.input).length;
+          totalTokens += providerEstimateTokenCount(toolPart.name);
+          totalTokens += providerEstimateTokenCount(JSON.stringify(toolPart.input));
         }
       }
     }
 
-    return Math.ceil(totalChars / 4);
+    return totalTokens;
   }
 
   /**
