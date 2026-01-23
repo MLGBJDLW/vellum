@@ -29,14 +29,14 @@
     "chokidar": "^4.0.3",
     "lru-cache": "^10.4.3",
     "nanoid": "^5.1.6",
-    "vscode-jsonrpc": "^8.2.0",
+    "vscode-jsonrpc": "^8.2.1",
     "vscode-languageserver-protocol": "^3.17.5",
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/node": "^22.19.3",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2",
-    "vitest": "^4.0.16"
+    "@types/node": "^22.19.7",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }

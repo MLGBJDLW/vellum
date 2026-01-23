@@ -107,6 +107,29 @@ function indicesToRanges(indices: readonly number[] | null): HighlightRange[] {
   return ranges;
 }
 
+/**
+ * Yield to the event loop to prevent blocking the UI.
+ * Uses setImmediate if available (Node.js), falls back to setTimeout.
+ */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof setImmediate !== "undefined") {
+      setImmediate(resolve);
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+/**
+ * Check if an AbortSignal is aborted and throw if so.
+ */
+function checkAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
+}
+
 // =============================================================================
 // Core Functions
 // =============================================================================
@@ -216,6 +239,85 @@ export function fuzzySearch<T>(
 }
 
 /**
+ * Options for async fuzzy search operations.
+ */
+export interface AsyncFuzzySearchOptions extends FuzzySearchOptions {
+  /** Size of each processing chunk (default: 1000) */
+  readonly chunkSize?: number;
+}
+
+/**
+ * Async version of fuzzySearch that yields to the event loop periodically.
+ * Prevents UI blocking for large datasets (10K+ items).
+ *
+ * @param items - Array of items to search
+ * @param query - Search query string
+ * @param key - Optional key to search (for object arrays)
+ * @param options - Search options including chunk size
+ * @param signal - Optional AbortSignal for cancellation
+ * @returns Promise of sorted array of fuzzy results (best matches first)
+ * @throws DOMException with name 'AbortError' if cancelled
+ *
+ * @example
+ * ```ts
+ * const controller = new AbortController();
+ * const results = await fuzzySearchAsync(files, 'test', 'path', {}, controller.signal);
+ *
+ * // Cancel if user types new input
+ * controller.abort();
+ * ```
+ */
+export async function fuzzySearchAsync<T>(
+  items: readonly T[],
+  query: string,
+  key?: keyof T,
+  options: AsyncFuzzySearchOptions = {},
+  signal?: AbortSignal
+): Promise<FuzzyResult<T>[]> {
+  const { limit, threshold = -10000, chunkSize = 1000 } = options;
+
+  checkAborted(signal);
+
+  if (!query) {
+    // No query - return all items with neutral score
+    const results: FuzzyResult<T>[] = items.map((item) => ({
+      item,
+      score: 0,
+      highlights: [],
+      target: key ? String(item[key]) : String(item),
+    }));
+    return limit ? results.slice(0, limit) : results;
+  }
+
+  // For small datasets, use sync version directly (no benefit from chunking)
+  if (items.length <= chunkSize) {
+    return fuzzySearch(items, query, key, { limit, threshold });
+  }
+
+  // Process in chunks to yield to event loop
+  const allResults: FuzzyResult<T>[] = [];
+
+  for (let i = 0; i < items.length; i += chunkSize) {
+    checkAborted(signal);
+
+    const chunk = items.slice(i, i + chunkSize);
+    const chunkResults = fuzzySearch(chunk, query, key, { threshold });
+    allResults.push(...chunkResults);
+
+    // Yield to event loop after each chunk (except the last one)
+    if (i + chunkSize < items.length) {
+      await yieldToEventLoop();
+    }
+  }
+
+  checkAborted(signal);
+
+  // Sort all results by score and apply limit
+  allResults.sort((a, b) => b.score - a.score);
+  return limit ? allResults.slice(0, limit) : allResults;
+}
+
+/**
  * Search items across multiple fields with optional weighting.
  *
  * @param items - Array of items to search
@@ -288,6 +390,86 @@ export function fuzzySearchMulti<T extends object>(
       target: bestResult?.target ?? "",
     };
   });
+}
+
+/**
+ * Options for async multi-field fuzzy search.
+ */
+export interface AsyncMultiFieldSearchOptions<T> extends MultiFieldSearchOptions<T> {
+  /** Size of each processing chunk (default: 1000) */
+  readonly chunkSize?: number;
+}
+
+/**
+ * Async version of fuzzySearchMulti that yields to the event loop periodically.
+ * Prevents UI blocking for large datasets (10K+ items).
+ *
+ * @param items - Array of items to search
+ * @param query - Search query string
+ * @param options - Multi-field search options including keys and chunk size
+ * @param signal - Optional AbortSignal for cancellation
+ * @returns Promise of sorted array of fuzzy results (best matches first)
+ * @throws DOMException with name 'AbortError' if cancelled
+ *
+ * @example
+ * ```ts
+ * const controller = new AbortController();
+ * const results = await fuzzySearchMultiAsync(items, 'test', {
+ *   keys: ['name', 'description'],
+ *   chunkSize: 500,
+ * }, controller.signal);
+ * ```
+ */
+export async function fuzzySearchMultiAsync<T extends object>(
+  items: readonly T[],
+  query: string,
+  options: AsyncMultiFieldSearchOptions<T>,
+  signal?: AbortSignal
+): Promise<FuzzyResult<T>[]> {
+  const { keys, limit, threshold = -10000, chunkSize = 1000 } = options;
+
+  checkAborted(signal);
+
+  if (!query) {
+    // No query - return all items
+    const results: FuzzyResult<T>[] = items.map((item) => {
+      const firstKey = typeof keys[0] === "object" ? keys[0].key : keys[0];
+      return {
+        item,
+        score: 0,
+        highlights: [],
+        target: firstKey ? String(item[firstKey as keyof T]) : "",
+      };
+    });
+    return limit ? results.slice(0, limit) : results;
+  }
+
+  // For small datasets, use sync version directly
+  if (items.length <= chunkSize) {
+    return fuzzySearchMulti(items, query, { keys, limit, threshold });
+  }
+
+  // Process in chunks to yield to event loop
+  const allResults: FuzzyResult<T>[] = [];
+
+  for (let i = 0; i < items.length; i += chunkSize) {
+    checkAborted(signal);
+
+    const chunk = items.slice(i, i + chunkSize);
+    const chunkResults = fuzzySearchMulti(chunk, query, { keys, threshold });
+    allResults.push(...chunkResults);
+
+    // Yield to event loop after each chunk (except the last one)
+    if (i + chunkSize < items.length) {
+      await yieldToEventLoop();
+    }
+  }
+
+  checkAborted(signal);
+
+  // Sort all results by score and apply limit
+  allResults.sort((a, b) => b.score - a.score);
+  return limit ? allResults.slice(0, limit) : allResults;
 }
 
 /**

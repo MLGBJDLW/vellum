@@ -19,8 +19,8 @@
     "@vellum/shared": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.19.3",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2"
+    "@types/node": "^22.19.7",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   }
 }

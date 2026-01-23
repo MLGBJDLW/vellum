@@ -116,6 +116,12 @@ export {
   type UseKeyboardScrollReturn,
   useKeyboardScroll,
 } from "./useKeyboardScroll.js";
+// Kitty keyboard protocol hook for enhanced key reporting
+export {
+  type UseKittyKeyboardOptions,
+  type UseKittyKeyboardReturn,
+  useKittyKeyboard,
+} from "./useKittyKeyboard.js";
 // Line buffer hook for pre-wrapped message lines (scroll optimization)
 export {
   type LineBufferEntry,

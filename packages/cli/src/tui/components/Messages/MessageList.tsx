@@ -33,6 +33,7 @@ import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { isEndKey, isHomeKey } from "../../types/ink-extended.js";
 import { estimateMessageHeight } from "../../utils/heightEstimator.js";
+import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { MaxSizedBox } from "../common/MaxSizedBox.js";
 import { NewMessagesBadge } from "../common/NewMessagesBadge.js";
 import { ScrollIndicator } from "../common/ScrollIndicator.js";
@@ -300,14 +301,29 @@ const InlineToolCall = memo(function InlineToolCall({
     toolCall.result !== undefined &&
     toolCall.result !== null;
 
+  // Shimmer effect for running tools - use accent as base, highlight gold as shimmer peak
+  const isRunning = toolCall.status === "running" || toolCall.status === "pending";
+
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
         <Text color={statusColor}>{statusIcon}</Text>
         <Text> </Text>
-        <Text color={accentColor} bold>
-          {toolCall.name}
-        </Text>
+        {isRunning ? (
+          <BannerShimmerText
+            baseColor={accentColor}
+            highlightColor="#FFD700"
+            shimmerConfig={{ cycleDuration: 2000 }}
+            shimmerWidth={0.2}
+            bold
+          >
+            {toolCall.name}
+          </BannerShimmerText>
+        ) : (
+          <Text color={accentColor} bold>
+            {toolCall.name}
+          </Text>
+        )}
         {hasDiffStats && diffMeta && (
           <>
             <Text> </Text>

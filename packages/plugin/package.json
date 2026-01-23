@@ -18,11 +18,11 @@
   "dependencies": {
     "@vellum/core": "workspace:*",
     "@vellum/shared": "workspace:*",
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/node": "^22.10.1",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2"
+    "@types/node": "^22.19.7",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   }
 }
