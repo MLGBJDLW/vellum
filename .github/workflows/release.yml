@@ -152,12 +152,75 @@ jobs:
         if: steps.create-tags.outputs.has_new_tags == 'true'
         run: git push --tags
 
+      - name: Generate release notes from commits
+        if: steps.create-tags.outputs.has_new_tags == 'true'
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+
+          CURRENT_TAG="${{ steps.create-tags.outputs.latest_tag }}"
+          PREV_TAG=$(git tag --list '@butlerw/vellum@*' --sort=-v:refname | sed -n '2p' || true)
+
+          echo "# @butlerw/vellum ${CURRENT_TAG}" > dist/release-notes.md
+          echo "" >> dist/release-notes.md
+          echo "## ✨ What's Changed" >> dist/release-notes.md
+          echo "" >> dist/release-notes.md
+
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="$PREV_TAG..$CURRENT_TAG"
+          else
+            RANGE="HEAD~50..HEAD"
+          fi
+
+          FILTER_CMD="grep -Ev 'by (github-actions\[bot\]|dependabot\[bot\]|renovate\[bot\])$'"
+
+          add_section() {
+            local title="$1"
+            local pattern="$2"
+            local lines
+            lines=$(git log "$RANGE" --no-merges --pretty=format:'- %s (%h) by %an' | eval "$FILTER_CMD" | grep -E "$pattern" || true)
+            if [ -n "$lines" ]; then
+              echo "## $title" >> dist/release-notes.md
+              echo "" >> dist/release-notes.md
+              echo "$lines" >> dist/release-notes.md
+              echo "" >> dist/release-notes.md
+              return 0
+            fi
+            return 1
+          }
+
+          add_section "Features" '^(feat|feature)(\(.+\))?: ' || true
+          add_section "Fixes" '^(fix|bugfix)(\(.+\))?: ' || true
+          add_section "Docs" '^(docs)(\(.+\))?: ' || true
+          add_section "Refactors" '^(refactor)(\(.+\))?: ' || true
+          add_section "Chores" '^(chore|build|ci|deps)(\(.+\))?: ' || true
+          add_section "Tests" '^(test)(\(.+\))?: ' || true
+
+          other_lines=$(git log "$RANGE" --no-merges --pretty=format:'- %s (%h) by %an' | eval "$FILTER_CMD" \
+            | grep -Ev '^(feat|feature|fix|bugfix|docs|refactor|chore|build|ci|deps|test)(\(.+\))?: ' || true)
+          if [ -n "$other_lines" ]; then
+            echo "## Other Changes" >> dist/release-notes.md
+            echo "" >> dist/release-notes.md
+            echo "$other_lines" >> dist/release-notes.md
+            echo "" >> dist/release-notes.md
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Full Changelog" >> dist/release-notes.md
+            echo "https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${CURRENT_TAG}" >> dist/release-notes.md
+          else
+            echo "## Full Changelog" >> dist/release-notes.md
+            echo "https://github.com/${GITHUB_REPOSITORY}/commits/${CURRENT_TAG}" >> dist/release-notes.md
+          fi
+
       - name: Create GitHub Release
         if: steps.create-tags.outputs.has_new_tags == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.create-tags.outputs.latest_tag }}
-          generate_release_notes: true
+          generate_release_notes: false
+          body_path: dist/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

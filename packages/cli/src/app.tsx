@@ -33,6 +33,7 @@ import {
   StorageManager,
   setBatchToolRegistry,
   setTuiModeActive,
+  shouldRunOnboarding,
   updateSessionMetadata,
 } from "@vellum/core";
 import { createId } from "@vellum/shared";
@@ -1150,11 +1151,14 @@ function AppContent({
   // Check onboarding completion status on mount and load saved config
   useEffect(() => {
     const checkOnboarding = async () => {
-      const completed = await CoreOnboardingWizard.isCompleted();
-      setIsFirstRun(!completed);
+      const [completed, needsOnboarding] = await Promise.all([
+        CoreOnboardingWizard.isCompleted(),
+        shouldRunOnboarding(),
+      ]);
+      setIsFirstRun(needsOnboarding);
 
       // Issue 2 Fix: Load saved config if onboarding was completed
-      if (completed) {
+      if (completed && !needsOnboarding) {
         const wizard = new CoreOnboardingWizard();
         const loadResult = await wizard.loadState();
         if (loadResult.ok) {
