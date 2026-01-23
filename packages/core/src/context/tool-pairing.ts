@@ -387,3 +387,118 @@ export function getLinkedIndices(analysis: ToolPairAnalysis, messageIndex: numbe
   // Return sorted for consistent ordering
   return Array.from(linkedSet).sort((a, b) => a - b);
 }
+
+/**
+ * Get message indices that should be protected (kept together) during compression.
+ * This identifies all tool pair boundaries that should not be split.
+ *
+ * Tool pairs MUST stay together during compression (REQ-006):
+ * - If a tool_use is compressed, its tool_result must also be compressed
+ * - If a tool_result is in the compression range, its tool_use must be included
+ *
+ * @param messages - Full array of context messages
+ * @param analysis - Tool pair analysis (if not provided, will be computed)
+ * @returns Set of message indices that are part of tool pairs
+ *
+ * @example
+ * ```typescript
+ * const messages = [msg0, msg1, msg2_tool_use, msg3_tool_result, msg4];
+ * const protected = getKeepMessagesWithToolBlocks(messages);
+ * // protected contains indices 2 and 3
+ * ```
+ */
+export function getKeepMessagesWithToolBlocks(
+  messages: ContextMessage[],
+  analysis?: ToolPairAnalysis
+): Set<number> {
+  const toolAnalysis = analysis ?? analyzeToolPairs(messages);
+  return new Set(toolAnalysis.pairedMessageIndices);
+}
+
+/**
+ * Adjust a compression range to respect tool pair boundaries.
+ *
+ * Given a desired compression range [start, end), this function adjusts
+ * the boundaries to ensure tool pairs are not split. If the start index
+ * falls in the middle of a tool pair, it's moved to include the full pair.
+ * Similarly for the end index.
+ *
+ * @param messages - Full array of context messages
+ * @param start - Desired start index (inclusive)
+ * @param end - Desired end index (exclusive)
+ * @returns Adjusted range that respects tool pair boundaries
+ *
+ * @example
+ * ```typescript
+ * // If message 2 has tool_use and message 3 has tool_result:
+ * adjustRangeForToolPairs(messages, 3, 10);
+ * // Returns { start: 2, end: 10 } - includes the tool_use at index 2
+ *
+ * adjustRangeForToolPairs(messages, 0, 3);
+ * // Returns { start: 0, end: 4 } - includes the tool_result at index 3
+ * ```
+ */
+export function adjustRangeForToolPairs(
+  messages: ContextMessage[],
+  start: number,
+  end: number
+): { start: number; end: number } {
+  const analysis = analyzeToolPairs(messages);
+
+  let adjustedStart = start;
+  let adjustedEnd = end;
+
+  // Check each tool pair to see if it spans the boundary
+  for (const pair of analysis.pairs) {
+    const minIdx = Math.min(pair.useMessageIndex, pair.resultMessageIndex);
+    const maxIdx = Math.max(pair.useMessageIndex, pair.resultMessageIndex);
+
+    // If start is in the middle of a pair, move start to include the full pair
+    if (adjustedStart > minIdx && adjustedStart <= maxIdx) {
+      adjustedStart = minIdx;
+    }
+
+    // If end is in the middle of a pair (exclusive), move end to include the full pair
+    if (adjustedEnd > minIdx && adjustedEnd <= maxIdx) {
+      adjustedEnd = maxIdx + 1;
+    }
+  }
+
+  return { start: adjustedStart, end: adjustedEnd };
+}
+
+/**
+ * Check if a compression range respects tool pair boundaries.
+ *
+ * @param messages - Full array of context messages
+ * @param start - Start index (inclusive)
+ * @param end - End index (exclusive)
+ * @returns True if the range doesn't split any tool pairs
+ *
+ * @example
+ * ```typescript
+ * // If messages 2-3 form a tool pair:
+ * isRangeToolPairSafe(messages, 0, 4); // true - includes both
+ * isRangeToolPairSafe(messages, 0, 3); // false - splits pair at index 3
+ * isRangeToolPairSafe(messages, 3, 5); // false - splits pair at index 2
+ * ```
+ */
+export function isRangeToolPairSafe(
+  messages: ContextMessage[],
+  start: number,
+  end: number
+): boolean {
+  const analysis = analyzeToolPairs(messages);
+
+  for (const pair of analysis.pairs) {
+    const useInRange = pair.useMessageIndex >= start && pair.useMessageIndex < end;
+    const resultInRange = pair.resultMessageIndex >= start && pair.resultMessageIndex < end;
+
+    // If one is in range but not the other, the pair is split
+    if (useInRange !== resultInRange) {
+      return false;
+    }
+  }
+
+  return true;
+}

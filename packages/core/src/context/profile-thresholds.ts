@@ -32,6 +32,12 @@ export interface ProfileThresholds {
   readonly description: string;
   /** Threshold configuration values */
   readonly thresholds: ThresholdConfig;
+  /**
+   * Profile-specific auto-condense threshold (REQ-010).
+   * When set, compression is triggered at this threshold instead of
+   * the critical threshold. Value should be between 0 and 1.
+   */
+  readonly autoCondensePercent?: number;
 }
 
 // ============================================================================
@@ -45,21 +51,26 @@ export interface ProfileThresholds {
  *
  * - **default**: Balanced settings suitable for most applications.
  *   Good balance between context preservation and memory management.
+ *   autoCondensePercent: 0.85 (compress at 85% of budget)
  *
  * - **code-review**: Conservative settings for detailed code analysis.
  *   Triggers actions earlier to preserve room for detailed responses.
+ *   autoCondensePercent: 0.70 (compress earlier at 70%)
  *
  * - **creative**: Aggressive settings for creative tasks.
  *   Maximizes available context for creative writing and brainstorming.
+ *   autoCondensePercent: 0.90 (compress later at 90% to preserve more context)
  *
  * - **minimal**: Very aggressive settings for short conversations.
  *   Best for quick Q&A or single-turn interactions.
+ *   autoCondensePercent: 0.60 (compress very early at 60%)
  *
  * @example
  * ```typescript
  * const profile = DEFAULT_PROFILE_THRESHOLDS['code-review'];
- * console.log(profile.name);        // 'Code Review'
- * console.log(profile.thresholds);  // { warning: 0.65, critical: 0.75, overflow: 0.85 }
+ * console.log(profile.name);              // 'Code Review'
+ * console.log(profile.thresholds);        // { warning: 0.65, critical: 0.75, overflow: 0.85 }
+ * console.log(profile.autoCondensePercent); // 0.70
  * ```
  */
 export const DEFAULT_PROFILE_THRESHOLDS: Record<string, ProfileThresholds> = {
@@ -71,6 +82,7 @@ export const DEFAULT_PROFILE_THRESHOLDS: Record<string, ProfileThresholds> = {
       critical: 0.85,
       overflow: 0.95,
     },
+    autoCondensePercent: 0.85,
   },
   "code-review": {
     name: "Code Review",
@@ -80,6 +92,7 @@ export const DEFAULT_PROFILE_THRESHOLDS: Record<string, ProfileThresholds> = {
       critical: 0.75,
       overflow: 0.85,
     },
+    autoCondensePercent: 0.7,
   },
   creative: {
     name: "Creative",
@@ -89,6 +102,7 @@ export const DEFAULT_PROFILE_THRESHOLDS: Record<string, ProfileThresholds> = {
       critical: 0.92,
       overflow: 0.97,
     },
+    autoCondensePercent: 0.9,
   },
   minimal: {
     name: "Minimal",
@@ -98,6 +112,7 @@ export const DEFAULT_PROFILE_THRESHOLDS: Record<string, ProfileThresholds> = {
       critical: 0.95,
       overflow: 0.98,
     },
+    autoCondensePercent: 0.6,
   },
 };
 

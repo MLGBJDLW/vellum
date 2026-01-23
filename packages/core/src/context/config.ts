@@ -2,10 +2,148 @@
  * Context Management System - Configuration Module
  *
  * Provides configuration interfaces, defaults, and validation for the
- * Context Management System. Implements REQ-CFG-001 and REQ-CFG-002.
+ * Context Management System. Implements REQ-CFG-001, REQ-CFG-002, and REQ-008.
  *
  * @module @vellum/core/context/config
  */
+
+import { z } from "zod";
+
+// ============================================================================
+// Zod Schemas (REQ-008)
+// ============================================================================
+
+/**
+ * Schema for truncation policy options.
+ *
+ * Defines how messages should be truncated when context limits are reached.
+ */
+export const TruncationPolicySchema = z.enum([
+  /** Remove oldest messages first (FIFO) */
+  "sliding-window",
+  /** Compress older messages into summaries */
+  "summary",
+  /** Aggressive truncation for overflow scenarios */
+  "aggressive",
+  /** No automatic truncation (manual control) */
+  "none",
+]);
+
+/** Type for truncation policy values */
+export type TruncationPolicy = z.infer<typeof TruncationPolicySchema>;
+
+/**
+ * Schema for summary model fallback configuration.
+ *
+ * Defines the ordered list of models to try when generating summaries.
+ * If one model fails, the next in the list is attempted.
+ */
+export const SummaryModelFallbackSchema = z.object({
+  /** Ordered list of models to try for summarization */
+  models: z.array(z.string()).min(1, "At least one summary model required"),
+  /** Maximum retry attempts per model (default: 2) */
+  maxRetriesPerModel: z.number().int().min(0).max(5).default(2),
+  /** Timeout for each model attempt in milliseconds (default: 30000) */
+  timeoutMs: z.number().int().min(1000).max(120000).default(30000),
+});
+
+/** Type for summary model fallback configuration */
+export type SummaryModelFallback = z.infer<typeof SummaryModelFallbackSchema>;
+
+/**
+ * Schema for protected tools configuration.
+ *
+ * Tools in this list will never be pruned or truncated during context management.
+ */
+export const ProtectedToolsSchema = z
+  .array(z.string())
+  .default(["skill", "memory_search", "code_review"]);
+
+/** Type for protected tools list */
+export type ProtectedTools = z.infer<typeof ProtectedToolsSchema>;
+
+/**
+ * Schema for custom threshold configuration.
+ *
+ * Defines warning, critical, and overflow thresholds as decimals (0.0-1.0).
+ */
+export const CustomThresholdsSchema = z
+  .object({
+    /** Budget ratio that triggers warning state (e.g., 0.75 = 75%) */
+    warning: z.number().min(0).max(1),
+    /** Budget ratio that triggers critical state (e.g., 0.85 = 85%) */
+    critical: z.number().min(0).max(1),
+    /** Budget ratio that triggers overflow state (e.g., 0.95 = 95%) */
+    overflow: z.number().min(0).max(1),
+  })
+  .refine((data) => data.warning < data.critical && data.critical < data.overflow, {
+    message: "Thresholds must be in order: warning < critical < overflow",
+  });
+
+/** Type for custom thresholds */
+export type CustomThresholds = z.infer<typeof CustomThresholdsSchema>;
+
+/**
+ * Complete schema for context manager configuration with Zod validation.
+ *
+ * This schema can be used to validate configuration objects from external sources
+ * (e.g., configuration files, environment variables).
+ *
+ * @example
+ * ```typescript
+ * const config = ContextManagerConfigSchema.parse({
+ *   maxContextWindow: 200_000,
+ *   truncationPolicy: 'summary',
+ *   summaryModelFallback: {
+ *     models: ['gpt-4o-mini', 'claude-3-haiku'],
+ *     maxRetriesPerModel: 2,
+ *   },
+ * });
+ * ```
+ */
+export const ContextManagerConfigSchema = z
+  .object({
+    // Token management
+    maxContextWindow: z.number().int().positive().optional(),
+    outputReserve: z.number().int().nonnegative().optional(),
+    systemReserve: z.number().int().nonnegative().optional(),
+
+    // Thresholds
+    warningThreshold: z.number().min(0).max(1).optional(),
+    criticalThreshold: z.number().min(0).max(1).optional(),
+    overflowThreshold: z.number().min(0).max(1).optional(),
+
+    // Behavior flags
+    useAutoCondense: z.boolean().optional(),
+    preserveToolPairs: z.boolean().optional(),
+    maxCheckpoints: z.number().int().nonnegative().optional(),
+
+    // Pruning settings
+    maxToolOutputChars: z.number().int().nonnegative().optional(),
+    protectedTools: ProtectedToolsSchema.optional(),
+
+    // Cache settings
+    tokenCacheSize: z.number().int().nonnegative().optional(),
+    tokenCacheTTL: z.number().int().nonnegative().optional(),
+
+    // REQ-008: New compaction system fields
+    truncationPolicy: TruncationPolicySchema.optional(),
+    summaryModelFallback: SummaryModelFallbackSchema.optional(),
+    customThresholds: CustomThresholdsSchema.optional(),
+  })
+  .refine(
+    (data) => {
+      // Validate threshold ordering if multiple are provided
+      const warning = data.warningThreshold ?? 0.75;
+      const critical = data.criticalThreshold ?? 0.85;
+      const overflow = data.overflowThreshold ?? 0.95;
+      return warning < critical && critical < overflow;
+    },
+    {
+      message:
+        "Thresholds must be in order: warningThreshold < criticalThreshold < overflowThreshold",
+    }
+  );
 
 // ============================================================================
 // Configuration Interface
@@ -182,6 +320,48 @@ export interface ContextManagerConfig {
    * @default 300000 (5 minutes)
    */
   tokenCacheTTL?: number;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // REQ-008: Compaction System Settings
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Truncation policy to use when context limits are reached.
+   *
+   * - `sliding-window`: Remove oldest messages first (FIFO)
+   * - `summary`: Compress older messages into summaries (requires LLM)
+   * - `aggressive`: Aggressive truncation for overflow scenarios
+   * - `none`: No automatic truncation (manual control)
+   *
+   * @default 'sliding-window'
+   */
+  truncationPolicy?: TruncationPolicy;
+
+  /**
+   * Configuration for summary model fallback chain.
+   *
+   * When generating summaries, models are tried in order. If one fails,
+   * the next model in the list is attempted.
+   *
+   * @example
+   * ```typescript
+   * summaryModelFallback: {
+   *   models: ['gpt-4o-mini', 'claude-3-haiku', 'gemini-1.5-flash'],
+   *   maxRetriesPerModel: 2,
+   *   timeoutMs: 30000,
+   * }
+   * ```
+   */
+  summaryModelFallback?: SummaryModelFallback;
+
+  /**
+   * Custom threshold configuration for context state transitions.
+   *
+   * Override the default thresholds with custom values.
+   * Use this for fine-grained control over when context management
+   * actions are triggered.
+   */
+  customThresholds?: CustomThresholds;
 }
 
 // ============================================================================
@@ -229,6 +409,19 @@ export const DEFAULT_CONFIG: Required<ContextManagerConfig> = {
   // Cache settings
   tokenCacheSize: 1000,
   tokenCacheTTL: 5 * 60 * 1000, // 5 minutes
+
+  // REQ-008: Compaction system settings
+  truncationPolicy: "sliding-window",
+  summaryModelFallback: {
+    models: ["gpt-4o-mini", "claude-3-haiku-20240307", "gemini-1.5-flash"],
+    maxRetriesPerModel: 2,
+    timeoutMs: 30000,
+  },
+  customThresholds: {
+    warning: 0.75,
+    critical: 0.85,
+    overflow: 0.95,
+  },
 } as const;
 
 // ============================================================================
@@ -301,6 +494,13 @@ export function createConfig(
     // Cache settings
     tokenCacheSize: partial.tokenCacheSize ?? DEFAULT_CONFIG.tokenCacheSize,
     tokenCacheTTL: partial.tokenCacheTTL ?? DEFAULT_CONFIG.tokenCacheTTL,
+
+    // REQ-008: Compaction system settings
+    truncationPolicy: partial.truncationPolicy ?? DEFAULT_CONFIG.truncationPolicy,
+    summaryModelFallback: partial.summaryModelFallback ?? {
+      ...DEFAULT_CONFIG.summaryModelFallback,
+    },
+    customThresholds: partial.customThresholds ?? { ...DEFAULT_CONFIG.customThresholds },
   };
 }
 

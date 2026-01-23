@@ -12,6 +12,9 @@ The Context Management System automatically manages conversation history to stay
 - **LLM Compression** - Summarize old messages with 6-section format
 - **Checkpoint/Rollback** - Recover from aggressive operations
 - **Provider-Specific Image Tokens** - Accurate image token calculation
+- **Growth Validation** - Prevent compression from increasing context
+- **Multi-Model Fallback** - Resilient summarization with automatic failover
+- **DeepSeek Reasoning Support** - Synthetic thinking blocks for CoT models
 
 ## Quick Start
 
@@ -37,11 +40,11 @@ console.log(result.actions);  // ['pruned 3 tool outputs', 'truncated 5 messages
 
 // Get API-safe history (excludes compressed originals)
 const apiHistory = getEffectiveApiHistory(result.messages);
-```markdown
+```
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    AutoContextManager                        │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
@@ -55,7 +58,7 @@ const apiHistory = getEffectiveApiHistory(result.messages);
 │  │  3. Execute actions (prune/truncate/compress)         │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
-```markdown
+```
 
 ## State Machine
 
@@ -80,7 +83,7 @@ interface AutoContextManagerConfig {
   maxCheckpoints?: number;          // LRU limit (default: 5)
   recentCount?: number;             // Recent messages to protect (default: 3)
 }
-```markdown
+```
 
 ## Priority System
 
@@ -110,7 +113,7 @@ class AutoContextManager {
   createCheckpoint(messages: ContextMessage[], label?: string): string;
   rollbackToCheckpoint(id: string, messages: ContextMessage[]): ContextMessage[];
 }
-```markdown
+```
 
 ### Token Budget
 
@@ -122,7 +125,7 @@ function calculateTokenBudget(options: {
 }): TokenBudget;
 
 function calculateOutputReserve(contextWindow: number): number;
-```markdown
+```
 
 ### Compression
 
@@ -133,7 +136,7 @@ class NonDestructiveCompressor {
 
 function isSummaryMessage(message: ContextMessage): boolean;
 function getCompressedMessages(messages: ContextMessage[], condenseId: string): ContextMessage[];
-```markdown
+```
 
 ### Checkpoints
 
@@ -143,7 +146,153 @@ class CheckpointManager {
   rollback(id: string, currentMessages: ContextMessage[]): RollbackResult;
   list(): Checkpoint[];
 }
-```markdown
+```
+
+### ContextGrowthValidator
+
+Validates that LLM-generated summaries are smaller than the original content, preventing context explosion.
+
+```typescript
+import { ContextGrowthValidator, validateGrowth } from '@vellum/core';
+
+// Class-based usage
+const validator = new ContextGrowthValidator({
+  maxAllowedRatio: 1.0,   // Summary must be smaller than original
+  throwOnFailure: true,   // Throw CompactionError on growth
+});
+
+const result = validator.validate(1000, 300);
+// => { isValid: true, ratio: 0.3, tokensSaved: 700 }
+
+// Throws CompactionError (CONTEXT_GROWTH) if summary is larger
+validator.validate(1000, 1200); // Error!
+
+// Quick validation function
+const quick = validateGrowth(1000, 300);
+```
+
+### ReasoningBlockHandler
+
+Handles synthetic reasoning blocks for models that require explicit chain-of-thought (CoT), such as DeepSeek R1.
+
+```typescript
+import { ReasoningBlockHandler, requiresReasoningBlock } from '@vellum/core';
+
+// Check if model needs reasoning blocks
+if (requiresReasoningBlock('deepseek-r1')) {
+  const handler = new ReasoningBlockHandler({
+    thinkingPrefix: 'Let me analyze the context...',
+    includeTimestamp: false,
+  });
+
+  const result = handler.addReasoningBlock(summaryMessage);
+  // result.message.reasoningContent contains <thinking>...</thinking>
+}
+
+// Process message for specific model
+const result = handler.processForModel(message, 'deepseek-r1');
+```
+
+**Supported Models:**
+
+- `deepseek-r1`, `deepseek-v3`, `deepseek-coder`
+- Any model matching `/deepseek/i` pattern
+
+### FallbackChain
+
+Multi-model fallback chain for resilient summarization. Tries models in order with automatic failover.
+
+```typescript
+import { FallbackChain, createFallbackChain } from '@vellum/core';
+
+const chain = new FallbackChain({
+  models: [
+    { model: 'gpt-4o', timeout: 30000, maxRetries: 2 },
+    { model: 'claude-3-haiku', timeout: 20000 },
+    { model: 'gemini-flash', timeout: 15000 },
+  ],
+  createClient: (model) => createLLMClient(model),
+  onFallback: (from, to) => console.log(`Falling back: ${from} -> ${to}`),
+});
+
+try {
+  const result = await chain.summarize(messages, prompt);
+  console.log(`Success: ${result.model}, attempts: ${result.attempts}`);
+} catch (err) {
+  // CompactionError with code ALL_MODELS_FAILED
+}
+```
+
+**Features:**
+
+- Per-model timeout and retry configuration
+- Progressive backoff between retries
+- Detailed attempt history for observability
+- Callbacks for monitoring fallbacks
+
+### CompactionError
+
+Specialized error class for compaction-related failures with typed error codes.
+
+```typescript
+import { CompactionError, CompactionErrorCode } from '@vellum/core';
+
+// Error codes
+CompactionErrorCode.INVALID_SUMMARY    // Summary failed quality checks
+CompactionErrorCode.CONTEXT_GROWTH     // Summary larger than original
+CompactionErrorCode.ALL_MODELS_FAILED  // All fallback models exhausted
+CompactionErrorCode.NO_TOKEN_BUDGET    // Insufficient token budget
+CompactionErrorCode.MIN_MESSAGES_NOT_MET // Not enough messages
+
+// Static factory methods
+throw CompactionError.invalidSummary('Missing key info', { model: 'gpt-4o' });
+throw CompactionError.contextGrowth('Summary grew', {
+  originalTokens: 1000,
+  resultingTokens: 1200,
+});
+
+// Type checking
+if (CompactionError.isCompactionError(error)) {
+  console.log(error.code, error.isRetryable);
+}
+```
+
+**Error Properties:**
+
+- `code` — Typed error code
+- `isRetryable` — Whether retry may help
+- `model` — Model that failed (if applicable)
+- `originalTokens`, `resultingTokens` — For growth errors
+
+## Profile Thresholds & Configuration
+
+### Profile-Specific Thresholds
+
+Models use different threshold profiles based on their characteristics:
+
+| Profile | autoCondensePercent | Warning | Critical | Overflow | Use Case |
+|---------|---------------------|---------|----------|----------|----------|
+| conservative | 75% | 70% | 80% | 90% | High-quality models (Claude Opus) |
+| balanced | 80% | 75% | 85% | 95% | General purpose (GPT-4o, Claude Sonnet) |
+| aggressive | 85% | 85% | 92% | 97% | Large context models (DeepSeek, Gemini) |
+
+The `autoCondensePercent` threshold triggers automatic summarization when context usage exceeds this percentage.
+
+### Protected Tools Configuration
+
+Certain tools should never have their outputs pruned during compression:
+
+```typescript
+const manager = new AutoContextManager({
+  model: 'claude-sonnet-4-20250514',
+  protectedTools: ['skill', 'memory_search', 'read_file'],
+});
+```
+
+**Default Protected Tools:**
+
+- `skill` — Skill execution results
+- `memory_search` — Memory search results
 
 ## Model-Specific Thresholds
 
@@ -168,7 +317,7 @@ Provider-specific calculations:
 ```typescript
 const calc = createImageCalculator('anthropic');
 const tokens = calc.calculateTokens(imageBlock);
-```markdown
+```
 
 ## Testing
 

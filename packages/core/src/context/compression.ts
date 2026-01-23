@@ -22,6 +22,10 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { ContextGrowthValidator, GrowthValidationResult } from "./context-growth-check.js";
+import type { FallbackChain, SummaryFallbackResult } from "./fallback-chain.js";
+import type { ReasoningBlockHandler } from "./reasoning-block.js";
+import { adjustRangeForToolPairs } from "./tool-pairing.js";
 import type { ContextMessage } from "./types.js";
 import { MessagePriority as Priority } from "./types.js";
 
@@ -101,6 +105,75 @@ export interface CompressionOptions {
    * @default 4
    */
   minMessagesToCompress?: number;
+
+  /**
+   * Growth validator for ensuring summaries are smaller than originals.
+   * When provided, compression will validate that the summary doesn't
+   * grow the context (REQ-005).
+   *
+   * @example
+   * ```typescript
+   * import { ContextGrowthValidator } from './context-growth-check';
+   *
+   * const compressor = new NonDestructiveCompressor({
+   *   llmClient,
+   *   growthValidator: new ContextGrowthValidator(),
+   * });
+   * ```
+   */
+  growthValidator?: ContextGrowthValidator;
+
+  /**
+   * Reasoning block handler for models that require explicit CoT.
+   * When provided and targeting DeepSeek models, summaries will include
+   * synthetic `<thinking>` blocks (REQ-004).
+   *
+   * @example
+   * ```typescript
+   * import { ReasoningBlockHandler } from './reasoning-block';
+   *
+   * const compressor = new NonDestructiveCompressor({
+   *   llmClient,
+   *   reasoningBlockHandler: new ReasoningBlockHandler(),
+   * });
+   * ```
+   */
+  reasoningBlockHandler?: ReasoningBlockHandler;
+
+  /**
+   * Target model name for compression operations.
+   * Used to determine if reasoning blocks should be added.
+   */
+  targetModel?: string;
+
+  /**
+   * Fallback chain for multi-model summarization (REQ-009).
+   * When provided, compression will use the fallback chain instead of
+   * the direct llmClient, enabling automatic failover between models.
+   *
+   * @example
+   * ```typescript
+   * import { FallbackChain } from './fallback-chain';
+   *
+   * const compressor = new NonDestructiveCompressor({
+   *   llmClient, // Used as fallback if chain not provided
+   *   fallbackChain: new FallbackChain({
+   *     models: [
+   *       { model: 'gpt-4o', timeout: 30000 },
+   *       { model: 'claude-3-haiku', timeout: 20000 },
+   *     ],
+   *     createClient: myClientFactory,
+   *   }),
+   * });
+   * ```
+   */
+  fallbackChain?: FallbackChain;
+
+  /**
+   * Callback invoked when fallback chain is used.
+   * Logs which model was actually used for summarization.
+   */
+  onFallbackUsed?: (result: SummaryFallbackResult) => void;
 }
 
 /**
@@ -127,6 +200,24 @@ export interface CompressionResult {
 
   /** Unique ID for this compression operation */
   condenseId: string;
+
+  /** Growth validation result (when validator is configured) */
+  growthValidation?: GrowthValidationResult;
+
+  /** Whether reasoning block was added to summary */
+  reasoningBlockAdded?: boolean;
+
+  /**
+   * Fallback chain result when using multi-model summarization (REQ-009).
+   * Populated when fallbackChain is configured and used.
+   */
+  fallbackResult?: SummaryFallbackResult;
+
+  /**
+   * Model that was actually used for summarization.
+   * Populated when fallbackChain is used.
+   */
+  modelUsed?: string;
 }
 
 /**
@@ -239,6 +330,11 @@ export class NonDestructiveCompressor {
   private readonly preserveToolOutputs: boolean;
   private readonly customPrompt?: string;
   private readonly minMessagesToCompress: number;
+  private readonly growthValidator?: ContextGrowthValidator;
+  private readonly reasoningBlockHandler?: ReasoningBlockHandler;
+  private readonly targetModel?: string;
+  private readonly fallbackChain?: FallbackChain;
+  private readonly onFallbackUsed?: (result: SummaryFallbackResult) => void;
 
   constructor(options: CompressionOptions) {
     this.llmClient = options.llmClient;
@@ -247,6 +343,11 @@ export class NonDestructiveCompressor {
     this.preserveToolOutputs = options.preserveToolOutputs ?? DEFAULTS.preserveToolOutputs;
     this.customPrompt = options.customPrompt;
     this.minMessagesToCompress = options.minMessagesToCompress ?? DEFAULTS.minMessagesToCompress;
+    this.growthValidator = options.growthValidator;
+    this.reasoningBlockHandler = options.reasoningBlockHandler;
+    this.targetModel = options.targetModel;
+    this.fallbackChain = options.fallbackChain;
+    this.onFallbackUsed = options.onFallbackUsed;
   }
 
   /**
@@ -273,6 +374,10 @@ export class NonDestructiveCompressor {
   /**
    * Compress a range of messages into a structured summary.
    *
+   * The compression range is automatically adjusted to respect tool pair
+   * boundaries (REQ-006). If the specified range would split a tool_use/tool_result
+   * pair, the range is expanded to include the full pair.
+   *
    * @param messages - Full message array
    * @param range - Start/end indices to compress. If not provided, compresses
    *                all messages except the last 3 turns (6 messages).
@@ -290,7 +395,11 @@ export class NonDestructiveCompressor {
    */
   async compress(messages: ContextMessage[], range?: CompressionRange): Promise<CompressionResult> {
     // Default range: all except last 6 messages (3 turns)
-    const effectiveRange = range ?? this.calculateDefaultRange(messages);
+    const rawRange = range ?? this.calculateDefaultRange(messages);
+
+    // Adjust range to respect tool pair boundaries (REQ-006)
+    // Ensures tool_use/tool_result pairs are not split during compression
+    const effectiveRange = adjustRangeForToolPairs(messages, rawRange.start, rawRange.end);
     const toCompress = messages.slice(effectiveRange.start, effectiveRange.end);
 
     // Validate minimum messages
@@ -304,8 +413,8 @@ export class NonDestructiveCompressor {
     // Calculate original token count
     const originalTokens = this.calculateTotalTokens(toCompress);
 
-    // Generate summary via LLM
-    const summaryText = await this.generateSummary(toCompress);
+    // Generate summary via LLM (using fallback chain if configured)
+    const summaryResult = await this.generateSummary(toCompress);
 
     // Create unique condense ID
     const condenseId = generateCondenseId();
@@ -314,11 +423,27 @@ export class NonDestructiveCompressor {
     const compressedMessageIds = toCompress.map((m) => m.id);
 
     // Create summary message
-    const summary = this.createSummaryMessage(summaryText, toCompress, condenseId);
+    let summary = this.createSummaryMessage(summaryResult.text, toCompress, condenseId);
 
     // Calculate metrics
-    const summaryTokens = summary.tokens ?? this.estimateTokens(summaryText);
+    const summaryTokens = summary.tokens ?? this.estimateTokens(summaryResult.text);
     const ratio = this.calculateRatio(originalTokens, summaryTokens);
+
+    // Validate growth if validator is configured (REQ-005)
+    let growthValidation: GrowthValidationResult | undefined;
+    if (this.growthValidator) {
+      growthValidation = this.growthValidator.validate(originalTokens, summaryTokens);
+    }
+
+    // Add reasoning block for DeepSeek models if handler is configured (REQ-004)
+    let reasoningBlockAdded = false;
+    if (this.reasoningBlockHandler && this.targetModel) {
+      const result = this.reasoningBlockHandler.processForModel(summary, this.targetModel);
+      if (result.wasAdded) {
+        summary = result.message;
+        reasoningBlockAdded = true;
+      }
+    }
 
     return {
       summary,
@@ -327,18 +452,57 @@ export class NonDestructiveCompressor {
       summaryTokens,
       ratio,
       condenseId,
+      growthValidation,
+      reasoningBlockAdded,
+      fallbackResult: summaryResult.fallbackResult,
+      modelUsed: summaryResult.modelUsed,
     };
+  }
+
+  /**
+   * Internal result type for summary generation.
+   */
+  private generateSummaryResult(
+    text: string,
+    fallbackResult?: SummaryFallbackResult,
+    modelUsed?: string
+  ): { text: string; fallbackResult?: SummaryFallbackResult; modelUsed?: string } {
+    return { text, fallbackResult, modelUsed };
   }
 
   /**
    * Generate summary text via LLM.
    *
+   * Uses fallback chain if configured (REQ-009), otherwise falls back
+   * to the direct llmClient.
+   *
    * @param messages - Messages to summarize
-   * @returns Generated summary text
+   * @returns Summary result with text and optional fallback metadata
    */
-  private async generateSummary(messages: ContextMessage[]): Promise<string> {
+  private async generateSummary(
+    messages: ContextMessage[]
+  ): Promise<{ text: string; fallbackResult?: SummaryFallbackResult; modelUsed?: string }> {
     const prompt = this.customPrompt ?? DEFAULT_SUMMARY_PROMPT;
-    return this.llmClient.summarize(messages, prompt);
+
+    // Use fallback chain if configured (REQ-009)
+    if (this.fallbackChain) {
+      const fallbackResult = await this.fallbackChain.summarize(messages, prompt);
+
+      // Invoke callback if configured
+      if (this.onFallbackUsed) {
+        this.onFallbackUsed(fallbackResult);
+      }
+
+      return this.generateSummaryResult(
+        fallbackResult.summary,
+        fallbackResult,
+        fallbackResult.model
+      );
+    }
+
+    // Fall back to direct LLM client
+    const text = await this.llmClient.summarize(messages, prompt);
+    return this.generateSummaryResult(text);
   }
 
   /**
@@ -599,4 +763,220 @@ export function calculateCompressionSavings(result: CompressionResult): {
       ? Math.round(((result.originalTokens - result.summaryTokens) / result.originalTokens) * 100)
       : 0;
   return { tokens, percentage };
+}
+
+// ============================================================================
+// Session Storage for Condensed Messages (REQ-003)
+// ============================================================================
+
+/**
+ * Stored data for a compression operation.
+ *
+ * Contains the original messages and metadata needed for recovery.
+ */
+export interface CondensedMessageEntry {
+  /** Unique identifier for this compression operation */
+  readonly condenseId: string;
+  /** Original messages that were compressed */
+  readonly originalMessages: ContextMessage[];
+  /** Compression result metadata */
+  readonly compressionResult: CompressionResult;
+  /** Timestamp when compression occurred */
+  readonly compressedAt: number;
+}
+
+/**
+ * Session-scoped storage for condensed message data.
+ *
+ * This class provides in-memory storage for compressed message data,
+ * enabling recovery of original messages via condenseId lookup.
+ *
+ * @example
+ * ```typescript
+ * const store = new CondensedMessageStore();
+ *
+ * // Store compressed messages
+ * store.store(condenseId, originalMessages, compressionResult);
+ *
+ * // Later, recover the originals
+ * const recovered = store.recover(condenseId);
+ * if (recovered) {
+ *   console.log(`Recovered ${recovered.originalMessages.length} messages`);
+ * }
+ * ```
+ */
+export class CondensedMessageStore {
+  private readonly entries = new Map<string, CondensedMessageEntry>();
+
+  /**
+   * Store original messages with their compression metadata.
+   *
+   * @param condenseId - Unique identifier for this compression
+   * @param originalMessages - The original messages that were compressed
+   * @param compressionResult - The compression result with summary and metrics
+   */
+  store(
+    condenseId: string,
+    originalMessages: ContextMessage[],
+    compressionResult: CompressionResult
+  ): void {
+    this.entries.set(condenseId, {
+      condenseId,
+      originalMessages,
+      compressionResult,
+      compressedAt: Date.now(),
+    });
+  }
+
+  /**
+   * Retrieve stored entry by condenseId.
+   *
+   * @param condenseId - The condense ID to look up
+   * @returns The stored entry, or undefined if not found
+   */
+  get(condenseId: string): CondensedMessageEntry | undefined {
+    return this.entries.get(condenseId);
+  }
+
+  /**
+   * Check if a condenseId exists in storage.
+   *
+   * @param condenseId - The condense ID to check
+   * @returns True if the entry exists
+   */
+  has(condenseId: string): boolean {
+    return this.entries.has(condenseId);
+  }
+
+  /**
+   * Remove an entry from storage.
+   *
+   * @param condenseId - The condense ID to remove
+   * @returns True if an entry was removed
+   */
+  delete(condenseId: string): boolean {
+    return this.entries.delete(condenseId);
+  }
+
+  /**
+   * Get all stored condenseIds.
+   *
+   * @returns Array of all stored condense IDs
+   */
+  keys(): string[] {
+    return [...this.entries.keys()];
+  }
+
+  /**
+   * Get the number of stored entries.
+   */
+  get size(): number {
+    return this.entries.size;
+  }
+
+  /**
+   * Clear all stored entries.
+   */
+  clear(): void {
+    this.entries.clear();
+  }
+}
+
+/**
+ * Result of a message recovery operation.
+ */
+export interface RecoveryResult {
+  /** Original messages that were restored */
+  readonly restoredMessages: ContextMessage[];
+  /** Messages after recovery (summary removed, originals restored) */
+  readonly messages: ContextMessage[];
+  /** The condenseId that was recovered */
+  readonly condenseId: string;
+  /** Whether recovery was successful */
+  readonly success: boolean;
+}
+
+/**
+ * Recover condensed messages by condenseId.
+ *
+ * Restores original messages from the store and removes the summary message
+ * from the message array. Also clears condenseParent pointers from restored
+ * messages.
+ *
+ * @param messages - Current message array (with summary)
+ * @param condenseId - The condenseId to recover
+ * @param store - The condensed message store
+ * @returns Recovery result with restored messages, or null if not found
+ *
+ * @example
+ * ```typescript
+ * const store = new CondensedMessageStore();
+ * // ... after compression, store.store(result.condenseId, originalMessages, result);
+ *
+ * // Later, to recover:
+ * const recovery = recoverCondensed(currentMessages, condenseId, store);
+ * if (recovery?.success) {
+ *   messages = recovery.messages;
+ *   console.log(`Recovered ${recovery.restoredMessages.length} messages`);
+ * }
+ * ```
+ */
+export function recoverCondensed(
+  messages: ContextMessage[],
+  condenseId: string,
+  store: CondensedMessageStore
+): RecoveryResult | null {
+  // Look up the stored entry
+  const entry = store.get(condenseId);
+  if (!entry) {
+    return null;
+  }
+
+  // Find the summary message index
+  const summaryIndex = messages.findIndex((m) => m.isSummary && m.condenseId === condenseId);
+
+  // Clear condenseParent from restored messages
+  const restoredMessages = entry.originalMessages.map((m) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { condenseParent, ...rest } = m;
+    return rest as ContextMessage;
+  });
+
+  // Build new message array:
+  // 1. Remove the summary message
+  // 2. Insert original messages at the summary's position
+  // 3. Clear condenseParent from any messages that pointed to this condenseId
+  let newMessages: ContextMessage[];
+
+  if (summaryIndex >= 0) {
+    // Insert restored messages where the summary was
+    newMessages = [
+      ...messages.slice(0, summaryIndex),
+      ...restoredMessages,
+      ...messages.slice(summaryIndex + 1),
+    ];
+  } else {
+    // Summary not in array, just append restored messages
+    newMessages = [...messages, ...restoredMessages];
+  }
+
+  // Clear condenseParent from any messages pointing to this condenseId
+  newMessages = newMessages.map((m) => {
+    if (m.condenseParent === condenseId) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { condenseParent, ...rest } = m;
+      return rest as ContextMessage;
+    }
+    return m;
+  });
+
+  // Remove from store after successful recovery
+  store.delete(condenseId);
+
+  return {
+    restoredMessages,
+    messages: newMessages,
+    condenseId,
+    success: true,
+  };
 }

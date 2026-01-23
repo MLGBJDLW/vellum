@@ -33,6 +33,15 @@ export interface TruncateOptions {
 
   /** Custom tokenizer function (default: estimate) */
   readonly tokenizer?: (message: ContextMessage) => number;
+
+  /**
+   * Truncation mode (REQ-008).
+   * - 'tokens': Use token count for budget calculations (default)
+   * - 'bytes': Use byte count for budget calculations (useful for byte-limited APIs)
+   *
+   * @default 'tokens'
+   */
+  readonly mode?: "tokens" | "bytes";
 }
 
 /**
@@ -152,6 +161,45 @@ export function estimateTokens(message: ContextMessage): number {
   }
 
   return Math.ceil(totalChars / CHARS_PER_TOKEN);
+}
+
+/**
+ * Estimate bytes for a message (REQ-008).
+ * Used when mode is 'bytes' for APIs with byte-based limits.
+ *
+ * @param message - The context message to estimate bytes for
+ * @returns Estimated byte count
+ *
+ * @example
+ * ```typescript
+ * const bytes = estimateBytes({
+ *   id: '1',
+ *   role: 'user',
+ *   content: 'Hello, world!',
+ *   priority: MessagePriority.NORMAL,
+ * });
+ * // bytes ≈ 13
+ * ```
+ */
+export function estimateBytes(message: ContextMessage): number {
+  const content = message.content;
+
+  // String content: calculate byte length
+  if (typeof content === "string") {
+    return new TextEncoder().encode(content).length;
+  }
+
+  // Array content: sum up all blocks as JSON
+  let totalBytes = 0;
+
+  for (const block of content) {
+    const blockJson = JSON.stringify(block);
+    totalBytes += new TextEncoder().encode(blockJson).length;
+  }
+
+  // Add overhead for message metadata (role, id, etc.)
+  const metadataOverhead = 50; // Approximate JSON overhead
+  return totalBytes + metadataOverhead;
 }
 
 // ============================================================================
@@ -384,16 +432,25 @@ function calculateTotalTokens(
  * 3. Remove lowest priority messages until under budget
  * 4. Never split tool pairs (REQ-WIN-002)
  *
+ * Supports both token-based and byte-based budgets (REQ-008).
+ *
  * @param messages - Array of context messages to truncate
  * @param options - Truncation options
  * @returns Result containing truncated messages and removal info
  *
  * @example
  * ```typescript
+ * // Token-based truncation (default)
  * const result = truncate(messages, {
  *   targetTokens: 10000,
  *   recentCount: 3,
  *   preserveToolPairs: true,
+ * });
+ *
+ * // Byte-based truncation
+ * const result = truncate(messages, {
+ *   targetTokens: 50000, // Actually bytes when mode='bytes'
+ *   mode: 'bytes',
  * });
  * console.log(`Removed ${result.removedCount} messages`);
  * ```
@@ -404,7 +461,11 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
     recentCount = DEFAULT_RECENT_COUNT,
     preserveToolPairs = true,
     tokenizer = estimateTokens,
+    mode = "tokens",
   } = options;
+
+  // Select the appropriate estimator based on mode (REQ-008)
+  const sizeEstimator = mode === "bytes" ? estimateBytes : tokenizer;
 
   // Empty or already fitting
   if (messages.length === 0) {
@@ -416,8 +477,8 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
     };
   }
 
-  // Calculate current token count
-  let currentTokens = calculateTotalTokens(messages, tokenizer);
+  // Calculate current size (tokens or bytes based on mode)
+  let currentTokens = calculateTotalTokens(messages, sizeEstimator);
 
   // Already within budget?
   if (currentTokens <= targetTokens) {
@@ -463,7 +524,7 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
           if (!indicesToRemove.has(idx)) {
             const msg = messages[idx];
             if (msg) {
-              pairTokens += tokenizer(msg);
+              pairTokens += sizeEstimator(msg);
               if (msg.id) {
                 pairIds.push(msg.id);
               }

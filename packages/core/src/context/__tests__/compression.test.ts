@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CompressionLLMClient,
   type CompressionResult,
+  CondensedMessageStore,
   calculateCompressionSavings,
   DEFAULT_SUMMARY_PROMPT,
   estimateCompressionTokens,
@@ -21,6 +22,7 @@ import {
   isSummaryMessage,
   linkCompressedMessages,
   NonDestructiveCompressor,
+  recoverCondensed,
 } from "../compression.js";
 import type { ContextMessage } from "../types.js";
 import { MessagePriority } from "../types.js";
@@ -469,5 +471,306 @@ describe("DEFAULT_SUMMARY_PROMPT", () => {
 
   it("should not be empty", () => {
     expect(DEFAULT_SUMMARY_PROMPT.length).toBeGreaterThan(100);
+  });
+});
+
+// ============================================================================
+// CondensedMessageStore Tests (T012)
+// ============================================================================
+
+describe("CondensedMessageStore", () => {
+  function createMockCompressionResult(condenseId: string): CompressionResult {
+    return {
+      summary: createMessage("summary-1", "assistant", "Summary content", {
+        isSummary: true,
+        condenseId,
+      }),
+      compressedMessageIds: ["msg-1", "msg-2", "msg-3"],
+      originalTokens: 1000,
+      summaryTokens: 300,
+      ratio: 0.3,
+      condenseId,
+    };
+  }
+
+  describe("store()", () => {
+    it("should store original messages with condenseId", () => {
+      const store = new CondensedMessageStore();
+      const condenseId = "condense-test-1";
+      const originalMessages = createTestMessages(5);
+      const result = createMockCompressionResult(condenseId);
+
+      store.store(condenseId, originalMessages, result);
+
+      expect(store.has(condenseId)).toBe(true);
+      expect(store.size).toBe(1);
+    });
+
+    it("should overwrite existing entry with same condenseId", () => {
+      const store = new CondensedMessageStore();
+      const condenseId = "condense-test-1";
+      const firstMessages = createTestMessages(3);
+      const secondMessages = createTestMessages(5);
+      const result = createMockCompressionResult(condenseId);
+
+      store.store(condenseId, firstMessages, result);
+      store.store(condenseId, secondMessages, result);
+
+      const entry = store.get(condenseId);
+      expect(entry?.originalMessages.length).toBe(5);
+      expect(store.size).toBe(1);
+    });
+  });
+
+  describe("get()", () => {
+    it("should retrieve stored entry by condenseId", () => {
+      const store = new CondensedMessageStore();
+      const condenseId = "condense-test-1";
+      const originalMessages = createTestMessages(4);
+      const result = createMockCompressionResult(condenseId);
+
+      store.store(condenseId, originalMessages, result);
+      const entry = store.get(condenseId);
+
+      expect(entry).toBeDefined();
+      expect(entry?.condenseId).toBe(condenseId);
+      expect(entry?.originalMessages).toEqual(originalMessages);
+      expect(entry?.compressionResult).toEqual(result);
+      expect(entry?.compressedAt).toBeGreaterThan(0);
+    });
+
+    it("should return undefined for non-existent condenseId", () => {
+      const store = new CondensedMessageStore();
+      expect(store.get("non-existent")).toBeUndefined();
+    });
+  });
+
+  describe("has()", () => {
+    it("should return true for existing condenseId", () => {
+      const store = new CondensedMessageStore();
+      const condenseId = "condense-test-1";
+      store.store(condenseId, [], createMockCompressionResult(condenseId));
+
+      expect(store.has(condenseId)).toBe(true);
+    });
+
+    it("should return false for non-existent condenseId", () => {
+      const store = new CondensedMessageStore();
+      expect(store.has("non-existent")).toBe(false);
+    });
+  });
+
+  describe("delete()", () => {
+    it("should remove entry and return true", () => {
+      const store = new CondensedMessageStore();
+      const condenseId = "condense-test-1";
+      store.store(condenseId, [], createMockCompressionResult(condenseId));
+
+      const deleted = store.delete(condenseId);
+
+      expect(deleted).toBe(true);
+      expect(store.has(condenseId)).toBe(false);
+      expect(store.size).toBe(0);
+    });
+
+    it("should return false when condenseId does not exist", () => {
+      const store = new CondensedMessageStore();
+      expect(store.delete("non-existent")).toBe(false);
+    });
+  });
+
+  describe("keys()", () => {
+    it("should return all stored condenseIds", () => {
+      const store = new CondensedMessageStore();
+      const id1 = "condense-1";
+      const id2 = "condense-2";
+      const id3 = "condense-3";
+
+      store.store(id1, [], createMockCompressionResult(id1));
+      store.store(id2, [], createMockCompressionResult(id2));
+      store.store(id3, [], createMockCompressionResult(id3));
+
+      const keys = store.keys();
+      expect(keys).toHaveLength(3);
+      expect(keys).toContain(id1);
+      expect(keys).toContain(id2);
+      expect(keys).toContain(id3);
+    });
+
+    it("should return empty array when store is empty", () => {
+      const store = new CondensedMessageStore();
+      expect(store.keys()).toEqual([]);
+    });
+  });
+
+  describe("clear()", () => {
+    it("should remove all entries", () => {
+      const store = new CondensedMessageStore();
+      store.store("id-1", [], createMockCompressionResult("id-1"));
+      store.store("id-2", [], createMockCompressionResult("id-2"));
+
+      store.clear();
+
+      expect(store.size).toBe(0);
+      expect(store.keys()).toEqual([]);
+    });
+  });
+});
+
+// ============================================================================
+// recoverCondensed Tests (T013)
+// ============================================================================
+
+describe("recoverCondensed", () => {
+  function createMockCompressionResult(condenseId: string): CompressionResult {
+    return {
+      summary: createMessage("summary-1", "assistant", "Summary content", {
+        isSummary: true,
+        condenseId,
+      }),
+      compressedMessageIds: ["msg-1", "msg-2", "msg-3"],
+      originalTokens: 1000,
+      summaryTokens: 300,
+      ratio: 0.3,
+      condenseId,
+    };
+  }
+
+  it("should recover original messages and remove summary", () => {
+    const store = new CondensedMessageStore();
+    const condenseId = "condense-recovery-test";
+    const originalMessages = createTestMessages(4);
+    const result = createMockCompressionResult(condenseId);
+
+    store.store(condenseId, originalMessages, result);
+
+    // Create current messages with summary in place of originals
+    const summaryMessage = createMessage("summary", "assistant", "[📦 Context Summary]", {
+      isSummary: true,
+      condenseId,
+    });
+    const currentMessages = [
+      createMessage("system-1", "system", "System prompt"),
+      summaryMessage,
+      createMessage("recent-1", "user", "Recent message"),
+    ];
+
+    const recovery = recoverCondensed(currentMessages, condenseId, store);
+
+    expect(recovery).not.toBeNull();
+    expect(recovery?.success).toBe(true);
+    expect(recovery?.condenseId).toBe(condenseId);
+    expect(recovery?.restoredMessages).toHaveLength(4);
+
+    // Verify summary was removed and originals inserted
+    const summaryInResult = recovery?.messages.find(
+      (m) => m.isSummary && m.condenseId === condenseId
+    );
+    expect(summaryInResult).toBeUndefined();
+
+    // Verify original messages are in result
+    for (const orig of originalMessages) {
+      const found = recovery?.messages.find((m) => m.id === orig.id);
+      expect(found).toBeDefined();
+    }
+  });
+
+  it("should return null when condenseId not in store", () => {
+    const store = new CondensedMessageStore();
+    const currentMessages = createTestMessages(3);
+
+    const recovery = recoverCondensed(currentMessages, "non-existent", store);
+
+    expect(recovery).toBeNull();
+  });
+
+  it("should clear condenseParent from restored messages", () => {
+    const store = new CondensedMessageStore();
+    const condenseId = "condense-parent-test";
+
+    // Create original messages with condenseParent set
+    const originalMessages = [
+      createMessage("msg-1", "user", "Hello", { condenseParent: condenseId }),
+      createMessage("msg-2", "assistant", "Hi", { condenseParent: condenseId }),
+    ];
+    const result = createMockCompressionResult(condenseId);
+
+    store.store(condenseId, originalMessages, result);
+
+    const currentMessages = [
+      createMessage("summary", "assistant", "Summary", { isSummary: true, condenseId }),
+    ];
+
+    const recovery = recoverCondensed(currentMessages, condenseId, store);
+
+    // Verify condenseParent is cleared from restored messages
+    for (const msg of recovery?.restoredMessages ?? []) {
+      expect(msg.condenseParent).toBeUndefined();
+    }
+  });
+
+  it("should remove entry from store after successful recovery", () => {
+    const store = new CondensedMessageStore();
+    const condenseId = "condense-cleanup-test";
+    const originalMessages = createTestMessages(3);
+    const result = createMockCompressionResult(condenseId);
+
+    store.store(condenseId, originalMessages, result);
+    expect(store.has(condenseId)).toBe(true);
+
+    const currentMessages = [
+      createMessage("summary", "assistant", "Summary", { isSummary: true, condenseId }),
+    ];
+
+    recoverCondensed(currentMessages, condenseId, store);
+
+    expect(store.has(condenseId)).toBe(false);
+  });
+
+  it("should handle recovery when summary is not in current messages", () => {
+    const store = new CondensedMessageStore();
+    const condenseId = "condense-no-summary-test";
+    const originalMessages = createTestMessages(3);
+    const result = createMockCompressionResult(condenseId);
+
+    store.store(condenseId, originalMessages, result);
+
+    // Current messages without the summary
+    const currentMessages = [
+      createMessage("other-1", "user", "Some message"),
+      createMessage("other-2", "assistant", "Response"),
+    ];
+
+    const recovery = recoverCondensed(currentMessages, condenseId, store);
+
+    expect(recovery?.success).toBe(true);
+    // Original messages should be appended
+    expect(recovery?.messages.length).toBe(currentMessages.length + originalMessages.length);
+  });
+
+  it("should clear condenseParent from other messages pointing to recovered condenseId", () => {
+    const store = new CondensedMessageStore();
+    const condenseId = "condense-pointer-test";
+    const originalMessages = createTestMessages(2);
+    const result = createMockCompressionResult(condenseId);
+
+    store.store(condenseId, originalMessages, result);
+
+    // Current messages include some with condenseParent pointing to this condenseId
+    const currentMessages = [
+      createMessage("summary", "assistant", "Summary", { isSummary: true, condenseId }),
+      createMessage("linked-1", "user", "Linked message", { condenseParent: condenseId }),
+      createMessage("unlinked", "assistant", "Normal message"),
+    ];
+
+    const recovery = recoverCondensed(currentMessages, condenseId, store);
+
+    // Find the linked message in result - condenseParent should be cleared
+    const linkedInResult = recovery?.messages.find((m) => m.id === "linked-1");
+    expect(linkedInResult?.condenseParent).toBeUndefined();
+
+    // Unlinked message should be unchanged
+    const unlinkedInResult = recovery?.messages.find((m) => m.id === "unlinked");
+    expect(unlinkedInResult).toBeDefined();
   });
 });
