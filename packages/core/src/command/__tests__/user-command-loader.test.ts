@@ -182,9 +182,9 @@ shell: pnpm run deploy --env=prod
       expect(result.errors).toHaveLength(0);
       expect(result.commands).toHaveLength(1);
 
-      const cmd = result.commands[0]!;
-      expect(cmd.name).toBe("deploy");
-      expect(cmd.type).toBe("yaml");
+      const cmd = result.commands.at(0);
+      expect(cmd?.name).toBe("deploy");
+      expect(cmd?.type).toBe("yaml");
 
       const yamlCmd = cmd as YamlShellCommand;
       expect(yamlCmd.commandType).toBe("shell");
@@ -207,9 +207,9 @@ prompt: |
       expect(result.errors).toHaveLength(0);
       expect(result.commands).toHaveLength(1);
 
-      const cmd = result.commands[0]!;
-      expect(cmd.name).toBe("review");
-      expect(cmd.type).toBe("yaml");
+      const cmd = result.commands.at(0);
+      expect(cmd?.name).toBe("review");
+      expect(cmd?.type).toBe("yaml");
     });
 
     it("should load command with aliases", async () => {
@@ -229,8 +229,8 @@ shell: pnpm test --run
       expect(result.errors).toHaveLength(0);
       expect(result.commands).toHaveLength(1);
 
-      const cmd = result.commands[0]!;
-      expect(cmd.aliases).toEqual(["ta", "tests"]);
+      const cmd = result.commands.at(0);
+      expect(cmd?.aliases).toEqual(["ta", "tests"]);
     });
 
     it("should report error for invalid YAML", async () => {
@@ -277,8 +277,8 @@ shell: pnpm build
 
       expect(result.commands).toHaveLength(1);
 
-      const cmd = result.commands[0]!;
-      expect(cmd.name).toBe("build");
+      const cmd = result.commands.at(0);
+      expect(cmd?.name).toBe("build");
     });
   });
 
@@ -299,9 +299,9 @@ export default {
       expect(result.commands).toHaveLength(0);
       expect(result.pendingTrust).toHaveLength(1);
 
-      const cmd = result.pendingTrust[0]!;
-      expect(cmd.type).toBe("typescript");
-      expect(cmd.trusted).toBe(false);
+      const cmd = result.pendingTrust.at(0);
+      expect(cmd?.type).toBe("typescript");
+      expect(cmd?.trusted).toBe(false);
     });
 
     it("should load trusted TypeScript command with autoTrust", async () => {
@@ -324,9 +324,9 @@ export default {
       expect(result.pendingTrust).toHaveLength(0);
       expect(result.commands).toHaveLength(1);
 
-      const cmd = result.commands[0]!;
-      expect(cmd.name).toBe("custom");
-      expect(cmd.type).toBe("typescript");
+      const cmd = result.commands.at(0);
+      expect(cmd?.name).toBe("custom");
+      expect(cmd?.type).toBe("typescript");
 
       const tsCmd = cmd as TypeScriptCommand;
       expect(tsCmd.trusted).toBe(true);
@@ -348,8 +348,8 @@ export default {
 
       expect(result.pendingTrust).toHaveLength(1);
 
-      const cmd = result.pendingTrust[0]!;
-      expect(cmd.filePath).toContain("esm-cmd.mts");
+      const cmd = result.pendingTrust.at(0);
+      expect(cmd?.filePath).toContain("esm-cmd.mts");
     });
   });
 
@@ -373,9 +373,9 @@ shell: pnpm deploy:staging
 
       expect(result.commands).toHaveLength(1);
 
-      const cmd = result.commands[0]!;
-      expect(cmd.source).toBe("project");
-      expect(cmd.description).toBe("Project deploy");
+      const cmd = result.commands.at(0);
+      expect(cmd?.source).toBe("project");
+      expect(cmd?.description).toBe("Project deploy");
     });
 
     it("should load user commands when no project commands exist", async () => {
@@ -391,8 +391,8 @@ shell: echo user
 
       expect(result.commands).toHaveLength(1);
 
-      const cmd = result.commands[0]!;
-      expect(cmd.source).toBe("user");
+      const cmd = result.commands.at(0);
+      expect(cmd?.source).toBe("user");
     });
 
     it("should skip user commands when loadUserCommands is false", async () => {
@@ -452,9 +452,9 @@ shell: echo test
 
       expect(result.commands).toHaveLength(1);
 
-      const cmd = result.commands[0]!;
-      expect(cmd.contentHash).toBeDefined();
-      expect(cmd.contentHash.length).toBe(64); // SHA-256 hex
+      const cmd = result.commands.at(0);
+      expect(cmd?.contentHash).toBeDefined();
+      expect(cmd?.contentHash?.length).toBe(64); // SHA-256 hex
     });
   });
 });
@@ -586,8 +586,8 @@ shell: echo tracked
     const loader = new UserCommandLoader({ cwd: PROJECT_DIR, userHomeDir: USER_HOME_DIR });
     const result = await loader.load();
 
-    const cmd = result.commands[0]!;
-    expect(cmd.filePath).toBe(path.join(PROJECT_COMMANDS_DIR, "tracked.yaml"));
+    const cmd = result.commands.at(0);
+    expect(cmd?.filePath).toBe(path.join(PROJECT_COMMANDS_DIR, "tracked.yaml"));
   });
 });
 

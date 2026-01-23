@@ -211,7 +211,7 @@ export class FallbackChain {
     let totalAttempts = 0;
 
     for (let modelIndex = 0; modelIndex < this.models.length; modelIndex++) {
-      const modelConfig = this.models[modelIndex]!;
+      const modelConfig = this.models[modelIndex] as FallbackModelConfig;
       const {
         model,
         timeout = DEFAULT_TIMEOUT_MS,

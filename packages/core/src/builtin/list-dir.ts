@@ -138,7 +138,7 @@ function generateTree(entries: DirEntry[], basePath: string): string {
     let current = root;
 
     for (let i = 0; i < parts.length; i++) {
-      const part = parts[i]!;
+      const part = parts[i] as string;
       const isLast = i === parts.length - 1;
 
       if (!current.children.has(part)) {
@@ -148,7 +148,7 @@ function generateTree(entries: DirEntry[], basePath: string): string {
           children: new Map(),
         });
       }
-      current = current.children.get(part)!;
+      current = current.children.get(part) as TreeNode;
     }
   }
 
