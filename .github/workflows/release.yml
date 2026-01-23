@@ -132,6 +132,9 @@ jobs:
           echo "Package version: $CLI_VERSION"
           echo "Tag name: $TAG_NAME"
 
+          # Always output cli_version for use in later steps
+          echo "cli_version=$CLI_VERSION" >> $GITHUB_OUTPUT
+
           # Check if tag already exists on remote
           if git ls-remote --tags origin | grep -q "refs/tags/${TAG_NAME}$"; then
             echo "Tag $TAG_NAME already exists on remote, skipping"
@@ -162,13 +165,13 @@ jobs:
         if: steps.create-tags.outputs.has_new_tags == 'true'
         run: |
           mkdir -p dist
-          zip -r dist/vellum-${{ steps.create-tags.outputs.latest_tag }}.zip . -x "node_modules/*" -x ".git/*" -x ".turbo/*" -x "dist/*"
+          zip -r dist/vellum.zip . -x "node_modules/*" -x ".git/*" -x ".turbo/*" -x "dist/*"
 
       - name: Upload assets to Release
         if: steps.create-tags.outputs.has_new_tags == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.create-tags.outputs.latest_tag }}
-          files: dist/vellum-*.zip
+          files: dist/vellum.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
