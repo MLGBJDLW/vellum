@@ -1,5 +1,16 @@
 # @butlerw/vellum
 
+## 0.2.0
+
+### Minor Changes
+
+- [#27](https://github.com/MLGBJDLW/vellum/pull/27) [`3fadc78`](https://github.com/MLGBJDLW/vellum/commit/3fadc782ca69000e4784ca46a936cb16be8bc995) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - fix(credentials): resolve keytar missing package error in npm install
+
+  - Add `keytar` as optionalDependency in cli package to ensure it's available at runtime
+  - Switch from explicit KeychainStore to HybridCredentialStore for automatic fallback
+  - When keytar is unavailable (e.g., missing build tools), gracefully fall back to encrypted file storage
+  - Fixes "Cannot find package 'keytar'" error when running global npm install
+
 ## 0.1.10
 
 ### Patch Changes
