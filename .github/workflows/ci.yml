@@ -24,10 +24,13 @@ jobs:
       is-version-pr: ${{ steps.check.outputs.is-version-pr }}
     steps:
       - id: check
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           # Check if this is a Version PR merge push (commit message contains "chore: release")
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          if [[ "$COMMIT_MSG" == *"chore: release"* ]] && [[ "${{ github.event_name }}" == "push" ]]; then
+          if [[ "$COMMIT_MSG" == *"chore: release"* ]] && [[ "$EVENT_NAME" == "push" ]]; then
             echo "skip-full-ci=true" >> $GITHUB_OUTPUT
             echo "::notice::Skipping full CI - Version PR merge detected"
           else
@@ -35,8 +38,7 @@ jobs:
           fi
 
           # Check if this is a Version PR
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          if [[ "$PR_TITLE" == chore:\ release* ]]; then
+          if [[ "$PR_TITLE" == "chore: release"* ]]; then
             echo "is-version-pr=true" >> $GITHUB_OUTPUT
             echo "::notice::Version PR detected - will run quick check only"
           else
