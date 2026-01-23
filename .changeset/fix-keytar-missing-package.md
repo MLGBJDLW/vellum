@@ -1,5 +1,5 @@
 ---
-@butlerw/vellum
+"@butlerw/vellum": minor
 ---
 
 fix(credentials): resolve keytar missing package error in npm install
