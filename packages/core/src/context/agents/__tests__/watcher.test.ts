@@ -199,7 +199,11 @@ describe("AgentsWatcher", () => {
       if (changedPaths !== null) {
         // May detect multiple events from chokidar (add + change), just verify we got something
         expect(changedPaths.length).toBeGreaterThanOrEqual(1);
-        expect(changedPaths.some((p) => p.includes("AGENTS.md"))).toBe(true);
+        const hasAgentsFile = changedPaths.some((p) => {
+          const normalized = p.toLowerCase();
+          return normalized.includes("agents.md") || path.basename(normalized) === "agents.md";
+        });
+        expect(hasAgentsFile).toBe(true);
       }
     });
 
