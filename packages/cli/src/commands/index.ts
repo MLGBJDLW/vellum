@@ -519,6 +519,57 @@ export {
 } from "./workflow.js";
 
 // =============================================================================
+// Agent Level Commands (T046c)
+// =============================================================================
+
+export {
+  agentCommand as agentLevelCommand,
+  agentSlashCommands,
+  getAgentCommandsManager,
+  l0Command,
+  l1Command,
+  l2Command,
+  setAgentCommandsManager,
+} from "./agent.js";
+
+// =============================================================================
+// Trust Commands (T060)
+// =============================================================================
+
+export {
+  setTrustCommandsManager,
+  trustCommand,
+  trustedCommand,
+  trustSlashCommands,
+  untrustCommand,
+} from "./trust.js";
+
+// =============================================================================
+// Progress Command (REQ-022)
+// =============================================================================
+
+export { progressCommand } from "./progress.js";
+
+// =============================================================================
+// Install/Uninstall Commands (Phase 37)
+// =============================================================================
+
+export {
+  executeInstall,
+  executeUninstall,
+  handleInstall,
+  handleUninstall,
+  type InstallCommandOptions,
+  type InstallCommandResult,
+  installCommand,
+  printInstallResult,
+  printUninstallResult,
+  type SetupCommandResult,
+  type UninstallCommandOptions,
+  uninstallCommand,
+} from "./install.js";
+
+// =============================================================================
 // Markdown Commands (T033)
 // =============================================================================
 
@@ -699,3 +750,40 @@ export {
 // =============================================================================
 
 export { openCommand } from "./open.js";
+
+// =============================================================================
+// Environment Command (Phase 37)
+// =============================================================================
+
+export {
+  type EnvCommandOptions,
+  type EnvCommandResult,
+  type EnvValues,
+  envCommand,
+  executeEnv,
+  handleEnv,
+  printEnvResult,
+} from "./env.js";
+
+// =============================================================================
+// Sandbox Commands (Phase 37)
+// =============================================================================
+
+export {
+  createSandboxCommand,
+  type EnableableBackend,
+  type EnableOptions,
+  type EnableResult,
+  executeSandbox,
+  executeSandboxEnable,
+  executeSandboxStatus,
+  getSandboxHelp,
+  handleSandboxEnable,
+  handleSandboxStatus,
+  type SandboxStatusJson,
+  type SandboxSubcommand,
+  type StatusOptions,
+  sandboxCommand,
+  sandboxEnableCommand,
+  sandboxStatusCommand,
+} from "./sandbox/index.js";

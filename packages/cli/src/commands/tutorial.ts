@@ -375,6 +375,33 @@ async function handleReset(lessonId?: string): Promise<CommandResult> {
   return success(chalk.yellow(`${ICONS.reset} All tutorial progress has been reset.`));
 }
 
+/**
+ * Stop the current tutorial lesson
+ */
+async function handleStop(): Promise<CommandResult> {
+  const system = await getTutorialSystem();
+
+  if (!system.isLessonActive()) {
+    return error("OPERATION_NOT_ALLOWED", "No tutorial lesson is currently active.", [
+      "/tutorial list",
+      "/tutorial start <lesson-id>",
+    ]);
+  }
+
+  const currentLesson = system.getCurrentLesson();
+  const lessonTitle = currentLesson?.title ?? "Unknown";
+
+  // Reset the current lesson to stop it
+  if (currentLesson) {
+    await system.resetLesson(currentLesson.id);
+  }
+
+  return success(
+    chalk.yellow(`[Stop] Stopped lesson: ${lessonTitle}\n\n`) +
+      "Progress has been saved. Use /tutorial start to resume later."
+  );
+}
+
 // =============================================================================
 // Help
 // =============================================================================
@@ -452,13 +479,15 @@ export const tutorialCommand: SlashCommand = {
     "/tutorial reset basics    - Reset specific lesson",
   ],
   subcommands: [
-    { name: "start", description: "Start tutorial" },
-    { name: "stop", description: "Stop tutorial" },
-    { name: "next", description: "Next step" },
-    { name: "prev", description: "Previous step" },
-    { name: "status", description: "Show status" },
+    { name: "list", description: "List all lessons" },
+    { name: "start", description: "Start a lesson" },
+    { name: "stop", description: "Stop current lesson" },
+    { name: "next", description: "Next recommended lesson" },
+    { name: "continue", description: "Continue current lesson" },
+    { name: "skip", description: "Skip current step" },
+    { name: "status", description: "Show progress" },
+    { name: "reset", description: "Reset progress" },
     { name: "help", description: "Show help" },
-    { name: "demo", description: "Run demo" },
   ],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
@@ -496,6 +525,9 @@ export const tutorialCommand: SlashCommand = {
 
       case "reset":
         return handleReset(argument);
+
+      case "stop":
+        return handleStop();
 
       case "help":
       case "--help":

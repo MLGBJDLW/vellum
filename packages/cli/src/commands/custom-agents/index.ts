@@ -357,7 +357,7 @@ export const customAgentsCommand: SlashCommand = {
     { name: "list", description: "List custom agents", aliases: ["ls"] },
     { name: "create", description: "Create custom agent" },
     { name: "validate", description: "Validate agent" },
-    { name: "edit", description: "Edit agent" },
+    { name: "info", description: "Show agent details" },
     { name: "export", description: "Export agent" },
     { name: "import", description: "Import agent" },
   ],

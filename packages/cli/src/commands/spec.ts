@@ -438,16 +438,18 @@ export async function executeSpec(options: SpecOptions = {}): Promise<SpecResult
 // =============================================================================
 
 /**
- * /spec slash command for TUI
+ * /spec-workflow slash command for TUI
  *
  * Manages spec workflows from within the TUI.
+ * Note: Named /spec-workflow to avoid conflict with /spec (mode switch).
+ * Use /spec to switch to spec mode, /spec-workflow to manage workflows.
  */
 export const specSlashCommand: SlashCommand = {
-  name: "spec",
-  description: "Manage spec workflows",
+  name: "spec-workflow",
+  description: "Manage spec workflows (start, continue, status)",
   kind: "builtin",
   category: "system",
-  aliases: [],
+  aliases: ["sw"],
   positionalArgs: [
     {
       name: "description",

@@ -6,9 +6,11 @@
  * @module cli/commands/metrics
  */
 
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { getMetricsManager } from "../tui/metrics-integration.js";
 import type { CommandContext, CommandResult, SlashCommand as SlashCommandDef } from "./types.js";
-import { success } from "./types.js";
+import { error, success } from "./types.js";
 
 /**
  * /metrics command - Display current metrics
@@ -18,7 +20,14 @@ export const metricsCommand: SlashCommandDef = {
   description: "Display application metrics and statistics",
   kind: "builtin",
   category: "debug",
-  positionalArgs: [],
+  positionalArgs: [
+    {
+      name: "subcommand",
+      type: "string",
+      description: "Subcommand: show, reset, export",
+      required: false,
+    },
+  ],
   namedArgs: [
     {
       name: "format",
@@ -26,6 +35,13 @@ export const metricsCommand: SlashCommandDef = {
       description: "Output format (text, json)",
       required: false,
       default: "text",
+    },
+    {
+      name: "output",
+      shorthand: "o",
+      type: "path",
+      description: "Output file path for export",
+      required: false,
     },
   ],
   subcommands: [
@@ -36,19 +52,71 @@ export const metricsCommand: SlashCommandDef = {
   aliases: ["stats"],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
+    const subcommand = (ctx.parsedArgs.positional[0] as string)?.toLowerCase() ?? "show";
+    const format = (ctx.parsedArgs.named?.format as string) ?? "text";
+    const outputPath = ctx.parsedArgs.named?.output as string | undefined;
+
     const manager = getMetricsManager();
     const snapshot = manager.getSnapshot();
-    const format = (ctx.parsedArgs?.named?.format as string) ?? "text";
 
-    if (format === "json") {
-      return success(JSON.stringify(snapshot, null, 2));
+    switch (subcommand) {
+      case "show":
+        if (format === "json") {
+          return success(JSON.stringify(snapshot, null, 2));
+        }
+        return success(manager.formatSnapshot(snapshot));
+
+      case "reset":
+        manager.reset();
+        return success("✅ Metrics reset successfully");
+
+      case "export":
+        return handleExport(snapshot, outputPath);
+
+      default:
+        return error("INVALID_ARGUMENT", `Unknown subcommand: ${subcommand}`, [
+          "/metrics show",
+          "/metrics reset",
+          "/metrics export --output=./metrics.json",
+        ]);
     }
-
-    // Format as text
-    const output = manager.formatSnapshot(snapshot);
-    return success(output);
   },
 };
+
+/**
+ * Handle metrics export to file
+ */
+async function handleExport(
+  snapshot: ReturnType<ReturnType<typeof getMetricsManager>["getSnapshot"]>,
+  outputPath?: string
+): Promise<CommandResult> {
+  // Default output path
+  const filePath = outputPath ?? `metrics-${Date.now()}.json`;
+  const resolvedPath = path.resolve(filePath);
+
+  try {
+    // Format with timestamp
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      metrics: snapshot,
+    };
+
+    await fs.writeFile(resolvedPath, JSON.stringify(exportData, null, 2), "utf-8");
+
+    return success(
+      `📊 Metrics exported successfully\n\n` +
+        `  File: ${resolvedPath}\n` +
+        `  Size: ${JSON.stringify(exportData).length} bytes\n\n` +
+        "Use /metrics show to view current metrics."
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return error("INTERNAL_ERROR", `Failed to export metrics: ${message}`, [
+      "Check file permissions",
+      "Try a different output path",
+    ]);
+  }
+}
 
 /**
  * /metrics reset command - Reset all metrics
