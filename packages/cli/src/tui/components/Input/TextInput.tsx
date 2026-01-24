@@ -193,6 +193,11 @@ function TextInputComponent({
   // Cursor position within the value
   const [cursorPosition, setCursorPosition] = useState(value.length);
 
+  const setCursor = useCallback((position: number) => {
+    cursorPositionRef.current = position;
+    setCursorPosition(position);
+  }, []);
+
   // Undo/Redo stacks for Ctrl+Z support
   const [undoStack, setUndoStack] = useState<Array<{ value: string; cursor: number }>>([]);
   const [redoStack, setRedoStack] = useState<Array<{ value: string; cursor: number }>>([]);
@@ -201,9 +206,9 @@ function TextInputComponent({
   // Sync cursor position when value changes externally
   useEffect(() => {
     if (cursorPosition > value.length) {
-      setCursorPosition(value.length);
+      setCursor(value.length);
     }
-  }, [value, cursorPosition]);
+  }, [value, cursorPosition, setCursor]);
 
   // Keep valueRef in sync with latest value
   useEffect(() => {
@@ -241,10 +246,10 @@ function TextInputComponent({
   // Handle cursorToEnd prop - move cursor to end when requested
   useEffect(() => {
     if (cursorToEnd) {
-      setCursorPosition(value.length);
+      setCursor(value.length);
       onCursorMoved?.();
     }
-  }, [cursorToEnd, value.length, onCursorMoved]);
+  }, [cursorToEnd, value.length, onCursorMoved, setCursor]);
 
   // Cleanup input buffer timer on unmount
   useEffect(() => {
@@ -279,9 +284,9 @@ function TextInputComponent({
       }
 
       onChange(newValue);
-      setCursorPosition(newCursorPosition);
+      setCursor(newCursorPosition);
     },
-    [disabled, focused, multiline, value, cursorPosition, maxLength, onChange]
+    [disabled, focused, multiline, value, cursorPosition, maxLength, onChange, setCursor]
   );
 
   // Subscribe to paste events from the BracketedPasteProvider
@@ -315,9 +320,9 @@ function TextInputComponent({
       }
 
       onChange(newValue);
-      setCursorPosition(cursorPosition + normalizedInput.length);
+      setCursor(cursorPosition + normalizedInput.length);
     },
-    [disabled, value, cursorPosition, maxLength, onChange, multiline]
+    [disabled, value, cursorPosition, maxLength, onChange, multiline, setCursor]
   );
 
   /**
@@ -328,8 +333,8 @@ function TextInputComponent({
 
     const newValue = deleteAt(value, cursorPosition);
     onChange(newValue);
-    setCursorPosition(cursorPosition - 1);
-  }, [disabled, value, cursorPosition, onChange]);
+    setCursor(cursorPosition - 1);
+  }, [disabled, value, cursorPosition, onChange, setCursor]);
 
   /**
    * Handle delete key
@@ -353,12 +358,12 @@ function TextInputComponent({
         const beforeCursor = value.slice(0, cursorPosition);
         const match = beforeCursor.match(/\s*\S*$/);
         const jumpLength = match ? match[0].length : 1;
-        setCursorPosition(Math.max(0, cursorPosition - jumpLength));
+        setCursor(Math.max(0, cursorPosition - jumpLength));
       } else {
-        setCursorPosition(cursorPosition - 1);
+        setCursor(cursorPosition - 1);
       }
     },
-    [value, cursorPosition]
+    [value, cursorPosition, setCursor]
   );
 
   /**
@@ -373,12 +378,12 @@ function TextInputComponent({
         const afterCursor = value.slice(cursorPosition);
         const match = afterCursor.match(/^\S*\s*/);
         const jumpLength = match ? match[0].length : 1;
-        setCursorPosition(Math.min(value.length, cursorPosition + jumpLength));
+        setCursor(Math.min(value.length, cursorPosition + jumpLength));
       } else {
-        setCursorPosition(cursorPosition + 1);
+        setCursor(cursorPosition + 1);
       }
     },
-    [value, cursorPosition]
+    [value, cursorPosition, setCursor]
   );
 
   /**
@@ -393,7 +398,7 @@ function TextInputComponent({
 
     if (lastNewline === -1) {
       // No previous line, move to start
-      setCursorPosition(0);
+      setCursor(0);
       return;
     }
 
@@ -404,8 +409,8 @@ function TextInputComponent({
 
     // Move to same column in previous line (or end of line if shorter)
     const newPosition = lineStart + Math.min(columnInCurrentLine, previousLineLength);
-    setCursorPosition(newPosition);
-  }, [multiline, value, cursorPosition]);
+    setCursor(newPosition);
+  }, [multiline, value, cursorPosition, setCursor]);
 
   /**
    * Handle down arrow in multiline mode
@@ -423,7 +428,7 @@ function TextInputComponent({
     const nextNewline = afterCursor.indexOf("\n");
     if (nextNewline === -1) {
       // No next line, move to end
-      setCursorPosition(value.length);
+      setCursor(value.length);
       return;
     }
 
@@ -435,8 +440,8 @@ function TextInputComponent({
 
     // Move to same column in next line (or end of line if shorter)
     const newPosition = nextLineStart + Math.min(columnInCurrentLine, nextLineLength);
-    setCursorPosition(newPosition);
-  }, [multiline, value, cursorPosition]);
+    setCursor(newPosition);
+  }, [multiline, value, cursorPosition, setCursor]);
 
   /**
    * Calculate current cursor row (0-indexed)
@@ -458,8 +463,8 @@ function TextInputComponent({
         pos += line.length + 1;
       }
     }
-    setCursorPosition(pos);
-  }, [value, cursorRow]);
+    setCursor(pos);
+  }, [value, cursorRow, setCursor]);
 
   /**
    * Handle End key (Ctrl+E) - move to current line end
@@ -473,8 +478,8 @@ function TextInputComponent({
         pos += line.length + (i < cursorRow ? 1 : 0);
       }
     }
-    setCursorPosition(pos);
-  }, [value, cursorRow]);
+    setCursor(pos);
+  }, [value, cursorRow, setCursor]);
 
   /**
    * Handle Ctrl+K - kill (delete) from cursor to end of line
@@ -499,8 +504,8 @@ function TextInputComponent({
     const lineStart = lines.slice(0, cursorRow).join("\n").length + (cursorRow > 0 ? 1 : 0);
     const newValue = value.slice(0, lineStart) + value.slice(cursorPosition);
     onChange(newValue);
-    setCursorPosition(lineStart);
-  }, [disabled, value, cursorPosition, cursorRow, onChange]);
+    setCursor(lineStart);
+  }, [disabled, value, cursorPosition, cursorRow, onChange, setCursor]);
 
   /**
    * Handle Ctrl+W - delete word backward
@@ -517,8 +522,8 @@ function TextInputComponent({
 
     const newValue = value.slice(0, pos) + value.slice(cursorPosition);
     onChange(newValue);
-    setCursorPosition(pos);
-  }, [disabled, value, cursorPosition, onChange]);
+    setCursor(pos);
+  }, [disabled, value, cursorPosition, onChange, setCursor]);
 
   /**
    * Handle Ctrl+Z - undo
@@ -529,9 +534,9 @@ function TextInputComponent({
     setUndoStack((s) => s.slice(0, -1));
     setRedoStack((s) => [...s, { value, cursor: cursorPosition }]);
     onChange(prev.value);
-    setCursorPosition(prev.cursor);
+    setCursor(prev.cursor);
     lastValueRef.current = prev.value; // Prevent re-adding to undo stack
-  }, [undoStack, value, cursorPosition, onChange]);
+  }, [undoStack, value, cursorPosition, onChange, setCursor]);
 
   /**
    * Handle Ctrl+Shift+Z / Ctrl+Y - redo
@@ -542,9 +547,9 @@ function TextInputComponent({
     setRedoStack((s) => s.slice(0, -1));
     setUndoStack((s) => [...s, { value, cursor: cursorPosition }]);
     onChange(next.value);
-    setCursorPosition(next.cursor);
+    setCursor(next.cursor);
     lastValueRef.current = next.value; // Prevent re-adding to undo stack
-  }, [redoStack, value, cursorPosition, onChange]);
+  }, [redoStack, value, cursorPosition, onChange, setCursor]);
 
   /**
    * Handle submission
@@ -567,8 +572,8 @@ function TextInputComponent({
 
     const newValue = insertAt(value, cursorPosition, "\n");
     onChange(newValue);
-    setCursorPosition(cursorPosition + 1);
-  }, [disabled, multiline, value, cursorPosition, maxLength, onChange]);
+    setCursor(cursorPosition + 1);
+  }, [disabled, multiline, value, cursorPosition, maxLength, onChange, setCursor]);
 
   /**
    * Handle return/enter key based on mode
@@ -765,6 +770,7 @@ function TextInputComponent({
           // Update value first, then cursor position in low-priority transition
           // This batches both updates in React 18+ automatic batching
           onChange(newValue);
+          cursorPositionRef.current = newPosition;
           startTransition(() => {
             setCursorPosition(newPosition);
           });
@@ -801,6 +807,7 @@ function TextInputComponent({
 
             const newPosition = Math.min(currentCursorPosition + buffered.length, newValue.length);
             // Use startTransition for cursor update to reduce flickering during paste
+            cursorPositionRef.current = newPosition;
             startTransition(() => {
               setCursorPosition(newPosition);
             });

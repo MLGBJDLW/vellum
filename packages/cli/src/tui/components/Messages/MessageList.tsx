@@ -54,6 +54,7 @@ import { ToolResultPreview } from "./ToolResultPreview.js";
 
 /** ASCII text spinner animation frames for running tools (no Unicode/emoji) */
 const SPINNER_FRAMES = ["-", "\\", "|", "/"] as const;
+const THINKING_TOGGLE_HINT = "Alt+E";
 
 /** Enable debug logging for TUI mode decisions */
 const DEBUG_TUI = process.env.NODE_ENV === "development" && process.env.DEBUG_TUI;
@@ -433,6 +434,10 @@ interface MessageItemProps {
   readonly showToolCalls?: boolean;
   /** Display mode for thinking blocks */
   readonly thinkingDisplayMode?: "full" | "compact";
+  /** Toggle signal for thinking blocks */
+  readonly thinkingToggleSignal?: number;
+  /** Hint text for thinking toggle */
+  readonly thinkingToggleHint?: string;
 }
 
 /**
@@ -450,6 +455,8 @@ const MessageItem = memo(function MessageItem({
   errorColor,
   showToolCalls = true,
   thinkingDisplayMode,
+  thinkingToggleSignal,
+  thinkingToggleHint,
 }: MessageItemProps) {
   const icon = getRoleIcon(message.role);
   const label = getRoleLabel(message.role);
@@ -489,6 +496,8 @@ const MessageItem = memo(function MessageItem({
           persistenceId={`thinking-${message.id}`}
           showCharCount
           displayMode={thinkingDisplayMode}
+          toggleSignal={thinkingToggleSignal}
+          toggleHint={thinkingToggleHint}
         />
       )}
 
@@ -603,6 +612,20 @@ const MessageList = memo(function MessageList({
   // NOTE: Hoisted here to avoid TDZ error with scrollViewportHeight calculation
   const hasPendingContent = pendingMessage?.content && pendingMessage.content.length > 0;
   const showThinkingIndicator = isLoading && !hasPendingContent;
+  const hasActiveStreaming = Boolean(pendingMessage?.isStreaming);
+  const forceFollowWhileStreaming = autoScroll && (hasActiveStreaming || showThinkingIndicator);
+  const activeThinkingMessageId = useMemo(() => {
+    if (pendingMessage?.thinking && pendingMessage.thinking.length > 0) {
+      return pendingMessage.id;
+    }
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message?.thinking && message.thinking.length > 0) {
+        return message.id;
+      }
+    }
+    return null;
+  }, [messages, pendingMessage?.id, pendingMessage?.thinking]);
 
   // Get viewport dimensions for adaptive rendering
   // FIX: Use consistent inputReserve value matching useAlternateBuffer default (7)
@@ -869,6 +892,7 @@ const MessageList = memo(function MessageList({
 
   // Whether user has manually scrolled away from bottom
   const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const [thinkingToggleNonce, setThinkingToggleNonce] = useState(0);
 
   // Track previous message count for auto-scroll detection
   const prevMessageCountRef = useRef(messages.length);
@@ -910,6 +934,9 @@ const MessageList = memo(function MessageList({
 
   // Scroll to bottom helper
   const scrollToBottom = useCallback(() => {
+    if (enableScroll) {
+      scrollActions.scrollToBottom();
+    }
     if (useVirtualizedListInternal) {
       virtualizedListRef.current?.scrollToEnd();
       setUserScrolledUp(false);
@@ -919,7 +946,7 @@ const MessageList = memo(function MessageList({
       setScrollOffset(messages.length - computedMaxHeight);
     }
     setUserScrolledUp(false);
-  }, [useVirtualizedListInternal, messages.length, computedMaxHeight]);
+  }, [enableScroll, scrollActions, useVirtualizedListInternal, messages.length, computedMaxHeight]);
 
   // Scroll up helper
   const scrollUp = useCallback((amount = 1) => {
@@ -1167,11 +1194,29 @@ const MessageList = memo(function MessageList({
     [isScrollNavigationKey, forceFollowOnInput, scrollState.mode, scrollActions]
   );
 
+  // Force follow while streaming or showing the thinking indicator.
+  useEffect(() => {
+    if (!forceFollowWhileStreaming) {
+      return;
+    }
+    scrollToBottom();
+  }, [forceFollowWhileStreaming, scrollToBottom]);
+
   // Handle keyboard input for scrolling
   // isActive defaults to true when isFocused is undefined (backward compatible)
   useInput(
     useCallback(
       (char, key) => {
+        if (
+          key.meta &&
+          char.toLowerCase() === "e" &&
+          thinkingDisplayMode !== "compact" &&
+          activeThinkingMessageId
+        ) {
+          setThinkingToggleNonce((prev) => prev + 1);
+          return;
+        }
+
         // Handle scroll controller mode separately
         if (enableScroll && useVirtualizedListInternal) {
           handleScrollControllerInput(char, key);
@@ -1205,6 +1250,8 @@ const MessageList = memo(function MessageList({
         scrollToBottom,
         handleVirtualizedNavigation,
         handleDirectNavigation,
+        thinkingDisplayMode,
+        activeThinkingMessageId,
       ]
     ),
     { isActive: isFocused !== false }
@@ -1234,6 +1281,25 @@ const MessageList = memo(function MessageList({
   // Use muted color for thinking/reasoning content (dimmed appearance)
   const thinkingColor = theme.semantic.text.secondary ?? mutedColor;
 
+  const getThinkingToggleInfo = useCallback(
+    (message: Message) => {
+      if (!message.thinking || message.thinking.length === 0) {
+        return { signal: undefined, hint: undefined };
+      }
+      if (thinkingDisplayMode === "compact") {
+        return { signal: undefined, hint: undefined };
+      }
+      if (message.id !== activeThinkingMessageId) {
+        return { signal: undefined, hint: undefined };
+      }
+      return {
+        signal: thinkingToggleNonce > 0 ? thinkingToggleNonce : undefined,
+        hint: THINKING_TOGGLE_HINT,
+      };
+    },
+    [activeThinkingMessageId, thinkingDisplayMode, thinkingToggleNonce]
+  );
+
   // Virtualized list callbacks must be defined unconditionally to keep hook order stable.
   const renderMessageItem = useCallback(
     ({ item }: { item: Message; index: number }) => {
@@ -1249,6 +1315,7 @@ const MessageList = memo(function MessageList({
         );
       }
       const showToolCallsForItem = shouldRenderInlineToolCalls(item);
+      const thinkingToggle = getThinkingToggleInfo(item);
       // Standard message rendering
       return (
         <MessageItem
@@ -1261,6 +1328,8 @@ const MessageList = memo(function MessageList({
           errorColor={errorColor}
           showToolCalls={showToolCallsForItem}
           thinkingDisplayMode={thinkingDisplayMode}
+          thinkingToggleSignal={thinkingToggle.signal}
+          thinkingToggleHint={thinkingToggle.hint}
         />
       );
     },
@@ -1273,10 +1342,12 @@ const MessageList = memo(function MessageList({
       errorColor,
       shouldRenderInlineToolCalls,
       thinkingDisplayMode,
+      getThinkingToggleInfo,
     ]
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
+  const pendingThinkingToggle = pendingMessage ? getThinkingToggleInfo(pendingMessage) : null;
 
   const handleStickingChange = useCallback(
     (isSticking: boolean) => {
@@ -1359,6 +1430,22 @@ const MessageList = memo(function MessageList({
     const maxOffset = Math.max(0, scrollHeight - innerHeight);
     const targetScrollTop = Math.max(0, maxOffset - scrollState.offsetFromBottom);
 
+    if (scrollState.offsetFromBottom <= 0 && !list.isAtBottom()) {
+      // Mark sync direction
+      syncDirectionRef.current = "toList";
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+      syncTimeoutRef.current = setTimeout(() => {
+        syncDirectionRef.current = null;
+      }, 16);
+
+      isApplyingControllerScrollRef.current = true;
+      expectedScrollTopRef.current = maxOffset;
+      list.scrollToEnd();
+      return;
+    }
+
     // FIX: Increased tolerance to prevent jitter from small differences
     if (Math.abs(scrollTop - targetScrollTop) > 2) {
       // Mark sync direction
@@ -1436,17 +1523,15 @@ const MessageList = memo(function MessageList({
 
     // Scroll when: new message arrived OR pending message content is streaming
     const shouldScroll = hasNewMessages || (pendingMessage?.isStreaming && pendingContentChanged);
+    const shouldFollow =
+      (enableScroll ? scrollState.mode === "follow" : !userScrolledUp) ||
+      forceFollowWhileStreaming ||
+      newPendingMessageStarted;
 
-    // Skip scroll if user manually scrolled up (but not if we just reset it above)
-    if (
-      !useVirtualizedListInternal ||
-      !autoScroll ||
-      (userScrolledUp && !newPendingMessageStarted) ||
-      !shouldScroll
-    ) {
+    if (!useVirtualizedListInternal || !autoScroll || !shouldScroll || !shouldFollow) {
       return;
     }
-    virtualizedListRef.current?.scrollToEnd();
+    scrollToBottom();
   }, [
     useVirtualizedListInternal,
     autoScroll,
@@ -1455,6 +1540,10 @@ const MessageList = memo(function MessageList({
     pendingMessage?.content,
     pendingMessage?.isStreaming,
     pendingMessage?.id,
+    enableScroll,
+    scrollState.mode,
+    forceFollowWhileStreaming,
+    scrollToBottom,
   ]);
 
   // Empty state
@@ -1562,21 +1651,26 @@ const MessageList = memo(function MessageList({
           <Box flexDirection="column" flexGrow={1}>
             {/* History messages - rendered in <Static>, NEVER re-render */}
             <Static items={historyMessages as Message[]}>
-              {(message: Message) => (
-                <Box key={message.id} paddingX={1}>
-                  <MessageItem
-                    message={message}
-                    roleColor={roleColors[message.role]}
-                    mutedColor={mutedColor}
-                    accentColor={accentColor}
-                    thinkingColor={thinkingColor}
-                    successColor={successColor}
-                    errorColor={errorColor}
-                    showToolCalls={shouldRenderInlineToolCalls(message)}
-                    thinkingDisplayMode={thinkingDisplayMode}
-                  />
-                </Box>
-              )}
+              {(message: Message) => {
+                const thinkingToggle = getThinkingToggleInfo(message);
+                return (
+                  <Box key={message.id} paddingX={1}>
+                    <MessageItem
+                      message={message}
+                      roleColor={roleColors[message.role]}
+                      mutedColor={mutedColor}
+                      accentColor={accentColor}
+                      thinkingColor={thinkingColor}
+                      successColor={successColor}
+                      errorColor={errorColor}
+                      showToolCalls={shouldRenderInlineToolCalls(message)}
+                      thinkingDisplayMode={thinkingDisplayMode}
+                      thinkingToggleSignal={thinkingToggle.signal}
+                      thinkingToggleHint={thinkingToggle.hint}
+                    />
+                  </Box>
+                );
+              }}
             </Static>
 
             {/* Pending message - this is the ONLY thing that re-renders during streaming */}
@@ -1592,6 +1686,8 @@ const MessageList = memo(function MessageList({
                   errorColor={errorColor}
                   showToolCalls={shouldRenderInlineToolCalls(pendingMessage)}
                   thinkingDisplayMode={thinkingDisplayMode}
+                  thinkingToggleSignal={pendingThinkingToggle?.signal}
+                  thinkingToggleHint={pendingThinkingToggle?.hint}
                 />
               </Box>
             )}
@@ -1659,17 +1755,21 @@ const MessageList = memo(function MessageList({
       <Box flexDirection="row">
         {/* Messages */}
         <Box flexDirection="column" paddingX={1} flexGrow={1}>
-          {visibleMessages.map((message) =>
-            message.role === "tool_group" ? (
-              <ToolGroupItem
-                key={message.id}
-                message={message as Message & { role: "tool_group" }}
-                accentColor={accentColor}
-                mutedColor={mutedColor}
-                successColor={successColor}
-                errorColor={errorColor}
-              />
-            ) : (
+          {visibleMessages.map((message) => {
+            if (message.role === "tool_group") {
+              return (
+                <ToolGroupItem
+                  key={message.id}
+                  message={message as Message & { role: "tool_group" }}
+                  accentColor={accentColor}
+                  mutedColor={mutedColor}
+                  successColor={successColor}
+                  errorColor={errorColor}
+                />
+              );
+            }
+            const thinkingToggle = getThinkingToggleInfo(message);
+            return (
               <MessageItem
                 key={message.id}
                 message={message}
@@ -1681,9 +1781,11 @@ const MessageList = memo(function MessageList({
                 errorColor={errorColor}
                 showToolCalls={shouldRenderInlineToolCalls(message)}
                 thinkingDisplayMode={thinkingDisplayMode}
+                thinkingToggleSignal={thinkingToggle.signal}
+                thinkingToggleHint={thinkingToggle.hint}
               />
-            )
-          )}
+            );
+          })}
         </Box>
         {/* ScrollIndicator (right side) - only when enableScroll is true */}
         {enableScroll && (

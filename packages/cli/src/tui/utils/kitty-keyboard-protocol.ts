@@ -16,6 +16,7 @@
 
 import * as fs from "node:fs";
 import { getActiveStdout } from "../buffered-stdout.js";
+import { lockRawMode, unlockRawMode } from "./raw-mode-manager.js";
 
 // =============================================================================
 // Constants
@@ -127,11 +128,8 @@ export async function detectKittyKeyboardProtocol(): Promise<boolean> {
       return;
     }
 
-    // Save and set raw mode for escape sequence handling
-    const originalRawMode = process.stdin.isRaw;
-    if (!originalRawMode) {
-      process.stdin.setRawMode(true);
-    }
+    // Lock raw mode for escape sequence handling
+    lockRawMode();
 
     let responseBuffer = "";
     let progressiveEnhancementReceived = false;
@@ -145,14 +143,7 @@ export async function detectKittyKeyboardProtocol(): Promise<boolean> {
 
       process.stdin.removeListener("data", handleData);
 
-      // Restore original raw mode
-      if (!originalRawMode) {
-        try {
-          process.stdin.setRawMode(false);
-        } catch {
-          // Ignore errors (stdin may be closed)
-        }
-      }
+      unlockRawMode();
 
       detectionComplete = true;
       resolve(kittySupported);

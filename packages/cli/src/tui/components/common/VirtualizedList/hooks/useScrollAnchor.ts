@@ -179,8 +179,8 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
       prevScrollTop.current >= prevTotalHeight.current - prevContainerHeight.current - 1;
     const wasAtBottom = contentPreviouslyFit || wasScrolledToBottomPixels;
 
-    // If the user was at the bottom, they are now sticking
-    if (wasAtBottom && scrollTop >= prevScrollTop.current) {
+    // If the user was at the bottom, keep sticking even when content shrinks.
+    if (wasAtBottom && !isStickingToBottom) {
       setIsStickingToBottom(true);
     }
 
@@ -188,6 +188,7 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     const containerChanged = prevContainerHeight.current !== containerHeight;
     // Detect content height growth (triggers during streaming output)
     const contentHeightGrew = totalHeight > prevTotalHeight.current;
+    const contentHeightShrank = totalHeight < prevTotalHeight.current;
     // FIX: Calculate the height delta for more aggressive follow mode
     const heightDelta = totalHeight - prevTotalHeight.current;
 
@@ -200,12 +201,17 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     if (
       (listGrew && (isStickingToBottom || wasAtBottom)) ||
       (isStickingToBottom && containerChanged) ||
-      (isStickingToBottom && contentHeightGrew && heightDelta > 0)
+      (isStickingToBottom && contentHeightGrew && heightDelta > 0) ||
+      (contentHeightShrank && (isStickingToBottom || wasAtBottom))
     ) {
-      setScrollAnchor({
-        index: dataLength > 0 ? dataLength - 1 : 0,
-        offset: SCROLL_TO_ITEM_END,
-      });
+      const atEnd =
+        scrollAnchor.index === dataLength - 1 && scrollAnchor.offset === SCROLL_TO_ITEM_END;
+      if (!atEnd) {
+        setScrollAnchor({
+          index: dataLength > 0 ? dataLength - 1 : 0,
+          offset: SCROLL_TO_ITEM_END,
+        });
+      }
       if (!isStickingToBottom) {
         setIsStickingToBottom(true);
       }
@@ -233,6 +239,7 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     scrollTop,
     containerHeight,
     scrollAnchor.index,
+    scrollAnchor.offset,
     getAnchorForScrollTop,
     isStickingToBottom,
   ]);

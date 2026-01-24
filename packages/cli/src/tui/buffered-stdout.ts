@@ -10,6 +10,7 @@
 
 import fs from "node:fs";
 import { Writable } from "node:stream";
+import { isCursorHidden, isCursorLocked } from "./utils/cursor-state.js";
 
 // =============================================================================
 // Shared Stdout Reference
@@ -151,13 +152,16 @@ export class BufferedStdout extends Writable {
     const frame = this.buf;
     this.buf = "";
 
+    const shouldShowCursor = !isCursorHidden() && !isCursorLocked();
+    const cursorSuffix = shouldShowCursor ? SHOW_CURSOR : "";
+
     // Atomic write with synchronized output wrapping:
     // 1. Hide cursor to prevent cursor flicker
     // 2. Begin synchronized update (terminal holds display)
     // 3. Write the actual frame content
     // 4. End synchronized update (terminal renders atomically)
     // 5. Show cursor again
-    atomicWrite(HIDE_CURSOR + BSU + frame + ESU + SHOW_CURSOR);
+    atomicWrite(HIDE_CURSOR + BSU + frame + ESU + cursorSuffix);
   }
 
   /**
