@@ -15,9 +15,17 @@ export {
   PASTE_END,
   PASTE_START,
 } from "./bracketedPaste.js";
-
+// Circular Buffer (efficient fixed-size buffer)
+export {
+  type CircularBuffer,
+  type CircularBufferActions,
+  type CircularBufferConfig,
+  createCircularBuffer,
+  createMessageBuffer,
+  MESSAGE_BUFFER_DEFAULTS,
+  useCircularBuffer,
+} from "./circularBuffer.js";
 export { CursorManager, type CursorManagerImpl } from "./cursor-manager.js";
-
 export {
   clearTerminalCapabilitiesCache,
   createHyperlink,
@@ -30,7 +38,6 @@ export {
   type TerminalCapabilities,
   type TerminalType,
 } from "./detectTerminal.js";
-
 export { findLastSafeSplitPoint } from "./findLastSafeSplitPoint.js";
 // Height estimation utilities (T002)
 export {
@@ -69,6 +76,20 @@ export {
   isStdoutGuardActive,
 } from "./stdoutGuard.js";
 export { isSyncUpdateSupported, syncUpdate } from "./synchronized-update.js";
+// Terminal scroll utilities
+export {
+  createScrollNormalizer,
+  createScrollNormalizerWithReset,
+  createSensitiveScrollNormalizer,
+  detectTerminal as detectScrollTerminal,
+  getScrollConfig,
+  getScrollSensitivity,
+  type ScrollNormalizerWithReset,
+  TERMINAL_SCROLL_CONFIGS,
+  type TerminalScrollConfig,
+  useScrollNormalizer,
+  useSensitiveScrollNormalizer,
+} from "./terminal-scroll.js";
 // Text width utilities (CJK/emoji aware)
 export {
   countLines,

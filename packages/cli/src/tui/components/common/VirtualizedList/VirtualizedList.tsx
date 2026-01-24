@@ -22,7 +22,16 @@ import {
   useState,
 } from "react";
 import { useScrollOptional } from "../../../context/ScrollContext.js";
-import { useBatchedScroll, useScrollAnchor, useVirtualization } from "./hooks/index.js";
+import {
+  type FollowMode,
+  useBatchedScroll,
+  useScrollAnchor,
+  useScrollPastEnd,
+  useSmoothScroll,
+  useStickyBottom,
+  useVirtualization,
+} from "./hooks/index.js";
+import { useAnchorManager } from "./scrollAnchorAPI.js";
 import { SCROLL_TO_ITEM_END, type VirtualizedListProps, type VirtualizedListRef } from "./types.js";
 
 /**
@@ -68,7 +77,11 @@ function VirtualizedListInner<T>(
     scrollbarThumbColor,
     onScrollTopChange,
     onStickingToBottomChange,
+    onFollowModeChange,
     alignToBottom = false,
+    isStreaming = false,
+    enableSmoothScroll = true,
+    enableScrollPastEnd = false,
   } = props;
 
   // Note: theme reserved for future scrollbar styling
@@ -91,6 +104,7 @@ function VirtualizedListInner<T>(
     estimatedItemHeight,
     scrollTop: 0,
     containerHeight,
+    isStreaming,
   });
 
   // Scroll anchor management
@@ -120,14 +134,16 @@ function VirtualizedListInner<T>(
     endIndex,
     // Note: spacer heights not used in Ink (no real scroll support)
     // topSpacerHeight and bottomSpacerHeight are kept in hook for API compat
-    itemRefCallback,
+    setItemRef,
     containerRef,
     measuredContainerHeight,
+    triggerMeasure,
   } = useVirtualization({
     dataLength: data.length,
     estimatedItemHeight,
     scrollTop,
     containerHeight,
+    isStreaming,
   });
 
   // FIX: Debounce container height updates to prevent rapid state changes
@@ -169,6 +185,87 @@ function VirtualizedListInner<T>(
   // Batched scroll for smooth updates
   const { getScrollTop, setPendingScrollTop } = useBatchedScroll(scrollTop);
 
+  // =========================================================================
+  // New Hooks Integration (v2.0)
+  // =========================================================================
+
+  // Sticky bottom with 3-state Follow Mode FSM
+  const stickyBottom = useStickyBottom({
+    scrollTop,
+    maxScroll: totalHeight - measuredContainerHeight,
+    containerHeight: measuredContainerHeight,
+    totalContentHeight: totalHeight,
+    dataLength: data.length,
+    isStreaming,
+  });
+
+  // Smooth scroll animation
+  const smoothScroll = useSmoothScroll({
+    targetScrollTop: scrollTop,
+    maxScroll: totalHeight - measuredContainerHeight,
+    enabled: enableSmoothScroll,
+    onScrollUpdate: (newScrollTop) => {
+      setPendingScrollTop(newScrollTop);
+      setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+    },
+  });
+
+  // Scroll past end (overscroll with rubberband)
+  const scrollPastEnd = useScrollPastEnd({
+    maxLines: enableScrollPastEnd ? 3 : 0,
+  });
+
+  // Anchor manager for programmatic scroll control
+  const anchorManager = useAnchorManager();
+
+  // Track follow mode changes
+  const prevFollowModeRef = useRef<FollowMode>(stickyBottom.followMode);
+  useEffect(() => {
+    if (stickyBottom.followMode !== prevFollowModeRef.current) {
+      prevFollowModeRef.current = stickyBottom.followMode;
+      onFollowModeChange?.(stickyBottom.followMode);
+    }
+  }, [stickyBottom.followMode, onFollowModeChange]);
+
+  // Sync sticky bottom state with legacy isStickingToBottom
+  useEffect(() => {
+    const shouldStick = stickyBottom.shouldAutoScroll;
+    if (shouldStick !== isStickingToBottom) {
+      setIsStickingToBottom(shouldStick);
+    }
+  }, [stickyBottom.shouldAutoScroll, isStickingToBottom, setIsStickingToBottom]);
+
+  // Auto-scroll when in auto/locked mode and new content arrives
+  useEffect(() => {
+    if (stickyBottom.shouldAutoScroll && data.length > 0) {
+      if (enableSmoothScroll) {
+        // Use smooth scroll for animated transition
+        smoothScroll.jumpTo(totalHeight - measuredContainerHeight);
+      } else {
+        // Direct scroll
+        setScrollAnchor({
+          index: data.length - 1,
+          offset: SCROLL_TO_ITEM_END,
+        });
+      }
+    }
+  }, [
+    data.length,
+    stickyBottom.shouldAutoScroll,
+    enableSmoothScroll,
+    smoothScroll,
+    totalHeight,
+    measuredContainerHeight,
+    setScrollAnchor,
+  ]);
+
+  // Reset overscroll when content changes
+  useEffect(() => {
+    if (scrollPastEnd.isOverscrolled) {
+      scrollPastEnd.resetOverscroll();
+    }
+  }, [scrollPastEnd.isOverscrolled, scrollPastEnd.resetOverscroll]);
+
   // Notify parent of scroll changes and dimension updates
   useEffect(() => {
     if (onScrollTopChange) {
@@ -188,37 +285,57 @@ function VirtualizedListInner<T>(
     ref,
     () => ({
       scrollBy: (delta: number) => {
-        if (delta < 0) {
-          setIsStickingToBottom(false);
-        }
+        // Track scroll direction for sticky bottom FSM
+        stickyBottom.handleScroll(delta, "programmatic");
+
         const currentScrollTop = getScrollTop();
-        const newScrollTop = Math.max(
-          0,
-          Math.min(totalHeight - measuredContainerHeight, currentScrollTop + delta)
-        );
-        setPendingScrollTop(newScrollTop);
-        setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+        const maxScroll = totalHeight - measuredContainerHeight;
+        const newScrollTop = Math.max(0, Math.min(maxScroll, currentScrollTop + delta));
+
+        // Handle overscroll when at bottom
+        if (enableScrollPastEnd && currentScrollTop >= maxScroll && delta > 0) {
+          scrollPastEnd.handleOverscroll(scrollPastEnd.overscrollAmount + delta);
+          return;
+        }
+
+        if (enableSmoothScroll) {
+          smoothScroll.jumpTo(newScrollTop);
+        } else {
+          setPendingScrollTop(newScrollTop);
+          setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+        }
       },
 
       scrollTo: (offset: number) => {
-        setIsStickingToBottom(false);
+        stickyBottom.handleScroll(offset - scrollTop, "programmatic");
         const newScrollTop = Math.max(0, Math.min(totalHeight - measuredContainerHeight, offset));
-        setPendingScrollTop(newScrollTop);
-        setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+
+        if (enableSmoothScroll) {
+          smoothScroll.jumpTo(newScrollTop);
+        } else {
+          setPendingScrollTop(newScrollTop);
+          setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+        }
       },
 
       scrollToEnd: () => {
-        setIsStickingToBottom(true);
+        // Use scrollToBottomAndLock for explicit "go to bottom" action
+        stickyBottom.scrollToBottomAndLock();
+        scrollPastEnd.resetOverscroll();
+
         if (data.length > 0) {
-          setScrollAnchor({
-            index: data.length - 1,
-            offset: SCROLL_TO_ITEM_END,
-          });
+          if (enableSmoothScroll) {
+            smoothScroll.jumpTo(totalHeight - measuredContainerHeight);
+          } else {
+            setScrollAnchor({
+              index: data.length - 1,
+              offset: SCROLL_TO_ITEM_END,
+            });
+          }
         }
       },
 
       scrollToIndex: ({ index, viewOffset = 0, viewPosition = 0 }) => {
-        setIsStickingToBottom(false);
         const offset = offsets[index];
         if (offset !== undefined) {
           const newScrollTop = Math.max(
@@ -228,13 +345,18 @@ function VirtualizedListInner<T>(
               offset - viewPosition * measuredContainerHeight + viewOffset
             )
           );
-          setPendingScrollTop(newScrollTop);
-          setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+          stickyBottom.handleScroll(newScrollTop - scrollTop, "programmatic");
+
+          if (enableSmoothScroll) {
+            smoothScroll.jumpTo(newScrollTop);
+          } else {
+            setPendingScrollTop(newScrollTop);
+            setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+          }
         }
       },
 
       scrollToItem: ({ item, viewOffset = 0, viewPosition = 0 }) => {
-        setIsStickingToBottom(false);
         const index = data.indexOf(item);
         if (index !== -1) {
           const offset = offsets[index];
@@ -246,8 +368,14 @@ function VirtualizedListInner<T>(
                 offset - viewPosition * measuredContainerHeight + viewOffset
               )
             );
-            setPendingScrollTop(newScrollTop);
-            setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+            stickyBottom.handleScroll(newScrollTop - scrollTop, "programmatic");
+
+            if (enableSmoothScroll) {
+              smoothScroll.jumpTo(newScrollTop);
+            } else {
+              setPendingScrollTop(newScrollTop);
+              setScrollAnchor(getAnchorForScrollTop(newScrollTop));
+            }
           }
         }
       },
@@ -260,11 +388,54 @@ function VirtualizedListInner<T>(
         innerHeight: measuredContainerHeight,
       }),
 
-      isAtBottom: () => isStickingToBottom,
+      isAtBottom: () => stickyBottom.isAtBottom,
+
+      forceRemeasure: () => {
+        triggerMeasure();
+      },
+
+      // =====================================================================
+      // New APIs (v2.0)
+      // =====================================================================
+
+      /** Get current follow mode state */
+      getFollowMode: () => stickyBottom.followMode,
+
+      /** Get new message count (accumulated while follow is off) */
+      getNewMessageCount: () => stickyBottom.newMessageCount,
+
+      /** Clear new message count (e.g., when banner is dismissed) */
+      clearNewMessageCount: () => stickyBottom.clearNewMessageCount(),
+
+      /** Handle wheel scroll event */
+      handleWheel: (delta: number) => {
+        stickyBottom.handleScroll(delta, "wheel");
+      },
+
+      /** Handle keyboard scroll event */
+      handleKeyboardScroll: (delta: number) => {
+        stickyBottom.handleScroll(delta, "keyboard");
+      },
+
+      /** Get anchor manager for external anchor control */
+      getAnchorManager: () => anchorManager,
+
+      /** Current overscroll amount (for scroll past end) */
+      getOverscrollAmount: () => scrollPastEnd.overscrollAmount,
+
+      /** Start bounce-back animation */
+      startBounce: () => scrollPastEnd.startBounce(),
+
+      /** Check if smooth scroll animation is in progress */
+      isAnimating: () => smoothScroll.isAnimating,
+
+      /** Stop smooth scroll animation */
+      stopAnimation: () => smoothScroll.stop(),
     }),
     [
       offsets,
       scrollAnchor,
+      scrollTop,
       totalHeight,
       getAnchorForScrollTop,
       data,
@@ -272,8 +443,13 @@ function VirtualizedListInner<T>(
       getScrollTop,
       setPendingScrollTop,
       setScrollAnchor,
-      setIsStickingToBottom,
-      isStickingToBottom,
+      triggerMeasure,
+      stickyBottom,
+      smoothScroll,
+      scrollPastEnd,
+      anchorManager,
+      enableSmoothScroll,
+      enableScrollPastEnd,
     ]
   );
 
@@ -369,13 +545,8 @@ function VirtualizedListInner<T>(
     setScrollAnchor,
   ]);
 
-  // Create ref callback wrapper
-  const createItemRef = useCallback(
-    (index: number) => (el: DOMElement | null) => {
-      itemRefCallback(index, el);
-    },
-    [itemRefCallback]
-  );
+  // Create ref callback wrapper (now id-based for stable refs across insertions/deletions)
+  const createItemRef = useCallback((id: string) => setItemRef(id), [setItemRef]);
 
   // Render visible items
   const renderedItems = useMemo(() => {
@@ -383,8 +554,9 @@ function VirtualizedListInner<T>(
     for (let i = startIndex; i <= endIndex; i++) {
       const item = data[i];
       if (item) {
+        const id = keyExtractor(item, i);
         items.push(
-          <Box key={keyExtractor(item, i)} width="100%" ref={createItemRef(i)}>
+          <Box key={id} width="100%" ref={createItemRef(id)}>
             {renderItem({ item, index: i })}
           </Box>
         );

@@ -109,14 +109,24 @@ export {
 export { RootProvider, type RootProviderProps } from "./RootProvider.js";
 // Scroll state context (ported from Gemini CLI)
 export {
+  // Types
+  type ScrollActions,
+  // Contexts
+  ScrollActionsContext,
   ScrollContext,
   type ScrollContextValue,
+  // Provider
   ScrollProvider,
   type ScrollProviderProps,
   type ScrollState,
+  ScrollStateContext,
+  // Hooks
   useScroll,
+  useScrollActions,
+  useScrollActionsOptional,
   useScrollOptional,
   useScrollState,
+  useScrollStateOptional,
 } from "./ScrollContext.js";
 
 // Tools state context

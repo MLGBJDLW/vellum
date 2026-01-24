@@ -35,11 +35,17 @@ import { isEndKey, isHomeKey } from "../../types/ink-extended.js";
 import { estimateMessageHeight } from "../../utils/heightEstimator.js";
 import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { MaxSizedBox } from "../common/MaxSizedBox.js";
-import { NewMessagesBadge } from "../common/NewMessagesBadge.js";
 import { ScrollIndicator } from "../common/ScrollIndicator.js";
 import { StreamingIndicator } from "../common/StreamingIndicator.js";
 import {
+  // New Messages Banner - unread notification
+  NewMessagesBanner,
   SCROLL_TO_ITEM_END,
+  type SeparableMessage,
+  StreamingMessageItem,
+  // Message Separation - streaming/stable split
+  useMessageSeparation,
+  useNewMessagesBanner,
   VirtualizedList,
   type VirtualizedListRef,
 } from "../common/VirtualizedList/index.js";
@@ -438,6 +444,8 @@ interface MessageItemProps {
   readonly thinkingToggleSignal?: number;
   /** Hint text for thinking toggle */
   readonly thinkingToggleHint?: string;
+  /** Callback when thinking block height changes (for virtualized list re-measurement) */
+  readonly onThinkingHeightChange?: () => void;
 }
 
 /**
@@ -457,6 +465,7 @@ const MessageItem = memo(function MessageItem({
   thinkingDisplayMode,
   thinkingToggleSignal,
   thinkingToggleHint,
+  onThinkingHeightChange,
 }: MessageItemProps) {
   const icon = getRoleIcon(message.role);
   const label = getRoleLabel(message.role);
@@ -498,6 +507,7 @@ const MessageItem = memo(function MessageItem({
           displayMode={thinkingDisplayMode}
           toggleSignal={thinkingToggleSignal}
           toggleHint={thinkingToggleHint}
+          onHeightChange={onThinkingHeightChange}
         />
       )}
 
@@ -807,8 +817,7 @@ const MessageList = memo(function MessageList({
   });
 
   // Show badge when user has scrolled up and new messages arrived
-  const showNewMessagesBadge =
-    enableScroll && scrollState.mode === "manual" && scrollState.newMessageCount > 0;
+  // (Computed later after allMessages/userScrolledUp are defined)
 
   // Update scroll controller when content height changes
   useEffect(() => {
@@ -1300,6 +1309,11 @@ const MessageList = memo(function MessageList({
     [activeThinkingMessageId, thinkingDisplayMode, thinkingToggleNonce]
   );
 
+  // Callback to trigger re-measurement when ThinkingBlock height changes
+  const handleThinkingHeightChange = useCallback(() => {
+    virtualizedListRef.current?.forceRemeasure();
+  }, []);
+
   // Virtualized list callbacks must be defined unconditionally to keep hook order stable.
   const renderMessageItem = useCallback(
     ({ item }: { item: Message; index: number }) => {
@@ -1330,6 +1344,7 @@ const MessageList = memo(function MessageList({
           thinkingDisplayMode={thinkingDisplayMode}
           thinkingToggleSignal={thinkingToggle.signal}
           thinkingToggleHint={thinkingToggle.hint}
+          onThinkingHeightChange={handleThinkingHeightChange}
         />
       );
     },
@@ -1343,6 +1358,7 @@ const MessageList = memo(function MessageList({
       shouldRenderInlineToolCalls,
       thinkingDisplayMode,
       getThinkingToggleInfo,
+      handleThinkingHeightChange,
     ]
   );
 
@@ -1482,6 +1498,36 @@ const MessageList = memo(function MessageList({
     return [...msgs, pendingMessage];
   }, [messages, pendingMessage]);
 
+  // ============================================================================
+  // Message Separation (streaming vs stable)
+  // ============================================================================
+  // Convert messages to SeparableMessage format for the separation hook
+  const separableMessages = useMemo<SeparableMessage[]>(
+    () =>
+      allMessages.map((msg) => ({
+        id: msg.id,
+        content: msg.content || "",
+        isStreaming: msg.isStreaming,
+      })),
+    [allMessages]
+  );
+
+  const messageSeparation = useMessageSeparation(separableMessages, {
+    maxStreamingMessages: 3,
+    stableThresholdMs: 500,
+  });
+
+  // ============================================================================
+  // New Messages Banner (enhanced unread notification)
+  // ============================================================================
+  const isAtBottomForBanner = enableScroll ? scrollState.mode === "follow" : !userScrolledUp;
+
+  const bannerState = useNewMessagesBanner(
+    scrollState.newMessageCount,
+    isAtBottomForBanner,
+    scrollActions.scrollToBottom
+  );
+
   const estimatedItemHeightForVirtualization = useMemo(() => {
     if (typeof estimatedItemHeight === "function") {
       return estimatedItemHeight;
@@ -1590,6 +1636,7 @@ const MessageList = memo(function MessageList({
               onStickingToBottomChange={handleStickingChange}
               scrollbarThumbColor={animatedThumbColor}
               alignToBottom
+              isStreaming={hasActiveStreaming}
             />
           </Box>
           {/* ScrollIndicator (right side) - only when enableScroll is true */}
@@ -1607,11 +1654,27 @@ const MessageList = memo(function MessageList({
         {/* Thinking indicator - shows while agent is processing before first token */}
         {showThinkingIndicator && <ThinkingIndicator />}
 
-        {/* NewMessagesBadge - only when enableScroll and in manual mode with unread */}
-        {showNewMessagesBadge && (
-          <NewMessagesBadge
-            count={scrollState.newMessageCount}
-            onScrollToBottom={scrollActions.scrollToBottom}
+        {/* Streaming messages rendered separately (outside VirtualizedList) */}
+        {messageSeparation.streamingMessages.length > 0 && (
+          <Box flexDirection="column" paddingX={1}>
+            {messageSeparation.streamingMessages.map((msg) => (
+              <StreamingMessageItem
+                key={msg.id}
+                id={msg.id}
+                content={msg.content}
+                meta={msg.meta}
+                onComplete={messageSeparation.markComplete}
+              />
+            ))}
+          </Box>
+        )}
+
+        {/* NewMessagesBanner - enhanced unread notification */}
+        {bannerState.isVisible && (
+          <NewMessagesBanner
+            unreadCount={scrollState.newMessageCount}
+            isAtBottom={isAtBottomForBanner}
+            onJumpToBottom={scrollActions.scrollToBottom}
           />
         )}
 
@@ -1707,11 +1770,27 @@ const MessageList = memo(function MessageList({
         {/* Thinking indicator - shows while agent is processing before first token */}
         {showThinkingIndicator && <ThinkingIndicator />}
 
-        {/* NewMessagesBadge - only when enableScroll and in manual mode with unread */}
-        {showNewMessagesBadge && (
-          <NewMessagesBadge
-            count={scrollState.newMessageCount}
-            onScrollToBottom={scrollActions.scrollToBottom}
+        {/* Streaming messages rendered separately (outside Static list) */}
+        {messageSeparation.streamingMessages.length > 0 && (
+          <Box flexDirection="column" paddingX={1}>
+            {messageSeparation.streamingMessages.map((msg) => (
+              <StreamingMessageItem
+                key={msg.id}
+                id={msg.id}
+                content={msg.content}
+                meta={msg.meta}
+                onComplete={messageSeparation.markComplete}
+              />
+            ))}
+          </Box>
+        )}
+
+        {/* NewMessagesBanner - enhanced unread notification */}
+        {bannerState.isVisible && (
+          <NewMessagesBanner
+            unreadCount={scrollState.newMessageCount}
+            isAtBottom={isAtBottomForBanner}
+            onJumpToBottom={scrollActions.scrollToBottom}
           />
         )}
 
@@ -1802,11 +1881,27 @@ const MessageList = memo(function MessageList({
       {/* Thinking indicator - shows while agent is processing before first token */}
       {showThinkingIndicator && <ThinkingIndicator />}
 
-      {/* NewMessagesBadge - only when enableScroll and in manual mode with unread */}
-      {showNewMessagesBadge && (
-        <NewMessagesBadge
-          count={scrollState.newMessageCount}
-          onScrollToBottom={scrollActions.scrollToBottom}
+      {/* Streaming messages rendered separately (outside normal list) */}
+      {messageSeparation.streamingMessages.length > 0 && (
+        <Box flexDirection="column" paddingX={1}>
+          {messageSeparation.streamingMessages.map((msg) => (
+            <StreamingMessageItem
+              key={msg.id}
+              id={msg.id}
+              content={msg.content}
+              meta={msg.meta}
+              onComplete={messageSeparation.markComplete}
+            />
+          ))}
+        </Box>
+      )}
+
+      {/* NewMessagesBanner - enhanced unread notification */}
+      {bannerState.isVisible && (
+        <NewMessagesBanner
+          unreadCount={scrollState.newMessageCount}
+          isAtBottom={isAtBottomForBanner}
+          onJumpToBottom={scrollActions.scrollToBottom}
         />
       )}
 
