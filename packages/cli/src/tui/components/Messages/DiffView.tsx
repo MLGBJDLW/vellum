@@ -9,7 +9,7 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import type { DiffViewMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { getTerminalWidth } from "../../utils/ui-sizing.js";
@@ -564,7 +564,7 @@ function SideBySideRow({
  * />
  * ```
  */
-export function DiffView({
+export const DiffView = memo(function DiffView({
   diff,
   fileName,
   showLineNumbers = false,
@@ -675,4 +675,4 @@ export function DiffView({
       </Box>
     </Box>
   );
-}
+});

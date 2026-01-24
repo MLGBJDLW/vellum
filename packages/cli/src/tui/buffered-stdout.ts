@@ -130,8 +130,10 @@ export class BufferedStdout extends Writable {
 
     if (!this.scheduled) {
       this.scheduled = true;
-      // Use setImmediate to batch multiple synchronous writes
-      setImmediate(() => this.flush());
+      // FIX: Use process.nextTick instead of setImmediate for tighter batching
+      // This prevents partial frames from being visible, reducing header duplication/flickering
+      // nextTick runs before I/O callbacks, setImmediate runs after - nextTick is faster
+      process.nextTick(() => this.flush());
     }
 
     callback();

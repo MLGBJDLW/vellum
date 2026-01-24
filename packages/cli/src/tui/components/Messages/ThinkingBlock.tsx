@@ -18,7 +18,7 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { ToolCallInfo } from "../../context/MessagesContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
@@ -148,7 +148,7 @@ function getPreview(content: string, maxLines: number, maxChars: number): string
  * />
  * ```
  */
-export function ThinkingBlock({
+export const ThinkingBlock = memo(function ThinkingBlock({
   content,
   durationMs,
   isStreaming = false,
@@ -337,7 +337,7 @@ export function ThinkingBlock({
       )}
     </Box>
   );
-}
+});
 
 // =============================================================================
 // Compact Variant
