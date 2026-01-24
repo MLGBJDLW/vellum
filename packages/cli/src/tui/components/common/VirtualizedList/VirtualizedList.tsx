@@ -282,12 +282,27 @@ function VirtualizedListInner<T>(
   // ==========================================================================
   const scrollContext = useScrollOptional();
   const lastReportedScrollTop = useRef<number>(scrollTop);
+  const lastReportedDimensions = useRef({
+    totalHeight: -1,
+    containerHeight: -1,
+  });
 
   // Report dimensions to ScrollContext when they change
   useEffect(() => {
-    if (scrollContext) {
-      scrollContext.updateDimensions(totalHeight, measuredContainerHeight);
+    if (!scrollContext) {
+      return;
     }
+    if (
+      lastReportedDimensions.current.totalHeight === totalHeight &&
+      lastReportedDimensions.current.containerHeight === measuredContainerHeight
+    ) {
+      return;
+    }
+    lastReportedDimensions.current = {
+      totalHeight,
+      containerHeight: measuredContainerHeight,
+    };
+    scrollContext.updateDimensions(totalHeight, measuredContainerHeight);
   }, [scrollContext, totalHeight, measuredContainerHeight]);
 
   // Sync internal scrollTop changes to ScrollContext (debounced to avoid loops)

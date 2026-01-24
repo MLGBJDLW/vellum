@@ -18,7 +18,7 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { ToolCallInfo } from "../../context/MessagesContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
@@ -59,6 +59,10 @@ export interface ThinkingBlockProps {
   readonly onToggle?: (collapsed: boolean) => void;
   /** Tool calls to display inline within the thinking block */
   readonly toolCalls?: readonly ToolCallInfo[];
+  /** External toggle signal (increment to toggle) */
+  readonly toggleSignal?: number;
+  /** Hint text for external toggle */
+  readonly toggleHint?: string;
   /**
    * Display mode for thinking content.
    * - "full": Show content (default, can expand/collapse)
@@ -148,7 +152,7 @@ function getPreview(content: string, maxLines: number, maxChars: number): string
  * />
  * ```
  */
-export function ThinkingBlock({
+export const ThinkingBlock = memo(function ThinkingBlock({
   content,
   durationMs,
   isStreaming = false,
@@ -160,6 +164,8 @@ export function ThinkingBlock({
   showCharCount = true,
   onToggle,
   toolCalls,
+  toggleSignal,
+  toggleHint,
   displayMode = "full",
 }: ThinkingBlockProps): React.JSX.Element | null {
   const { theme } = useTheme();
@@ -182,6 +188,18 @@ export function ThinkingBlock({
 
   // In compact mode, always show as collapsed (never expandable)
   const effectiveIsCollapsed = isCompactMode ? true : isCollapsed;
+  const lastToggleSignalRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isCompactMode || toggleSignal === undefined) {
+      return;
+    }
+    if (lastToggleSignalRef.current === toggleSignal) {
+      return;
+    }
+    lastToggleSignalRef.current = toggleSignal;
+    _toggle();
+  }, [isCompactMode, toggleSignal, _toggle]);
 
   // Theme colors
   const thinkingColor = theme.colors.warning ?? "yellow";
@@ -269,6 +287,12 @@ export function ThinkingBlock({
             (press 't')
           </Text>
         )}
+        {toggleHint && !isStreaming && !isCompactMode && (
+          <Text color={mutedColor} dimColor>
+            {" "}
+            ({toggleHint})
+          </Text>
+        )}
       </Box>
 
       {/* Content area - In compact mode, don't show any content (no preview) */}
@@ -337,7 +361,7 @@ export function ThinkingBlock({
       )}
     </Box>
   );
-}
+});
 
 // =============================================================================
 // Compact Variant

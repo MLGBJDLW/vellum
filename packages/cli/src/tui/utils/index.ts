@@ -47,6 +47,21 @@ export {
 } from "./heightEstimator.js";
 // Narrow width detection
 export { getNarrowBreakpoint, isNarrowWidth } from "./isNarrowWidth.js";
+// Kitty keyboard protocol (enhanced key reporting)
+export {
+  detectAndEnableKittyProtocol,
+  detectKittyKeyboardProtocol,
+  disableKittyKeyboardProtocol,
+  type EnhancedKeyEvent,
+  enableKittyKeyboardProtocol,
+  isKittyKeyboardEnabled,
+  isKittyKeyboardSupported,
+  isKittySequence,
+  KittyFlags,
+  KittyModifiers,
+  parseEnhancedKey,
+  reEnableKittyProtocol,
+} from "./kitty-keyboard-protocol.js";
 // Stdout guard for debugging (T002 Hardening)
 export {
   disableStdoutGuard,

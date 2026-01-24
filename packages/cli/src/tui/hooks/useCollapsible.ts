@@ -56,8 +56,30 @@ export interface UseCollapsibleReturn {
 // Storage for Persistence
 // =============================================================================
 
+/** Maximum entries in collapsible state storage (LRU eviction) */
+const MAX_COLLAPSIBLE_ENTRIES = 100;
+
 /** In-memory storage for collapsible states */
 const collapsibleStateStorage = new Map<string, boolean>();
+
+/**
+ * Set a collapsible state with LRU eviction policy.
+ * When storage exceeds MAX_COLLAPSIBLE_ENTRIES, oldest entries are removed.
+ */
+function setCollapsibleState(key: string, value: boolean): void {
+  // Delete and re-set to move to end (most recently used)
+  collapsibleStateStorage.delete(key);
+  collapsibleStateStorage.set(key, value);
+
+  // Simple LRU eviction - remove oldest entries if over limit
+  if (collapsibleStateStorage.size > MAX_COLLAPSIBLE_ENTRIES) {
+    const keys = Array.from(collapsibleStateStorage.keys());
+    const toRemove = keys.slice(0, keys.length - MAX_COLLAPSIBLE_ENTRIES);
+    for (const k of toRemove) {
+      collapsibleStateStorage.delete(k);
+    }
+  }
+}
 
 // =============================================================================
 // Hook Implementation
@@ -110,13 +132,23 @@ export function useCollapsible(options: UseCollapsibleOptions = {}): UseCollapsi
   };
 
   const [isCollapsed, setIsCollapsed] = useState(getInitialState);
+
+  // FIX: Auto-collapse when external state indicates "should be collapsed"
+  // This handles the case where streaming ends and we should auto-collapse
+  // (initialCollapsed changes from false to true when streaming completes)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Intentional - only trigger on initialCollapsed change, not isCollapsed
+  useEffect(() => {
+    if (initialCollapsed && !isCollapsed) {
+      setIsCollapsed(true);
+    }
+  }, [initialCollapsed]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(isCollapsed ? 0 : 1);
 
   // Update persistence when state changes
   useEffect(() => {
     if (persistenceId) {
-      collapsibleStateStorage.set(persistenceId, isCollapsed);
+      setCollapsibleState(persistenceId, isCollapsed);
     }
   }, [isCollapsed, persistenceId]);
 

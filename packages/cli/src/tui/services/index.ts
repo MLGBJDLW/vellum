@@ -23,6 +23,8 @@ export {
   resetSupportCache as resetClipboardSupportCache,
 } from "./clipboard.js";
 export {
+  type AsyncFuzzySearchOptions,
+  type AsyncMultiFieldSearchOptions,
   createPreparedSearch,
   type FuzzyHighlightSegment,
   type FuzzyMatchResult,
@@ -30,7 +32,9 @@ export {
   type FuzzySearchOptions,
   fuzzyMatch,
   fuzzySearch,
+  fuzzySearchAsync,
   fuzzySearchMulti,
+  fuzzySearchMultiAsync,
   fuzzyTest,
   getHighlightSegments,
   type HighlightRange,

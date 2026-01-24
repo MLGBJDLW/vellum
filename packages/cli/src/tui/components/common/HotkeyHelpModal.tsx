@@ -52,6 +52,7 @@ export const DEFAULT_HOTKEYS: HotkeyBinding[] = [
   { key: "Ctrl+Shift+A", description: "Open approval queue", scope: "Global" },
   { key: "Ctrl+C", description: "Exit application", scope: "Global" },
   { key: "Ctrl+L", description: "Clear screen", scope: "Global" },
+  { key: "Alt+E", description: "Toggle latest thought", scope: "Global" },
   { key: "Esc", description: "Cancel / Close modal", scope: "Global" },
   { key: "↑/↓", description: "Navigate history / options", scope: "Navigation" },
   { key: "Tab", description: "Autocomplete / Next field", scope: "Input" },

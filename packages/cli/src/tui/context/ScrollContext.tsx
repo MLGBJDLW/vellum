@@ -137,12 +137,14 @@ export function ScrollProvider({
 }: ScrollProviderProps): React.JSX.Element {
   // Scroll position state
   const [scrollTop, setScrollTop] = useState(initialScrollTop);
+  const scrollTopRef = useRef(scrollTop);
 
   // Content dimensions (updated by scrollable components)
   const [dimensions, setDimensions] = useState({
     totalHeight: 0,
     containerHeight: 0,
   });
+  const dimensionsRef = useRef(dimensions);
 
   // Track if user has scrolled away from bottom
   const [userScrolledAway, setUserScrolledAway] = useState(false);
@@ -156,6 +158,9 @@ export function ScrollProvider({
   const maxScrollTop = Math.max(0, dimensions.totalHeight - dimensions.containerHeight);
   const isAtBottom = scrollTop >= maxScrollTop - 1; // Allow 1-line tolerance
   const isAtTop = scrollTop <= 0;
+
+  // Keep scrollTopRef in sync for update guards
+  scrollTopRef.current = scrollTop;
 
   /**
    * Notify all registered callbacks of scroll change
@@ -221,13 +226,23 @@ export function ScrollProvider({
    */
   const updateDimensions = useCallback(
     (totalHeight: number, containerHeight: number) => {
-      setDimensions({ totalHeight, containerHeight });
+      const prev = dimensionsRef.current;
+      if (prev.totalHeight === totalHeight && prev.containerHeight === containerHeight) {
+        return;
+      }
+
+      const next = { totalHeight, containerHeight };
+      dimensionsRef.current = next;
+      setDimensions(next);
 
       // Auto-scroll to bottom if enabled and user hasn't scrolled away
       if (autoScrollToBottom && !userScrolledAway) {
         const newMax = Math.max(0, totalHeight - containerHeight);
-        setScrollTop(newMax);
-        notifyScrollChange(newMax);
+        if (scrollTopRef.current !== newMax) {
+          scrollTopRef.current = newMax;
+          setScrollTop(newMax);
+          notifyScrollChange(newMax);
+        }
       }
     },
     [autoScrollToBottom, userScrolledAway, notifyScrollChange]

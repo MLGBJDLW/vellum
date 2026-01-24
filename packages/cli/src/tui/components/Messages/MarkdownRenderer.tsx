@@ -9,7 +9,7 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { useAnimation } from "../../context/AnimationContext.js";
 import { useDiffMode } from "../../hooks/useDiffMode.js";
 import { useTheme } from "../../theme/index.js";
@@ -364,7 +364,7 @@ function isDiffContent(content: string, language?: string): boolean {
  * <MarkdownRenderer content={markdown} compact />
  * ```
  */
-export function MarkdownRenderer({
+export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
   compact = false,
   textColor: textColorOverride,
@@ -494,4 +494,4 @@ export function MarkdownRenderer({
       })}
     </Box>
   );
-}
+});

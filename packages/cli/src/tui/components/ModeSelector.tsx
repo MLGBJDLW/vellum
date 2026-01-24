@@ -147,7 +147,7 @@ export function ModeSelector({
           }
         }
       },
-      [isActive, focusedIndex, modes, onSelect]
+      [isActive, focusedIndex, onSelect]
     ),
     { isActive }
   );

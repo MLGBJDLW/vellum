@@ -9,7 +9,7 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -189,7 +189,7 @@ function truncateLines(
  * // ... +1 lines
  * ```
  */
-export function ToolResultPreview({
+export const ToolResultPreview = memo(function ToolResultPreview({
   result,
   toolName,
   maxLines: maxLinesOverride,
@@ -240,4 +240,4 @@ export function ToolResultPreview({
       )}
     </Box>
   );
-}
+});

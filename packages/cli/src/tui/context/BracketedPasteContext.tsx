@@ -16,6 +16,7 @@ import {
   PASTE_END,
   PASTE_START,
 } from "../utils/bracketedPaste.js";
+import { lockRawMode, unlockRawMode } from "../utils/raw-mode-manager.js";
 
 // =============================================================================
 // Types
@@ -93,6 +94,13 @@ export function BracketedPasteProvider({ children, enabled = true }: BracketedPa
 
   // Subscribers for paste events
   const subscribersRef = useRef<Set<PasteHandler>>(new Set());
+
+  // Lock raw mode so Ink's useInput can capture keypresses
+  useEffect(() => {
+    if (!enabled) return;
+    lockRawMode();
+    return () => unlockRawMode();
+  }, [enabled]);
 
   // Buffer for accumulating paste content
   const pasteBufferRef = useRef<string>("");

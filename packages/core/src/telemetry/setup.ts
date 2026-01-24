@@ -4,7 +4,7 @@
  */
 
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { Resource } from "@opentelemetry/resources";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { ConsoleSpanExporter, TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace-node";
 
@@ -48,7 +48,7 @@ export function setupTelemetry(config: TelemetryConfig): void {
   const sampler = new TraceIdRatioBasedSampler(clampedRatio);
 
   // Create resource with service identification
-  const resource = new Resource({
+  const resource = resourceFromAttributes({
     "service.name": config.serviceName ?? "vellum",
     "service.version": config.serviceVersion ?? "0.0.0",
   });

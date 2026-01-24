@@ -8,6 +8,7 @@
  */
 
 import { getActiveStdout } from "../buffered-stdout.js";
+import { setCursorHidden, setCursorLocked } from "./cursor-state.js";
 
 const HIDE_CURSOR = "\x1b[?25l";
 const SHOW_CURSOR = "\x1b[?25h";
@@ -33,6 +34,7 @@ class CursorManagerImpl {
       try {
         this._stdout.write(HIDE_CURSOR);
         this._hidden = true;
+        setCursorHidden(true);
       } catch {
         // Ignore write errors (e.g., closed stdout)
       }
@@ -48,6 +50,7 @@ class CursorManagerImpl {
       try {
         this._stdout.write(SHOW_CURSOR);
         this._hidden = false;
+        setCursorHidden(false);
       } catch {
         // Ignore write errors (e.g., closed stdout)
       }
@@ -60,6 +63,7 @@ class CursorManagerImpl {
    */
   lock(): void {
     this._locked = true;
+    setCursorLocked(true);
     this.forceHide();
   }
 
@@ -69,6 +73,7 @@ class CursorManagerImpl {
    */
   unlock(): void {
     this._locked = false;
+    setCursorLocked(false);
   }
 
   /**
@@ -79,6 +84,7 @@ class CursorManagerImpl {
     try {
       this._stdout.write(HIDE_CURSOR);
       this._hidden = true;
+      setCursorHidden(true);
     } catch {
       // Ignore write errors
     }
@@ -92,6 +98,7 @@ class CursorManagerImpl {
     try {
       this._stdout.write(SHOW_CURSOR);
       this._hidden = false;
+      setCursorHidden(false);
     } catch {
       // Ignore write errors
     }

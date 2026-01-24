@@ -72,13 +72,13 @@ vi.mock("@opentelemetry/exporter-trace-otlp-http", () => {
 
 vi.mock("@opentelemetry/resources", () => {
   return {
-    Resource: class MockResource {
-      type = "resource";
-      attributes: Record<string, string>;
-      constructor(attributes: Record<string, string>) {
-        this.attributes = attributes;
-        mockResourceInstances.push(this);
-      }
+    resourceFromAttributes: (attributes: Record<string, string>) => {
+      const resource = {
+        type: "resource",
+        attributes,
+      };
+      mockResourceInstances.push(resource);
+      return resource;
     },
   };
 });

@@ -180,6 +180,7 @@ import { useFileChangeStats } from "./tui/hooks/useFileChangeStats.js";
 import { useGitStatus } from "./tui/hooks/useGitStatus.js";
 import { type HotkeyDefinition, useHotkeys } from "./tui/hooks/useHotkeys.js";
 import { useInputHistory } from "./tui/hooks/useInputHistory.js";
+import { useKittyKeyboard } from "./tui/hooks/useKittyKeyboard.js";
 import { useModeShortcuts } from "./tui/hooks/useModeShortcuts.js";
 import { useProviderStatus } from "./tui/hooks/useProviderStatus.js";
 import { isScreenReaderEnabled, useScreenReader } from "./tui/hooks/useScreenReader.js";
@@ -755,6 +756,22 @@ function AppContent({
   const terminalHeight = process.stdout.rows || 24;
   void isAlternate; // Used for layout height calculation
   void terminalHeight; // Used for layout height calculation
+
+  // Kitty keyboard protocol for enhanced key reporting
+  // Enables detection of Ctrl+Shift combos, Ctrl+Enter, etc.
+  const kittyKeyboard = useKittyKeyboard({
+    enabled: !screenReaderDetected,
+    debug: process.env.DEBUG_KITTY === "1",
+  });
+
+  // Log Kitty protocol status for debugging
+  useEffect(() => {
+    if (kittyKeyboard.isSupported !== null && process.env.DEBUG_KITTY === "1") {
+      console.debug(
+        `[kitty] Protocol: supported=${kittyKeyboard.isSupported}, enabled=${kittyKeyboard.isEnabled}`
+      );
+    }
+  }, [kittyKeyboard.isSupported, kittyKeyboard.isEnabled]);
 
   // Hide the terminal cursor to avoid VS Code's blinking block over the message area.
   // We draw our own cursor in inputs and streaming text.

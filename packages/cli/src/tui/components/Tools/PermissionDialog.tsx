@@ -14,6 +14,7 @@ import { useRef } from "react";
 import type { ToolExecution } from "../../context/ToolsContext.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { ToolParams } from "./ToolParams.js";
 
 // =============================================================================
@@ -243,11 +244,17 @@ export function PermissionDialog({
       paddingX={1}
       paddingY={0}
     >
-      {/* Header */}
+      {/* Header with shimmer to draw attention */}
       <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
-        <Text color={textColor} bold>
-          # {t("permission.requestTitle")}
-        </Text>
+        <BannerShimmerText
+          baseColor={textColor}
+          highlightColor={borderColor}
+          shimmerConfig={{ cycleDuration: 2500 }}
+          shimmerWidth={0.25}
+          bold
+        >
+          {`# ${t("permission.requestTitle")}`}
+        </BannerShimmerText>
         <RiskBadge level={riskLevel} />
       </Box>
 
@@ -257,9 +264,15 @@ export function PermissionDialog({
       <Box flexDirection="column" marginY={1}>
         <Box flexDirection="row" gap={1}>
           <Text dimColor>{t("permission.tool")}</Text>
-          <Text color={textColor} bold>
+          <BannerShimmerText
+            baseColor={textColor}
+            highlightColor="#FFD700"
+            shimmerConfig={{ cycleDuration: 3000 }}
+            shimmerWidth={0.2}
+            bold
+          >
             {execution.toolName}
-          </Text>
+          </BannerShimmerText>
         </Box>
 
         {/* Parameters */}
