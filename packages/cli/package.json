@@ -1,6 +1,6 @@
 {
   "name": "@butlerw/vellum",
-  "version": "0.1.11",
+  "version": "0.2.0",
   "description": "Next-generation AI coding assistant CLI",
   "private": false,
   "publishConfig": {

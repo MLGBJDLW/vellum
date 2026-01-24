@@ -4,6 +4,63 @@
 
 ### Minor Changes
 
+- [#31](https://github.com/MLGBJDLW/vellum/pull/31) [`c6d3af8`](https://github.com/MLGBJDLW/vellum/commit/c6d3af8578b7a8002619adae313e6858708337a5) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - feat(tui): comprehensive TUI upgrade
+
+  - **Security**: Fixed 5 vulnerabilities via pnpm update, added hono>=4.11.4 override
+  - **Cleanup**: Removed 8 unused packages (neo-blessed, ora, ink-text-input, etc.) and tui-blessed folder
+  - **Kitty Keyboard Protocol**: Enhanced terminal input with modifier key detection
+  - **Async Fuzzy Search**: Non-blocking `fuzzySearchAsync()` with AbortSignal support
+  - **Shimmer Effects**: Added visual feedback to InlineToolCall and PermissionDialog
+
+    - New: `kitty-keyboard-protocol.ts` utility
+    - New: `useKittyKeyboard.ts` hook
+    - Auto-enables in supported terminals (Kitty, WezTerm, iTerm2, VS Code)
+
+  - **Async Fuzzy Search**: Non-blocking search for large datasets
+
+    - Added `fuzzySearchAsync()` with AbortSignal support
+    - Added `searchMultiFieldAsync()` with chunked processing
+    - CHUNK_SIZE=1000 for optimal responsiveness
+
+  - **Enhanced Shimmer Effects**: Visual feedback during operations
+    - Added shimmer to InlineToolCall during "running" state
+    - Added shimmer to PermissionDialog header and tool name
+
+- [#31](https://github.com/MLGBJDLW/vellum/pull/31) [`961c7be`](https://github.com/MLGBJDLW/vellum/commit/961c7bec16622c66c71e25c8e0971a4a2be152d7) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - chore(telemetry): upgrade OpenTelemetry SDK to latest
+
+  - Upgrade @opentelemetry/sdk-node from 0.46.0 to 0.211.0
+  - Upgrade @opentelemetry/api from 1.7.0 to 1.9.0
+  - Upgrade @opentelemetry/resources from 1.18.0 to 2.0.0
+  - Migrate from deprecated Resource class to resourceFromAttributes function
+
+### Patch Changes
+
+- [#31](https://github.com/MLGBJDLW/vellum/pull/31) [`d662bcf`](https://github.com/MLGBJDLW/vellum/commit/d662bcfcb3fee0b7d236efb8ebb1671a7e1274fb) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - fix(tui): resolve critical rendering and scroll issues
+
+  - Fix thinking block not auto-collapsing after streaming ends
+  - Fix header duplication/flickering with tighter render batching
+  - Fix virtual scroll follow mode losing sticky-to-bottom state
+  - Add LRU eviction to collapsible storage (max 100 entries)
+  - Add React.memo to 4 components for render optimization
+
+- [#31](https://github.com/MLGBJDLW/vellum/pull/31) [`c23b7d2`](https://github.com/MLGBJDLW/vellum/commit/c23b7d2c6b94c234153bb4030bfa9969fdd0a11f) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - fix(tui): memory and performance improvements
+
+  - Fix abort listener memory leak in permission handler
+  - Optimize shell output updates with O(1) lookup
+  - Clear tool call tracking map on execution clear
+
+- [#31](https://github.com/MLGBJDLW/vellum/pull/31) [`7907da8`](https://github.com/MLGBJDLW/vellum/commit/7907da83af34a35bfcfd1220c0f5d74c65c349dd) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - chore(lint): fix biome lint errors across 5 files
+
+  - Update biome.json schema version from 2.3.10 to 2.3.12
+  - Fix React hook dependencies in PromptInput.tsx
+  - Fix React hook dependencies in ChatView.tsx
+  - Fix React hook dependencies in MessageRenderer.tsx
+  - Fix dependency array formatting in MessageList.tsx
+
+## 0.2.0
+
+### Minor Changes
+
 - [#27](https://github.com/MLGBJDLW/vellum/pull/27) [`3fadc78`](https://github.com/MLGBJDLW/vellum/commit/3fadc782ca69000e4784ca46a936cb16be8bc995) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - fix(credentials): resolve keytar missing package error in npm install
 
   - Add `keytar` as optionalDependency in cli package to ensure it's available at runtime
