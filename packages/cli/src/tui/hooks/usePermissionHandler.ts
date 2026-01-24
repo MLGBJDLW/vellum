@@ -104,14 +104,19 @@ export function usePermissionHandler(): UsePermissionHandlerReturn {
         setPendingPermission(pending);
 
         // Handle timeout from the context signal
-        context.signal.addEventListener("abort", () => {
-          if (pendingRef.current?.id === id) {
-            // Timeout - return undefined to let the service handle it
-            resolve(undefined);
-            pendingRef.current = null;
-            setPendingPermission(null);
-          }
-        });
+        // Use { once: true } to ensure the listener is removed after firing
+        context.signal.addEventListener(
+          "abort",
+          () => {
+            if (pendingRef.current?.id === id) {
+              // Timeout - return undefined to let the service handle it
+              resolve(undefined);
+              pendingRef.current = null;
+              setPendingPermission(null);
+            }
+          },
+          { once: true }
+        );
       });
     },
     []

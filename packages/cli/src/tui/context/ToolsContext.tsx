@@ -463,6 +463,9 @@ export function ToolsProvider({
   // Correlate core ToolContext.callId -> ToolExecution.id
   const callIdMapRef = useRef<Map<string, string>>(new Map());
 
+  // O(1) lookup for execution index by id (updated when state changes)
+  const executionIndexMapRef = useRef<Map<string, number>>(new Map());
+
   type PendingResolver = {
     readonly resolve: (result: PermissionResponse | undefined) => void;
     readonly signal: AbortSignal;
@@ -471,6 +474,13 @@ export function ToolsProvider({
 
   // Pending permission prompts keyed by ToolExecution.id
   const pendingPermissionResolversRef = useRef<Map<string, PendingResolver>>(new Map());
+
+  // Keep executionIndexMapRef in sync with state.executions
+  // This runs on every render but Map operations are O(1)
+  executionIndexMapRef.current.clear();
+  state.executions.forEach((exec, index) => {
+    executionIndexMapRef.current.set(exec.id, index);
+  });
 
   /**
    * Add a new tool execution
@@ -625,6 +635,8 @@ export function ToolsProvider({
    * Clear all tool executions
    */
   const clearExecutions = useCallback((): void => {
+    // Clear the callId mapping to prevent unbounded growth
+    callIdMapRef.current.clear();
     dispatch({ type: "CLEAR_EXECUTIONS" });
   }, []);
 
@@ -637,8 +649,9 @@ export function ToolsProvider({
    */
   const updateShellOutput = useCallback(
     (id: string, chunk: string): void => {
-      // Get current execution to read existing output
-      const execution = state.executions.find((e) => e.id === id);
+      // Get current execution using O(1) index lookup
+      const index = executionIndexMapRef.current.get(id);
+      const execution = index !== undefined ? state.executions[index] : undefined;
       const currentLines = execution?.shellOutput ?? [];
 
       // Split chunk into lines and append
