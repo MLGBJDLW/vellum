@@ -115,9 +115,9 @@ describe("CrossSessionInheritanceResolver", () => {
       const inherited = await newResolver.resolveInheritance();
 
       expect(inherited).not.toBeNull();
-      expect(inherited!.sourceSessionId).toBe("session-123");
-      expect(inherited!.summaries).toHaveLength(2);
-      expect(inherited!.summaries[0]?.content).toBe("Summary 1");
+      expect(inherited?.sourceSessionId).toBe("session-123");
+      expect(inherited?.summaries).toHaveLength(2);
+      expect(inherited?.summaries[0]?.content).toBe("Summary 1");
     });
 
     it("should return null when no previous session exists", async () => {
@@ -171,7 +171,7 @@ describe("CrossSessionInheritanceResolver", () => {
       const inherited = await resolver.resolveInheritance("/path/to/project");
 
       expect(inherited).not.toBeNull();
-      expect(inherited!.sourceSessionId).toBe("project-context");
+      expect(inherited?.sourceSessionId).toBe("project-context");
     });
 
     it("should prefer same-project session when available", async () => {
@@ -195,7 +195,7 @@ describe("CrossSessionInheritanceResolver", () => {
       const inherited = await resolver.resolveInheritance("/project-a");
 
       expect(inherited).not.toBeNull();
-      expect(inherited!.sourceSessionId).toBe("session-a");
+      expect(inherited?.sourceSessionId).toBe("session-a");
     });
   });
 
@@ -255,7 +255,7 @@ describe("CrossSessionInheritanceResolver", () => {
       const inherited = await resolver.resolveInheritance();
 
       expect(inherited).not.toBeNull();
-      expect(inherited!.summaries).toHaveLength(2);
+      expect(inherited?.summaries).toHaveLength(2);
     });
 
     it("should filter summaries by inheritTypes", async () => {
@@ -273,8 +273,8 @@ describe("CrossSessionInheritanceResolver", () => {
       const inherited = await resolver.resolveInheritance();
 
       expect(inherited).not.toBeNull();
-      expect(inherited!.summaries).toHaveLength(1);
-      expect(inherited!.summaries[0]?.type).toBe("decisions");
+      expect(inherited?.summaries).toHaveLength(1);
+      expect(inherited?.summaries[0]?.type).toBe("decisions");
     });
   });
 
@@ -292,10 +292,12 @@ describe("CrossSessionInheritanceResolver", () => {
       // Mock the session as being old by modifying the index
       const index = await resolver.loadIndex();
       expect(index).not.toBeNull();
-      expect(index!.sessions[0]).toBeDefined();
+      expect(index?.sessions[0]).toBeDefined();
 
       // Set savedAt to 10 days ago
-      index!.sessions[0]!.savedAt = Date.now() - 10 * 24 * 60 * 60 * 1000;
+      if (index?.sessions[0]) {
+        index.sessions[0].savedAt = Date.now() - 10 * 24 * 60 * 60 * 1000;
+      }
       await fs.writeFile(
         path.join(TEST_STORAGE_DIR, "index.json"),
         JSON.stringify(index, null, 2),
@@ -421,8 +423,8 @@ describe("CrossSessionInheritanceResolver", () => {
       const info = resolver.getLastSessionInfo();
 
       expect(info).not.toBeNull();
-      expect(info!.sessionId).toBe("session-123");
-      expect(info!.timestamp).toBeGreaterThan(0);
+      expect(info?.sessionId).toBe("session-123");
+      expect(info?.timestamp).toBeGreaterThan(0);
     });
   });
 
@@ -494,7 +496,7 @@ describe("CrossSessionInheritanceResolver", () => {
       const inherited = await resolver.resolveInheritance();
 
       expect(inherited).not.toBeNull();
-      expect(inherited!.sourceSessionId).toBe(sessionId);
+      expect(inherited?.sourceSessionId).toBe(sessionId);
     });
 
     it("should handle corrupted index file gracefully", async () => {

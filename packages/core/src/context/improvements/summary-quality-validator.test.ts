@@ -268,7 +268,7 @@ describe("SummaryQualityValidator", () => {
 
       expect(report.passed).toBe(true);
       expect(report.ruleResults).toBeDefined();
-      expect(report.ruleResults!.techTermRetention).toBeGreaterThanOrEqual(0.8);
+      expect(report.ruleResults?.techTermRetention).toBeGreaterThanOrEqual(0.8);
     });
 
     it("should report correct compression metrics", async () => {
@@ -293,7 +293,7 @@ describe("SummaryQualityValidator", () => {
 
       expect(report.passed).toBe(false);
       expect(report.warnings.some((w) => w.includes("Technical term retention"))).toBe(true);
-      expect(report.ruleResults!.techTermRetention).toBeLessThan(0.8);
+      expect(report.ruleResults?.techTermRetention).toBeLessThan(0.8);
     });
 
     it("should list lost technical terms", async () => {
@@ -302,8 +302,8 @@ describe("SummaryQualityValidator", () => {
 
       const report = await validator.validate(original, summary);
 
-      expect(report.ruleResults!.lostItems.length).toBeGreaterThan(0);
-      expect(report.ruleResults!.lostItems.some((i) => i.type === "tech_term")).toBe(true);
+      expect(report.ruleResults?.lostItems.length).toBeGreaterThan(0);
+      expect(report.ruleResults?.lostItems.some((i) => i.type === "tech_term")).toBe(true);
     });
   });
 
@@ -316,7 +316,7 @@ describe("SummaryQualityValidator", () => {
 
       expect(report.passed).toBe(false);
       expect(report.warnings.some((w) => w.includes("Code reference retention"))).toBe(true);
-      expect(report.ruleResults!.codeRefRetention).toBeLessThan(0.9);
+      expect(report.ruleResults?.codeRefRetention).toBeLessThan(0.9);
     });
 
     it("should list lost code references", async () => {
@@ -325,7 +325,7 @@ describe("SummaryQualityValidator", () => {
 
       const report = await validator.validate(original, summary);
 
-      expect(report.ruleResults!.lostItems.some((i) => i.type === "code_ref")).toBe(true);
+      expect(report.ruleResults?.lostItems.some((i) => i.type === "code_ref")).toBe(true);
     });
   });
 
@@ -347,7 +347,7 @@ describe("SummaryQualityValidator", () => {
 
       const report = await validator.validate(original, summary);
 
-      expect(report.ruleResults!.criticalPathsPreserved).toBe(false);
+      expect(report.ruleResults?.criticalPathsPreserved).toBe(false);
     });
   });
 
@@ -423,10 +423,10 @@ describe("SummaryQualityValidator", () => {
       const report = await validator.validate(original, summary);
 
       expect(report.llmResults).toBeDefined();
-      expect(report.llmResults!.completenessScore).toBe(8);
-      expect(report.llmResults!.accuracyScore).toBe(9);
-      expect(report.llmResults!.actionabilityScore).toBe(7);
-      expect(report.llmResults!.suggestions).toContain("Consider adding more context");
+      expect(report.llmResults?.completenessScore).toBe(8);
+      expect(report.llmResults?.accuracyScore).toBe(9);
+      expect(report.llmResults?.actionabilityScore).toBe(7);
+      expect(report.llmResults?.suggestions).toContain("Consider adding more context");
     });
 
     it("should fail when LLM scores are low", async () => {
@@ -489,7 +489,7 @@ describe("SummaryQualityValidator", () => {
       const report = await validator.validate(original, summary);
 
       expect(report.llmResults).toBeDefined();
-      expect(report.llmResults!.completenessScore).toBe(8);
+      expect(report.llmResults?.completenessScore).toBe(8);
     });
   });
 
@@ -600,7 +600,7 @@ describe("createSummaryQualityValidator", () => {
     );
 
     // Should pass with lower threshold
-    expect(report.ruleResults!.techTermRetention).toBeLessThan(0.8);
+    expect(report.ruleResults?.techTermRetention).toBeLessThan(0.8);
   });
 });
 

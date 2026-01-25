@@ -19,7 +19,7 @@
 
 ### 架构图
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      ContextImprovementsManager                             │
 │                         (统一管理入口)                                        │
@@ -64,6 +64,7 @@
 **用途**：验证摘要质量，确保关键信息不丢失。
 
 **验证方法**：
+
 - **规则验证 (快速)**：模式匹配检测技术术语、代码引用、文件路径
 - **LLM 验证 (深度)**：使用语言模型评估完整性、准确性、可操作性
 
@@ -105,6 +106,7 @@ if (!report.passed) {
 **用途**：在截断前保存快照，支持内容恢复。
 
 **特性**：
+
 - LRU 淘汰策略管理内存
 - 可选 zlib 压缩减少存储
 - 自动过期清理
@@ -147,7 +149,8 @@ if (recovered) {
 **用途**：跨会话继承上下文，保持知识连续性。
 
 **存储结构**：
-```
+
+```text
 .vellum/inheritance/
 ├── index.json              # 会话索引
 ├── session-{id}.json       # 会话摘要
@@ -198,13 +201,15 @@ if (inherited) {
 **用途**：防止摘要被级联压缩，避免信息逐层丢失。
 
 **问题场景**：
-```
+
+```text
 M1-M50  → Summary1  (可能丢失细节)
 M51-M90 → Summary2
 Summary1 + Summary2 → Summary3  ← M1-M50 细节永久丢失!
 ```
 
 **保护策略**：
+
 - `all`：保护所有摘要
 - `recent`：仅保护最近 N 个摘要
 - `weighted`：基于重要性评分保护
@@ -245,7 +250,8 @@ const safeCandidates = filter.filterCandidates(candidates, allMessages);
 **用途**：将检查点持久化到磁盘，支持崩溃恢复。
 
 **存储结构**：
-```
+
+```text
 .vellum/checkpoints/
 ├── manifest.json           # 检查点清单
 ├── cp-xxx.checkpoint       # 检查点文件
@@ -253,6 +259,7 @@ const safeCandidates = filter.filterCandidates(candidates, allMessages);
 ```
 
 **持久化策略**：
+
 - `immediate`：创建后立即写入
 - `lazy`：下一个空闲周期写入
 - `on_demand`：仅在显式请求时写入
@@ -300,6 +307,7 @@ await persistence.cleanup();
 **用途**：追踪压缩统计，检测级联压缩。
 
 **追踪指标**：
+
 - 总压缩次数
 - 级联压缩次数
 - Token 节省量
@@ -351,6 +359,7 @@ console.log(`级联压缩次数: ${stats.cascadeCompactions}`);
 **用途**：统一管理所有改进组件，提供集中配置和生命周期管理。
 
 **特性**：
+
 - 集中配置管理
 - 懒加载组件实例
 - 统一初始化/关闭
@@ -551,7 +560,7 @@ improvements.truncationManager.saveSnapshot('id', messages, 'token_overflow');
 
 新版本会自动创建所需的存储目录：
 
-```
+```text
 .vellum/
 ├── checkpoints/         # 检查点存储 (P2-1)
 ├── inheritance/         # 继承数据 (P1-1)
@@ -569,10 +578,12 @@ improvements.truncationManager.saveSnapshot('id', messages, 'token_overflow');
 **症状**：`report.passed` 始终为 `false`
 
 **可能原因**：
+
 1. 阈值设置过高
 2. 摘要压缩过度
 
 **解决方案**：
+
 ```typescript
 // 检查具体哪些规则失败
 const report = await validator.validate(messages, summary);
@@ -592,6 +603,7 @@ const validator = new SummaryQualityValidator({
 **症状**：`.vellum/` 目录占用空间持续增长
 
 **解决方案**：
+
 ```typescript
 // 1. 减少检查点保留
 const diskCheckpoint = new DiskCheckpointPersistence({
@@ -612,6 +624,7 @@ const statsTracker = new CompactionStatsTracker({
 **症状**：新会话未继承上一会话的上下文
 
 **排查步骤**：
+
 ```typescript
 // 1. 检查是否正确保存
 await resolver.saveSessionContext(sessionId, summaries);
@@ -642,7 +655,7 @@ setLogLevel('debug');
 
 **常见日志模式**：
 
-```
+```text
 [context-improvements-manager] 组件初始化完成
 [summary-quality-validator] 规则验证: techTermRetention=0.82, codeRefRetention=0.91
 [truncation-state-manager] 保存快照: id=trunc-1, size=524288, compressed=true
