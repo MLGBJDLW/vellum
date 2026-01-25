@@ -13,8 +13,12 @@ import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  getThinkingDisplayMode,
   getThinkingState,
+  setDisplayMode,
+  subscribeToDisplayMode,
   subscribeToThinkingState,
+  type ThinkingDisplayMode,
   toggleThinking,
 } from "../../commands/think.js";
 import { useTUITranslation } from "../i18n/index.js";
@@ -160,6 +164,9 @@ export function ModelSelector({
 
   // Thinking state management
   const [thinkingEnabled, setThinkingEnabled] = useState(() => getThinkingState().enabled);
+  const [displayMode, setLocalDisplayMode] = useState<ThinkingDisplayMode>(() =>
+    getThinkingDisplayMode()
+  );
 
   // Subscribe to thinking state changes
   useEffect(() => {
@@ -169,11 +176,25 @@ export function ModelSelector({
     return unsubscribe;
   }, []);
 
+  // Subscribe to display mode changes
+  useEffect(() => {
+    const unsubscribe = subscribeToDisplayMode((mode) => {
+      setLocalDisplayMode(mode);
+    });
+    return unsubscribe;
+  }, []);
+
   // Handle thinking toggle
   const handleThinkingToggle = useCallback(() => {
     const newState = toggleThinking();
     onThinkingToggle?.(newState);
   }, [onThinkingToggle]);
+
+  // Handle display mode toggle
+  const handleDisplayModeToggle = useCallback(() => {
+    const newMode: ThinkingDisplayMode = displayMode === "full" ? "compact" : "full";
+    setDisplayMode(newMode);
+  }, [displayMode]);
 
   // Build flattened list of model options
   const modelOptions = useMemo<ModelOption[]>(() => {
@@ -212,6 +233,12 @@ export function ModelSelector({
           return;
         }
 
+        // Toggle display mode with 'd' or 'D'
+        if (input === "d" || input === "D") {
+          handleDisplayModeToggle();
+          return;
+        }
+
         // Arrow navigation
         if (key.upArrow || input === "k") {
           setFocusedIndex((prev) => (prev > 0 ? prev - 1 : modelOptions.length - 1));
@@ -231,7 +258,14 @@ export function ModelSelector({
           }
         }
       },
-      [isActive, focusedIndex, modelOptions, onSelect, handleThinkingToggle]
+      [
+        isActive,
+        focusedIndex,
+        modelOptions,
+        onSelect,
+        handleThinkingToggle,
+        handleDisplayModeToggle,
+      ]
     ),
     { isActive }
   );
@@ -264,10 +298,23 @@ export function ModelSelector({
       </Box>
 
       {/* Thinking Mode Toggle */}
-      <Box marginBottom={1}>
-        <Text>Thinking: </Text>
-        <Text color={thinkingEnabled ? "green" : "gray"}>{thinkingEnabled ? "◆ On" : "◇ Off"}</Text>
-        <Text dimColor> (press T to toggle)</Text>
+      <Box marginBottom={1} flexDirection="column">
+        <Box>
+          <Text>Thinking: </Text>
+          <Text color={thinkingEnabled ? "green" : "gray"}>
+            {thinkingEnabled ? "◆ On" : "◇ Off"}
+          </Text>
+          <Text dimColor> (press T to toggle)</Text>
+        </Box>
+        {thinkingEnabled && (
+          <Box marginLeft={2}>
+            <Text>Display: </Text>
+            <Text color={displayMode === "full" ? "cyan" : "gray"}>
+              {displayMode === "full" ? "◆ Full" : "◇ Compact"}
+            </Text>
+            <Text dimColor> (press D to toggle)</Text>
+          </Box>
+        )}
       </Box>
 
       {Array.from(groupedByProvider.entries()).map(([provider, { options, startIndex }]) => {

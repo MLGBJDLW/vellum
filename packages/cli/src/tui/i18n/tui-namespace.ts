@@ -177,6 +177,36 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
     moonshot: { name: "Moonshot", shortcut: "[S]", description: "Moonshot-v1" },
     ollama: { name: "Ollama", shortcut: "[L]", description: "Local models" },
   },
+  cost: {
+    input: "Input: ",
+    output: "Output: ",
+    total: "Total: ",
+    tokens: "tokens",
+    cacheRead: "Cache read: ",
+    cacheWrite: "Cache write: ",
+    reasoning: "Reasoning: ",
+    cost: "Cost: ",
+    sessionCost: "Session Cost",
+  },
+  agent: {
+    progress: "Progress",
+    noTasks: "No tasks",
+    taskChain: "Task chain",
+  },
+  backtrack: {
+    keybindings: "Ctrl+Z: Undo • Ctrl+Y: Redo",
+    selectBranch: "Select branch",
+    current: "(current)",
+    undo: "Undo",
+    redo: "Redo",
+    fork: "fork",
+    forks: "forks",
+    switchBranch: "Switch branch",
+    newBranch: "New branch",
+  },
+  code: {
+    copy: "Copy code",
+  },
 };
 
 /**
@@ -341,6 +371,36 @@ const ZH_TRANSLATIONS: Record<string, unknown> = {
     qwen: { name: "Qwen", shortcut: "[Q]", description: "阿里巴巴 Qwen-72B" },
     moonshot: { name: "Moonshot", shortcut: "[S]", description: "Moonshot-v1" },
     ollama: { name: "Ollama", shortcut: "[L]", description: "本地模型" },
+  },
+  cost: {
+    input: "输入：",
+    output: "输出：",
+    total: "总计：",
+    tokens: "令牌",
+    cacheRead: "缓存读取：",
+    cacheWrite: "缓存写入：",
+    reasoning: "推理：",
+    cost: "费用：",
+    sessionCost: "会话费用",
+  },
+  agent: {
+    progress: "进度",
+    noTasks: "暂无任务",
+    taskChain: "任务链",
+  },
+  backtrack: {
+    keybindings: "Ctrl+Z: 撤销 • Ctrl+Y: 重做",
+    selectBranch: "选择分支",
+    current: "(当前)",
+    undo: "撤销",
+    redo: "重做",
+    fork: "分支",
+    forks: "分支",
+    switchBranch: "切换分支",
+    newBranch: "新建分支",
+  },
+  code: {
+    copy: "复制代码",
   },
 };
 

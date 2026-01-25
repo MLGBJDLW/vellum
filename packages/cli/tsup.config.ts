@@ -10,6 +10,8 @@ export default defineConfig({
   format: ["esm"],
   dts: false,
   clean: true,
+  logLevel: "error",
+  silent: true,
   target: "node20",
   platform: "node",
   splitting: false,
@@ -89,6 +91,12 @@ export default defineConfig({
   esbuildOptions(options) {
     options.jsx = "automatic";
     options.jsxImportSource = "react";
+    options.logLevel = "error";
+    options.logOverride = {
+      ...options.logOverride,
+      "direct-eval": "silent",
+      "unused-import": "silent",
+    };
     // Inject version from package.json at build time
     options.define = {
       ...options.define,

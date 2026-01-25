@@ -127,7 +127,6 @@ import { Banner } from "./tui/components/Banner/index.js";
 import { BacktrackControls } from "./tui/components/backtrack/BacktrackControls.js";
 import { CheckpointDiffView } from "./tui/components/Checkpoint/CheckpointDiffView.js";
 import { SnapshotCheckpointPanel } from "./tui/components/Checkpoint/SnapshotCheckpointPanel.js";
-import { CostDisplay } from "./tui/components/CostDisplay.js";
 // New status components (Phase 35+)
 import { AutoApprovalStatus } from "./tui/components/common/AutoApprovalStatus.js";
 import { CostWarning } from "./tui/components/common/CostWarning.js";
@@ -143,7 +142,6 @@ import { InitErrorBanner, McpPanel } from "./tui/components/index.js";
 import { Layout } from "./tui/components/Layout.js";
 import { MemoryPanel, type MemoryPanelProps } from "./tui/components/MemoryPanel.js";
 import { MessageList } from "./tui/components/Messages/MessageList.js";
-import { ModeIndicator } from "./tui/components/ModeIndicator.js";
 import { ModelSelector } from "./tui/components/ModelSelector.js";
 import { ModeSelector } from "./tui/components/ModeSelector.js";
 import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
@@ -4330,11 +4328,6 @@ interface AppHeaderProps {
   readonly initError?: Error;
   readonly redoBacktrack: () => void;
   readonly specPhase: number;
-  readonly tokenUsage: {
-    inputTokens: number;
-    outputTokens: number;
-    totalCost: number;
-  };
   readonly undoBacktrack: () => void;
 }
 
@@ -4349,7 +4342,6 @@ function AppHeader({
   initError,
   redoBacktrack,
   specPhase,
-  tokenUsage,
   undoBacktrack,
 }: AppHeaderProps): React.JSX.Element {
   const fileStats = useFileChangeStats();
@@ -4357,15 +4349,7 @@ function AppHeader({
 
   return (
     <Box flexDirection="column">
-      <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
-        <ModeIndicator mode={currentMode} specPhase={specPhase} compact />
-        <CostDisplay
-          inputTokens={tokenUsage.inputTokens}
-          outputTokens={tokenUsage.outputTokens}
-          totalCost={tokenUsage.totalCost}
-          compact
-        />
-      </Box>
+      {/* Mode and Cost info moved to footer StatusBar - no longer duplicated here */}
       {initError && <InitErrorBanner error={initError} />}
       {(currentTip || showFileChanges) && (
         <Box flexDirection="row" justifyContent="space-between">
@@ -4626,7 +4610,6 @@ function AppContentView({
       initError={initError}
       redoBacktrack={redoBacktrack}
       specPhase={specPhase}
-      tokenUsage={tokenUsage}
       undoBacktrack={undoBacktrack}
     />
   );

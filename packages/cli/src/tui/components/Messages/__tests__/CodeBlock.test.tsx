@@ -6,6 +6,7 @@
 
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
+import { translate } from "../../../i18n/index.js";
 import { ThemeProvider } from "../../../theme/index.js";
 import { CodeBlock } from "../CodeBlock.js";
 
@@ -211,15 +212,13 @@ line 4`;
     it("shows copy button when enabled", () => {
       const { lastFrame } = renderWithTheme(<CodeBlock code="test" showCopyButton />);
 
-      // Translation key is used in tests
-      expect(lastFrame()).toContain("code.copy");
+      expect(lastFrame()).toContain(translate("code.copy"));
     });
 
     it("hides copy button when disabled", () => {
       const { lastFrame } = renderWithTheme(<CodeBlock code="test" showCopyButton={false} />);
 
-      // Translation key should not be present
-      expect(lastFrame()).not.toContain("code.copy");
+      expect(lastFrame()).not.toContain(translate("code.copy"));
     });
   });
 
@@ -286,8 +285,7 @@ line 3`;
       );
 
       expect(lastFrame()).toContain("typescript");
-      // Translation key is used in tests
-      expect(lastFrame()).toContain("code.copy");
+      expect(lastFrame()).toContain(translate("code.copy"));
       expect(lastFrame()).toContain("▶");
       expect(lastFrame()).toContain("1");
       expect(lastFrame()).toContain("function");
