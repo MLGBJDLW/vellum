@@ -92,7 +92,30 @@ describe("CompactionStatsTracker", () => {
   });
 
   afterEach(async () => {
-    cleanupTestDir(testDir);
+    // Wait for any pending microtasks (schedulePersist uses queueMicrotask)
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // On Windows, file handles may not be released immediately
+    // Retry cleanup with exponential backoff
+    let attempts = 0;
+    const maxAttempts = 3;
+    while (attempts < maxAttempts) {
+      try {
+        cleanupTestDir(testDir);
+        break;
+      } catch (error: unknown) {
+        attempts++;
+        if (
+          attempts >= maxAttempts ||
+          !(error instanceof Error) ||
+          !error.message.includes("ENOTEMPTY")
+        ) {
+          throw error;
+        }
+        // Wait before retry (exponential backoff: 10ms, 20ms, 40ms)
+        await new Promise((resolve) => setTimeout(resolve, 10 * 2 ** attempts));
+      }
+    }
     vi.restoreAllMocks();
   });
 
