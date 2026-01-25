@@ -150,7 +150,7 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
   const compensationEnabled = enableCompensation && blockSumsState !== undefined;
 
   // Initialize scroll anchor based on initial props
-  const [scrollAnchor, setScrollAnchor] = useState<ScrollAnchor>(() => {
+  const [scrollAnchor, setScrollAnchorState] = useState<ScrollAnchor>(() => {
     const scrollToEnd =
       initialScrollIndex === SCROLL_TO_ITEM_END ||
       (typeof initialScrollIndex === "number" &&
@@ -173,6 +173,19 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
 
     return { index: 0, offset: 0 };
   });
+
+  const setScrollAnchor = useCallback(
+    (next: ScrollAnchor | ((prev: ScrollAnchor) => ScrollAnchor)) => {
+      setScrollAnchorState((prev) => {
+        const resolved = typeof next === "function" ? next(prev) : next;
+        if (resolved.index === prev.index && resolved.offset === prev.offset) {
+          return prev;
+        }
+        return resolved;
+      });
+    },
+    []
+  );
 
   // Track whether we're sticking to bottom (auto-scroll)
   const [isStickingToBottom, setIsStickingToBottom] = useState(() => {
@@ -317,6 +330,7 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     scrollAnchor.offset,
     getAnchorForScrollTop,
     isStickingToBottom,
+    setScrollAnchor,
   ]);
 
   // Handle initial scroll position
@@ -362,6 +376,7 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     containerHeight,
     getAnchorForScrollTop,
     dataLength,
+    setScrollAnchor,
   ]);
 
   // ============================================================================
@@ -453,6 +468,7 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     heights,
     scrollTop,
     getAnchorForScrollTop,
+    setScrollAnchor,
   ]);
 
   // Initialize prefix ref when compensation becomes enabled

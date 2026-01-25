@@ -112,12 +112,15 @@ export function useInputHighlight({
     return findSegmentAtCursor(result.segments, cursorPosition);
   }, [result.segments, cursorPosition, result.hasHighlights]);
 
-  return {
-    result,
-    hasHighlights: result.hasHighlights,
-    cursorSegment,
-    isHighlighting: enabled && result.hasHighlights,
-  };
+  return useMemo(
+    () => ({
+      result,
+      hasHighlights: result.hasHighlights,
+      cursorSegment,
+      isHighlighting: enabled && result.hasHighlights,
+    }),
+    [result, cursorSegment, enabled]
+  );
 }
 
 // =============================================================================

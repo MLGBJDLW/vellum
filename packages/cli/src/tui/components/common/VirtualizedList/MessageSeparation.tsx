@@ -205,51 +205,67 @@ export function useMessageSeparation<T extends SeparableMessage>(
    */
   useEffect(() => {
     const now = Date.now();
-    const newMetaMap = new Map<string, MessageMetaState>();
     const currentIds = new Set(messages.map((m) => m.id));
 
-    for (const message of messages) {
-      const existing = metaMap.get(message.id);
-      const isStreaming = message.isStreaming ?? false;
+    setMetaMap((prev) => {
+      const nextMetaMap = new Map<string, MessageMetaState>();
+      let hasChanges = false;
 
-      if (existing) {
-        // Update existing entry
-        const contentChanged = message.content.length !== existing.lastContentLength;
-        const progress = estimateProgress(message.content, existing.lastContentLength);
+      for (const message of messages) {
+        const existing = prev.get(message.id);
+        const isStreaming = message.isStreaming ?? false;
 
-        newMetaMap.set(message.id, {
-          ...existing,
-          status: isStreaming ? "streaming" : existing.status,
-          lastUpdateTime: contentChanged ? now : existing.lastUpdateTime,
-          estimatedProgress: progress,
-          lastContentLength: message.content.length,
-        });
-      } else {
-        // New message
-        newMetaMap.set(message.id, {
-          id: message.id,
-          status: isStreaming ? "streaming" : "stable",
-          streamStartTime: isStreaming ? now : 0,
-          lastUpdateTime: now,
-          estimatedProgress: isStreaming ? 0 : 1,
-          lastContentLength: message.content.length,
-        });
-      }
-    }
+        if (existing) {
+          // Update existing entry
+          const contentChanged = message.content.length !== existing.lastContentLength;
+          const progress = estimateProgress(message.content, existing.lastContentLength);
 
-    // Cleanup removed messages from transition timers
-    for (const id of metaMap.keys()) {
-      if (!currentIds.has(id)) {
-        const timer = transitionTimersRef.current.get(id);
-        if (timer) {
-          clearTimeout(timer);
-          transitionTimersRef.current.delete(id);
+          const nextMeta: MessageMetaState = {
+            ...existing,
+            status: isStreaming ? "streaming" : existing.status,
+            lastUpdateTime: contentChanged ? now : existing.lastUpdateTime,
+            estimatedProgress: progress,
+            lastContentLength: message.content.length,
+          };
+
+          nextMetaMap.set(message.id, nextMeta);
+
+          if (!hasChanges && !isMetaStateEqual(existing, nextMeta)) {
+            hasChanges = true;
+          }
+        } else {
+          // New message
+          nextMetaMap.set(message.id, {
+            id: message.id,
+            status: isStreaming ? "streaming" : "stable",
+            streamStartTime: isStreaming ? now : 0,
+            lastUpdateTime: now,
+            estimatedProgress: isStreaming ? 0 : 1,
+            lastContentLength: message.content.length,
+          });
+          hasChanges = true;
         }
       }
-    }
 
-    setMetaMap(newMetaMap);
-  }, [messages, metaMap]);
+      if (prev.size !== nextMetaMap.size) {
+        hasChanges = true;
+      }
+
+      // Cleanup removed messages from transition timers
+      for (const id of prev.keys()) {
+        if (!currentIds.has(id)) {
+          hasChanges = true;
+          const timer = transitionTimersRef.current.get(id);
+          if (timer) {
+            clearTimeout(timer);
+            transitionTimersRef.current.delete(id);
+          }
+        }
+      }
+
+      return hasChanges ? nextMetaMap : prev;
+    });
+  }, [messages]);
 
   /**
    * Start transition timer for a message.
@@ -461,6 +477,16 @@ function estimateProgress(content: string, lastLength: number): number {
   }
 
   return Math.min(1, progress);
+}
+
+function isMetaStateEqual(a: MessageMetaState, b: MessageMetaState): boolean {
+  return (
+    a.status === b.status &&
+    a.streamStartTime === b.streamStartTime &&
+    a.lastUpdateTime === b.lastUpdateTime &&
+    a.estimatedProgress === b.estimatedProgress &&
+    a.lastContentLength === b.lastContentLength
+  );
 }
 
 // ============================================================================

@@ -9,7 +9,7 @@
  */
 
 import type { MemoryEntry } from "@vellum/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TodoItemData } from "../components/TodoItem.js";
 import type { ToolExecution } from "../context/ToolsContext.js";
 
@@ -111,5 +111,8 @@ export function useSidebarPanelData(options: SidebarPanelDataOptions): SidebarPa
     lastHandledExecutionIdRef.current = executionId;
   }, [executions, refreshMemories, refreshTodos]);
 
-  return { todoItems, memoryEntries, refreshTodos, refreshMemories };
+  return useMemo(
+    () => ({ todoItems, memoryEntries, refreshTodos, refreshMemories }),
+    [todoItems, memoryEntries, refreshTodos, refreshMemories]
+  );
 }
