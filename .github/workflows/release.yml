@@ -16,6 +16,7 @@ jobs:
   # Job 1: Create Version Packages PR when changesets exist
   version-pr:
     name: Create Version PR
+    timeout-minutes: 15
     concurrency:
       group: version-pr-${{ github.ref }}
       cancel-in-progress: true
@@ -73,6 +74,7 @@ jobs:
   # Job 2: Publish packages when Version PR is merged
   publish:
     name: Publish to npm
+    timeout-minutes: 30
     concurrency:
       group: publish-${{ github.ref }}
       cancel-in-progress: false

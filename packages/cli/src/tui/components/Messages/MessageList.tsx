@@ -2,11 +2,11 @@
  * MessageList Component (T017)
  *
  * Displays a list of messages with auto-scroll support and optimized rendering.
- * Uses Ink's <Static> component for completed messages (never re-render)
- * and only re-renders the pending streaming message.
+ * Supports optional Ink <Static> rendering for completed messages in static output mode,
+ * otherwise renders within layout and only re-renders the pending streaming message.
  *
- * Key optimization: Static rendering pattern from Gemini CLI
- * - historyMessages: Rendered in <Static>, never re-render
+ * Key optimization: Static rendering pattern from Gemini CLI (opt-in)
+ * - historyMessages: Rendered in <Static> only when static output mode is enabled
  * - pendingMessage: Only this causes re-renders during streaming
  *
  * Virtualized mode (useVirtualizedList=true):
@@ -30,6 +30,7 @@ import { useKeyboardScroll } from "../../hooks/useKeyboardScroll.js";
 import { type ModeControllerConfig, useModeController } from "../../hooks/useModeController.js";
 import { useScrollController } from "../../hooks/useScrollController.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
+import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { isEndKey, isHomeKey } from "../../types/ink-extended.js";
 import { estimateMessageHeight } from "../../utils/heightEstimator.js";
@@ -75,7 +76,7 @@ const DEBUG_TUI = process.env.NODE_ENV === "development" && process.env.DEBUG_TU
 export interface MessageListProps {
   /** Array of messages to display (for backward compatibility) */
   readonly messages: readonly Message[];
-  /** Completed messages for <Static> rendering (never re-render) */
+  /** Completed messages for optional <Static> rendering in static output mode */
   readonly historyMessages?: readonly Message[];
   /** Currently streaming message (only this causes re-renders) */
   readonly pendingMessage?: Message | null;
@@ -177,20 +178,22 @@ function getRoleIcon(role: Message["role"]): string {
 }
 
 /**
- * Get the role display label.
+ * Get the role display label using i18n.
+ * @param role - Message role
+ * @param t - Translation function from useTUITranslation
  */
-function getRoleLabel(role: Message["role"]): string {
+function getRoleLabel(role: Message["role"], t: (key: string) => string): string {
   switch (role) {
     case "user":
-      return "You";
+      return t("messages.user");
     case "assistant":
-      return "Vellum";
+      return t("messages.assistant");
     case "system":
-      return "System";
+      return t("messages.system");
     case "tool":
-      return "Tool";
+      return t("messages.tool");
     default:
-      return "Unknown";
+      return t("messages.unknown");
   }
 }
 
@@ -467,8 +470,9 @@ const MessageItem = memo(function MessageItem({
   thinkingToggleHint,
   onThinkingHeightChange,
 }: MessageItemProps) {
+  const { t } = useTUITranslation();
   const icon = getRoleIcon(message.role);
-  const label = getRoleLabel(message.role);
+  const label = getRoleLabel(message.role, t);
   const timestamp = formatTimestamp(message.timestamp);
   const hasThinking = message.thinking && message.thinking.length > 0;
 
@@ -567,7 +571,7 @@ const MessageItem = memo(function MessageItem({
  * // Basic usage with auto-scroll
  * <MessageList messages={messages} />
  *
- * // Optimized usage with Static rendering
+ * // Optional Static rendering (static output mode only)
  * <MessageList
  *   messages={messages}
  *   historyMessages={historyMessages}
@@ -661,10 +665,19 @@ const MessageList = memo(function MessageList({
   }, [messages, estimatedContentWidth]);
 
   // Mode controller for adaptive rendering decisions
-  const { mode, windowSize, modeReason, staticThreshold, virtualThreshold } = useModeController({
+  // Now considers both content height AND message count for virtualization decisions
+  const {
+    mode,
+    windowSize,
+    modeReason,
+    staticThreshold,
+    virtualThreshold,
+    virtualizedByMessageCount,
+  } = useModeController({
     availableHeight,
     totalContentHeight,
     config: modeConfig,
+    messageCount: messages.length,
   });
 
   const toolGroupCallIds = useMemo(() => {
@@ -700,6 +713,9 @@ const MessageList = memo(function MessageList({
   const isStaticOutputMode = process.env.VELLUM_STATIC_OUTPUT === "1";
   const shouldConstrainHeight =
     !isStaticOutputMode && (useAltBuffer || (process.stdout.isTTY ?? false));
+  // Ink <Static> renders outside the flex layout; keep it disabled to avoid
+  // messages leaking into scrollback during interactive rendering.
+  const allowStaticRendering = false;
 
   // Ref for VirtualizedList imperative control
   const virtualizedListRef = useRef<VirtualizedListRef<Message>>(null);
@@ -794,6 +810,7 @@ const MessageList = memo(function MessageList({
   }, [pendingMessage?.thinking, pendingMessage?.isStreaming, pendingMessage?.isThinkingComplete]);
 
   const useStaticRendering =
+    allowStaticRendering &&
     historyMessages !== undefined &&
     !computedMaxHeight &&
     !hasActiveStreamingThinking &&
@@ -878,6 +895,7 @@ const MessageList = memo(function MessageList({
         useStaticRendering,
         useVirtualizedListInternal,
         messageCount: messages.length,
+        virtualizedByMessageCount,
         adaptive,
       });
     }
@@ -893,6 +911,7 @@ const MessageList = memo(function MessageList({
     useStaticRendering,
     useVirtualizedListInternal,
     messages.length,
+    virtualizedByMessageCount,
     adaptive,
   ]);
 

@@ -4,10 +4,139 @@
  * React hook for managing input history with navigation.
  * Supports navigating through previous entries and optional persistence.
  *
+ * Storage Strategy:
+ * 1. Try localStorage (works in some environments)
+ * 2. Fall back to file-based storage (~/.vellum/input-history.json)
+ *
  * @module @vellum/cli
  */
 
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { useCallback, useRef, useState } from "react";
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+/** Directory for Vellum user data */
+const VELLUM_DIR = join(homedir(), ".vellum");
+
+/** File path for input history persistence */
+const HISTORY_FILE = join(VELLUM_DIR, "input-history.json");
+
+// =============================================================================
+// Storage Abstraction
+// =============================================================================
+
+/**
+ * Detected storage backend type.
+ */
+type StorageBackend = "localStorage" | "file" | "none";
+
+/**
+ * Check if localStorage is available and functional.
+ */
+function isLocalStorageAvailable(): boolean {
+  try {
+    if (typeof globalThis.localStorage === "undefined") {
+      return false;
+    }
+    // Test actual functionality (some environments have localStorage but it throws)
+    const testKey = "__vellum_storage_test__";
+    globalThis.localStorage.setItem(testKey, "test");
+    globalThis.localStorage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Detect the best available storage backend.
+ * Caches result for performance.
+ */
+let cachedBackend: StorageBackend | null = null;
+
+function getStorageBackend(): StorageBackend {
+  if (cachedBackend !== null) {
+    return cachedBackend;
+  }
+
+  // Try localStorage first
+  if (isLocalStorageAvailable()) {
+    cachedBackend = "localStorage";
+    return cachedBackend;
+  }
+
+  // Fall back to file storage (CLI environment)
+  try {
+    // Ensure directory exists for file storage
+    if (!existsSync(VELLUM_DIR)) {
+      mkdirSync(VELLUM_DIR, { recursive: true });
+    }
+    cachedBackend = "file";
+    return cachedBackend;
+  } catch {
+    // No storage available
+    cachedBackend = "none";
+    return cachedBackend;
+  }
+}
+
+// =============================================================================
+// File Storage Helpers
+// =============================================================================
+
+/**
+ * History file structure for multi-key support.
+ */
+interface HistoryFile {
+  [key: string]: string[];
+}
+
+/**
+ * Read all history data from file.
+ */
+function readHistoryFile(): HistoryFile {
+  try {
+    if (!existsSync(HISTORY_FILE)) {
+      return {};
+    }
+    const content = readFileSync(HISTORY_FILE, "utf-8");
+    const parsed = JSON.parse(content) as unknown;
+    if (typeof parsed === "object" && parsed !== null) {
+      return parsed as HistoryFile;
+    }
+    return {};
+  } catch {
+    // Corrupted file or parse error - return empty
+    return {};
+  }
+}
+
+/**
+ * Write history data to file.
+ * Ensures directory exists and handles errors gracefully.
+ */
+function writeHistoryFile(data: HistoryFile): boolean {
+  try {
+    const dir = dirname(HISTORY_FILE);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    writeFileSync(HISTORY_FILE, JSON.stringify(data, null, 2), "utf-8");
+    return true;
+  } catch {
+    // Write failed - log but don't crash
+    return false;
+  }
+}
+
+// =============================================================================
+// Types
+// =============================================================================
 
 /**
  * Options for the useInputHistory hook.
@@ -15,7 +144,7 @@ import { useCallback, useRef, useState } from "react";
 export interface UseInputHistoryOptions {
   /** Maximum number of history entries to keep (default: 100) */
   maxItems?: number;
-  /** localStorage key for persistence (if provided, history will be persisted) */
+  /** Storage key for persistence (if provided, history will be persisted) */
   persistKey?: string;
 }
 
@@ -37,12 +166,18 @@ export interface UseInputHistoryReturn {
   getCurrentEntry: () => string | null;
 }
 
+// =============================================================================
+// Storage Operations
+// =============================================================================
+
 /**
- * Load history from storage.
+ * Load history from storage (localStorage or file-based).
  */
 function loadFromStorage(key: string): string[] {
+  const backend = getStorageBackend();
+
   try {
-    if (typeof globalThis.localStorage !== "undefined") {
+    if (backend === "localStorage") {
       const stored = globalThis.localStorage.getItem(key);
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -50,23 +185,37 @@ function loadFromStorage(key: string): string[] {
           return parsed.filter((item): item is string => typeof item === "string");
         }
       }
+    } else if (backend === "file") {
+      const historyData = readHistoryFile();
+      const entries = historyData[key];
+      if (Array.isArray(entries)) {
+        return entries.filter((item): item is string => typeof item === "string");
+      }
     }
   } catch {
-    // Ignore storage errors
+    // Ignore storage errors - return empty array
   }
+
   return [];
 }
 
 /**
- * Save history to storage.
+ * Save history to storage (localStorage or file-based).
  */
 function saveToStorage(key: string, history: string[]): void {
+  const backend = getStorageBackend();
+
   try {
-    if (typeof globalThis.localStorage !== "undefined") {
+    if (backend === "localStorage") {
       globalThis.localStorage.setItem(key, JSON.stringify(history));
+    } else if (backend === "file") {
+      const historyData = readHistoryFile();
+      historyData[key] = history;
+      writeHistoryFile(historyData);
     }
+    // backend === "none": silently do nothing
   } catch {
-    // Ignore storage errors
+    // Ignore storage errors - history won't persist but app continues
   }
 }
 

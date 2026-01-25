@@ -93,6 +93,8 @@
     "user": "You",
     "assistant": "Vellum",
     "system": "System",
+    "tool": "Tool",
+    "unknown": "Unknown",
     "error": "Error",
     "empty": "No messages yet",
     "copied": "Copied to clipboard",
