@@ -22,6 +22,7 @@ import {
   useState,
 } from "react";
 import { useScrollOptional } from "../../../context/ScrollContext.js";
+import { tuiConfig } from "../../theme/tokens.js";
 import {
   type FollowMode,
   useBatchedScroll,
@@ -94,8 +95,9 @@ function VirtualizedListInner<T>(
     // Use actual terminal rows if available, with fallback to reasonable default
     const terminalRows = process.stdout.rows;
     // Reserve some space for UI elements (header, input, status)
-    const reservedLines = 10;
-    return Math.max(8, (terminalRows || 24) - reservedLines);
+    // Values configurable via VELLUM_RESERVED_LINES and VELLUM_DEFAULT_ROWS
+    const { reservedLines, defaultRows } = tuiConfig.virtualization;
+    return Math.max(8, (terminalRows || defaultRows) - reservedLines);
   });
 
   // Initial virtualization pass with estimated heights

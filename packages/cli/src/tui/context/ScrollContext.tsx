@@ -201,9 +201,6 @@ ScrollContext.displayName = "ScrollContext";
  * const { scrollTop, isAtBottom } = useScrollState(); // Only re-renders on state change
  * const { scrollBy, scrollToBottom } = useScrollActions(); // Never causes re-renders
  *
- * // Or use the combined hook for backward compatibility:
- * const { state, scrollBy, scrollToBottom } = useScroll();
- *
  * // Handle keyboard scroll
  * useEffect(() => {
  *   if (keyPressed === 'j') scrollBy(1);
@@ -550,49 +547,6 @@ export function useScrollActions(): ScrollActions {
 }
 
 /**
- * Hook to access the combined scroll context (backward compatibility).
- *
- * @deprecated For better performance, use useScrollState() for state and
- * useScrollActions() for actions separately. This prevents unnecessary
- * re-renders when only actions are needed.
- *
- * @returns The combined scroll context value
- * @throws Error if used outside of a ScrollProvider
- *
- * @example
- * ```tsx
- * function ScrollIndicator() {
- *   const { state } = useScroll();
- *
- *   return (
- *     <Text>
- *       {state.isAtTop ? '⬆ Top' : state.isAtBottom ? '⬇ Bottom' : `${state.scrollTop}/${state.maxScrollTop}`}
- *     </Text>
- *   );
- * }
- * ```
- */
-export function useScroll(): ScrollContextValue {
-  const context = useContext(ScrollContext);
-
-  if (context === null) {
-    throw new Error("useScroll must be used within a ScrollProvider");
-  }
-
-  return context;
-}
-
-/**
- * Optional hook that returns null instead of throwing when used outside provider.
- * Useful for components that may work with or without scroll context.
- *
- * @returns The scroll context value or null if not within a provider
- */
-export function useScrollOptional(): ScrollContextValue | null {
-  return useContext(ScrollContext);
-}
-
-/**
  * Optional hook for scroll state that returns null instead of throwing.
  *
  * @returns The scroll state or null if not within a provider
@@ -608,4 +562,17 @@ export function useScrollStateOptional(): ScrollState | null {
  */
 export function useScrollActionsOptional(): ScrollActions | null {
   return useContext(ScrollActionsContext);
+}
+
+/**
+ * Optional hook that returns null instead of throwing when used outside provider.
+ * Useful for components that may work with or without scroll context.
+ *
+ * @internal Used by VirtualizedList for backward compatibility.
+ * External code should use useScrollStateOptional() and useScrollActionsOptional().
+ *
+ * @returns The scroll context value or null if not within a provider
+ */
+export function useScrollOptional(): ScrollContextValue | null {
+  return useContext(ScrollContext);
 }

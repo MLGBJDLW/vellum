@@ -24,7 +24,9 @@ import type { ToolCallInfo } from "../../context/MessagesContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { SPINNER_STYLES, Spinner } from "../common/Spinner.js";
+import { StreamingText } from "./StreamingText.js";
 
 // Spinner frames for tool call status
 const TOOL_SPINNER_FRAMES = ["-", "\\", "|", "/"];
@@ -287,14 +289,15 @@ export const ThinkingBlock = memo(function ThinkingBlock({
         <Text color={thinkingColor}>[...] </Text>
 
         {/* Header text - clickable area concept (visual only in TUI) */}
-        <Text
-          color={thinkingColor}
-          dimColor={!isStreaming}
-          italic
-          // In terminal, we can't have onClick, but visual cue
-        >
-          {headerParts.join(" ")}
-        </Text>
+        {isStreaming ? (
+          <BannerShimmerText baseColor={thinkingColor} highlightColor="#FFD700" enabled={true}>
+            {headerParts.join(" ")}
+          </BannerShimmerText>
+        ) : (
+          <Text color={thinkingColor} dimColor italic>
+            {headerParts.join(" ")}
+          </Text>
+        )}
 
         {/* Keyboard hint */}
         {effectiveKeyboardToggle && !isStreaming && (
@@ -322,10 +325,15 @@ export const ThinkingBlock = memo(function ThinkingBlock({
           </Box>
         )
       ) : (
-        // Expanded: show full content
+        // Expanded: show full content with typewriter effect
         <Box marginLeft={2} marginTop={0} flexDirection="column">
-          <Text color={thinkingColor} dimColor wrap="wrap">
-            {content}
+          <Text color={thinkingColor} dimColor>
+            <StreamingText
+              content={content}
+              isStreaming={isStreaming}
+              typewriterEffect={true}
+              cursorBlink={true}
+            />
           </Text>
         </Box>
       )}

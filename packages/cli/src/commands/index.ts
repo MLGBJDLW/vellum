@@ -377,6 +377,24 @@ export {
 } from "./mode.js";
 
 // =============================================================================
+// Role Commands (Specialist Roles)
+// =============================================================================
+
+export {
+  analystCommand,
+  architectCommand,
+  coderCommand,
+  getRoleManager,
+  orchestratorCommand,
+  qaCommand,
+  roleCommand,
+  roleSlashCommands,
+  securityCommand,
+  setRoleManager,
+  writerCommand,
+} from "./role.js";
+
+// =============================================================================
 // Vim Mode Commands (T041)
 // =============================================================================
 

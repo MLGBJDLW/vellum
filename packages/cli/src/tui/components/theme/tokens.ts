@@ -426,6 +426,50 @@ export const icons = {
 } as const;
 
 // =============================================================================
+// TUI Configuration (ENV Overrides)
+// =============================================================================
+
+/**
+ * Parse a numeric environment variable with fallback.
+ * Returns the default value if ENV is not set, empty, or NaN.
+ */
+function parseEnvNumber(envVar: string | undefined, defaultValue: number): number {
+  if (!envVar) return defaultValue;
+  const parsed = Number(envVar);
+  return Number.isNaN(parsed) ? defaultValue : parsed;
+}
+
+/**
+ * TUI Configuration with environment variable overrides.
+ *
+ * Environment Variables:
+ * - VELLUM_COMPACT_THRESHOLD: Columns threshold for compact mode (default: 60)
+ * - VELLUM_SIDEBAR_WIDTH_PERCENT: Sidebar width percentage (default: 20)
+ * - VELLUM_SIDEBAR_MIN_WIDTH: Minimum sidebar width in columns (default: 16)
+ * - VELLUM_SIDEBAR_MAX_WIDTH: Maximum sidebar width in columns (default: 60)
+ * - VELLUM_RESERVED_LINES: Lines reserved for UI elements (default: 10)
+ * - VELLUM_DEFAULT_ROWS: Default terminal rows fallback (default: 24)
+ * - VELLUM_PASTE_TIMEOUT: Paste timeout in milliseconds (default: 30000)
+ */
+export const tuiConfig = {
+  layout: {
+    compactThreshold: parseEnvNumber(process.env.VELLUM_COMPACT_THRESHOLD, 60),
+    sidebarWidthPercent: parseEnvNumber(process.env.VELLUM_SIDEBAR_WIDTH_PERCENT, 20),
+    sidebarMinWidth: parseEnvNumber(process.env.VELLUM_SIDEBAR_MIN_WIDTH, 16),
+    sidebarMaxWidth: parseEnvNumber(process.env.VELLUM_SIDEBAR_MAX_WIDTH, 60),
+  },
+  virtualization: {
+    reservedLines: parseEnvNumber(process.env.VELLUM_RESERVED_LINES, 10),
+    defaultRows: parseEnvNumber(process.env.VELLUM_DEFAULT_ROWS, 24),
+  },
+  paste: {
+    timeoutMs: parseEnvNumber(process.env.VELLUM_PASTE_TIMEOUT, 30_000),
+  },
+} as const;
+
+export type TuiConfig = typeof tuiConfig;
+
+// =============================================================================
 // Type Exports
 // =============================================================================
 

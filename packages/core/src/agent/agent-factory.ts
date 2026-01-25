@@ -15,7 +15,22 @@
 import { PromptBuilder } from "../prompts/prompt-builder.js";
 import { PromptLoader, type PromptLoaderOptions } from "../prompts/prompt-loader.js";
 import { PromptWatcher, type PromptWatcherOptions } from "../prompts/prompt-watcher.js";
+import type { CodingMode } from "./coding-modes.js";
 import type { AgentLoopConfig } from "./loop.js";
+
+// =============================================================================
+// Mode-to-Role Mapping
+// =============================================================================
+
+/**
+ * Default roles for each coding mode.
+ * Can be overridden by explicitly passing `role` in options.
+ */
+const MODE_DEFAULT_ROLE: Partial<Record<CodingMode, string>> = {
+  vibe: "coder", // Implementation-focused
+  plan: "coder", // Planning for implementation
+  spec: "orchestrator", // Multi-agent coordination
+};
 
 // =============================================================================
 // Types
@@ -62,9 +77,9 @@ export interface AgentFactoryOptions {
   integrationInstructions?: string;
 
   /**
-   * Agent role to load from MD files (e.g., 'coder', 'base').
-   * If provided, loads role prompt from markdown.
-   * @default 'base'
+   * Agent role to load from MD files (e.g., 'coder', 'qa', 'orchestrator').
+   * Overrides the mode's default role if provided.
+   * Falls back to mode's default role, then to 'coder'.
    */
   role?: string;
 
@@ -93,6 +108,11 @@ export interface AgentFactoryResult {
    * PromptWatcher instance (if hot-reload enabled).
    */
   promptWatcher: PromptWatcher | null;
+
+  /**
+   * The effective role loaded (from --role or mode default).
+   */
+  effectiveRole: string;
 
   /**
    * Cleanup function to stop watcher and clear caches.
@@ -147,7 +167,7 @@ export class AgentFactory {
       enableHotReload = process.env.NODE_ENV !== "production",
       customInstructions,
       integrationInstructions,
-      role = "base",
+      role,
       mode,
     } = options;
 
@@ -163,10 +183,22 @@ export class AgentFactory {
     // Create PromptBuilder with loader (T051)
     const promptBuilder = new PromptBuilder().withLoader(promptLoader);
 
-    // Load base role prompt from MD files (REQ-001: MD prompts priority)
-    await promptBuilder.withExternalRole(role);
+    // Determine effective role:
+    // 1. Use role from options if provided
+    // 2. Fall back to MODE_DEFAULT_ROLE[mode] if mode is set
+    // 3. Fall back to "coder" as ultimate default
+    const modeDefaultRole = mode ? MODE_DEFAULT_ROLE[mode as CodingMode] : undefined;
+    const effectiveRole = role ?? modeDefaultRole ?? "coder";
 
-    // Load mode prompt from MD files if specified (REQ-002: Mode prompts)
+    // Load base foundation (always loaded first)
+    await promptBuilder.withExternalRole("base");
+
+    // Load specialist role (if not base)
+    if (effectiveRole !== "base") {
+      await promptBuilder.withExternalRole(effectiveRole);
+    }
+
+    // Load mode workflow rules
     if (mode) {
       await promptBuilder.withExternalMode(mode);
     }
@@ -212,6 +244,7 @@ export class AgentFactory {
       promptBuilder,
       promptLoader,
       promptWatcher,
+      effectiveRole,
       cleanup,
     };
   }

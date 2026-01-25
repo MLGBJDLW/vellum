@@ -90,10 +90,10 @@ const MODES_CONFIG: Array<{ mode: CodingMode; icon: string; label: string }> = [
 
 /** Agent name to abbreviation mapping for status bar display */
 const AGENT_ABBREVIATIONS: Record<string, string> = {
-  // Core Agents
+  // Mode-based agents (fallback when no role override)
   "vibe-agent": "Vibe",
   "plan-agent": "Plan",
-  "spec-orchestrator": "Spec",
+  "spec-orchestrator": "Orch",
 
   // Spec Workflow Workers
   researcher: "Rsrch",
@@ -102,14 +102,16 @@ const AGENT_ABBREVIATIONS: Record<string, string> = {
   tasks: "Tasks",
   validator: "Valid",
 
-  // Builtin Workers
+  // Role-based agents (direct role mappings)
   coder: "Code",
   qa: "QA",
   writer: "Write",
   analyst: "Anlst",
   architect: "Arch",
   devops: "DevOp",
-  security: "Secur",
+  security: "Sec",
+  orchestrator: "Orch",
+  base: "Base",
 };
 
 // =============================================================================
@@ -203,10 +205,6 @@ export function StatusBar({
 }: StatusBarProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
-
-  // Note: agentLevel prop is deprecated (T017)
-  // Agent level is now derived from agent state in spec mode workflows
-  void agentLevel; // Silence unused variable warning
 
   // Use primary/accent color for status bar border
   const borderColor = theme.colors.primary;
