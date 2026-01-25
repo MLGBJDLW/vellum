@@ -206,13 +206,6 @@ export {
   type ViewportScrollActions,
   type ViewportScrollState,
 } from "./useScrollController.js";
-// Scroll event batcher hook for jitter prevention
-export {
-  type BatchStrategy,
-  type ScrollEventBatcherConfig,
-  type UseScrollEventBatcherReturn,
-  useScrollEventBatcher,
-} from "./useScrollEventBatcher.js";
 // Smooth scroll animation hook
 export {
   type EasingFunction,

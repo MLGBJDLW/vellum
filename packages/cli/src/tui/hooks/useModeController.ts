@@ -3,12 +3,17 @@
  *
  * Manages render mode decisions for adaptive message list rendering.
  * Dynamically switches between Static, Windowed, and Virtualized modes
- * based on content height vs available viewport.
+ * based on content height vs available viewport AND message count.
+ *
+ * Key features:
+ * - Content height-based thresholds for viewport fitting
+ * - Message count-based thresholds for conversation complexity
+ * - Hysteresis to prevent rapid mode switching at boundaries
  *
  * @module tui/hooks/useModeController
  */
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 
 // =============================================================================
 // Types
@@ -42,6 +47,18 @@ export interface ModeControllerConfig {
   readonly minWindowSize?: number;
   /** Maximum window size as ratio of available height (default: 0.8) */
   readonly maxWindowSizeRatio?: number;
+  /**
+   * Message count threshold for virtualized mode (default: 50).
+   * When message count exceeds this, prefer virtualized rendering regardless of height.
+   */
+  readonly messageCountThreshold?: number;
+  /**
+   * Hysteresis buffer for message count threshold (default: 10).
+   * Prevents rapid switching at boundaries:
+   * - Switch TO virtualized at: messageCountThreshold
+   * - Switch FROM virtualized at: messageCountThreshold - hysteresis
+   */
+  readonly messageCountHysteresis?: number;
 }
 
 /**
@@ -54,6 +71,8 @@ export interface UseModeControllerInput {
   readonly totalContentHeight: number;
   /** Configuration options */
   readonly config?: ModeControllerConfig;
+  /** Current message count for message-based threshold */
+  readonly messageCount?: number;
 }
 
 /**
@@ -72,6 +91,10 @@ export interface ModeControllerState {
   readonly virtualThreshold: number;
   /** Whether mode is auto-detected (true) or forced (false) */
   readonly isAutoMode: boolean;
+  /** Current message count threshold in use */
+  readonly messageCountThreshold: number;
+  /** Whether virtualized mode was triggered by message count */
+  readonly virtualizedByMessageCount: boolean;
 }
 
 // =============================================================================
@@ -82,6 +105,10 @@ const DEFAULT_STATIC_MULTIPLIER = 1.2;
 const DEFAULT_VIRTUAL_MULTIPLIER = 5.0;
 const DEFAULT_MIN_WINDOW_SIZE = 10;
 const DEFAULT_MAX_WINDOW_SIZE_RATIO = 0.8;
+/** Default message count threshold for virtualized mode */
+const DEFAULT_MESSAGE_COUNT_THRESHOLD = 50;
+/** Default hysteresis buffer to prevent rapid switching */
+const DEFAULT_MESSAGE_COUNT_HYSTERESIS = 10;
 
 // =============================================================================
 // Hook Implementation
@@ -99,7 +126,7 @@ const DEFAULT_MAX_WINDOW_SIZE_RATIO = 0.8;
  * @returns Mode controller state with recommended settings
  */
 export function useModeController(input: UseModeControllerInput): ModeControllerState {
-  const { availableHeight, totalContentHeight, config = {} } = input;
+  const { availableHeight, totalContentHeight, config = {}, messageCount = 0 } = input;
 
   const {
     staticMultiplier = DEFAULT_STATIC_MULTIPLIER,
@@ -107,7 +134,15 @@ export function useModeController(input: UseModeControllerInput): ModeController
     forceMode,
     minWindowSize = DEFAULT_MIN_WINDOW_SIZE,
     maxWindowSizeRatio = DEFAULT_MAX_WINDOW_SIZE_RATIO,
+    messageCountThreshold = DEFAULT_MESSAGE_COUNT_THRESHOLD,
+    messageCountHysteresis = DEFAULT_MESSAGE_COUNT_HYSTERESIS,
   } = config;
+
+  // Track previous virtualized state for hysteresis
+  // Hysteresis prevents rapid mode switching at threshold boundaries:
+  // - Enter virtualized at: threshold
+  // - Exit virtualized at: threshold - hysteresis
+  const wasVirtualizedByCountRef = useRef(false);
 
   return useMemo(() => {
     // Compute thresholds from available height
@@ -122,6 +157,7 @@ export function useModeController(input: UseModeControllerInput): ModeController
 
     // Handle forced mode
     if (forceMode) {
+      wasVirtualizedByCountRef.current = false;
       return {
         mode: forceMode,
         windowSize,
@@ -129,14 +165,37 @@ export function useModeController(input: UseModeControllerInput): ModeController
         staticThreshold,
         virtualThreshold,
         isAutoMode,
+        messageCountThreshold,
+        virtualizedByMessageCount: false,
       };
     }
 
+    // Check message count threshold with hysteresis
+    // Once virtualized by message count, stay virtualized until count drops below (threshold - hysteresis)
+    let virtualizedByMessageCount = false;
+    const exitThreshold = messageCountThreshold - messageCountHysteresis;
+
+    if (wasVirtualizedByCountRef.current) {
+      // Already virtualized by count - only exit if below exit threshold
+      virtualizedByMessageCount = messageCount >= exitThreshold;
+    } else {
+      // Not yet virtualized by count - enter if at or above entry threshold
+      virtualizedByMessageCount = messageCount >= messageCountThreshold;
+    }
+
+    // Update ref for next render
+    wasVirtualizedByCountRef.current = virtualizedByMessageCount;
+
     // Auto-detect mode based on content height vs thresholds
+    // Message count threshold takes precedence for large conversations
     let mode: RenderMode;
     let modeReason: ModeReason;
 
-    if (totalContentHeight <= staticThreshold) {
+    if (virtualizedByMessageCount) {
+      // Message count triggered virtualized mode
+      mode = "virtualized";
+      modeReason = "content-very-large";
+    } else if (totalContentHeight <= staticThreshold) {
       mode = "static";
       modeReason = "content-fits";
     } else if (totalContentHeight <= virtualThreshold) {
@@ -154,6 +213,8 @@ export function useModeController(input: UseModeControllerInput): ModeController
       staticThreshold,
       virtualThreshold,
       isAutoMode,
+      messageCountThreshold,
+      virtualizedByMessageCount,
     };
   }, [
     availableHeight,
@@ -163,5 +224,8 @@ export function useModeController(input: UseModeControllerInput): ModeController
     forceMode,
     minWindowSize,
     maxWindowSizeRatio,
+    messageCount,
+    messageCountThreshold,
+    messageCountHysteresis,
   ]);
 }

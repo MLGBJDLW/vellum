@@ -14,17 +14,25 @@ import type {
   RenderMode,
 } from "../useModeController.js";
 
+/** Default message count threshold for virtualized mode */
+const DEFAULT_MESSAGE_COUNT_THRESHOLD = 50;
+
 // Extract pure logic from the hook for testing (mirrors hook internals)
+// Note: This does NOT test hysteresis (stateful) behavior - that requires React hook testing
 function computeModeState(
   availableHeight: number,
   totalContentHeight: number,
-  config: ModeControllerConfig = {}
+  config: ModeControllerConfig = {},
+  messageCount = 0,
+  wasVirtualizedByCount = false
 ): ModeControllerState {
   const staticMultiplier = config.staticMultiplier ?? 1.2;
   const virtualMultiplier = config.virtualMultiplier ?? 5.0;
   const minWindowSize = config.minWindowSize ?? 10;
   const maxWindowSizeRatio = config.maxWindowSizeRatio ?? 0.8;
   const forceMode = config.forceMode;
+  const messageCountThreshold = config.messageCountThreshold ?? DEFAULT_MESSAGE_COUNT_THRESHOLD;
+  const messageCountHysteresis = config.messageCountHysteresis ?? 10;
 
   const staticThreshold = Math.max(1, availableHeight * staticMultiplier);
   const virtualThreshold = Math.max(1, availableHeight * virtualMultiplier);
@@ -39,12 +47,28 @@ function computeModeState(
       staticThreshold,
       virtualThreshold,
       isAutoMode,
+      messageCountThreshold,
+      virtualizedByMessageCount: false,
     };
+  }
+
+  // Check message count threshold with hysteresis simulation
+  let virtualizedByMessageCount = false;
+  const exitThreshold = messageCountThreshold - messageCountHysteresis;
+
+  if (wasVirtualizedByCount) {
+    virtualizedByMessageCount = messageCount >= exitThreshold;
+  } else {
+    virtualizedByMessageCount = messageCount >= messageCountThreshold;
   }
 
   let mode: RenderMode;
   let modeReason: ModeReason;
-  if (totalContentHeight <= staticThreshold) {
+
+  if (virtualizedByMessageCount) {
+    mode = "virtualized";
+    modeReason = "content-very-large";
+  } else if (totalContentHeight <= staticThreshold) {
     mode = "static";
     modeReason = "content-fits";
   } else if (totalContentHeight <= virtualThreshold) {
@@ -55,7 +79,16 @@ function computeModeState(
     modeReason = "content-very-large";
   }
 
-  return { mode, windowSize, modeReason, staticThreshold, virtualThreshold, isAutoMode };
+  return {
+    mode,
+    windowSize,
+    modeReason,
+    staticThreshold,
+    virtualThreshold,
+    isAutoMode,
+    messageCountThreshold,
+    virtualizedByMessageCount,
+  };
 }
 
 describe("useModeController (core logic)", () => {
@@ -102,6 +135,40 @@ describe("useModeController (core logic)", () => {
     it("returns isAutoMode true when not forced", () => {
       const result = computeModeState(20, 10);
       expect(result.isAutoMode).toBe(true);
+    });
+  });
+
+  describe("message count thresholds", () => {
+    it("triggers virtualized mode when message count exceeds threshold", () => {
+      // Small content but many messages
+      const result = computeModeState(20, 10, {}, 60);
+      expect(result.mode).toBe("virtualized");
+      expect(result.virtualizedByMessageCount).toBe(true);
+    });
+
+    it("stays in static mode when message count below threshold", () => {
+      const result = computeModeState(20, 10, {}, 30);
+      expect(result.mode).toBe("static");
+      expect(result.virtualizedByMessageCount).toBe(false);
+    });
+
+    it("respects hysteresis when exiting virtualized mode", () => {
+      // With default threshold=50 and hysteresis=10, exit at 40
+      // Was virtualized by count, now at 45 messages -> should stay virtualized
+      const result = computeModeState(20, 10, {}, 45, true);
+      expect(result.mode).toBe("virtualized");
+      expect(result.virtualizedByMessageCount).toBe(true);
+
+      // Drop below exit threshold (40) -> should exit virtualized
+      const result2 = computeModeState(20, 10, {}, 35, true);
+      expect(result2.virtualizedByMessageCount).toBe(false);
+    });
+
+    it("allows custom message count threshold", () => {
+      // With threshold=100, 60 messages should NOT trigger virtualized
+      const result = computeModeState(20, 10, { messageCountThreshold: 100 }, 60);
+      expect(result.mode).toBe("static");
+      expect(result.virtualizedByMessageCount).toBe(false);
     });
   });
 

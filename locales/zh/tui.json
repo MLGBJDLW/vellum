@@ -93,6 +93,8 @@
     "user": "你",
     "assistant": "Vellum",
     "system": "系统",
+    "tool": "工具",
+    "unknown": "未知",
     "error": "错误",
     "empty": "暂无消息",
     "copied": "已复制到剪贴板",

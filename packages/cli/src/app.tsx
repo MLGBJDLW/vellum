@@ -188,6 +188,7 @@ import { useProviderStatus } from "./tui/hooks/useProviderStatus.js";
 import { isScreenReaderEnabled, useScreenReader } from "./tui/hooks/useScreenReader.js";
 import { type SidebarContent, useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
 import { useSnapshots } from "./tui/hooks/useSnapshots.js";
+import { useTerminalDimensions } from "./tui/hooks/useTerminalSize.js";
 import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
 import type { VimMode } from "./tui/hooks/useVim.js";
 import { useVim } from "./tui/hooks/useVim.js";
@@ -4117,6 +4118,79 @@ interface AppOverlaysProps {
   readonly updateAvailable: { current: string; latest: string } | null;
 }
 
+/**
+ * Calculate responsive overlay margins based on terminal width.
+ *
+ * Breakpoints:
+ * - Narrow (≤80): minimal margins (1-2 cols)
+ * - Medium (81-120): proportional margins (5-12% of width)
+ * - Wide (>120): fixed comfortable margins
+ */
+function useOverlayPositioning(): {
+  margins: {
+    /** Standard overlay margin (ModeSelector, PermissionDialog, etc.) */
+    standard: { top: number; left: number };
+    /** Compact overlay margin (SessionPicker, ApprovalQueue, etc.) */
+    compact: { top: number; left: number };
+    /** Loading indicator margin */
+    loading: { top: number; left: number };
+  };
+  /** Responsive minWidth for loading indicator */
+  loadingMinWidth: number;
+  /** Whether terminal is narrow (<= 80 cols) */
+  isNarrow: boolean;
+  /** Terminal width */
+  width: number;
+} {
+  const { width, isNarrow } = useTerminalDimensions();
+
+  // Narrow terminals (≤80 cols): minimal margins to prevent clipping
+  if (isNarrow) {
+    return {
+      margins: {
+        standard: { top: 2, left: 1 },
+        compact: { top: 1, left: 1 },
+        loading: { top: 2, left: 1 },
+      },
+      loadingMinWidth: Math.min(36, width - 4), // Leave 4 cols for border+padding
+      isNarrow: true,
+      width,
+    };
+  }
+
+  // Medium terminals (81-120 cols): proportional margins
+  if (width <= 120) {
+    // Scale from narrow to wide breakpoints
+    const t = (width - 80) / 40; // 0 at 80 cols, 1 at 120 cols
+    const standardLeft = Math.round(2 + t * 8); // 2 → 10
+    const compactLeft = Math.round(1 + t * 4); // 1 → 5
+    const loadingLeft = Math.round(2 + t * 6); // 2 → 8
+
+    return {
+      margins: {
+        standard: { top: Math.round(3 + t * 2), left: standardLeft },
+        compact: { top: Math.round(2 + t * 1), left: compactLeft },
+        loading: { top: Math.round(2 + t * 2), left: loadingLeft },
+      },
+      loadingMinWidth: Math.min(40, width - standardLeft * 2 - 4),
+      isNarrow: false,
+      width,
+    };
+  }
+
+  // Wide terminals (>120 cols): fixed comfortable margins
+  return {
+    margins: {
+      standard: { top: 5, left: 10 },
+      compact: { top: 3, left: 5 },
+      loading: { top: 4, left: 8 },
+    },
+    loadingMinWidth: 40,
+    isNarrow: false,
+    width,
+  };
+}
+
 function AppOverlays({
   activeApproval,
   activeRiskLevel,
@@ -4152,6 +4226,8 @@ function AppOverlays({
   themeContext,
   updateAvailable,
 }: AppOverlaysProps): React.JSX.Element {
+  const { margins, loadingMinWidth, isNarrow } = useOverlayPositioning();
+
   return (
     <>
       {updateAvailable && (
@@ -4167,17 +4243,17 @@ function AppOverlays({
       {showModeSelector && (
         <Box
           position="absolute"
-          marginTop={5}
-          marginLeft={10}
+          marginTop={margins.standard.top}
+          marginLeft={margins.standard.left}
           borderStyle="round"
           borderColor={themeContext.theme.colors.info}
-          padding={1}
+          padding={isNarrow ? 0 : 1}
         >
           <ModeSelector
             currentMode={currentMode}
             onSelect={handleModeSelect}
             isActive={showModeSelector}
-            showDescriptions
+            showDescriptions={!isNarrow}
           />
         </Box>
       )}
@@ -4185,11 +4261,11 @@ function AppOverlays({
       {showSessionManager && (
         <Box
           position="absolute"
-          marginTop={3}
-          marginLeft={5}
+          marginTop={margins.compact.top}
+          marginLeft={margins.compact.left}
           borderStyle="round"
           borderColor={themeContext.theme.colors.primary}
-          padding={1}
+          padding={isNarrow ? 0 : 1}
         >
           <SessionPicker
             sessions={sessions}
@@ -4205,11 +4281,11 @@ function AppOverlays({
       {activeApproval && (
         <Box
           position="absolute"
-          marginTop={5}
-          marginLeft={10}
+          marginTop={margins.standard.top}
+          marginLeft={margins.standard.left}
           borderStyle="double"
           borderColor={themeContext.theme.colors.warning}
-          padding={1}
+          padding={isNarrow ? 0 : 1}
         >
           <PermissionDialog
             execution={activeApproval}
@@ -4225,18 +4301,18 @@ function AppOverlays({
       {showModelSelector && (
         <Box
           position="absolute"
-          marginTop={5}
-          marginLeft={10}
+          marginTop={margins.standard.top}
+          marginLeft={margins.standard.left}
           borderStyle="round"
           borderColor={themeContext.theme.colors.success}
-          padding={1}
+          padding={isNarrow ? 0 : 1}
         >
           <ModelSelector
             currentModel={currentModel}
             currentProvider={currentProvider}
             onSelect={handleModelSelect}
             isActive={showModelSelector}
-            showDetails
+            showDetails={!isNarrow}
           />
         </Box>
       )}
@@ -4244,13 +4320,13 @@ function AppOverlays({
       {pendingOperation && (
         <Box
           position="absolute"
-          marginTop={4}
-          marginLeft={8}
+          marginTop={margins.loading.top}
+          marginLeft={margins.loading.left}
           borderStyle="round"
           borderColor={themeContext.theme.colors.warning}
-          padding={1}
+          padding={isNarrow ? 0 : 1}
           flexDirection="column"
-          minWidth={40}
+          minWidth={loadingMinWidth}
         >
           <LoadingIndicator message={pendingOperation.message} />
           {pendingOperation.cancel && <Text dimColor>Press Esc to cancel</Text>}
@@ -4260,11 +4336,11 @@ function AppOverlays({
       {showHelpModal && (
         <Box
           position="absolute"
-          marginTop={5}
-          marginLeft={10}
+          marginTop={margins.standard.top}
+          marginLeft={margins.standard.left}
           borderStyle="round"
           borderColor={themeContext.theme.colors.info}
-          padding={1}
+          padding={isNarrow ? 0 : 1}
         >
           <HotkeyHelpModal
             isVisible={showHelpModal}
@@ -4277,11 +4353,11 @@ function AppOverlays({
       {showApprovalQueue && pendingApprovals.length > 1 && (
         <Box
           position="absolute"
-          marginTop={3}
-          marginLeft={5}
+          marginTop={margins.compact.top}
+          marginLeft={margins.compact.left}
           borderStyle="double"
           borderColor={themeContext.theme.colors.warning}
-          padding={1}
+          padding={isNarrow ? 0 : 1}
         >
           <ApprovalQueue
             executions={pendingApprovals}
@@ -4297,11 +4373,11 @@ function AppOverlays({
       {checkpointDiff.isVisible && (
         <Box
           position="absolute"
-          marginTop={3}
-          marginLeft={5}
+          marginTop={margins.compact.top}
+          marginLeft={margins.compact.left}
           borderStyle="double"
           borderColor={themeContext.theme.colors.info}
-          padding={1}
+          padding={isNarrow ? 0 : 1}
         >
           <CheckpointDiffView
             diffContent={checkpointDiff.content}
@@ -4624,7 +4700,7 @@ function AppContentView({
           historyMessages={messages.filter((m) => !m.isStreaming)}
           pendingMessage={pendingMessage}
           isLoading={isLoading}
-          useVirtualizedList={true}
+          adaptive={true}
           estimatedItemHeight={4}
           scrollKeyMode={commandInputFocused ? "page" : "all"}
           forceFollowOnInput={true}

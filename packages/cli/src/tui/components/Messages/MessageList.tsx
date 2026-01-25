@@ -30,6 +30,7 @@ import { useKeyboardScroll } from "../../hooks/useKeyboardScroll.js";
 import { type ModeControllerConfig, useModeController } from "../../hooks/useModeController.js";
 import { useScrollController } from "../../hooks/useScrollController.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
+import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { isEndKey, isHomeKey } from "../../types/ink-extended.js";
 import { estimateMessageHeight } from "../../utils/heightEstimator.js";
@@ -177,20 +178,22 @@ function getRoleIcon(role: Message["role"]): string {
 }
 
 /**
- * Get the role display label.
+ * Get the role display label using i18n.
+ * @param role - Message role
+ * @param t - Translation function from useTUITranslation
  */
-function getRoleLabel(role: Message["role"]): string {
+function getRoleLabel(role: Message["role"], t: (key: string) => string): string {
   switch (role) {
     case "user":
-      return "You";
+      return t("messages.user");
     case "assistant":
-      return "Vellum";
+      return t("messages.assistant");
     case "system":
-      return "System";
+      return t("messages.system");
     case "tool":
-      return "Tool";
+      return t("messages.tool");
     default:
-      return "Unknown";
+      return t("messages.unknown");
   }
 }
 
@@ -467,8 +470,9 @@ const MessageItem = memo(function MessageItem({
   thinkingToggleHint,
   onThinkingHeightChange,
 }: MessageItemProps) {
+  const { t } = useTUITranslation();
   const icon = getRoleIcon(message.role);
-  const label = getRoleLabel(message.role);
+  const label = getRoleLabel(message.role, t);
   const timestamp = formatTimestamp(message.timestamp);
   const hasThinking = message.thinking && message.thinking.length > 0;
 
@@ -661,10 +665,19 @@ const MessageList = memo(function MessageList({
   }, [messages, estimatedContentWidth]);
 
   // Mode controller for adaptive rendering decisions
-  const { mode, windowSize, modeReason, staticThreshold, virtualThreshold } = useModeController({
+  // Now considers both content height AND message count for virtualization decisions
+  const {
+    mode,
+    windowSize,
+    modeReason,
+    staticThreshold,
+    virtualThreshold,
+    virtualizedByMessageCount,
+  } = useModeController({
     availableHeight,
     totalContentHeight,
     config: modeConfig,
+    messageCount: messages.length,
   });
 
   const toolGroupCallIds = useMemo(() => {
@@ -878,6 +891,7 @@ const MessageList = memo(function MessageList({
         useStaticRendering,
         useVirtualizedListInternal,
         messageCount: messages.length,
+        virtualizedByMessageCount,
         adaptive,
       });
     }
@@ -893,6 +907,7 @@ const MessageList = memo(function MessageList({
     useStaticRendering,
     useVirtualizedListInternal,
     messages.length,
+    virtualizedByMessageCount,
     adaptive,
   ]);
 
