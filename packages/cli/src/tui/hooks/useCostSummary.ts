@@ -7,7 +7,7 @@
  * @module tui/hooks/useCostSummary
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 // =============================================================================
 // Types
@@ -54,22 +54,25 @@ export function useCostSummary(): UseCostSummaryResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     setSummary(defaultSummary);
     setError(null);
-  };
+  }, []);
 
   useEffect(() => {
     // Placeholder: In real implementation, subscribe to cost events
     setIsLoading(false);
   }, []);
 
-  return {
-    summary,
-    isLoading,
-    error,
-    reset,
-  };
+  return useMemo(
+    () => ({
+      summary,
+      isLoading,
+      error,
+      reset,
+    }),
+    [summary, isLoading, error, reset]
+  );
 }
 
 export default useCostSummary;

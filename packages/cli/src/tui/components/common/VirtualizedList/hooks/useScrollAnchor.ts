@@ -5,11 +5,20 @@
  * during content changes. This approach is more robust than pure pixel-based
  * scrolling when items resize or new items are added.
  *
+ * Features:
+ * - O(1) anchor compensation when item heights change (using Block Sums)
+ * - Automatic scrollTop adjustment to prevent visual "jumping"
+ * - Binary search anchor determination for efficient lookups
+ *
  * @module tui/components/common/VirtualizedList/hooks/useScrollAnchor
  */
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SCROLL_TO_ITEM_END, type ScrollAnchor } from "../types.js";
+import { type BlockSumsState, computeAnchorDelta, prefixSum } from "../utils/blockSums.js";
+
+/** Minimum compensation threshold to avoid floating-point noise */
+const COMPENSATION_THRESHOLD = 0.5;
 
 /**
  * Props for the useScrollAnchor hook.
@@ -29,6 +38,10 @@ export interface UseScrollAnchorProps {
   readonly initialScrollIndex?: number;
   /** Initial offset within the scroll index */
   readonly initialScrollOffsetInIndex?: number;
+  /** Block sums state for O(1) anchor compensation (optional for backward compat) */
+  readonly blockSumsState?: BlockSumsState;
+  /** Enable anchor compensation (default: true when blockSumsState provided) */
+  readonly enableCompensation?: boolean;
 }
 
 /**
@@ -47,6 +60,55 @@ export interface UseScrollAnchorReturn {
   readonly scrollTop: number;
   /** Get anchor for a given scroll position */
   readonly getAnchorForScrollTop: (scrollTop: number) => ScrollAnchor;
+  /** Current anchor index (viewport top item) */
+  readonly anchorIndex: number;
+  /** Offset within the anchor item (pixels) */
+  readonly anchorOffset: number;
+}
+
+/**
+ * Compute anchor index using binary search on Block Sums.
+ * O(log n) complexity with O(n/BLOCK_SIZE + BLOCK_SIZE) prefix sum queries.
+ *
+ * @param scrollTop - Current scroll position in pixels
+ * @param blockSumsState - Block sums state for efficient prefix queries
+ * @param dataLength - Number of items in the list
+ * @returns Anchor index and offset within that item
+ */
+function computeAnchorFromBlockSums(
+  scrollTop: number,
+  blockSumsState: BlockSumsState,
+  dataLength: number
+): { index: number; offset: number } {
+  // Edge cases
+  if (dataLength === 0) {
+    return { index: 0, offset: 0 };
+  }
+  if (scrollTop <= 0) {
+    return { index: 0, offset: 0 };
+  }
+
+  // Binary search to find the item whose top edge is <= scrollTop
+  // We want the LAST item where prefixSum(i) <= scrollTop
+  let low = 0;
+  let high = dataLength - 1;
+
+  while (low < high) {
+    const mid = Math.floor((low + high + 1) / 2);
+    const itemTop = prefixSum(blockSumsState, mid);
+
+    if (itemTop <= scrollTop) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const anchorIndex = low;
+  const anchorTop = prefixSum(blockSumsState, anchorIndex);
+  const offset = scrollTop - anchorTop;
+
+  return { index: anchorIndex, offset: Math.max(0, offset) };
 }
 
 /**
@@ -80,10 +142,15 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     containerHeight,
     initialScrollIndex,
     initialScrollOffsetInIndex,
+    blockSumsState,
+    enableCompensation = true,
   } = props;
 
+  // Determine if compensation should be active
+  const compensationEnabled = enableCompensation && blockSumsState !== undefined;
+
   // Initialize scroll anchor based on initial props
-  const [scrollAnchor, setScrollAnchor] = useState<ScrollAnchor>(() => {
+  const [scrollAnchor, setScrollAnchorState] = useState<ScrollAnchor>(() => {
     const scrollToEnd =
       initialScrollIndex === SCROLL_TO_ITEM_END ||
       (typeof initialScrollIndex === "number" &&
@@ -106,6 +173,19 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
 
     return { index: 0, offset: 0 };
   });
+
+  const setScrollAnchor = useCallback(
+    (next: ScrollAnchor | ((prev: ScrollAnchor) => ScrollAnchor)) => {
+      setScrollAnchorState((prev) => {
+        const resolved = typeof next === "function" ? next(prev) : next;
+        if (resolved.index === prev.index && resolved.offset === prev.offset) {
+          return prev;
+        }
+        return resolved;
+      });
+    },
+    []
+  );
 
   // Track whether we're sticking to bottom (auto-scroll)
   const [isStickingToBottom, setIsStickingToBottom] = useState(() => {
@@ -192,17 +272,25 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     // FIX: Calculate the height delta for more aggressive follow mode
     const heightDelta = totalHeight - prevTotalHeight.current;
 
+    // ENHANCEMENT: Detect if user is "near bottom" - within a few lines
+    // This allows auto-follow to kick in even if not exactly at bottom
+    const NEAR_BOTTOM_THRESHOLD = 20; // pixels (roughly 2-3 lines)
+    const maxScrollTop = Math.max(0, totalHeight - containerHeight);
+    const isNearBottom = scrollTop >= maxScrollTop - NEAR_BOTTOM_THRESHOLD;
+
     // Scroll to end conditions:
     // 1. List grew AND we were already at the bottom (or sticking)
     // 2. We are sticking to bottom AND container size changed
     // 3. We are sticking to bottom AND content height grew (streaming content)
+    // 4. Content height grew AND we are near the bottom (auto-follow when close)
     // FIX: When sticking to bottom and content grows, ALWAYS jump to bottom immediately
     // This ensures follow mode works during streaming even with rapid content changes
     if (
       (listGrew && (isStickingToBottom || wasAtBottom)) ||
       (isStickingToBottom && containerChanged) ||
       (isStickingToBottom && contentHeightGrew && heightDelta > 0) ||
-      (contentHeightShrank && (isStickingToBottom || wasAtBottom))
+      (contentHeightShrank && (isStickingToBottom || wasAtBottom)) ||
+      (contentHeightGrew && isNearBottom && !isStickingToBottom)
     ) {
       const atEnd =
         scrollAnchor.index === dataLength - 1 && scrollAnchor.offset === SCROLL_TO_ITEM_END;
@@ -242,6 +330,7 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     scrollAnchor.offset,
     getAnchorForScrollTop,
     isStickingToBottom,
+    setScrollAnchor,
   ]);
 
   // Handle initial scroll position
@@ -287,7 +376,108 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     containerHeight,
     getAnchorForScrollTop,
     dataLength,
+    setScrollAnchor,
   ]);
+
+  // ============================================================================
+  // O(1) Anchor Compensation
+  // ============================================================================
+  // When heights of items BEFORE the anchor change (e.g., during streaming),
+  // we need to adjust scrollTop to prevent visual "jumping".
+  //
+  // Algorithm:
+  // 1. Track the prefix sum up to the anchor index
+  // 2. When blockSumsState changes, compute delta = newPrefixSum - oldPrefixSum
+  // 3. Adjust scrollAnchor offset by delta to maintain visual position
+
+  // Track prefix sum at anchor for compensation calculation
+  const prevAnchorPrefixRef = useRef<number>(0);
+
+  // Compute current anchor using Block Sums when available, otherwise use scroll anchor
+  const { index: anchorIndex, offset: anchorOffset } = (() => {
+    if (blockSumsState && dataLength > 0) {
+      // Use binary search on Block Sums for O(log n) anchor determination
+      return computeAnchorFromBlockSums(scrollTop, blockSumsState, dataLength);
+    }
+    // Fallback: use the existing scroll anchor
+    return {
+      index: scrollAnchor.index,
+      offset:
+        scrollAnchor.offset === SCROLL_TO_ITEM_END
+          ? (heights[scrollAnchor.index] ?? 0)
+          : scrollAnchor.offset,
+    };
+  })();
+
+  // Anchor compensation effect
+  // This runs when blockSumsState changes (height updates) and adjusts scroll position
+  useEffect(() => {
+    // Skip if compensation is disabled or no Block Sums available
+    if (!compensationEnabled || !blockSumsState) {
+      return;
+    }
+
+    // Skip if no valid anchor or sticking to bottom (auto-scroll handles it)
+    if (anchorIndex < 0 || isStickingToBottom) {
+      // Still update the ref so we have a baseline for next time
+      prevAnchorPrefixRef.current = prefixSum(blockSumsState, Math.max(0, anchorIndex));
+      return;
+    }
+
+    // Compute current prefix sum at anchor
+    const currentPrefix = prefixSum(blockSumsState, anchorIndex);
+
+    // Compute delta using the efficient Block Sums function
+    const delta = computeAnchorDelta(blockSumsState, prevAnchorPrefixRef.current, anchorIndex);
+
+    // Only compensate if delta exceeds threshold (avoid floating-point noise)
+    if (Math.abs(delta) > COMPENSATION_THRESHOLD) {
+      // Adjust the anchor offset to compensate for the height change
+      // This effectively keeps the same visual position on screen
+      setScrollAnchor((prev) => {
+        const baseOffset =
+          prev.offset === SCROLL_TO_ITEM_END ? (heights[prev.index] ?? 0) : prev.offset;
+
+        const newOffset = baseOffset + delta;
+
+        // If compensation pushes us before this item, we need to adjust index
+        if (newOffset < 0 && prev.index > 0) {
+          // Use getAnchorForScrollTop to find the correct new anchor
+          const newScrollTop = Math.max(0, scrollTop + delta);
+          return getAnchorForScrollTop(newScrollTop);
+        }
+
+        // Clamp offset to valid range
+        const maxOffset = heights[prev.index] ?? 0;
+        const clampedOffset = Math.max(0, Math.min(maxOffset, newOffset));
+
+        return {
+          index: prev.index,
+          offset: clampedOffset,
+        };
+      });
+    }
+
+    // Update reference for next comparison
+    prevAnchorPrefixRef.current = currentPrefix;
+  }, [
+    blockSumsState,
+    anchorIndex,
+    compensationEnabled,
+    isStickingToBottom,
+    heights,
+    scrollTop,
+    getAnchorForScrollTop,
+    setScrollAnchor,
+  ]);
+
+  // Initialize prefix ref when compensation becomes enabled
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only run on enable/disable, not every state change
+  useEffect(() => {
+    if (compensationEnabled && blockSumsState && anchorIndex >= 0) {
+      prevAnchorPrefixRef.current = prefixSum(blockSumsState, anchorIndex);
+    }
+  }, [compensationEnabled]);
 
   return {
     scrollAnchor,
@@ -296,5 +486,7 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
     setIsStickingToBottom,
     scrollTop,
     getAnchorForScrollTop,
+    anchorIndex,
+    anchorOffset,
   };
 }

@@ -57,6 +57,12 @@ export interface ThinkingBlockProps {
   readonly showCharCount?: boolean;
   /** Callback when toggle state changes */
   readonly onToggle?: (collapsed: boolean) => void;
+  /**
+   * Callback when the block's height changes.
+   * Called after expand/collapse or content changes that affect height.
+   * Useful for triggering re-measurement in virtualized lists.
+   */
+  readonly onHeightChange?: () => void;
   /** Tool calls to display inline within the thinking block */
   readonly toolCalls?: readonly ToolCallInfo[];
   /** External toggle signal (increment to toggle) */
@@ -163,6 +169,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   collapsedPreviewChars = 80,
   showCharCount = true,
   onToggle,
+  onHeightChange,
   toolCalls,
   toggleSignal,
   toggleHint,
@@ -200,6 +207,15 @@ export const ThinkingBlock = memo(function ThinkingBlock({
     lastToggleSignalRef.current = toggleSignal;
     _toggle();
   }, [isCompactMode, toggleSignal, _toggle]);
+
+  // Notify parent when collapsed state changes (triggers height re-measurement)
+  const prevCollapsedRef = useRef(effectiveIsCollapsed);
+  useEffect(() => {
+    if (prevCollapsedRef.current !== effectiveIsCollapsed) {
+      prevCollapsedRef.current = effectiveIsCollapsed;
+      onHeightChange?.();
+    }
+  }, [effectiveIsCollapsed, onHeightChange]);
 
   // Theme colors
   const thinkingColor = theme.colors.warning ?? "yellow";

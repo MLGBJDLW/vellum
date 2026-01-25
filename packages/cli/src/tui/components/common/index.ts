@@ -70,7 +70,14 @@ export {
   type ProtectedFileLegendProps,
 } from "./ProtectedFileLegend.js";
 // ScrollIndicator (Phase 3 - World-Class TUI)
-export { ScrollIndicator, type ScrollIndicatorProps } from "./ScrollIndicator.js";
+export {
+  CompactScrollIndicator,
+  type CompactScrollIndicatorProps,
+  HorizontalScrollIndicator,
+  type HorizontalScrollIndicatorProps,
+  ScrollIndicator,
+  type ScrollIndicatorProps,
+} from "./ScrollIndicator.js";
 // Spinner (Chain 21)
 export {
   LoadingIndicator,

@@ -9,7 +9,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FileSuggestion } from "../components/Input/MentionAutocomplete.js";
 
 // =============================================================================
@@ -170,7 +170,10 @@ export function useFileSuggestions(
     refreshTrigger,
   ]);
 
-  return { suggestions, loading, error, refresh };
+  return useMemo(
+    () => ({ suggestions, loading, error, refresh }),
+    [suggestions, loading, error, refresh]
+  );
 }
 
 // =============================================================================

@@ -7,7 +7,7 @@
  * @module tui/hooks/useDiffMode
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getDiffMode, subscribeDiffMode } from "../../commands/diff-mode.js";
 import type { DiffViewMode } from "../i18n/index.js";
 
@@ -40,5 +40,5 @@ export function useDiffMode(): UseDiffModeReturn {
     return subscribeDiffMode(setMode);
   }, []);
 
-  return { mode };
+  return useMemo(() => ({ mode }), [mode]);
 }

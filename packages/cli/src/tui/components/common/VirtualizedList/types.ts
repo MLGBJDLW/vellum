@@ -8,6 +8,8 @@
  */
 
 import type React from "react";
+import type { FollowMode } from "./hooks/useStickyBottom.js";
+import type { AnchorManager } from "./scrollAnchorAPI.js";
 
 /**
  * Sentinel value indicating scroll to the end of an item or the list.
@@ -46,8 +48,35 @@ export interface VirtualizedListProps<T> {
   /** Callback when sticking to bottom state changes */
   readonly onStickingToBottomChange?: (isSticking: boolean) => void;
 
+  /**
+   * Callback when follow mode changes (auto | off | locked).
+   * Use this for advanced scroll behavior handling.
+   */
+  readonly onFollowModeChange?: (mode: FollowMode) => void;
+
   /** Whether to align items to the bottom when content is shorter than the viewport */
   readonly alignToBottom?: boolean;
+
+  /**
+   * Whether there is active streaming content.
+   * When true, height measurement interval is reduced for more responsive scroll updates.
+   * @default false
+   */
+  readonly isStreaming?: boolean;
+
+  /**
+   * Enable smooth scroll animations.
+   * When true, scroll operations use eased animation instead of instant jumps.
+   * @default true
+   */
+  readonly enableSmoothScroll?: boolean;
+
+  /**
+   * Enable scroll past end (overscroll) with rubberband effect.
+   * When true, allows scrolling past the bottom with a bounce-back animation.
+   * @default false
+   */
+  readonly enableScrollPastEnd?: boolean;
 }
 
 /**
@@ -92,6 +121,63 @@ export interface VirtualizedListRef<T> {
 
   /** Check if currently sticking to bottom */
   isAtBottom: () => boolean;
+
+  /**
+   * Force immediate re-measurement of visible item heights.
+   * Call this when you know heights have changed (e.g., ThinkingBlock expand/collapse).
+   */
+  forceRemeasure: () => void;
+
+  // =========================================================================
+  // New APIs (v2.0) - Sticky Bottom FSM
+  // =========================================================================
+
+  /**
+   * Get current follow mode state.
+   * - 'auto': Automatically follows new content
+   * - 'off': User scrolled away, no auto-follow
+   * - 'locked': User explicitly requested bottom (End key)
+   */
+  getFollowMode: () => FollowMode;
+
+  /** Get new message count accumulated while follow is off */
+  getNewMessageCount: () => number;
+
+  /** Clear new message count (e.g., when banner is dismissed) */
+  clearNewMessageCount: () => void;
+
+  /** Handle wheel scroll event (updates follow mode FSM) */
+  handleWheel: (delta: number) => void;
+
+  /** Handle keyboard scroll event (updates follow mode FSM) */
+  handleKeyboardScroll: (delta: number) => void;
+
+  // =========================================================================
+  // New APIs (v2.0) - Anchor Manager
+  // =========================================================================
+
+  /** Get anchor manager for external anchor control */
+  getAnchorManager: () => AnchorManager;
+
+  // =========================================================================
+  // New APIs (v2.0) - Scroll Past End
+  // =========================================================================
+
+  /** Current overscroll amount in pixels */
+  getOverscrollAmount: () => number;
+
+  /** Start bounce-back animation (call when scroll release detected) */
+  startBounce: () => void;
+
+  // =========================================================================
+  // New APIs (v2.0) - Smooth Scroll
+  // =========================================================================
+
+  /** Check if smooth scroll animation is in progress */
+  isAnimating: () => boolean;
+
+  /** Stop smooth scroll animation at current position */
+  stopAnimation: () => void;
 }
 
 /**

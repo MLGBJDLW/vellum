@@ -148,6 +148,29 @@ export function estimateWrappedLineCount(text: string, width: number): number {
 }
 
 /**
+ * Fast height estimation for streaming content.
+ *
+ * This is a lightweight function optimized for real-time updates during streaming.
+ * It only considers the content text and doesn't account for thinking blocks,
+ * tool calls, or other message metadata. Use this for rapid height updates
+ * during streaming; use estimateMessageHeight for complete estimation.
+ *
+ * @param content - The content text to estimate height for
+ * @param width - Terminal width for line wrapping calculation
+ * @param headerLines - Number of lines for header (default: 2)
+ * @returns Estimated height in lines
+ */
+export function estimateStreamingContentHeight(
+  content: string,
+  width: number,
+  headerLines: number = 2
+): number {
+  const contentWidth = Math.max(10, width - 4); // Account for padding
+  const contentLines = estimateWrappedLineCount(content, contentWidth);
+  return Math.max(MIN_MESSAGE_HEIGHT, headerLines + contentLines + HEIGHT_SAFETY_MARGIN);
+}
+
+/**
  * Estimate a message height in lines for virtualized scrolling and layout.
  * Uses UPPER BOUND estimation to prevent terminal overflow.
  *

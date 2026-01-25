@@ -9,7 +9,15 @@
 
 import { useStdin } from "ink";
 import type { ReactNode } from "react";
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   disableBracketedPaste,
   enableBracketedPaste,
@@ -316,10 +324,10 @@ export function BracketedPasteProvider({ children, enabled = true }: BracketedPa
     };
   }, [enabled]);
 
-  const value: BracketedPasteContextValue = {
-    subscribe,
-    isPasting,
-  };
+  const value = useMemo<BracketedPasteContextValue>(
+    () => ({ subscribe, isPasting }),
+    [subscribe, isPasting]
+  );
 
   return <BracketedPasteContext.Provider value={value}>{children}</BracketedPasteContext.Provider>;
 }

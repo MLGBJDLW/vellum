@@ -4,17 +4,132 @@
  * Manages height calculations, measurement, and visible range computation
  * for virtualized list rendering.
  *
+ * Architecture:
+ * - heightCache: Map<id, height> - Primary source of truth (id-keyed)
+ * - blockSumsState: BlockSumsState - Index-based O(1) prefix sums for layout
+ * - idToIndexMap: Map<id, index> - Bridges id-based cache to index-based layout
+ *
  * @module tui/components/common/VirtualizedList/hooks/useVirtualization
  */
 
 import type { DOMElement } from "ink";
 import { measureElement } from "ink";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type BlockSumsState,
+  batchUpdateHeights,
+  createBlockSums,
+  prefixSum,
+  updateHeight as updateBlockHeight,
+} from "../utils/blockSums.js";
+
+/**
+ * Type of mutation detected in data array.
+ * Used for cache invalidation and development warnings.
+ */
+export type DataMutationType =
+  | "none" // No change
+  | "append" // Items added at end (cache-safe)
+  | "prepend" // Items added at start (requires cache rebuild)
+  | "delete" // Items removed (requires cache rebuild)
+  | "reorder" // Items reordered (requires cache rebuild)
+  | "insert-middle" // Items inserted in middle (requires cache rebuild)
+  | "replace"; // Complete data replacement (requires cache rebuild)
+
+/**
+ * Detect mutation type between previous and new data arrays.
+ * Returns the type of mutation for cache invalidation decisions.
+ *
+ * @param prevIds - Previous array of item IDs
+ * @param newIds - New array of item IDs
+ * @returns Detected mutation type
+ */
+export function detectMutationType(
+  prevIds: readonly string[],
+  newIds: readonly string[]
+): DataMutationType {
+  // No change
+  if (prevIds.length === 0 && newIds.length === 0) {
+    return "none";
+  }
+
+  // Complete replacement (empty -> populated or vice versa with no overlap)
+  if (prevIds.length === 0) {
+    return "append"; // Initial population is treated as append
+  }
+
+  if (newIds.length === 0) {
+    return "delete"; // All items deleted
+  }
+
+  // Check for pure append (most common streaming case)
+  if (newIds.length > prevIds.length) {
+    const isAppend = prevIds.every((id, index) => newIds[index] === id);
+    if (isAppend) {
+      return "append";
+    }
+  }
+
+  // Check for pure prepend
+  if (newIds.length > prevIds.length) {
+    const offset = newIds.length - prevIds.length;
+    const isPrepend = prevIds.every((id, index) => newIds[index + offset] === id);
+    if (isPrepend) {
+      return "prepend";
+    }
+  }
+
+  // Check for deletion
+  if (newIds.length < prevIds.length) {
+    const newIdSet = new Set(newIds);
+    const isDelete = prevIds.filter((id) => newIdSet.has(id)).length === newIds.length;
+    if (isDelete) {
+      return "delete";
+    }
+  }
+
+  // Check for reorder (same IDs, different order)
+  if (prevIds.length === newIds.length) {
+    const prevSet = new Set(prevIds);
+    const newSet = new Set(newIds);
+    const sameIds = prevSet.size === newSet.size && [...prevSet].every((id) => newSet.has(id));
+    if (sameIds) {
+      const isUnchanged = prevIds.every((id, index) => newIds[index] === id);
+      return isUnchanged ? "none" : "reorder";
+    }
+  }
+
+  // Otherwise it's an insert in the middle or complex change
+  return "insert-middle";
+}
 
 /**
  * Props for the useVirtualization hook.
  */
-export interface UseVirtualizationProps {
+export interface UseVirtualizationProps<T = unknown> {
+  /** Array of data items */
+  readonly data: readonly T[];
+  /** Function to extract unique key from item */
+  readonly keyExtractor: (item: T, index: number) => string;
+  /** Function or fixed value for estimated item height */
+  readonly estimatedItemHeight: number | ((index: number) => number);
+  /** Current scroll position in pixels */
+  readonly scrollTop: number;
+  /** Height of the visible container */
+  readonly containerHeight: number;
+  /**
+   * Whether there is active streaming content.
+   * When true, measurement interval is reduced for more responsive updates.
+   * @default false
+   */
+  readonly isStreaming?: boolean;
+}
+
+/**
+ * Legacy props interface for backward compatibility.
+ * @deprecated Use UseVirtualizationProps with data and keyExtractor instead
+ */
+export interface UseVirtualizationPropsLegacy {
   /** Number of data items */
   readonly dataLength: number;
   /** Function or fixed value for estimated item height */
@@ -23,6 +138,12 @@ export interface UseVirtualizationProps {
   readonly scrollTop: number;
   /** Height of the visible container */
   readonly containerHeight: number;
+  /**
+   * Whether there is active streaming content.
+   * When true, measurement interval is reduced for more responsive updates.
+   * @default false
+   */
+  readonly isStreaming?: boolean;
 }
 
 /**
@@ -35,7 +156,7 @@ export const MIN_VIEWPORT_WIDTH = 20;
  * Return type for the useVirtualization hook.
  */
 export interface UseVirtualizationReturn {
-  /** Array of measured or estimated heights */
+  /** Array of measured or estimated heights (index-based, for compatibility) */
   readonly heights: readonly number[];
   /** Array of cumulative offsets */
   readonly offsets: readonly number[];
@@ -49,14 +170,32 @@ export interface UseVirtualizationReturn {
   readonly topSpacerHeight: number;
   /** Height of spacer below visible items */
   readonly bottomSpacerHeight: number;
-  /** Ref callback for item elements */
-  readonly itemRefCallback: (index: number, el: DOMElement | null) => void;
+  /**
+   * Ref callback factory for item elements (id-based).
+   * Returns a ref callback for the given item id.
+   * Automatically cleans up refs when element unmounts (null passed).
+   */
+  readonly setItemRef: (id: string) => (element: DOMElement | null) => void;
   /** Ref for the container element */
   readonly containerRef: React.RefObject<DOMElement | null>;
   /** Measured container height */
   readonly measuredContainerHeight: number;
   /** True if the last item exceeds viewport height (needs clipping) */
   readonly isOversize: boolean;
+  /**
+   * Trigger an immediate re-measurement of visible items.
+   * Call this when you know heights have changed (e.g., ThinkingBlock expand/collapse).
+   */
+  readonly triggerMeasure: () => void;
+  /**
+   * Update measured height for an item by ID.
+   * Keeps heightCache (id-based) and blockSumsState (index-based) in sync.
+   */
+  readonly updateMeasuredHeight: (id: string, measuredHeight: number) => void;
+  /** Block sums state for O(1) prefix sum queries */
+  readonly blockSumsState: BlockSumsState;
+  /** Map from item ID to current index */
+  readonly idToIndexMap: ReadonlyMap<string, number>;
 }
 
 /**
@@ -95,13 +234,38 @@ function getEstimatedHeight(
 }
 
 /**
+ * Type guard to check if props are legacy format
+ */
+function isLegacyProps<T>(
+  props: UseVirtualizationProps<T> | UseVirtualizationPropsLegacy
+): props is UseVirtualizationPropsLegacy {
+  return "dataLength" in props && !("data" in props);
+}
+
+/**
  * Hook for managing virtualization state.
+ *
+ * Supports two API modes:
+ * 1. Modern: data + keyExtractor (enables id-based height caching)
+ * 2. Legacy: dataLength only (backward compatible, uses index-based keys)
  *
  * @param props - Configuration for virtualization
  * @returns Virtualization state and utilities
  */
-export function useVirtualization(props: UseVirtualizationProps): UseVirtualizationReturn {
-  const { dataLength, estimatedItemHeight, scrollTop, containerHeight } = props;
+export function useVirtualization<T = unknown>(
+  props: UseVirtualizationProps<T> | UseVirtualizationPropsLegacy
+): UseVirtualizationReturn {
+  // Normalize props to support both legacy and modern API
+  const isLegacy = isLegacyProps(props);
+  const data = isLegacy ? null : (props as UseVirtualizationProps<T>).data;
+  const keyExtractor = isLegacy
+    ? (_item: unknown, index: number) => String(index)
+    : (props as UseVirtualizationProps<T>).keyExtractor;
+  const dataLength = isLegacy
+    ? (props as UseVirtualizationPropsLegacy).dataLength
+    : (props as UseVirtualizationProps<T>).data.length;
+
+  const { estimatedItemHeight, scrollTop, containerHeight, isStreaming = false } = props;
 
   // Apply minimum viewport clamping to prevent degenerate cases
   const safeContainerHeight = Math.max(MIN_VIEWPORT_HEIGHT, containerHeight);
@@ -110,50 +274,163 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
   const containerRef = useRef<DOMElement | null>(null);
   const [measuredContainerHeight, setMeasuredContainerHeight] = useState(safeContainerHeight);
 
-  // Item refs for measurement
-  const itemRefs = useRef<Array<DOMElement | null>>([]);
+  // Item refs for measurement (id-based Map for stable references across insertions/deletions)
+  const itemRefs = useRef<Map<string, DOMElement>>(new Map());
 
-  // Heights cache - measured or estimated
-  const [heights, setHeights] = useState<number[]>(() => {
-    const initial: number[] = [];
-    for (let i = 0; i < dataLength; i++) {
-      initial[i] = getEstimatedHeight(estimatedItemHeight, i);
+  // ============================================================================
+  // ID-to-Index Mapping (bridges id-based cache to index-based layout)
+  // ============================================================================
+  const idToIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (data) {
+      data.forEach((item, index) => {
+        map.set(keyExtractor(item, index), index);
+      });
+    } else {
+      // Legacy mode: use string indices as keys
+      for (let i = 0; i < dataLength; i++) {
+        map.set(String(i), i);
+      }
     }
-    return initial;
+    return map;
+  }, [data, keyExtractor, dataLength]);
+
+  // ============================================================================
+  // Height Cache (id-based) - Primary source of truth for measured heights
+  // ============================================================================
+  const heightCache = useRef<Map<string, number>>(new Map());
+
+  // ============================================================================
+  // Block Sums State (index-based) - O(1) prefix sum queries for layout
+  // ============================================================================
+  const [blockSumsState, setBlockSumsState] = useState<BlockSumsState>(() => {
+    const initialHeights: number[] = [];
+    for (let i = 0; i < dataLength; i++) {
+      initialHeights[i] = getEstimatedHeight(estimatedItemHeight, i);
+    }
+    return createBlockSums(initialHeights);
   });
 
-  // Calculate offsets and total height
+  // Derived heights array for backward compatibility
+  // This mirrors blockSumsState.heights for existing consumers
+  const heights = blockSumsState.heights as number[];
+
+  // Track previous data IDs for mutation detection
+  const prevDataIdsRef = useRef<readonly string[]>([]);
+
+  // ============================================================================
+  // Sync block sums with data length changes (with mutation detection)
+  // ============================================================================
+  useEffect(() => {
+    // Build current IDs array for mutation detection
+    const currentIds: string[] = [];
+    if (data) {
+      for (let i = 0; i < dataLength; i++) {
+        currentIds.push(keyExtractor(data[i] as T, i));
+      }
+    } else {
+      for (let i = 0; i < dataLength; i++) {
+        currentIds.push(String(i));
+      }
+    }
+
+    // Detect mutation type
+    const mutationType = detectMutationType(prevDataIdsRef.current, currentIds);
+    prevDataIdsRef.current = currentIds;
+
+    // In development, warn about non-append mutations that require cache rebuild
+    if (
+      process.env.NODE_ENV !== "production" &&
+      mutationType !== "none" &&
+      mutationType !== "append"
+    ) {
+      console.warn(
+        `[VirtualizedList] Non-append mutation detected: ${mutationType}. ` +
+          `Height cache will be rebuilt. This may cause a brief layout shift. ` +
+          `For optimal performance, prefer append-only data updates.`
+      );
+    }
+
+    setBlockSumsState((prevState: BlockSumsState): BlockSumsState => {
+      const prevLength = prevState.heights.length;
+
+      if (dataLength === prevLength && mutationType === "none") {
+        return prevState;
+      }
+
+      // For non-append mutations, rebuild cache from scratch
+      // This ensures correct layout after prepend, delete, reorder, or insert-middle
+      if (mutationType !== "none" && mutationType !== "append") {
+        const newHeights: number[] = [];
+        for (let i = 0; i < dataLength; i++) {
+          const id = currentIds[i] as string;
+          const cachedHeight = heightCache.current.get(id);
+          newHeights[i] = cachedHeight ?? getEstimatedHeight(estimatedItemHeight, i);
+        }
+        return createBlockSums(newHeights);
+      }
+
+      if (dataLength < prevLength) {
+        // Shrink: rebuild with fewer items
+        // Preserve heights from heightCache where available
+        const newHeights: number[] = [];
+        for (let i = 0; i < dataLength; i++) {
+          const id = data ? keyExtractor(data[i] as T, i) : String(i);
+          const cachedHeight = heightCache.current.get(id);
+          newHeights[i] =
+            cachedHeight ??
+            (prevState.heights[i] as number) ??
+            getEstimatedHeight(estimatedItemHeight, i);
+        }
+        return createBlockSums(newHeights);
+      }
+
+      // Grow (append): add estimated heights for new items only
+      const newHeights: number[] = [...prevState.heights];
+
+      for (let i = prevLength; i < dataLength; i++) {
+        const id = data ? keyExtractor(data[i] as T, i) : String(i);
+        const cachedHeight = heightCache.current.get(id);
+        const height = cachedHeight ?? getEstimatedHeight(estimatedItemHeight, i);
+        newHeights.push(height);
+      }
+
+      return createBlockSums(newHeights);
+    });
+  }, [dataLength, data, keyExtractor, estimatedItemHeight]);
+
+  // ============================================================================
+  // Update measured height (keeps heightCache and blockSumsState in sync)
+  // ============================================================================
+  const updateMeasuredHeight = useCallback(
+    (id: string, measuredHeight: number) => {
+      const index = idToIndexMap.get(id);
+      if (index === undefined) return;
+
+      // Ensure valid height
+      const safeHeight = Math.max(MIN_ITEM_HEIGHT, Math.round(measuredHeight));
+
+      // Check if height actually changed
+      const currentHeight = heightCache.current.get(id);
+      if (currentHeight === safeHeight) return;
+
+      // Update heightCache (id -> height)
+      heightCache.current.set(id, safeHeight);
+
+      // Update Block Sums (index -> height)
+      setBlockSumsState((prev: BlockSumsState) => updateBlockHeight(prev, index, safeHeight));
+    },
+    [idToIndexMap]
+  );
+
+  // Calculate offsets and total height (using block sums)
   const { totalHeight, offsets } = useMemo(() => {
     const offsets: number[] = [0];
-    let totalHeight = 0;
     for (let i = 0; i < dataLength; i++) {
-      const height = heights[i] ?? getEstimatedHeight(estimatedItemHeight, i);
-      totalHeight += height;
-      offsets.push(totalHeight);
+      offsets.push(prefixSum(blockSumsState, i + 1));
     }
-    return { totalHeight, offsets };
-  }, [heights, dataLength, estimatedItemHeight]);
-
-  // Sync heights array with data length changes
-  useEffect(() => {
-    setHeights((prevHeights) => {
-      if (dataLength === prevHeights.length) {
-        return prevHeights;
-      }
-
-      const newHeights = [...prevHeights];
-      if (dataLength < prevHeights.length) {
-        // Shrink
-        newHeights.length = dataLength;
-      } else {
-        // Grow - add estimated heights for new items
-        for (let i = prevHeights.length; i < dataLength; i++) {
-          newHeights[i] = getEstimatedHeight(estimatedItemHeight, i);
-        }
-      }
-      return newHeights;
-    });
-  }, [dataLength, estimatedItemHeight]);
+    return { totalHeight: blockSumsState.totalHeight, offsets };
+  }, [blockSumsState, dataLength]);
 
   // Calculate visible range with OVERFLOW GUARD
   // This ensures we NEVER render more items than fit in the viewport
@@ -227,10 +504,46 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
   const topSpacerHeight = offsets[startIndex] ?? 0;
   const bottomSpacerHeight = totalHeight - (offsets[endIndex + 1] ?? totalHeight);
 
-  // Item ref callback for measurement
-  const itemRefCallback = (index: number, el: DOMElement | null) => {
-    itemRefs.current[index] = el;
-  };
+  // Number of extra refs to keep beyond visible range (prevents thrashing on scroll)
+  const OVERSCAN_BUFFER = 4;
+
+  /**
+   * Ref callback factory for item elements (id-based).
+   * Automatically cleans up refs when element unmounts.
+   */
+  const setItemRef = useCallback(
+    (id: string) => (element: DOMElement | null) => {
+      if (element) {
+        itemRefs.current.set(id, element);
+      } else {
+        itemRefs.current.delete(id);
+      }
+    },
+    []
+  );
+
+  /**
+   * Clean up refs that are no longer in the visible range.
+   * Keeps a buffer of OVERSCAN_BUFFER * 2 refs to prevent thrashing during scroll.
+   */
+  const cleanupRefs = useCallback((visibleIds: Set<string>) => {
+    const refsToDelete: string[] = [];
+
+    itemRefs.current.forEach((_, id) => {
+      if (!visibleIds.has(id)) {
+        refsToDelete.push(id);
+      }
+    });
+
+    // Keep some buffer refs to avoid frequent re-creation
+    const maxExtraRefs = OVERSCAN_BUFFER * 2;
+    if (refsToDelete.length > maxExtraRefs) {
+      // Delete oldest refs first (those furthest from visible range)
+      refsToDelete.slice(0, refsToDelete.length - maxExtraRefs).forEach((id) => {
+        itemRefs.current.delete(id);
+      });
+    }
+  }, []);
 
   // Track previous values to avoid unnecessary measurements
   const prevStartIndexRef = useRef(startIndex);
@@ -240,15 +553,48 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
   // Periodic measurement tick to catch dynamic content height changes
   // This ensures collapsible content like ThinkingBlock gets re-measured when expanded
   const [measureTick, setMeasureTick] = useState(0);
-  const REMEASURE_INTERVAL_MS = 250; // Check every 250ms for height changes
 
-  // Set up periodic measurement timer
+  // Dynamic measurement interval: faster during streaming for responsive updates
+  const STREAMING_INTERVAL_MS = 50; // Fast updates during streaming
+  const NORMAL_INTERVAL_MS = 250; // Normal interval when idle
+  const remeasureInterval = isStreaming ? STREAMING_INTERVAL_MS : NORMAL_INTERVAL_MS;
+
+  // Manual trigger for immediate re-measurement (e.g., ThinkingBlock expand/collapse)
+  const triggerMeasure = useCallback(() => {
+    setMeasureTick((t) => t + 1);
+  }, []);
+
+  // Set up periodic measurement timer with dynamic interval
   useEffect(() => {
     const timer = setInterval(() => {
       setMeasureTick((t) => t + 1);
-    }, REMEASURE_INTERVAL_MS);
+    }, remeasureInterval);
     return () => clearInterval(timer);
-  }, []);
+  }, [remeasureInterval]);
+
+  // Cleanup refs when visible items change
+  // This prevents memory leaks from accumulated refs of scrolled-out items
+  useEffect(() => {
+    if (!data) return; // Skip cleanup in legacy mode
+
+    const visibleIds = new Set<string>();
+    for (let i = startIndex; i <= endIndex; i++) {
+      const item = data[i];
+      if (item) {
+        visibleIds.add(keyExtractor(item, i));
+      }
+    }
+    cleanupRefs(visibleIds);
+  }, [data, startIndex, endIndex, keyExtractor, cleanupRefs]);
+
+  // Helper to get item ref by index (bridges id-based refs with index-based measurement)
+  const getItemRefByIndex = useCallback(
+    (index: number): DOMElement | undefined => {
+      const id = data ? keyExtractor(data[index] as T, index) : String(index);
+      return itemRefs.current.get(id);
+    },
+    [data, keyExtractor]
+  );
 
   // Measure container and visible items when visible range changes or on periodic tick
   // FIX: Added proper dependency array to prevent measuring on every single render
@@ -281,7 +627,7 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
     let forceRemeasure = false;
 
     for (let i = startIndex; i <= endIndex; i++) {
-      const itemRef = itemRefs.current[i];
+      const itemRef = getItemRefByIndex(i);
       if (itemRef) {
         const currentHeight = Math.round(measureElement(itemRef).height);
         const cachedHeight = heights[i] ?? 0;
@@ -303,25 +649,61 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
       return;
     }
 
+    // Collect all height updates for batch processing
+    const heightUpdates: Array<{ index: number; height: number }> = [];
+
     // Measure visible items
-    let newHeights: number[] | null = null;
     for (let i = startIndex; i <= endIndex; i++) {
-      const itemRef = itemRefs.current[i];
+      const itemRef = getItemRefByIndex(i);
       if (itemRef) {
-        const height = Math.round(measureElement(itemRef).height);
+        const measuredHeight = Math.round(measureElement(itemRef).height);
         // Only update if height actually changed and is valid
-        if (height > 0 && height !== heights[i]) {
-          if (!newHeights) {
-            newHeights = [...heights];
-          }
-          newHeights[i] = height;
+        if (measuredHeight > 0 && measuredHeight !== heights[i]) {
+          heightUpdates.push({ index: i, height: measuredHeight });
         }
       }
     }
-    if (newHeights) {
-      setHeights(newHeights);
+
+    // ENHANCEMENT: During streaming, always measure the last item even if it's
+    // outside the visible range. This ensures streaming content height is captured
+    // immediately rather than waiting for it to scroll into view.
+    if (isStreaming && dataLength > 0) {
+      const lastIndex = dataLength - 1;
+      // Only if last item wasn't already measured in the loop above
+      if (lastIndex > endIndex || lastIndex < startIndex) {
+        const lastItemRef = getItemRefByIndex(lastIndex);
+        if (lastItemRef) {
+          const measuredHeight = Math.round(measureElement(lastItemRef).height);
+          if (measuredHeight > 0 && measuredHeight !== heights[lastIndex]) {
+            heightUpdates.push({ index: lastIndex, height: measuredHeight });
+          }
+        }
+      }
     }
-  }, [startIndex, endIndex, dataLength, heights, measuredContainerHeight, measureTick]);
+
+    // Apply all height updates via block sums (maintains sync)
+    if (heightUpdates.length > 0) {
+      // Update heightCache for each item
+      for (const { index, height } of heightUpdates) {
+        const id = data ? keyExtractor(data[index] as T, index) : String(index);
+        heightCache.current.set(id, height);
+      }
+
+      // Batch update block sums state
+      setBlockSumsState((prev: BlockSumsState) => batchUpdateHeights(prev, heightUpdates));
+    }
+  }, [
+    startIndex,
+    endIndex,
+    dataLength,
+    data,
+    keyExtractor,
+    heights,
+    measuredContainerHeight,
+    measureTick,
+    isStreaming,
+    getItemRefByIndex,
+  ]);
 
   return {
     heights,
@@ -331,9 +713,13 @@ export function useVirtualization(props: UseVirtualizationProps): UseVirtualizat
     endIndex,
     topSpacerHeight,
     bottomSpacerHeight,
-    itemRefCallback,
+    setItemRef,
     containerRef,
     measuredContainerHeight,
     isOversize,
+    triggerMeasure,
+    updateMeasuredHeight,
+    blockSumsState,
+    idToIndexMap,
   };
 }

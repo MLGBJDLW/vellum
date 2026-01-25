@@ -475,11 +475,8 @@ function AutocompleteComponent({
       return;
     }
 
-    const clampedIndex = clamp(selectedIndex, 0, selectableOptions.length - 1);
-    if (clampedIndex !== selectedIndex) {
-      setSelectedIndex(clampedIndex);
-    }
-  }, [selectableOptions.length, selectedIndex]);
+    setSelectedIndex((prev) => clamp(prev, 0, selectableOptions.length - 1));
+  }, [selectableOptions.length]);
 
   // Handle keyboard input for arrow navigation and escape only
   // Note: Enter/Tab selection is handled by parent CommandInput to avoid race condition
