@@ -4694,10 +4694,8 @@ function AppContentView({
     <>
       <Box flexDirection="column" flexGrow={1}>
         {/* Thinking content is now integrated into messages via the `thinking` field */}
-        {/* T-VIRTUAL-SCROLL: Pass historyMessages for Static rendering optimization */}
         <MessageList
           messages={messages}
-          historyMessages={messages.filter((m) => !m.isStreaming)}
           pendingMessage={pendingMessage}
           isLoading={isLoading}
           adaptive={true}

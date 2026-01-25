@@ -2,11 +2,11 @@
  * MessageList Component (T017)
  *
  * Displays a list of messages with auto-scroll support and optimized rendering.
- * Uses Ink's <Static> component for completed messages (never re-render)
- * and only re-renders the pending streaming message.
+ * Supports optional Ink <Static> rendering for completed messages in static output mode,
+ * otherwise renders within layout and only re-renders the pending streaming message.
  *
- * Key optimization: Static rendering pattern from Gemini CLI
- * - historyMessages: Rendered in <Static>, never re-render
+ * Key optimization: Static rendering pattern from Gemini CLI (opt-in)
+ * - historyMessages: Rendered in <Static> only when static output mode is enabled
  * - pendingMessage: Only this causes re-renders during streaming
  *
  * Virtualized mode (useVirtualizedList=true):
@@ -76,7 +76,7 @@ const DEBUG_TUI = process.env.NODE_ENV === "development" && process.env.DEBUG_TU
 export interface MessageListProps {
   /** Array of messages to display (for backward compatibility) */
   readonly messages: readonly Message[];
-  /** Completed messages for <Static> rendering (never re-render) */
+  /** Completed messages for optional <Static> rendering in static output mode */
   readonly historyMessages?: readonly Message[];
   /** Currently streaming message (only this causes re-renders) */
   readonly pendingMessage?: Message | null;
@@ -571,7 +571,7 @@ const MessageItem = memo(function MessageItem({
  * // Basic usage with auto-scroll
  * <MessageList messages={messages} />
  *
- * // Optimized usage with Static rendering
+ * // Optional Static rendering (static output mode only)
  * <MessageList
  *   messages={messages}
  *   historyMessages={historyMessages}
@@ -713,6 +713,9 @@ const MessageList = memo(function MessageList({
   const isStaticOutputMode = process.env.VELLUM_STATIC_OUTPUT === "1";
   const shouldConstrainHeight =
     !isStaticOutputMode && (useAltBuffer || (process.stdout.isTTY ?? false));
+  // Ink <Static> renders outside the flex layout; keep it disabled to avoid
+  // messages leaking into scrollback during interactive rendering.
+  const allowStaticRendering = false;
 
   // Ref for VirtualizedList imperative control
   const virtualizedListRef = useRef<VirtualizedListRef<Message>>(null);
@@ -807,6 +810,7 @@ const MessageList = memo(function MessageList({
   }, [pendingMessage?.thinking, pendingMessage?.isStreaming, pendingMessage?.isThinkingComplete]);
 
   const useStaticRendering =
+    allowStaticRendering &&
     historyMessages !== undefined &&
     !computedMaxHeight &&
     !hasActiveStreamingThinking &&
