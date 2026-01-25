@@ -16,10 +16,22 @@
  * @module @vellum/core/context/auto-manager
  */
 
+import type { Message } from "../types/message.js";
 import { CheckpointManager } from "./checkpoint.js";
 import type { CompressionLLMClient } from "./compression.js";
 import { NonDestructiveCompressor } from "./compression.js";
 import { CompactionError } from "./errors.js";
+import {
+  type ContextImprovementsConfig,
+  ContextImprovementsManager,
+  CrossSessionInheritanceResolver,
+  type InheritedContext,
+  type InheritedSummary,
+  type SessionInheritanceConfig,
+  type TruncationRecoveryOptions,
+  type TruncationState,
+  TruncationStateManager,
+} from "./improvements/index.js";
 import { estimateTokens, truncate } from "./sliding-window.js";
 import { getThresholdConfig } from "./threshold.js";
 import { calculateTokenBudget, getModelContextWindow } from "./token-budget.js";
@@ -187,6 +199,71 @@ export interface AutoContextManagerConfig {
    * ```
    */
   onCompactionWarning?: (count: number, totalTokensCompressed: number) => void;
+
+  /**
+   * Truncation recovery options (P0-2).
+   * Enables snapshot storage before truncation for potential recovery.
+   *
+   * @example
+   * ```typescript
+   * const config: AutoContextManagerConfig = {
+   *   model: 'gpt-4o',
+   *   truncationRecovery: {
+   *     maxSnapshots: 3,
+   *     maxSnapshotSize: 1024 * 1024, // 1MB
+   *     enableCompression: true,
+   *     expirationMs: 30 * 60 * 1000, // 30 minutes
+   *   },
+   * };
+   * ```
+   */
+  truncationRecovery?: TruncationRecoveryOptions;
+
+  /**
+   * Session inheritance configuration (P1-1).
+   * Enables cross-session context inheritance.
+   *
+   * @example
+   * ```typescript
+   * const config: AutoContextManagerConfig = {
+   *   model: 'gpt-4o',
+   *   sessionInheritance: {
+   *     enabled: true,
+   *     source: 'last_session',
+   *     maxInheritedSummaries: 3,
+   *     inheritTypes: ['summary', 'decisions'],
+   *   },
+   * };
+   * ```
+   */
+  sessionInheritance?: SessionInheritanceConfig;
+
+  /**
+   * Storage directory for persistence features.
+   * Used by truncation recovery and session inheritance.
+   *
+   * @default '.vellum'
+   */
+  storageDir?: string;
+
+  /**
+   * Unified improvements configuration (alternative to individual configs).
+   * When provided, takes precedence over individual `truncationRecovery` and
+   * `sessionInheritance` settings.
+   *
+   * @example
+   * ```typescript
+   * const config: AutoContextManagerConfig = {
+   *   model: 'gpt-4o',
+   *   improvements: {
+   *     truncationRecovery: { maxSnapshots: 5 },
+   *     sessionInheritance: { enabled: true },
+   *     compactionStats: { enabled: true, persist: true },
+   *   },
+   * };
+   * ```
+   */
+  improvements?: Partial<ContextImprovementsConfig>;
 }
 
 /**
@@ -256,6 +333,14 @@ interface ResolvedConfig {
   onFallbackWarning: ((message: string) => void) | null;
   /** Callback for compaction warnings (REQ-011) */
   onCompactionWarning?: ((count: number, totalTokensCompressed: number) => void) | null;
+  /** Storage directory for persistence features */
+  storageDir: string;
+  /** Truncation recovery options (P0-2) */
+  truncationRecovery: TruncationRecoveryOptions | null;
+  /** Session inheritance options (P1-1) */
+  sessionInheritance: SessionInheritanceConfig | null;
+  /** Unified improvements config */
+  improvements: Partial<ContextImprovementsConfig> | null;
 }
 
 /**
@@ -263,6 +348,14 @@ interface ResolvedConfig {
  */
 function resolveConfig(config: AutoContextManagerConfig): ResolvedConfig {
   const contextWindow = config.contextWindow ?? getModelContextWindow(config.model);
+
+  // Resolve truncation recovery: improvements takes precedence
+  const truncationRecovery =
+    config.improvements?.truncationRecovery ?? config.truncationRecovery ?? null;
+
+  // Resolve session inheritance: improvements takes precedence
+  const sessionInheritance =
+    config.improvements?.sessionInheritance ?? config.sessionInheritance ?? null;
 
   return {
     model: config.model,
@@ -279,6 +372,10 @@ function resolveConfig(config: AutoContextManagerConfig): ResolvedConfig {
     autoCondensePercent: config.autoCondensePercent ?? null,
     onFallbackWarning: config.onFallbackWarning ?? null,
     onCompactionWarning: config.onCompactionWarning ?? null,
+    storageDir: config.storageDir ?? ".vellum",
+    truncationRecovery,
+    sessionInheritance,
+    improvements: config.improvements ?? null,
   };
 }
 
@@ -326,6 +423,18 @@ export class AutoContextManager {
   /** Track total tokens compressed in session (REQ-011) */
   private totalTokensCompressed = 0;
 
+  /** Truncation state manager for recoverable truncation (P0-2) */
+  private readonly truncationStateManager: TruncationStateManager | null;
+
+  /** Cross-session inheritance resolver (P1-1) */
+  private readonly inheritanceResolver: CrossSessionInheritanceResolver | null;
+
+  /** Unified improvements manager (optional, for factory access) */
+  private readonly improvementsManager: ContextImprovementsManager | null;
+
+  /** Cached inherited context from previous session */
+  private inheritedContext: InheritedContext | null = null;
+
   /**
    * Create a new AutoContextManager.
    *
@@ -347,6 +456,33 @@ export class AutoContextManager {
       });
     } else {
       this.compressor = null;
+    }
+
+    // Initialize improvements manager if unified config provided
+    if (this.config.improvements) {
+      this.improvementsManager = new ContextImprovementsManager(this.config.improvements);
+      // Use components from the manager
+      this.truncationStateManager = this.improvementsManager.truncationManager;
+      this.inheritanceResolver = this.improvementsManager.inheritanceResolver;
+    } else {
+      this.improvementsManager = null;
+
+      // Initialize truncation state manager (P0-2) from individual config
+      if (this.config.truncationRecovery) {
+        this.truncationStateManager = new TruncationStateManager(this.config.truncationRecovery);
+      } else {
+        this.truncationStateManager = null;
+      }
+
+      // Initialize inheritance resolver (P1-1) from individual config
+      if (this.config.sessionInheritance?.enabled) {
+        this.inheritanceResolver = new CrossSessionInheritanceResolver(
+          this.config.sessionInheritance,
+          this.config.storageDir
+        );
+      } else {
+        this.inheritanceResolver = null;
+      }
     }
 
     // Get model-specific thresholds with user overrides
@@ -594,6 +730,7 @@ export class AutoContextManager {
     messages: ContextMessage[];
     actions: string[];
     tokensSaved: number;
+    truncationId?: string;
   }> {
     const tokensBefore = this.countTokens(messages);
 
@@ -605,6 +742,9 @@ export class AutoContextManager {
       recentCount: this.config.recentCount,
       preserveToolPairs: true,
       tokenizer: this.messageTokenizer.bind(this),
+      // Pass truncation state manager for recoverable truncation (P0-2)
+      stateManager: this.truncationStateManager ?? undefined,
+      truncationReason: "sliding_window",
     });
 
     const tokensSaved = tokensBefore - truncateResult.tokenCount;
@@ -613,12 +753,16 @@ export class AutoContextManager {
     if (truncateResult.removedCount > 0) {
       actions.push(`truncate:${truncateResult.removedCount} messages removed`);
       actions.push(`truncate:${tokensSaved} tokens saved`);
+      if (truncateResult.truncationId) {
+        actions.push(`truncate:snapshot saved (id=${truncateResult.truncationId})`);
+      }
     }
 
     return {
       messages: truncateResult.messages,
       actions,
       tokensSaved,
+      truncationId: truncateResult.truncationId,
     };
   }
 
@@ -978,6 +1122,201 @@ export class AutoContextManager {
    */
   getCheckpointManager(): CheckpointManager {
     return this.checkpointManager;
+  }
+
+  // ==========================================================================
+  // Truncation Recovery (P0-2)
+  // ==========================================================================
+
+  /**
+   * Recover truncated messages from a snapshot.
+   *
+   * @param truncationId - ID of the truncation to recover
+   * @returns Recovered messages, or null if not found/expired
+   *
+   * @example
+   * ```typescript
+   * const manager = new AutoContextManager({ model: 'gpt-4o', truncationRecovery: { maxSnapshots: 3 } });
+   *
+   * // After a truncation operation...
+   * const recovered = manager.recoverTruncated('trunc-123');
+   * if (recovered) {
+   *   // Merge recovered messages back into conversation
+   * }
+   * ```
+   */
+  recoverTruncated(truncationId: string): ContextMessage[] | null {
+    return this.truncationStateManager?.recover(truncationId) ?? null;
+  }
+
+  /**
+   * List all recoverable truncations.
+   *
+   * @returns Array of truncation states that can still be recovered
+   *
+   * @example
+   * ```typescript
+   * const truncations = manager.listRecoverableTruncations();
+   * for (const t of truncations) {
+   *   console.log(`Truncation ${t.truncationId}: ${t.truncatedMessageIds.length} messages`);
+   * }
+   * ```
+   */
+  listRecoverableTruncations(): TruncationState[] {
+    return this.truncationStateManager?.listRecoverable() ?? [];
+  }
+
+  /**
+   * Get truncation state manager for advanced operations.
+   *
+   * @returns The truncation state manager instance, or null if not configured
+   */
+  getTruncationStateManager(): TruncationStateManager | null {
+    return this.truncationStateManager;
+  }
+
+  // ==========================================================================
+  // Cross-Session Inheritance (P1-1)
+  // ==========================================================================
+
+  /**
+   * Initialize with inherited context from a previous session.
+   *
+   * Call this at the start of a new session to load relevant context
+   * from previous sessions.
+   *
+   * @param projectPath - Optional project path for project-specific inheritance
+   * @returns Inherited context, or null if none available
+   *
+   * @example
+   * ```typescript
+   * const manager = new AutoContextManager({
+   *   model: 'gpt-4o',
+   *   sessionInheritance: {
+   *     enabled: true,
+   *     source: 'last_session',
+   *     maxInheritedSummaries: 3,
+   *     inheritTypes: ['summary', 'decisions'],
+   *   },
+   * });
+   *
+   * const inherited = await manager.initializeWithInheritance('/path/to/project');
+   * if (inherited) {
+   *   const contextMessage = manager.getInheritedContextMessage();
+   *   // Prepend contextMessage to conversation
+   * }
+   * ```
+   */
+  async initializeWithInheritance(projectPath?: string): Promise<InheritedContext | null> {
+    if (!this.inheritanceResolver) {
+      return null;
+    }
+
+    this.inheritedContext = await this.inheritanceResolver.resolveInheritance(projectPath);
+    return this.inheritedContext;
+  }
+
+  /**
+   * Save session context for future inheritance.
+   *
+   * Call this at the end of a session to persist summaries for future sessions.
+   *
+   * @param sessionId - Current session ID
+   * @param summaries - Summaries to save
+   * @param projectPath - Optional project path for project-level context
+   *
+   * @example
+   * ```typescript
+   * // At session end
+   * await manager.saveSessionContext('session-123', [
+   *   { id: 'sum-1', content: 'Implemented authentication...', ... },
+   * ], '/path/to/project');
+   * ```
+   */
+  async saveSessionContext(
+    sessionId: string,
+    summaries: InheritedSummary[],
+    projectPath?: string
+  ): Promise<void> {
+    if (!this.inheritanceResolver) {
+      return;
+    }
+
+    await this.inheritanceResolver.saveSummaries(sessionId, summaries, projectPath);
+  }
+
+  /**
+   * Get inherited context formatted as a message.
+   *
+   * Returns a message suitable for prepending to the conversation
+   * to provide context from previous sessions.
+   *
+   * @returns Message with inherited context, or null if none available
+   *
+   * @example
+   * ```typescript
+   * const contextMessage = manager.getInheritedContextMessage();
+   * if (contextMessage) {
+   *   messages.unshift(contextMessage);
+   * }
+   * ```
+   */
+  getInheritedContextMessage(): Message | null {
+    if (!this.inheritanceResolver || !this.inheritedContext) {
+      return null;
+    }
+
+    return this.inheritanceResolver.formatAsMessage(this.inheritedContext);
+  }
+
+  /**
+   * Get the cached inherited context.
+   *
+   * @returns Inherited context, or null if not loaded
+   */
+  getInheritedContext(): InheritedContext | null {
+    return this.inheritedContext;
+  }
+
+  /**
+   * Get inheritance resolver for advanced operations.
+   *
+   * @returns The inheritance resolver instance, or null if not configured
+   */
+  getInheritanceResolver(): CrossSessionInheritanceResolver | null {
+    return this.inheritanceResolver;
+  }
+
+  // ==========================================================================
+  // Improvements Manager (P3)
+  // ==========================================================================
+
+  /**
+   * Get the unified improvements manager.
+   *
+   * Returns the ContextImprovementsManager if configured via the `improvements`
+   * option. Provides access to all improvement components in one place.
+   *
+   * @returns The improvements manager instance, or null if not configured
+   *
+   * @example
+   * ```typescript
+   * const manager = new AutoContextManager({
+   *   model: 'gpt-4o',
+   *   improvements: {
+   *     summaryQuality: { enableLLMValidation: true },
+   *     compactionStats: { enabled: true },
+   *   },
+   * });
+   *
+   * const improvements = manager.getImprovementsManager();
+   * if (improvements) {
+   *   const stats = improvements.statsTracker.getStats();
+   * }
+   * ```
+   */
+  getImprovementsManager(): ContextImprovementsManager | null {
+    return this.improvementsManager;
   }
 }
 

@@ -13,6 +13,8 @@
 
 import { estimateTokenCount as providerEstimateTokenCount } from "@vellum/provider";
 
+import type { TruncationStateManager } from "./improvements/truncation-state-manager.js";
+import type { TruncationReason, TruncationRecoveryOptions } from "./improvements/types.js";
 import { analyzeToolPairs, getLinkedIndices, type ToolPairAnalysis } from "./tool-pairing.js";
 import { type ContextMessage, MessagePriority } from "./types.js";
 
@@ -44,6 +46,18 @@ export interface TruncateOptions {
    * @default 'tokens'
    */
   readonly mode?: "tokens" | "bytes";
+
+  /**
+   * Truncation state manager for recoverable truncation (P0-2).
+   * If provided, truncated messages will be saved to a snapshot before removal.
+   */
+  readonly stateManager?: TruncationStateManager;
+
+  /**
+   * Reason for truncation (used when stateManager is provided).
+   * @default 'sliding_window'
+   */
+  readonly truncationReason?: TruncationReason;
 }
 
 /**
@@ -61,6 +75,12 @@ export interface TruncateResult {
 
   /** IDs of removed messages (for rollback tracking) */
   readonly removedIds: string[];
+
+  /**
+   * Truncation ID for recovery (P0-2).
+   * Only present when stateManager was provided and messages were truncated.
+   */
+  readonly truncationId?: string;
 }
 
 /**
@@ -464,6 +484,8 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
     preserveToolPairs = true,
     tokenizer = estimateTokens,
     mode = "tokens",
+    stateManager,
+    truncationReason = "sliding_window",
   } = options;
 
   // Select the appropriate estimator based on mode (REQ-008)
@@ -572,10 +594,26 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
 
   // Build result message array (preserving order)
   const resultMessages: ContextMessage[] = [];
+  const removedMessages: ContextMessage[] = [];
   for (let i = 0; i < messages.length; i++) {
-    if (!indicesToRemove.has(i)) {
-      const msg = messages[i];
-      if (msg) resultMessages.push(msg);
+    const msg = messages[i];
+    if (!msg) continue;
+    if (indicesToRemove.has(i)) {
+      removedMessages.push(msg);
+    } else {
+      resultMessages.push(msg);
+    }
+  }
+
+  // Save snapshot if state manager is provided and messages were removed (P0-2)
+  let truncationId: string | undefined;
+  if (stateManager && removedMessages.length > 0) {
+    truncationId = `trunc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    try {
+      stateManager.saveSnapshot(truncationId, removedMessages, truncationReason);
+    } catch {
+      // Snapshot save failed (e.g., size limit exceeded), continue without recovery capability
+      truncationId = undefined;
     }
   }
 
@@ -584,6 +622,7 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
     removedCount: indicesToRemove.size,
     tokenCount: currentTokens,
     removedIds,
+    truncationId,
   };
 }
 
@@ -592,3 +631,8 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
 // ============================================================================
 
 export type { ToolPairAnalysis };
+export {
+  createTruncationStateManager,
+  TruncationStateManager,
+} from "./improvements/truncation-state-manager.js";
+export type { TruncationRecoveryOptions };

@@ -24,6 +24,18 @@
 import { randomUUID } from "node:crypto";
 import type { ContextGrowthValidator, GrowthValidationResult } from "./context-growth-check.js";
 import type { FallbackChain, SummaryFallbackResult } from "./fallback-chain.js";
+import {
+  type CompactionMessageInfo,
+  CompactionStatsTracker,
+} from "./improvements/compaction-stats-tracker.js";
+import { SummaryProtectionFilter } from "./improvements/summary-protection-filter.js";
+import { SummaryQualityValidator } from "./improvements/summary-quality-validator.js";
+import type {
+  CompactionStatsConfig,
+  SummaryProtectionConfig,
+  SummaryQualityConfig,
+  SummaryQualityReport,
+} from "./improvements/types.js";
 import type { ReasoningBlockHandler } from "./reasoning-block.js";
 import { adjustRangeForToolPairs } from "./tool-pairing.js";
 import type { ContextMessage } from "./types.js";
@@ -174,6 +186,62 @@ export interface CompressionOptions {
    * Logs which model was actually used for summarization.
    */
   onFallbackUsed?: (result: SummaryFallbackResult) => void;
+
+  /**
+   * Summary quality validation configuration (P0-1).
+   * When provided, validates summary quality after compression.
+   *
+   * @example
+   * ```typescript
+   * const compressor = new NonDestructiveCompressor({
+   *   llmClient,
+   *   summaryQualityConfig: {
+   *     enableRuleValidation: true,
+   *     enableLLMValidation: false,
+   *     minTechTermRetention: 0.8,
+   *     minCodeRefRetention: 0.9,
+   *     maxCompressionRatio: 10,
+   *   },
+   * });
+   * ```
+   */
+  summaryQualityConfig?: SummaryQualityConfig;
+
+  /**
+   * Summary protection configuration (P1-2).
+   * When provided, protects existing summaries from cascade compression.
+   *
+   * @example
+   * ```typescript
+   * const compressor = new NonDestructiveCompressor({
+   *   llmClient,
+   *   summaryProtectionConfig: {
+   *     enabled: true,
+   *     strategy: 'recent',
+   *     maxProtectedSummaries: 5,
+   *   },
+   * });
+   * ```
+   */
+  summaryProtectionConfig?: SummaryProtectionConfig;
+
+  /**
+   * Compaction statistics tracking configuration (P2-2).
+   * When provided, tracks compression statistics including cascade detection.
+   *
+   * @example
+   * ```typescript
+   * const compressor = new NonDestructiveCompressor({
+   *   llmClient,
+   *   compactionStatsConfig: {
+   *     enabled: true,
+   *     persist: true,
+   *     maxHistoryEntries: 100,
+   *   },
+   * });
+   * ```
+   */
+  compactionStatsConfig?: CompactionStatsConfig;
 }
 
 /**
@@ -218,6 +286,12 @@ export interface CompressionResult {
    * Populated when fallbackChain is used.
    */
   modelUsed?: string;
+
+  /**
+   * Quality validation report (P0-1).
+   * Populated when summaryQualityConfig is provided.
+   */
+  qualityReport?: SummaryQualityReport;
 }
 
 /**
@@ -335,6 +409,9 @@ export class NonDestructiveCompressor {
   private readonly targetModel?: string;
   private readonly fallbackChain?: FallbackChain;
   private readonly onFallbackUsed?: (result: SummaryFallbackResult) => void;
+  private readonly summaryQualityValidator?: SummaryQualityValidator;
+  private readonly summaryProtectionFilter?: SummaryProtectionFilter;
+  private readonly compactionStatsTracker?: CompactionStatsTracker;
 
   constructor(options: CompressionOptions) {
     this.llmClient = options.llmClient;
@@ -348,6 +425,21 @@ export class NonDestructiveCompressor {
     this.targetModel = options.targetModel;
     this.fallbackChain = options.fallbackChain;
     this.onFallbackUsed = options.onFallbackUsed;
+
+    // Initialize quality validator if config provided (P0-1)
+    if (options.summaryQualityConfig) {
+      this.summaryQualityValidator = new SummaryQualityValidator(options.summaryQualityConfig);
+    }
+
+    // Initialize summary protection filter if config provided (P1-2)
+    if (options.summaryProtectionConfig) {
+      this.summaryProtectionFilter = new SummaryProtectionFilter(options.summaryProtectionConfig);
+    }
+
+    // Initialize compaction stats tracker if config provided (P2-2)
+    if (options.compactionStatsConfig) {
+      this.compactionStatsTracker = new CompactionStatsTracker(options.compactionStatsConfig);
+    }
   }
 
   /**
@@ -400,7 +492,13 @@ export class NonDestructiveCompressor {
     // Adjust range to respect tool pair boundaries (REQ-006)
     // Ensures tool_use/tool_result pairs are not split during compression
     const effectiveRange = adjustRangeForToolPairs(messages, rawRange.start, rawRange.end);
-    const toCompress = messages.slice(effectiveRange.start, effectiveRange.end);
+    let toCompress = messages.slice(effectiveRange.start, effectiveRange.end);
+
+    // Filter out protected summaries to prevent cascade compression (P1-2)
+    // This prevents: M1-M50 → Summary1, Summary1 + M51 → Summary2 (detail loss)
+    if (this.summaryProtectionFilter) {
+      toCompress = this.summaryProtectionFilter.filterCandidates(toCompress, messages);
+    }
 
     // Validate minimum messages
     if (toCompress.length < this.minMessagesToCompress) {
@@ -445,6 +543,36 @@ export class NonDestructiveCompressor {
       }
     }
 
+    // Validate summary quality if configured (P0-1)
+    let qualityReport: SummaryQualityReport | undefined;
+    if (this.summaryQualityValidator) {
+      qualityReport = await this.summaryQualityValidator.validate(toCompress, summaryResult.text);
+    }
+
+    // Record compaction statistics if tracker is configured (P2-2)
+    if (this.compactionStatsTracker) {
+      // Detect cascade compaction
+      const messageInfos: CompactionMessageInfo[] = toCompress.map((m) => ({
+        id: m.id,
+        isSummary: m.isSummary,
+        condenseId: m.condenseId,
+      }));
+      const isCascade = this.compactionStatsTracker.isCascadeCompaction(messageInfos);
+
+      // Record the compaction
+      await this.compactionStatsTracker.record({
+        timestamp: Date.now(),
+        originalTokens,
+        compressedTokens: summaryTokens,
+        messageCount: toCompress.length,
+        isCascade,
+        qualityReport,
+      });
+
+      // Track compacted message IDs for future cascade detection
+      this.compactionStatsTracker.trackCompactedMessages(compressedMessageIds, condenseId);
+    }
+
     return {
       summary,
       compressedMessageIds,
@@ -456,6 +584,7 @@ export class NonDestructiveCompressor {
       reasoningBlockAdded,
       fallbackResult: summaryResult.fallbackResult,
       modelUsed: summaryResult.modelUsed,
+      qualityReport,
     };
   }
 

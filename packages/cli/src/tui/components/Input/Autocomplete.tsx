@@ -48,7 +48,11 @@ export interface AutocompleteProps {
   /** Callback when autocomplete is cancelled (Escape) */
   readonly onCancel: () => void;
   /** Callback when selection index changes (for parent to track selection state) */
-  readonly onSelectionChange?: (index: number, hasOptions: boolean) => void;
+  readonly onSelectionChange?: (
+    index: number,
+    hasOptions: boolean,
+    selectedOption?: AutocompleteOption
+  ) => void;
   /** Whether the autocomplete dropdown is visible (default: true) */
   readonly visible?: boolean;
   /**
@@ -464,8 +468,9 @@ function AutocompleteComponent({
 
   // Notify parent of selection changes
   useEffect(() => {
-    onSelectionChange?.(selectedIndex, selectableOptions.length > 0);
-  }, [selectedIndex, selectableOptions.length, onSelectionChange]);
+    const selectedOption = selectableOptions[selectedIndex]?.option;
+    onSelectionChange?.(selectedIndex, selectableOptions.length > 0, selectedOption);
+  }, [selectedIndex, selectableOptions, onSelectionChange]);
 
   // Keep selection in bounds when filtered list changes
   useEffect(() => {
