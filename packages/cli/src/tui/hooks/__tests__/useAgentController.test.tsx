@@ -748,10 +748,12 @@ describe("Error Handling", () => {
   it("handles network errors", async () => {
     result = renderAgentController();
     await nextTick();
+    await nextTick(); // Extra tick for initialization
 
     const networkError = new Error("Network error: Connection timeout");
     result.agentLoop.simulateError(networkError);
     await nextTick();
+    await nextTick(); // Extra tick for message propagation
 
     // Error should be surfaced
     const hasErrorMessage = result.messages.some(
