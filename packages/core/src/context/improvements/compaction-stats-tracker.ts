@@ -120,6 +120,7 @@ export class CompactionStatsTracker {
   private stats: CompactionStats;
   private compactedMessageIds: Set<string> = new Set();
   private persistPending = false;
+  private pendingPersist: Promise<void> | null = null;
 
   /**
    * Create a new CompactionStatsTracker.
@@ -398,12 +399,28 @@ export class CompactionStatsTracker {
     }
     this.persistPending = true;
 
-    // Use queueMicrotask for immediate but non-blocking persist
-    queueMicrotask(() => {
-      this.persist().catch((error) => {
-        console.warn("[CompactionStatsTracker] Failed to persist:", error);
+    this.pendingPersist = new Promise<void>((resolve) => {
+      queueMicrotask(() => {
+        this.persist()
+          .catch((error) => {
+            console.warn("[CompactionStatsTracker] Failed to persist:", error);
+          })
+          .finally(() => {
+            this.pendingPersist = null;
+            resolve();
+          });
       });
     });
+  }
+
+  /**
+   * Wait for any pending persist operations to complete.
+   * Useful in tests or when ensuring data is written before reading.
+   */
+  async flush(): Promise<void> {
+    if (this.pendingPersist) {
+      await this.pendingPersist;
+    }
   }
 }
 
