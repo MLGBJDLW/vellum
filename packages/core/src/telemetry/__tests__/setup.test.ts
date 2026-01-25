@@ -80,6 +80,11 @@ vi.mock("@opentelemetry/resources", () => {
       mockResourceInstances.push(resource);
       return resource;
     },
+    resourceFromAttributes: vi.fn((attrs: Record<string, string>) => {
+      const resource = { type: "resource", attributes: attrs };
+      mockResourceInstances.push(resource);
+      return resource;
+    }),
   };
 });
 

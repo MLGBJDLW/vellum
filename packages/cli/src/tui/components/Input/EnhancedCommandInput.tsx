@@ -121,9 +121,14 @@ export function EnhancedCommandInput({
   const [autocompleteJustCompleted, setAutocompleteJustCompleted] = useState(false);
 
   // Refs to track current autocomplete selection (avoids state delay on Enter/Tab)
-  const slashSelectionRef = useRef<{ index: number; hasOptions: boolean }>({
+  const slashSelectionRef = useRef<{
+    index: number;
+    hasOptions: boolean;
+    selectedOption?: AutocompleteOption;
+  }>({
     index: 0,
     hasOptions: false,
+    selectedOption: undefined,
   });
   const mentionSelectionRef = useRef<{ index: number; hasOptions: boolean }>({
     index: 0,
@@ -323,28 +328,6 @@ export function EnhancedCommandInput({
     { isActive: focused && !disabled && !multiline && activeAutocomplete === null }
   );
 
-  // Extract stable values for memoization to reduce unnecessary recomputation
-  const slashQuery = slashAutocomplete.query;
-  const slashActive = slashAutocomplete.active;
-
-  // Compute filtered/sorted slash options for Enter/Tab selection
-  const sortedSlashOptions = useMemo(() => {
-    if (!slashActive || slashOptions.length === 0) return [];
-    // Normalize to AutocompleteOption format
-    const normalized = slashOptions.map((opt) => (typeof opt === "string" ? { name: opt } : opt));
-    // Filter by prefix (check both name and aliases)
-    const query = slashQuery.toLowerCase();
-    const filtered = query
-      ? normalized.filter(
-          (opt) =>
-            opt.name.toLowerCase().startsWith(query) ||
-            opt.aliases?.some((alias) => alias.toLowerCase().startsWith(query))
-        )
-      : normalized;
-    // Sort alphabetically
-    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [slashActive, slashQuery, slashOptions]);
-
   // Handle slash autocomplete selection
   const handleSlashSelect = useCallback(
     (selected: string) => {
@@ -369,9 +352,9 @@ export function EnhancedCommandInput({
     (_input, key) => {
       if (key.return || key.tab) {
         if (activeAutocomplete === "slash") {
-          const { index, hasOptions } = slashSelectionRef.current;
-          if (hasOptions && sortedSlashOptions[index]) {
-            handleSlashSelect(sortedSlashOptions[index].name);
+          const { hasOptions, selectedOption } = slashSelectionRef.current;
+          if (hasOptions && selectedOption) {
+            handleSlashSelect(selectedOption.name);
           }
         } else if (activeAutocomplete === "mention") {
           // Mention selection is handled internally by MentionAutocomplete
@@ -399,9 +382,12 @@ export function EnhancedCommandInput({
   }, []);
 
   // Track slash autocomplete selection state
-  const handleSlashSelectionChange = useCallback((index: number, hasOptions: boolean) => {
-    slashSelectionRef.current = { index, hasOptions };
-  }, []);
+  const handleSlashSelectionChange = useCallback(
+    (index: number, hasOptions: boolean, selectedOption?: AutocompleteOption) => {
+      slashSelectionRef.current = { index, hasOptions, selectedOption };
+    },
+    []
+  );
 
   // Track mention autocomplete selection state
   const handleMentionSelectionChange = useCallback((index: number, hasOptions: boolean) => {
