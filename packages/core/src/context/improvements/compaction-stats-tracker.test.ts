@@ -93,7 +93,7 @@ describe("CompactionStatsTracker", () => {
 
   afterEach(async () => {
     // Wait for any pending microtasks (schedulePersist uses queueMicrotask)
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(() => resolve()));
 
     // On Windows, file handles may not be released immediately
     // Retry cleanup with exponential backoff
@@ -325,7 +325,7 @@ describe("CompactionStatsTracker", () => {
       await tracker.record(createMockRecord({ originalTokens: 2000, compressedTokens: 200 }));
 
       // Flush any pending microtasks from schedulePersist
-      await new Promise((resolve) => queueMicrotask(resolve));
+      await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
       await tracker.persist();
 
       // Create new tracker and load
