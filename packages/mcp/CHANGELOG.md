@@ -1,5 +1,12 @@
 # @vellum/mcp
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [[`24d366c`](https://github.com/MLGBJDLW/vellum/commit/24d366c90b959f563d578f301203e832ebe51833)]:
+  - @vellum/core@0.2.0
+
 ## 0.1.1
 
 ### Patch Changes
