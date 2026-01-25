@@ -300,6 +300,9 @@ describe("CompactionStatsTracker", () => {
       // Record and persist
       await tracker.record(createMockRecord({ originalTokens: 1000, compressedTokens: 100 }));
       await tracker.record(createMockRecord({ originalTokens: 2000, compressedTokens: 200 }));
+
+      // Flush any pending microtasks from schedulePersist
+      await new Promise((resolve) => queueMicrotask(resolve));
       await tracker.persist();
 
       // Create new tracker and load
