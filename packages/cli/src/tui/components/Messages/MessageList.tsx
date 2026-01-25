@@ -1216,12 +1216,16 @@ const MessageList = memo(function MessageList({
   useInput(
     useCallback(
       (char, key) => {
-        if (
-          key.meta &&
-          char.toLowerCase() === "e" &&
-          thinkingDisplayMode !== "compact" &&
-          activeThinkingMessageId
-        ) {
+        // Alt+E to toggle thinking block expand/collapse
+        // Check multiple ways since Alt detection varies by terminal:
+        // 1. key.meta with 'e' char (standard Ink)
+        // 2. Some terminals send Alt as escape sequence producing special chars
+        const isAltE =
+          (key.meta && (char.toLowerCase() === "e" || char === "ê" || char === "€")) ||
+          char === "\x1b" + "e" || // escape sequence
+          char === "´"; // Some Windows terminals
+
+        if (isAltE && thinkingDisplayMode !== "compact" && activeThinkingMessageId) {
           setThinkingToggleNonce((prev) => prev + 1);
           return;
         }
@@ -1550,16 +1554,21 @@ const MessageList = memo(function MessageList({
   const allMessagesLengthRef = useRef(allMessages.length);
   const prevPendingContentRef = useRef<string | undefined>(pendingMessage?.content);
   const prevPendingIdRef = useRef<string | undefined>(pendingMessage?.id);
+  const prevPendingIsStreamingRef = useRef<boolean | undefined>(pendingMessage?.isStreaming);
   useEffect(() => {
     const hasNewMessages = allMessages.length > allMessagesLengthRef.current;
     const pendingContentChanged = pendingMessage?.content !== prevPendingContentRef.current;
     // Detect when a NEW assistant message starts streaming (different ID than before)
     const newPendingMessageStarted =
       pendingMessage?.id !== prevPendingIdRef.current && pendingMessage?.isStreaming;
+    // Detect when streaming just finished (isStreaming changed from true to false)
+    const streamingJustFinished =
+      prevPendingIsStreamingRef.current === true && pendingMessage?.isStreaming === false;
 
     allMessagesLengthRef.current = allMessages.length;
     prevPendingContentRef.current = pendingMessage?.content;
     prevPendingIdRef.current = pendingMessage?.id;
+    prevPendingIsStreamingRef.current = pendingMessage?.isStreaming;
 
     // Reset userScrolledUp when a new assistant message starts streaming
     // This ensures auto-scroll resumes for new responses even if user scrolled up previously
@@ -1567,12 +1576,18 @@ const MessageList = memo(function MessageList({
       setUserScrolledUp(false);
     }
 
-    // Scroll when: new message arrived OR pending message content is streaming
-    const shouldScroll = hasNewMessages || (pendingMessage?.isStreaming && pendingContentChanged);
+    // Scroll when: new message arrived OR pending message content is streaming OR streaming just finished
+    // The streamingJustFinished check ensures we scroll to bottom after streaming ends
+    // to handle potential height changes (e.g., thinking block collapse)
+    const shouldScroll =
+      hasNewMessages ||
+      (pendingMessage?.isStreaming && pendingContentChanged) ||
+      streamingJustFinished;
     const shouldFollow =
       (enableScroll ? scrollState.mode === "follow" : !userScrolledUp) ||
       forceFollowWhileStreaming ||
-      newPendingMessageStarted;
+      newPendingMessageStarted ||
+      streamingJustFinished;
 
     if (!useVirtualizedListInternal || !autoScroll || !shouldScroll || !shouldFollow) {
       return;
