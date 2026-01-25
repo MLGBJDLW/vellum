@@ -127,7 +127,24 @@ export interface UseVirtualizationProps<T = unknown> {
 
 /**
  * Legacy props interface for backward compatibility.
- * @deprecated Use UseVirtualizationProps with data and keyExtractor instead
+ *
+ * @deprecated Use UseVirtualizationProps<T> with `data` and `keyExtractor` instead.
+ *
+ * Migration:
+ * ```tsx
+ * // Before (legacy):
+ * const result = useVirtualization({ dataLength: 100, ... });
+ *
+ * // After (recommended):
+ * const result = useVirtualization({ data: items, keyExtractor: (item) => item.id, ... });
+ * ```
+ *
+ * The new interface provides:
+ * - ID-based height caching (stable across data mutations)
+ * - Automatic cache invalidation on data changes
+ * - Better TypeScript inference
+ *
+ * This interface will be removed in a future major version.
  */
 export interface UseVirtualizationPropsLegacy {
   /** Number of data items */

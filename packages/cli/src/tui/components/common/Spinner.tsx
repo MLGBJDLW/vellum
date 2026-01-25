@@ -134,11 +134,6 @@ export interface SpinnerProps {
    */
   readonly frames?: readonly string[];
   /**
-   * Animation interval in milliseconds
-   * @deprecated No longer used - interval is controlled globally by AnimationContext
-   */
-  readonly interval?: number;
-  /**
    * Use ink-spinner with specified type.
    * When set, this takes precedence over `frames` and `scene`.
    * @example "dots", "line", "arc", "bounce"
@@ -211,11 +206,6 @@ export const SPINNER_STYLES = {
   box: ["▖", "▘", "▝", "▗"],
 } as const;
 
-/** Default animation interval in milliseconds
- * @deprecated Interval is now controlled globally by AnimationContext (120ms default, 150ms for VS Code)
- */
-const DEFAULT_INTERVAL_MS = 120;
-
 // =============================================================================
 // Spinner Component
 // =============================================================================
@@ -261,8 +251,6 @@ export function Spinner({
   scene = "default",
   label,
   frames = SPINNER_FRAMES,
-  // interval prop kept for backward compatibility but no longer used
-  interval: _interval = DEFAULT_INTERVAL_MS,
   type,
   useInkSpinner = false,
 }: SpinnerProps): React.JSX.Element {

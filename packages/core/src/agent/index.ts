@@ -247,6 +247,18 @@ export {
   type ToolGroupEntry,
   ToolGroupEntrySchema,
 } from "./restrictions.js";
+// Role Manager (Specialist Roles)
+export {
+  AGENT_ROLES,
+  type AgentRole,
+  AVAILABLE_ROLES,
+  createRoleManager,
+  type Role,
+  type RoleInfo,
+  RoleManager,
+  type RoleManagerOptions,
+  type RoleSwitchResult,
+} from "./role-manager.js";
 // Graceful Shutdown (T024)
 export {
   GracefulShutdownHandler,

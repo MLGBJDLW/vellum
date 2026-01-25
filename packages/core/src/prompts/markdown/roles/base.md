@@ -286,6 +286,23 @@ Plans should be **specific** and **actionable**:
 | `save_memory` | Persist information for later |
 | `recall_memory` | Retrieve stored information |
 
+### LSP Tools (Code Intelligence)
+
+When LSP servers are available, prefer these over grep for type-aware navigation:
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `lsp_definition` | Go to definition | Find where a symbol is defined |
+| `lsp_references` | Find all references | See everywhere a symbol is used |
+| `lsp_hover` | Type information | Get type signature and docs |
+| `lsp_diagnostics` | Get errors/warnings | Check for type errors, lint issues |
+
+**Priority Order:**
+1. Use `lsp_diagnostics` BEFORE running `pnpm typecheck` or lint commands
+2. Use `lsp_definition` BEFORE grep to find where functions/types are defined
+3. Use `lsp_references` BEFORE grep to find usages of a symbol
+4. Use `lsp_hover` to understand type signatures instead of reading full files
+
 ## Parallel Tool Calls
 
 When operations have no dependencies, call tools in parallel:

@@ -120,11 +120,9 @@ export {
   type ScrollProviderProps,
   type ScrollState,
   ScrollStateContext,
-  // Hooks
-  useScroll,
+  // Hooks (useScroll removed - use useScrollState and useScrollActions separately)
   useScrollActions,
   useScrollActionsOptional,
-  useScrollOptional,
   useScrollState,
   useScrollStateOptional,
 } from "./ScrollContext.js";

@@ -26,7 +26,7 @@ export { InitErrorBanner, type InitErrorBannerProps } from "./InitErrorBanner.js
 // Component subdirectories
 export * from "./Input/index.js";
 // Layout
-export { Layout, type LayoutProps, useTerminalSize } from "./Layout.js";
+export { Layout, type LayoutProps } from "./Layout.js";
 // MCP Panel
 export { McpPanel, type McpPanelProps } from "./McpPanel.js";
 // Memory Panel (Phase 31)

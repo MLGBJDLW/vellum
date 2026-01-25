@@ -434,6 +434,10 @@ export interface UseAnchorWithEffectOptions {
   readonly viewportHeight: number;
   /** Whether to apply scroll position changes immediately */
   readonly enabled?: boolean;
+  /** Optional smooth scroll instance for animated transitions */
+  readonly smoothScroll?: {
+    readonly jumpTo: (target: number) => void;
+  };
 }
 
 /**
@@ -478,6 +482,7 @@ export function useAnchorWithEffect(options: UseAnchorWithEffectOptions): UseAnc
     contentHeight,
     viewportHeight,
     enabled = true,
+    smoothScroll,
   } = options;
 
   const result = useAnchoredScroll(anchorManager, {
@@ -486,15 +491,20 @@ export function useAnchorWithEffect(options: UseAnchorWithEffectOptions): UseAnc
     viewportHeight,
   });
 
-  const { anchoredScrollPosition } = result;
+  const { anchoredScrollPosition, currentAnchor } = result;
 
   // Apply scroll position when anchor changes
   useEffect(() => {
     if (enabled && anchoredScrollPosition !== null) {
-      // TODO: Support animate option via smooth scroll
-      scrollTo(anchoredScrollPosition);
+      const animate = currentAnchor?.animate ?? false;
+
+      if (animate && smoothScroll) {
+        smoothScroll.jumpTo(anchoredScrollPosition);
+      } else {
+        scrollTo(anchoredScrollPosition);
+      }
     }
-  }, [enabled, anchoredScrollPosition, scrollTo]);
+  }, [enabled, anchoredScrollPosition, scrollTo, smoothScroll, currentAnchor]);
 
   return result;
 }

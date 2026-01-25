@@ -18,22 +18,23 @@ import { useMemo } from "react";
 import { useTerminalDimensions } from "../hooks/useTerminalSize.js";
 import { getAlternateBufferEnabled } from "../i18n/settings-integration.js";
 import { useTheme } from "../theme/index.js";
+import { tuiConfig } from "./theme/tokens.js";
 
 // =============================================================================
-// Constants
+// Constants (from tuiConfig with ENV overrides)
 // =============================================================================
 
-/** Compact mode threshold in columns (lowered from 80 for better sidebar visibility) */
-const COMPACT_THRESHOLD = 60;
+/** Compact mode threshold in columns */
+const COMPACT_THRESHOLD = tuiConfig.layout.compactThreshold;
 
-/** Default sidebar width percentage - reduced from 25% to give more space to messages */
-const SIDEBAR_WIDTH_PERCENT = 20;
+/** Default sidebar width percentage */
+const SIDEBAR_WIDTH_PERCENT = tuiConfig.layout.sidebarWidthPercent;
 
-/** Minimum sidebar width in columns - allow narrower for compact mode */
-const SIDEBAR_MIN_WIDTH = 16;
+/** Minimum sidebar width in columns */
+const SIDEBAR_MIN_WIDTH = tuiConfig.layout.sidebarMinWidth;
 
-/** Maximum sidebar width in columns - allow wider on large terminals */
-const SIDEBAR_MAX_WIDTH = 60;
+/** Maximum sidebar width in columns */
+const SIDEBAR_MAX_WIDTH = tuiConfig.layout.sidebarMaxWidth;
 
 // =============================================================================
 // Types
@@ -425,8 +426,4 @@ export function Layout({
   );
 }
 
-/**
- * Re-export hook for components that need terminal size.
- * @deprecated Import directly from hooks/useTerminalSize.js instead
- */
-export { useTerminalDimensions as useTerminalSize };
+// useTerminalSize re-export removed - import directly from hooks/useTerminalSize.js

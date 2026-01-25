@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { tuiConfig } from "../components/theme/tokens.js";
 import {
   disableBracketedPaste,
   enableBracketedPaste,
@@ -52,11 +53,11 @@ interface BracketedPasteContextValue {
 }
 
 // =============================================================================
-// Constants
+// Constants (from tuiConfig with ENV overrides)
 // =============================================================================
 
-/** Timeout for incomplete paste sequences (30 seconds) */
-const PASTE_TIMEOUT_MS = 30_000;
+/** Timeout for incomplete paste sequences (configurable via VELLUM_PASTE_TIMEOUT) */
+const PASTE_TIMEOUT_MS = tuiConfig.paste.timeoutMs;
 
 // =============================================================================
 // Context

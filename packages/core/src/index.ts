@@ -64,6 +64,7 @@ export {
   // Mode Switching (T031-T034)
   type ActivityTracker,
   AGENT_MODES,
+  AGENT_ROLES,
   AGENT_STATES,
   // AGENTS.md Directory Scoping (Phase 25)
   AGENTS_MD_PRIORITY,
@@ -83,6 +84,7 @@ export {
   AgentModeSchema,
   // Agent Registry (T003) - Built-in agent registry for mode-agent resolution
   AgentRegistry as BuiltinAgentRegistry,
+  type AgentRole,
   type AgentState,
   // State Machine
   AgentStateSchema,
@@ -99,6 +101,7 @@ export {
   // Coding Modes (Phase 23: T004-T016)
   type ApprovalPolicy,
   ApprovalPolicySchema,
+  AVAILABLE_ROLES,
   // Mode Handlers (T018-T027)
   BaseModeHandler,
   BUILT_IN_AGENTS,
@@ -146,6 +149,8 @@ export {
   // Mode Registry (T005)
   createModeRegistry,
   createModeSwitcher,
+  // Role Manager (Specialist Roles)
+  createRoleManager,
   createSnapshot,
   createStateContext,
   createTerminationContext,
@@ -237,6 +242,12 @@ export {
   PlanModeHandler,
   type PlanPhase,
   policyToTrustPreset,
+  // Role Manager (Specialist Roles)
+  type Role,
+  type RoleInfo,
+  RoleManager,
+  type RoleManagerOptions,
+  type RoleSwitchResult,
   registerShutdownHandler,
   SANDBOX_POLICIES,
   type SandboxPolicy,

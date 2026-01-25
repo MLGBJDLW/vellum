@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   AgentLoop,
+  AgentRole,
   ApprovalPolicy,
   CodingMode,
   EnterpriseHooks as CoreEnterpriseHooks,
@@ -20,6 +21,7 @@ import {
   OnboardingWizard as CoreOnboardingWizard,
   createCostService,
   createModeManager,
+  createRoleManager,
   createSession,
   createToolRegistry,
   createUserMessage,
@@ -92,6 +94,7 @@ import {
   setModeCommandsManager,
   setModelCommandConfig,
   setPersistenceRef,
+  setRoleManager,
   setThemeContext,
   settingsSlashCommands,
   setVimCallbacks,
@@ -109,6 +112,7 @@ import {
   workflowCommands,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
+import { roleSlashCommands } from "./commands/role.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
 import { setShutdownCleanup } from "./shutdown.js";
 import { useAgentAdapter } from "./tui/adapters/agent-adapter.js";
@@ -194,6 +198,7 @@ import {
   getAlternateBufferEnabled,
   getBannerSeen,
   setBannerSeen as saveBannerSeen,
+  setThemeInSettings,
 } from "./tui/i18n/settings-integration.js";
 import {
   disposeLsp,
@@ -308,6 +313,8 @@ interface AppProps {
   theme?: ThemeName;
   /** Force banner display on startup */
   banner?: boolean;
+  /** Effective role loaded from factory (e.g., 'coder', 'qa', 'orchestrator') */
+  effectiveRole?: string;
   /** Initialization error (when provider fails to initialize) */
   initError?: Error;
 }
@@ -451,6 +458,11 @@ function createCommandRegistry(): CommandRegistry {
 
   //: Register mode slash commands
   for (const cmd of modeSlashCommands) {
+    registry.register(cmd);
+  }
+
+  //: Register role slash commands
+  for (const cmd of roleSlashCommands) {
     registry.register(cmd);
   }
 
@@ -613,6 +625,7 @@ export function App({
   toolExecutor: toolExecutorProp,
   theme = "parchment",
   banner,
+  effectiveRole,
   initError,
 }: AppProps) {
   // Shared tool registry for the running tool system.
@@ -654,6 +667,7 @@ export function App({
           agentLoop={agentLoopProp}
           toolRegistry={toolRegistry}
           banner={banner}
+          effectiveRole={effectiveRole}
           initError={initError}
         />
       </ErrorBoundary>
@@ -674,6 +688,7 @@ function AppContent({
   agentLoop: agentLoopProp,
   banner,
   toolRegistry,
+  effectiveRole,
   initError,
 }: AppContentProps) {
   const { exit } = useInkApp();
@@ -1245,6 +1260,28 @@ function AppContent({
     setModeCommandsManager(modeManager);
     return () => setModeCommandsManager(null);
   }, [modeManager]);
+
+  // ==========================================================================
+  // Role Manager (Specialist Roles)
+  // ==========================================================================
+  const [currentRole, setCurrentRole] = useState<AgentRole>(
+    (effectiveRole as AgentRole) ?? "coder"
+  );
+  const roleManager = useMemo(
+    () =>
+      createRoleManager({
+        initialRole: (effectiveRole as AgentRole) ?? "coder",
+        onRoleChange: (newRole) => setCurrentRole(newRole),
+      }),
+    // effectiveRole is static prop, safe to depend on
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [effectiveRole]
+  );
+
+  useEffect(() => {
+    setRoleManager(roleManager);
+    return () => setRoleManager(null);
+  }, [roleManager]);
 
   // ==========================================================================
   // Wire up Agent Level Commands Manager (T046c)
@@ -2340,6 +2377,19 @@ function AppContent({
         description: "Toggle copy mode",
         scope: "global",
       },
+      // Theme toggle (Alt+Y)
+      {
+        key: "y",
+        alt: true,
+        handler: () => {
+          themeContext.toggleMode();
+          const newTheme = themeContext.theme.mode === "dark" ? "light" : "dark";
+          void setThemeInSettings(newTheme);
+          announce(`Theme switched to ${newTheme} mode`);
+        },
+        description: "Toggle theme (dark/light)",
+        scope: "global",
+      },
     ];
 
     // Alternate buffer toggle for full-screen views
@@ -2369,6 +2419,7 @@ function AppContent({
     alternateBuffer,
     alternateBufferEnabled,
     showModelSelector,
+    themeContext,
   ]);
 
   useHotkeys(hotkeyDefinitions, {
@@ -3633,10 +3684,10 @@ function AppContent({
   }, [interactivePrompt]);
 
   // Get agent level from AgentConfig via registry
-  // Derive active worker agent name from taskChain if available, otherwise use mode's default agent
+  // Derive active worker agent name from taskChain if available, otherwise use currentRole or mode's default agent
   const modeAgentName = BUILTIN_CODING_MODES[currentMode].agentName;
   const activeWorkerAgent = currentTaskId && taskChain?.nodes.get(currentTaskId)?.agentSlug;
-  const agentName = activeWorkerAgent ?? modeAgentName;
+  const agentName = activeWorkerAgent ?? currentRole ?? modeAgentName;
   const agentLevel = currentMode === "spec" ? 0 : currentMode === "plan" ? 1 : 2;
 
   return (

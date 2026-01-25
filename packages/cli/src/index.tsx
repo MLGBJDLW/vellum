@@ -160,6 +160,8 @@ export interface ChatOptions {
   sandbox?: SandboxPolicy;
   /** Full-auto shortcut flag */
   fullAuto?: boolean;
+  /** Specialist role (overrides mode default) */
+  role?: string;
   /** UI theme (dark, parchment, dracula, etc.) */
   theme?: string;
   /** Force banner display on startup */
@@ -229,6 +231,12 @@ program
   .option("--sandbox <policy>", `Set sandbox policy (${SANDBOX_POLICIES.join("|")})`, parseSandbox)
   // T040: --full-auto shortcut
   .option("--full-auto", "Shortcut for --mode=vibe --approval=full-auto", false)
+  // Role selection (overrides mode default)
+  .option(
+    "-r, --role <role>",
+    "Specialist role: coder, qa, security, analyst, orchestrator, architect, writer",
+    undefined
+  )
   // Theme selection
   .option("--theme <theme>", "UI theme (dark|parchment|dracula|etc.)", "parchment")
   .option("--banner", "Show banner on startup", false)
@@ -269,6 +277,7 @@ program
     // Create AgentLoop with real LLM provider
     let agentLoop: AgentLoop | undefined;
     let initError: Error | undefined;
+    let effectiveRole: string | undefined;
     try {
       // Initialize credential manager for secure credential resolution
       const { createCredentialManager } = await import("./commands/auth.js");
@@ -287,12 +296,14 @@ program
       const orchestrator = getOrCreateOrchestrator();
 
       // Create PromptBuilder with MD prompts (REQ-001: Use MD prompts)
-      const { promptBuilder, cleanup } = await createAgentFactory({
+      const factoryResult = await createAgentFactory({
         cwd: process.cwd(),
         projectRoot: process.cwd(),
-        role: "base", // Load base.md for identity
+        role: options.role, // User override or undefined (uses mode default)
         mode: effectiveMode, // Load vibe.md/plan.md/spec.md
       });
+      const { promptBuilder, cleanup } = factoryResult;
+      effectiveRole = factoryResult.effectiveRole;
 
       // Register cleanup for graceful shutdown
       setShutdownCleanup(cleanup);
@@ -444,6 +455,7 @@ program
         theme={options.theme as import("./tui/theme/index.js").ThemeName}
         banner={options.banner}
         agentLoop={agentLoop}
+        effectiveRole={effectiveRole}
         initError={initError}
       />,
       inkRenderOptions
