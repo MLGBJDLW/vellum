@@ -392,12 +392,15 @@ describe("Agent Execution - Happy Path", () => {
   it("accumulates streaming text chunks", async () => {
     result = renderAgentController();
     await nextTick();
+    await nextTick(); // Extra tick for context initialization
 
     // Simulate multiple chunks
     result.agentLoop.simulateText("Hello ");
     await nextTick();
+    await nextTick(); // Extra tick for message propagation
     result.agentLoop.simulateText("world");
     await nextTick();
+    await nextTick(); // Extra tick for message propagation
 
     const lastMessage = result.messages[result.messages.length - 1] as { content?: string };
     expect(lastMessage.content).toContain("Hello world");
@@ -663,10 +666,12 @@ describe("Cancellation", () => {
   it("preserves partial content on cancel", async () => {
     result = renderAgentController();
     await nextTick();
+    await nextTick(); // Extra tick for context initialization
 
     // Partial streaming
     result.agentLoop.simulateText("Partial content before");
     await nextTick();
+    await nextTick(); // Extra tick for message propagation
 
     const messageCountBefore = result.messages.length;
 
@@ -817,9 +822,11 @@ describe("Streaming State", () => {
   it("message is marked as streaming during text emission", async () => {
     result = renderAgentController();
     await nextTick();
+    await nextTick(); // Extra tick for context initialization
 
     result.agentLoop.simulateText("Streaming...");
     await nextTick();
+    await nextTick(); // Extra tick for message propagation
 
     expect(result.messages.length).toBeGreaterThan(0);
     const lastMessage = result.messages[result.messages.length - 1] as { isStreaming?: boolean };
@@ -920,11 +927,13 @@ describe("Message Accumulation", () => {
   it("handles empty chunks gracefully", async () => {
     result = renderAgentController();
     await nextTick();
+    await nextTick(); // Extra tick for context initialization
 
     result.agentLoop.simulateText("Start");
     result.agentLoop.simulateText("");
     result.agentLoop.simulateText("End");
     await nextTick();
+    await nextTick(); // Extra tick for message propagation
 
     const lastMessage = result.messages[result.messages.length - 1] as { content?: string };
     expect(lastMessage.content).toBe("StartEnd");
@@ -933,10 +942,12 @@ describe("Message Accumulation", () => {
   it("handles unicode and special characters", async () => {
     result = renderAgentController();
     await nextTick();
+    await nextTick(); // Extra tick for context initialization
 
     result.agentLoop.simulateText("Hello 👋 ");
     result.agentLoop.simulateText("世界 🌍");
     await nextTick();
+    await nextTick(); // Extra tick for message propagation
 
     const lastMessage = result.messages[result.messages.length - 1] as { content?: string };
     expect(lastMessage.content).toBe("Hello 👋 世界 🌍");
@@ -1085,10 +1096,12 @@ describe("Edge Cases", () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     result = renderAgentController();
     await nextTick();
+    await nextTick(); // Extra tick for context initialization
 
     // Error as first event
     result.agentLoop.simulateError(new Error("Immediate error"));
     await nextTick();
+    await nextTick(); // Extra tick for error message propagation
 
     // Should create error message
     const hasErrorMessage = result.messages.some(
@@ -1105,11 +1118,13 @@ describe("Edge Cases", () => {
   it("handles very long content chunks", async () => {
     result = renderAgentController();
     await nextTick();
+    await nextTick(); // Extra tick for context initialization
 
     // Very long content
     const longContent = "x".repeat(100000);
     result.agentLoop.simulateText(longContent);
     await nextTick();
+    await nextTick(); // Extra tick for message propagation
 
     const lastMessage = result.messages[result.messages.length - 1] as { content?: string };
     expect(lastMessage.content?.length).toBe(100000);
@@ -1123,10 +1138,12 @@ describe("Edge Cases", () => {
       result.rerender();
     }
     await nextTick();
+    await nextTick(); // Extra tick for context initialization
 
     // Should stabilize and still handle events
     result.agentLoop.simulateText("After reconnect");
     await nextTick();
+    await nextTick(); // Extra tick for message propagation
 
     expect(result.messages.length).toBeGreaterThan(0);
   });

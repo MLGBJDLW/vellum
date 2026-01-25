@@ -14,6 +14,8 @@ concurrency:
 env:
   NODE_VERSION: '20'
   PNPM_VERSION: '9.15.0'
+  # Increase Node.js heap size for large test suites (12k+ tests)
+  NODE_OPTIONS: '--max-old-space-size=8192'
 
 jobs:
   should-skip:
@@ -49,6 +51,7 @@ jobs:
     name: Lint
     needs: should-skip
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
     steps:
       - name: Checkout
@@ -75,6 +78,7 @@ jobs:
     name: Typecheck
     needs: should-skip
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
     steps:
       - name: Checkout
@@ -95,8 +99,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-turbo-
+          key: ${{ runner.os }}-turbo-typecheck-${{ hashFiles('**/tsconfig.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-typecheck-${{ hashFiles('**/tsconfig.json') }}-
+            ${{ runner.os }}-turbo-typecheck-
+            ${{ runner.os }}-turbo-
 
       - name: Install dependencies
         run: pnpm install
@@ -111,6 +118,8 @@ jobs:
     name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
     needs: should-skip
     runs-on: ${{ matrix.os }}
+    # 45 min timeout for 12k+ tests across matrix combinations
+    timeout-minutes: 45
     if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
     strategy:
       fail-fast: false
@@ -136,8 +145,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-turbo-
+          key: ${{ runner.os }}-node${{ matrix.node }}-turbo-test-${{ hashFiles('**/vitest.config.*') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-node${{ matrix.node }}-turbo-test-${{ hashFiles('**/vitest.config.*') }}-
+            ${{ runner.os }}-node${{ matrix.node }}-turbo-test-
+            ${{ runner.os }}-node${{ matrix.node }}-turbo-
+            ${{ runner.os }}-turbo-
 
       - name: Install dependencies
         run: pnpm install
@@ -147,6 +160,9 @@ jobs:
 
       - name: Run tests
         run: pnpm test:run
+        env:
+          # Extra memory for large test suites
+          NODE_OPTIONS: '--max-old-space-size=8192'
 
   # Quick check for Version PRs (fast pass)
   quick-check:
