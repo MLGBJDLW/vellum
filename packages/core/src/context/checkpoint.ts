@@ -6,15 +6,22 @@
  * - LRU eviction when maxCheckpoints limit is reached
  * - Interval-based automatic checkpoint support
  * - Full rollback to any previous checkpoint with cleanup
+ * - Optional disk persistence for crash recovery
  *
  * Requirements covered:
  * - REQ-CPT-001: Pre-compression checkpoints with deep copy
  * - REQ-CPT-002: Interval-based automatic checkpoints
  * - REQ-CPT-003: Checkpoint rollback with subsequent cleanup
+ * - REQ-CPT-004: Disk persistence for crash recovery
  *
  * @module @vellum/core/context
  */
 
+import {
+  createDiskCheckpointPersistence,
+  type DiskCheckpointPersistence,
+} from "./improvements/disk-checkpoint-persistence.js";
+import type { DiskCheckpointConfig } from "./improvements/types.js";
 import type { ContentBlock, ContextMessage } from "./types.js";
 
 // ============================================================================
@@ -68,6 +75,10 @@ export interface Checkpoint {
  *   maxCheckpoints: 10,
  *   minCheckpointInterval: 60_000, // 1 minute
  *   autoCheckpoint: true,
+ *   diskPersistence: {
+ *     enabled: true,
+ *     directory: '.vellum/checkpoints',
+ *   },
  * };
  * ```
  */
@@ -92,6 +103,13 @@ export interface CheckpointManagerOptions {
    * @default true
    */
   autoCheckpoint?: boolean;
+
+  /**
+   * Optional disk persistence configuration.
+   * When enabled, checkpoints are persisted to disk for crash recovery.
+   * @default undefined (no disk persistence)
+   */
+  diskPersistence?: Partial<DiskCheckpointConfig>;
 }
 
 /**
@@ -136,6 +154,7 @@ const DEFAULT_AUTO_CHECKPOINT = true;
  * - LRU eviction when maxCheckpoints is exceeded
  * - Interval-based automatic checkpoint support
  * - Full rollback with automatic cleanup of later checkpoints
+ * - Optional disk persistence for crash recovery
  *
  * @example
  * ```typescript
@@ -160,10 +179,15 @@ export class CheckpointManager {
   private checkpointOrder: string[];
 
   /** Resolved configuration options */
-  private readonly options: Required<CheckpointManagerOptions>;
+  private readonly options: Required<Omit<CheckpointManagerOptions, "diskPersistence">> & {
+    diskPersistence?: Partial<DiskCheckpointConfig>;
+  };
 
   /** Timestamp of last checkpoint creation */
   private lastCheckpointTime: number;
+
+  /** Optional disk persistence manager */
+  private readonly diskPersistence: DiskCheckpointPersistence | null;
 
   /**
    * Create a new CheckpointManager instance.
@@ -177,8 +201,16 @@ export class CheckpointManager {
       maxCheckpoints: options?.maxCheckpoints ?? DEFAULT_MAX_CHECKPOINTS,
       minCheckpointInterval: options?.minCheckpointInterval ?? DEFAULT_MIN_CHECKPOINT_INTERVAL,
       autoCheckpoint: options?.autoCheckpoint ?? DEFAULT_AUTO_CHECKPOINT,
+      diskPersistence: options?.diskPersistence,
     };
     this.lastCheckpointTime = 0;
+
+    // Initialize disk persistence if configured
+    if (options?.diskPersistence?.enabled) {
+      this.diskPersistence = createDiskCheckpointPersistence(options.diskPersistence);
+    } else {
+      this.diskPersistence = null;
+    }
   }
 
   /**
@@ -227,6 +259,19 @@ export class CheckpointManager {
     this.checkpoints.set(id, checkpoint);
     this.checkpointOrder.push(id);
     this.lastCheckpointTime = now;
+
+    // Async persist to disk (fire-and-forget)
+    if (this.diskPersistence) {
+      void this.diskPersistence.persist({
+        checkpointId: id,
+        messages: checkpoint.messages,
+        metadata: {
+          label: checkpoint.label,
+          reason: checkpoint.reason,
+          tokenCount: checkpoint.tokenCount,
+        },
+      });
+    }
 
     return checkpoint;
   }
@@ -345,6 +390,84 @@ export class CheckpointManager {
     this.checkpoints.clear();
     this.checkpointOrder = [];
     // Don't reset lastCheckpointTime - preserve timing for auto-checkpoint
+  }
+
+  /**
+   * Recover a checkpoint from disk if not in memory.
+   *
+   * @param checkpointId - The checkpoint ID to recover
+   * @returns The recovered checkpoint if found on disk, undefined otherwise
+   */
+  async recoverFromDisk(checkpointId: string): Promise<Checkpoint | undefined> {
+    // Check memory first
+    const inMemory = this.checkpoints.get(checkpointId);
+    if (inMemory) {
+      return inMemory;
+    }
+
+    // Try disk recovery
+    if (!this.diskPersistence) {
+      return undefined;
+    }
+
+    const loaded = await this.diskPersistence.load(checkpointId);
+    if (!loaded) {
+      return undefined;
+    }
+
+    // Restore to memory
+    const checkpoint: Checkpoint = {
+      id: checkpointId,
+      messages: loaded.messages,
+      createdAt: (loaded.metadata?.createdAt as number) ?? Date.now(),
+      label: loaded.metadata?.label as string | undefined,
+      tokenCount: (loaded.metadata?.tokenCount as number) ?? 0,
+      reason: loaded.metadata?.reason as string | undefined,
+    };
+
+    this.checkpoints.set(checkpointId, checkpoint);
+    if (!this.checkpointOrder.includes(checkpointId)) {
+      this.checkpointOrder.push(checkpointId);
+    }
+
+    return checkpoint;
+  }
+
+  /**
+   * List all checkpoints available on disk.
+   *
+   * @returns Array of persisted checkpoint metadata
+   */
+  async listDiskCheckpoints(): Promise<
+    Array<{
+      checkpointId: string;
+      createdAt: number;
+      sizeBytes: number;
+      messageCount: number;
+      inMemory: boolean;
+    }>
+  > {
+    if (!this.diskPersistence) {
+      return [];
+    }
+
+    const persisted = await this.diskPersistence.list();
+    return persisted.map((cp) => ({
+      checkpointId: cp.checkpointId,
+      createdAt: cp.createdAt,
+      sizeBytes: cp.sizeBytes,
+      messageCount: cp.messageCount,
+      inMemory: this.checkpoints.has(cp.checkpointId),
+    }));
+  }
+
+  /**
+   * Get the disk persistence manager instance.
+   *
+   * @returns The disk persistence manager if configured, null otherwise
+   */
+  getDiskPersistence(): DiskCheckpointPersistence | null {
+    return this.diskPersistence;
   }
 
   /**
