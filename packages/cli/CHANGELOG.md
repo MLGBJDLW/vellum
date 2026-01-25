@@ -1,5 +1,11 @@
 # @butlerw/vellum
 
+## 0.1.16
+
+### Patch Changes
+
+- [#39](https://github.com/MLGBJDLW/vellum/pull/39) [`620cb4d`](https://github.com/MLGBJDLW/vellum/commit/620cb4dc0182c49b518bc6cdb94c991c040485c7) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - Fix CodeBlock copy button tests to use translated labels and quiet CLI bundle warnings during build.
+
 ## 0.1.15
 
 ### Patch Changes
