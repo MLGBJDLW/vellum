@@ -1,5 +1,12 @@
 # @butlerw/vellum
 
+## 0.1.20
+
+### Patch Changes
+
+- [#50](https://github.com/MLGBJDLW/vellum/pull/50) [`dd0bf6f`](https://github.com/MLGBJDLW/vellum/commit/dd0bf6f95ff9c653f43da65b8f7ffab3e8d93887) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### fix(tui)
+  - Prevented the header separator from rendering a bare numeric node that could crash Ink.
+
 ## 0.2.0
 
 ### Minor Changes
