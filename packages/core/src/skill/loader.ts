@@ -52,6 +52,25 @@ export interface SkillLoaderOptions {
   parser?: SkillParser;
 }
 
+/**
+ * Result of L1 skill scanning operation.
+ */
+export interface ScanResult {
+  /** Number of successfully scanned skills */
+  scanned: number;
+  /** Skills that failed to scan */
+  failed: Array<{ path: string; error: string }>;
+}
+
+/**
+ * Result of L2 skill loading operation.
+ * Discriminated union to distinguish between success, not-found, and error cases.
+ */
+export type LoadL2Result =
+  | { status: "success"; skill: SkillLoaded }
+  | { status: "not-found"; skillId: string }
+  | { status: "error"; skillId: string; error: string };
+
 // ============================================
 // SkillLoader Class
 // ============================================
@@ -116,12 +135,22 @@ export class SkillLoader {
     const result = await this.discovery.discoverAll();
 
     // L1 scan each discovered skill
-    await this.scanL1(result.deduplicated);
+    const scanResult = await this.scanL1(result.deduplicated);
+
+    // Log any scan failures
+    if (scanResult.failed.length > 0) {
+      this.logger?.warn("Some skills failed to scan", {
+        failedCount: scanResult.failed.length,
+        failures: scanResult.failed,
+      });
+    }
 
     this.initialized = true;
 
     this.logger?.info("Skill loader initialized", {
       skillCount: this.cache.size,
+      scanned: scanResult.scanned,
+      failed: scanResult.failed.length,
     });
 
     return this.cache.size;
@@ -140,14 +169,19 @@ export class SkillLoader {
    * Scan skills at L1 level (frontmatter only).
    *
    * @param locations - Skill locations to scan
+   * @returns Scan result with count of scanned skills and any failures
    */
-  async scanL1(locations: SkillLocation[]): Promise<void> {
+  async scanL1(locations: SkillLocation[]): Promise<ScanResult> {
+    const failed: Array<{ path: string; error: string }> = [];
+    let scanned = 0;
+
     const promises = locations.map(async (location) => {
       try {
         const scan = await this.parser.parseMetadata(location.manifestPath, location.source);
 
         if (!scan) {
           this.logger?.warn(`Failed to parse skill at ${location.path}`);
+          failed.push({ path: location.path, error: "Failed to parse skill metadata" });
           return;
         }
 
@@ -160,33 +194,37 @@ export class SkillLoader {
         };
 
         this.cache.set(scan.name, entry);
+        scanned++;
         this.logger?.debug(`L1 scanned: ${scan.name}`);
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         this.logger?.warn(`Error scanning skill at ${location.path}`, { error });
+        failed.push({ path: location.path, error: errorMessage });
       }
     });
 
     await Promise.all(promises);
+    return { scanned, failed };
   }
 
   /**
    * Load a skill at L2 level (full SKILL.md content).
    *
    * @param name - Skill name
-   * @returns Loaded skill data or null if not found
+   * @returns LoadL2Result discriminated union with status
    */
-  async loadL2(name: string): Promise<SkillLoaded | null> {
+  async loadL2(name: string): Promise<LoadL2Result> {
     const entry = this.cache.get(name);
 
     if (!entry) {
-      this.logger?.debug(`Skill not found: ${name}`);
-      return null;
+      this.logger?.debug(`Skill not found in cache: ${name}`);
+      return { status: "not-found", skillId: name };
     }
 
     // Already at L2 or L3
     if (entry.level >= 2 && entry.data.loaded) {
       entry.lastAccessedAt = new Date();
-      return entry.data.loaded;
+      return { status: "success", skill: entry.data.loaded };
     }
 
     // Upgrade from L1 to L2
@@ -197,8 +235,8 @@ export class SkillLoader {
       );
 
       if (!loaded) {
-        this.logger?.warn(`Failed to load L2 for skill: ${name}`);
-        return null;
+        this.logger?.warn(`Failed to parse L2 for skill: ${name}`);
+        return { status: "error", skillId: name, error: "Failed to parse skill content" };
       }
 
       // Update cache
@@ -210,10 +248,11 @@ export class SkillLoader {
       entry.lastAccessedAt = new Date();
 
       this.logger?.debug(`L2 loaded: ${name}`);
-      return loaded;
+      return { status: "success", skill: loaded };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger?.error(`Error loading L2 for skill: ${name}`, { error });
-      return null;
+      return { status: "error", skillId: name, error: errorMessage };
     }
   }
 
@@ -239,8 +278,8 @@ export class SkillLoader {
 
     // Ensure L2 is loaded first
     if (entry.level < 2 || !entry.data.loaded) {
-      const loaded = await this.loadL2(name);
-      if (!loaded) {
+      const result = await this.loadL2(name);
+      if (result.status !== "success") {
         return null;
       }
     }
@@ -426,17 +465,25 @@ export class SkillLoader {
   /**
    * Resolve dependencies for a skill in topological order.
    * Returns dependencies deepest-first (leaf dependencies first).
+   * Gracefully handles circular dependencies by skipping problematic skills.
    *
    * @param skillName - Name of the skill to resolve dependencies for
    * @returns Ordered list of dependency names (deepest first)
-   * @throws Error on circular dependency
    */
   async resolveDependencies(skillName: string): Promise<string[]> {
     const resolved: string[] = [];
     const visiting = new Set<string>();
     const visited = new Set<string>();
+    const skipped: Array<{ skill: string; reason: string }> = [];
 
-    await this.resolveDependenciesRecursive(skillName, resolved, visiting, visited);
+    await this.resolveDependenciesRecursive(skillName, resolved, visiting, visited, skipped);
+
+    // Log summary of skipped skills
+    if (skipped.length > 0) {
+      this.logger?.warn(`Dependency resolution completed with ${skipped.length} skipped skill(s)`, {
+        skipped: skipped.map((s) => s.skill),
+      });
+    }
 
     // Remove the original skill from the result (we only want dependencies)
     const index = resolved.indexOf(skillName);
@@ -449,27 +496,35 @@ export class SkillLoader {
 
   /**
    * Recursive helper for dependency resolution.
+   * Gracefully skips circular dependencies instead of throwing.
    *
    * @param skillName - Current skill being resolved
    * @param resolved - Accumulator for resolved dependencies
    * @param visiting - Set of skills currently being visited (for cycle detection)
    * @param visited - Set of fully resolved skills
+   * @param skipped - Accumulator for skipped skills due to circular dependencies
    */
   private async resolveDependenciesRecursive(
     skillName: string,
     resolved: string[],
     visiting: Set<string>,
-    visited: Set<string>
+    visited: Set<string>,
+    skipped: Array<{ skill: string; reason: string }>
   ): Promise<void> {
     // Already fully resolved
     if (visited.has(skillName)) {
       return;
     }
 
-    // Cycle detection
+    // Cycle detection - gracefully skip instead of throwing
     if (visiting.has(skillName)) {
       const cycle = `${Array.from(visiting).join(" -> ")} -> ${skillName}`;
-      throw new Error(`Circular dependency detected: ${cycle}`);
+      this.logger?.warn("Circular dependency detected, skipping skill", {
+        skill: skillName,
+        cycle,
+      });
+      skipped.push({ skill: skillName, reason: `Circular dependency: ${cycle}` });
+      return;
     }
 
     // Mark as currently visiting
@@ -488,7 +543,7 @@ export class SkillLoader {
 
     // Recursively resolve dependencies
     for (const dep of dependencies) {
-      await this.resolveDependenciesRecursive(dep, resolved, visiting, visited);
+      await this.resolveDependenciesRecursive(dep, resolved, visiting, visited, skipped);
     }
 
     // Mark as visited and add to resolved list
@@ -504,10 +559,10 @@ export class SkillLoader {
   /**
    * Load a skill and all its dependencies.
    * Returns loaded skills in dependency order (dependencies first).
+   * Gracefully handles circular dependencies by skipping problematic skills.
    *
    * @param skillName - Name of the skill to load
    * @returns Array of loaded skills in dependency order
-   * @throws Error on circular dependency
    */
   async loadWithDependencies(skillName: string): Promise<SkillLoaded[]> {
     // Resolve dependency order
@@ -520,11 +575,13 @@ export class SkillLoader {
     const loaded: SkillLoaded[] = [];
 
     for (const name of dependencyOrder) {
-      const skill = await this.loadL2(name);
-      if (skill) {
-        loaded.push(skill);
+      const result = await this.loadL2(name);
+      if (result.status === "success") {
+        loaded.push(result.skill);
+      } else if (result.status === "error") {
+        this.logger?.warn(`Failed to load dependency: ${name}`, { error: result.error });
       } else {
-        this.logger?.warn(`Failed to load dependency: ${name}`);
+        this.logger?.warn(`Dependency not found: ${name}`);
       }
     }
 

@@ -10,6 +10,7 @@ import type { SubsessionManager } from "../agents/session/subsession-manager.js"
 import type { UserPromptSignal } from "../builtin/ask-followup.js";
 import type { AttemptCompletionOutput } from "../builtin/attempt-completion.js";
 import type { DelegateAgentSignal } from "../builtin/delegate-agent.js";
+import { setSkillConfig, setSkillManager } from "../builtin/skill-tool.js";
 import { SessionAgentsIntegration } from "../context/agents/session-integration.js";
 import type { CostService } from "../cost/service.js";
 import type { CostLimitsConfig } from "../cost/types-limits.js";
@@ -456,6 +457,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** SkillManager for skills system integration (T053) */
   private skillManager?: SkillManager;
 
+  /** Promise that resolves when skillManager initialization completes (T053 race fix) */
+  private skillManagerInitPromise?: Promise<void>;
+
   /** Currently active skills for this session (T053) */
   private activeSkills: SkillLoaded[] = [];
 
@@ -584,13 +588,18 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         },
       });
 
-      // Initialize asynchronously - errors are logged but don't fail construction
-      this.skillManager
+      // Initialize asynchronously - store promise to await before first use (T053 race fix)
+      this.skillManagerInitPromise = this.skillManager
         .initialize()
         .then((count) => {
           this.logger?.debug("Skills System initialized", {
             skillCount: count,
           });
+          // Wire up skill-tool module (T053 fix: setSkillManager was never called)
+          setSkillManager(this.skillManager!);
+          if (config.skillConfig) {
+            setSkillConfig(config.skillConfig);
+          }
         })
         .catch((error) => {
           this.logger?.warn("Failed to initialize Skills System", { error });
@@ -1272,7 +1281,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       }
     }
 
-    // Match and load skills
+    // Match and load skills - await init to avoid race condition (T053 race fix)
+    if (this.skillManagerInitPromise) {
+      await this.skillManagerInitPromise;
+    }
     if (this.skillManager?.isInitialized()) {
       try {
         const matchContext = this.buildSkillMatchContext();
@@ -3125,11 +3137,30 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // Extract slash command if present
     const command = request.startsWith("/") ? request.split(/\s/)[0]?.slice(1) : undefined;
 
+    // Build project context from available config
+    const projectContext: Record<string, string> = {};
+
+    // Provider info (e.g., "anthropic", "openai")
+    if (this.config.providerType) {
+      projectContext.provider = this.config.providerType;
+    }
+
+    // Model info (e.g., "claude-3-5-sonnet-20241022")
+    if (this.config.model) {
+      projectContext.model = this.config.model;
+    }
+
+    // Current coding mode (e.g., "code", "plan", "ask")
+    if (this.config.mode?.name) {
+      projectContext.mode = this.config.mode.name;
+    }
+
     return {
       request,
       files,
       command,
-      projectContext: {}, // Could be populated from config or context detection
+      projectContext: Object.keys(projectContext).length > 0 ? projectContext : undefined,
+      mode: this.config.mode?.name,
     };
   }
 

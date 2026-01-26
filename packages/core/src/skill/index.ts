@@ -39,6 +39,8 @@ export {
   SkillParser,
   skillParser,
 } from "./parser.js";
+// Permission
+export { checkSkillPermission } from "./permission.js";
 // Types
 export type {
   Skill,

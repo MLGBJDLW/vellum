@@ -169,8 +169,8 @@ describe("SkillManager", () => {
       mockLoader.getAllScans.mockReturnValue(scans);
       mockMatcher.matchAll.mockReturnValue(matches);
       mockLoader.loadL2
-        .mockResolvedValueOnce(createMockLoaded("skill-a"))
-        .mockResolvedValueOnce(createMockLoaded("skill-b"));
+        .mockResolvedValueOnce({ status: "success", skill: createMockLoaded("skill-a") })
+        .mockResolvedValueOnce({ status: "success", skill: createMockLoaded("skill-b") });
 
       const context: MatchContext = {
         request: "test something",
@@ -192,8 +192,8 @@ describe("SkillManager", () => {
       mockLoader.getAllScans.mockReturnValue(scans);
       mockMatcher.matchAll.mockReturnValue(matches);
       mockLoader.loadL2
-        .mockResolvedValueOnce(createMockLoaded("skill-a"))
-        .mockResolvedValueOnce(null); // skill-b fails to load
+        .mockResolvedValueOnce({ status: "success", skill: createMockLoaded("skill-a") })
+        .mockResolvedValueOnce({ status: "error", skillId: "skill-b", error: "Parse error" }); // skill-b fails to load
 
       const context: MatchContext = { request: "test", files: [] };
 
@@ -226,7 +226,7 @@ describe("SkillManager", () => {
 
     it("should load skill by name", async () => {
       const loaded = createMockLoaded("test-skill");
-      mockLoader.loadL2.mockResolvedValue(loaded);
+      mockLoader.loadL2.mockResolvedValue({ status: "success", skill: loaded });
 
       const result = await manager.loadSkill("test-skill");
 
@@ -235,7 +235,7 @@ describe("SkillManager", () => {
     });
 
     it("should return null for unknown skill", async () => {
-      mockLoader.loadL2.mockResolvedValue(null);
+      mockLoader.loadL2.mockResolvedValue({ status: "not-found", skillId: "unknown" });
 
       const result = await manager.loadSkill("unknown");
 

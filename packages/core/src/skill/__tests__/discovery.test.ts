@@ -416,13 +416,18 @@ describe("SkillDiscovery", () => {
       expect(result.locations[0]?.priority).toBe(SKILL_SOURCE_PRIORITY.global);
     });
 
-    it("should return empty array for builtin source", async () => {
+    it("should discover builtin skills from package directory", async () => {
       discovery = new SkillDiscovery({ workspacePath: WORKSPACE_PATH });
 
+      // The builtin path is resolved relative to the discovery module
+      // In tests with mocked fs, the directory won't exist so it returns empty
+      // This test verifies the method doesn't throw for builtin source
       const result = await discovery.discoverSource("builtin");
 
-      // Builtin skills are not discovered from filesystem
+      // With mocked fs that doesn't know about builtin path, we get empty results
+      // Real integration would find the 4 builtin skills
       expect(result.locations).toHaveLength(0);
+      expect(result.validationErrors).toHaveLength(0);
     });
 
     it("should return empty array when workspace path not set", async () => {

@@ -8,8 +8,8 @@
  */
 
 import { z } from "zod";
-
 import type { SkillManager } from "../skill/manager.js";
+import { checkSkillPermission } from "../skill/permission.js";
 import type { SkillConfig, SkillExecutionResult, SkillPermission } from "../skill/types.js";
 import { defineTool, fail, ok } from "../types/index.js";
 
@@ -71,6 +71,7 @@ export function setSkillConfig(config: SkillConfig): void {
 
 /**
  * Check permission for loading a skill.
+ * Uses shared picomatch-based utility for consistent behavior.
  *
  * @param skillName - Name of the skill to check
  * @returns Permission level for the skill
@@ -82,21 +83,7 @@ function checkPermission(skillName: string): SkillPermission {
 
   const { rules = [], default: defaultPermission = "allow" } = skillConfig.permissions;
 
-  // Check rules in order (first match wins)
-  for (const rule of rules) {
-    // Simple glob matching (supports * and ?)
-    const pattern = rule.pattern
-      .replace(/[.+^${}()|[\]\\]/g, "\\$&") // Escape regex special chars except * and ?
-      .replace(/\*/g, ".*")
-      .replace(/\?/g, ".");
-
-    const regex = new RegExp(`^${pattern}$`, "i");
-    if (regex.test(skillName)) {
-      return rule.permission;
-    }
-  }
-
-  return defaultPermission;
+  return checkSkillPermission(skillName, rules, defaultPermission);
 }
 
 /**
@@ -163,7 +150,8 @@ export const skillTool = defineTool<typeof skillParamsSchema, SkillOutput>({
     if (permission === "ask") {
       // For 'ask' permission, we need user confirmation
       // This should be handled by the permission system
-      const allowed = await ctx.checkPermission(`load skill: ${name}`);
+      // Guard: if checkPermission unavailable, allow for backward compatibility
+      const allowed = (await ctx.checkPermission?.(`load skill: ${name}`)) ?? true;
       if (!allowed) {
         return ok({
           success: false,
