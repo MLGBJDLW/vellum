@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-// Auto-mode 三级模式
+// Auto-mode levels
 export const AutoModeLevel = z.enum(["auto", "semi-auto", "manual"]);
 export type AutoModeLevel = z.infer<typeof AutoModeLevel>;
 
-// 检测触发器配置
+// Detection trigger configuration
 export const AutoModeTriggers = z.object({
   onStartup: z.boolean().default(true),
   onFileOpen: z.boolean().default(true),
@@ -14,11 +14,11 @@ export const AutoModeTriggers = z.object({
 // Keep-alive 配置
 export const KeepAliveConfig = z.object({
   enabled: z.boolean().default(true),
-  idleTimeoutMs: z.number().min(0).default(0), // 0 = 永不关闭
+  idleTimeoutMs: z.number().min(0).default(0), // 0 = never close
   heartbeatIntervalMs: z.number().min(1000).default(30000),
 });
 
-// 语言级别覆盖
+// Language-level overrides
 export const LanguageOverride = z.object({
   serverId: z.string(),
   mode: AutoModeLevel.optional(),
@@ -26,7 +26,7 @@ export const LanguageOverride = z.object({
   autoStart: z.boolean().default(true),
 });
 
-// 完整配置Schema
+// Complete configuration schema
 export const AutoModeConfigSchema = z.object({
   mode: AutoModeLevel.default("semi-auto"),
   triggers: AutoModeTriggers.default({
@@ -50,5 +50,5 @@ export type AutoModeTriggers = z.infer<typeof AutoModeTriggers>;
 export type KeepAliveConfig = z.infer<typeof KeepAliveConfig>;
 export type LanguageOverride = z.infer<typeof LanguageOverride>;
 
-// 默认配置
+// Default configuration
 export const DEFAULT_AUTO_MODE_CONFIG: AutoModeConfig = AutoModeConfigSchema.parse({});
