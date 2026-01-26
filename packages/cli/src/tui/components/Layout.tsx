@@ -127,8 +127,8 @@ function Separator({
 
   // Build embedded info parts for length calculation
   // Format: "[ workspace | branch *N +A -D ]"
-  const hasLineStats = (additions && additions > 0) || (deletions && deletions > 0);
-  const lineStatsText = hasLineStats ? ` +${additions ?? 0} -${deletions ?? 0}` : "";
+  const showLineStats = Boolean((additions ?? 0) > 0 || (deletions ?? 0) > 0);
+  const lineStatsText = showLineStats ? ` +${additions ?? 0} -${deletions ?? 0}` : "";
 
   const infoParts: string[] = [];
   if (workspace) {
@@ -189,12 +189,12 @@ function Separator({
     <Box width="100%">
       <Text color={color}>{leftLine}</Text>
       <Text color={color}>{prefixText}</Text>
-      {hasLineStats && (
+      {showLineStats ? (
         <>
           <Text color={theme.colors.success}> +{additions ?? 0}</Text>
           <Text color={theme.colors.error}> -{deletions ?? 0}</Text>
         </>
-      )}
+      ) : null}
       <Text color={color}> ]</Text>
       <Text color={color}>{rightLine}</Text>
     </Box>
