@@ -4,10 +4,28 @@ import { pathToFileURL } from "node:url";
 import { type FSWatcher, watch } from "chokidar";
 import type { Diagnostic } from "vscode-languageserver-protocol";
 
+import {
+  type AutoModeConfig,
+  AutoModeConfigSchema,
+  type LanguageOverride,
+} from "./auto-mode/config.js";
+import { AutoModeController } from "./auto-mode/controller.js";
+import { LanguageDetector } from "./auto-mode/detector.js";
+import type {
+  ConfirmationRequest,
+  DetectedLanguage,
+  LspServerState,
+  LspStateChangeEvent,
+} from "./auto-mode/types.js";
 import { BrokenServerTracker } from "./broken-tracker.js";
 import { LspCache } from "./cache.js";
 import type { LspConfig, LspServerConfig } from "./config.js";
-import { getServerConfig, loadLspConfig } from "./config.js";
+import {
+  getServerConfig,
+  loadLspConfig,
+  updateAutoModeLanguageOverride,
+  updateDisabledServers,
+} from "./config.js";
 import { ServerNotFoundError } from "./errors.js";
 import { ServerInstaller } from "./installer.js";
 import { LanguageClient } from "./LanguageClient.js";
@@ -73,6 +91,10 @@ export class LspHub {
   private pendingDiagnostics = new Map<string, { serverId: string; diagnostics: Diagnostic[] }>();
   // Track servers pending installation when autoInstall is "prompt"
   private pendingInstalls = new Map<string, PendingInstall>();
+  // Auto-mode controller for language detection and server lifecycle
+  private autoModeController: AutoModeController | null = null;
+  // Confirmation handler for semi-auto mode (set by TUI)
+  private confirmationHandler?: (request: ConfirmationRequest) => Promise<boolean>;
 
   constructor(options: LspHubOptions) {
     this.options = options;
@@ -946,6 +968,10 @@ export class LspHub {
   }
 
   async dispose(): Promise<void> {
+    // Dispose auto-mode controller first
+    this.autoModeController?.dispose();
+    this.autoModeController = null;
+
     // FIX: Properly clean up all resources to prevent memory leaks
     for (const entry of this.servers.values()) {
       if (entry.connection) {
@@ -1135,6 +1161,271 @@ export class LspHub {
     } catch {
       return false;
     }
+  }
+
+  // ============================================
+  // Auto-Mode APIs
+  // ============================================
+
+  private buildAutoModeConfig(config?: Partial<AutoModeConfig>): AutoModeConfig {
+    const defaultConfig = AutoModeConfigSchema.parse({});
+    const storedConfig = this.config?.autoMode ?? defaultConfig;
+
+    const merged: AutoModeConfig = {
+      ...defaultConfig,
+      ...storedConfig,
+      ...config,
+      triggers: {
+        ...defaultConfig.triggers,
+        ...storedConfig.triggers,
+        ...config?.triggers,
+      },
+      keepAlive: {
+        ...defaultConfig.keepAlive,
+        ...storedConfig.keepAlive,
+        ...config?.keepAlive,
+      },
+      languageOverrides: {
+        ...defaultConfig.languageOverrides,
+        ...storedConfig.languageOverrides,
+        ...config?.languageOverrides,
+      },
+    };
+
+    return AutoModeConfigSchema.parse(merged);
+  }
+
+  /**
+   * Initialize auto-mode with optional configuration.
+   * This enables automatic language detection and LSP server lifecycle management.
+   */
+  async initAutoMode(config?: Partial<AutoModeConfig>): Promise<void> {
+    await this.initialize();
+
+    const fullConfig = this.buildAutoModeConfig(config);
+    const workspaceRoot = this.options.workspaceRoot ?? process.cwd();
+
+    // Build serverConfigs Map from current config
+    const serverConfigs = new Map<string, LspServerConfig>();
+    if (this.config) {
+      for (const [id, cfg] of Object.entries(this.config.servers) as [string, LspServerConfig][]) {
+        if (cfg.enabled && !this.config.disabled.includes(id)) {
+          serverConfigs.set(id, cfg);
+        }
+      }
+    }
+
+    // Create LanguageDetector
+    const detector = new LanguageDetector({
+      workspaceRoot,
+      serverConfigs,
+      isServerInstalled: (serverId) => this.isServerInstalled(serverId),
+      isServerRunning: (serverId) => this.isServerRunning(serverId),
+    });
+
+    this.autoModeController = new AutoModeController({
+      config: fullConfig,
+      workspaceRoot,
+      onInstall: async (serverId) => {
+        // Enable the server first if it's disabled (user approved via semi-auto)
+        if (this.isServerDisabled(serverId)) {
+          await this.enableServer(serverId);
+        }
+        await this.installServer(serverId);
+      },
+      onStart: async (serverId, root) => {
+        // Enable the server first if it's disabled (user approved via semi-auto)
+        if (this.isServerDisabled(serverId)) {
+          await this.enableServer(serverId);
+        }
+        await this.startServer(serverId, root);
+      },
+      onStop: (serverId) => this.stopServer(serverId),
+      isInstalled: (serverId) => this.isServerInstalled(serverId),
+      isRunning: (serverId) => this.isServerRunning(serverId),
+      requestConfirmation: this.confirmationHandler,
+      detector,
+      isServerEnabled: (serverId) => !this.isServerDisabled(serverId),
+    });
+
+    // Forward state change events
+    this.autoModeController.on("stateChange", (event: LspStateChangeEvent) => {
+      this.emitEvent("lspStateChange", event);
+    });
+
+    // Trigger detection on startup if configured
+    if (fullConfig.triggers.onStartup) {
+      await this.autoModeController.triggerDetection();
+    }
+  }
+
+  /**
+   * Get auto-mode server states.
+   * Returns null if auto-mode is not initialized.
+   */
+  getAutoModeState(): Map<string, LspServerState> | null {
+    return this.autoModeController?.getAllServerStates() ?? null;
+  }
+
+  /**
+   * Set confirmation handler for semi-auto mode.
+   * TUI should set this to show confirmation prompts to users.
+   */
+  setConfirmationHandler(handler: (request: ConfirmationRequest) => Promise<boolean>): void {
+    this.confirmationHandler = handler;
+    // If controller already exists, we need to recreate it with the new handler
+    // This is a simple approach; alternatively we could add a setter to the controller
+  }
+
+  /**
+   * Confirm or deny a pending auto-mode action.
+   * Used in semi-auto mode when user responds to a confirmation prompt.
+   */
+  async confirmAutoModeAction(request: ConfirmationRequest, approved: boolean): Promise<void> {
+    await this.autoModeController?.confirmAction(request.serverId, approved);
+    if (!approved) return;
+
+    try {
+      await this.persistAutoModeApproval(request);
+    } catch (error) {
+      this.emitEvent("config:error", {
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }
+
+  private async persistAutoModeApproval(request: ConfirmationRequest): Promise<void> {
+    const workspaceRoot = await this.getWorkspaceRoot();
+    const override: LanguageOverride = {
+      serverId: request.serverId,
+      mode: "auto",
+      enabled: true,
+      autoStart: true,
+    };
+
+    await updateAutoModeLanguageOverride(workspaceRoot, request.languageId, override);
+    await this.reloadConfig();
+    this.autoModeController?.setLanguageOverride(request.languageId, override);
+  }
+
+  /**
+   * Manually trigger language detection.
+   * Returns detected languages with suggested actions.
+   */
+  async triggerLanguageDetection(): Promise<DetectedLanguage[] | undefined> {
+    return this.autoModeController?.triggerDetection();
+  }
+
+  /**
+   * Check if a server is installed (command is available).
+   */
+  async isServerInstalled(serverId: string): Promise<boolean> {
+    if (!this.config) return false;
+    const config = this.config.servers[serverId] as LspServerConfig | undefined;
+    if (!config) return false;
+    const paths = await this.findCommandPaths(config.command);
+    return paths.length > 0;
+  }
+
+  /**
+   * Check if a server is currently running.
+   */
+  isServerRunning(serverId: string): boolean {
+    const entry = this.servers.get(serverId);
+    return entry?.connection?.isAlive() ?? false;
+  }
+
+  /**
+   * Install a server by its ID.
+   */
+  async installServer(serverId: string): Promise<void> {
+    if (!this.config) {
+      throw new Error("LSP config not loaded");
+    }
+    const config = this.config.servers[serverId] as LspServerConfig | undefined;
+    if (!config) {
+      throw new Error(`No configuration for server: ${serverId}`);
+    }
+    await this.performInstall(serverId, config);
+  }
+
+  /**
+   * Get the workspace root path.
+   */
+  private async getWorkspaceRoot(): Promise<string> {
+    const projectPath = await this.options.getProjectConfigPath?.();
+    return projectPath ? dirname(dirname(projectPath)) : process.cwd();
+  }
+
+  /**
+   * Enable a server by removing it from the disabled list.
+   * Updates the config file and reloads the configuration.
+   */
+  async enableServer(serverId: string): Promise<void> {
+    if (!this.config) {
+      await this.initialize();
+    }
+    if (!this.config) {
+      throw new Error("LSP config not loaded");
+    }
+
+    // Remove from disabled list if present
+    const disabled = this.config.disabled.filter((id) => id !== serverId);
+    if (disabled.length === this.config.disabled.length) {
+      // Server was not disabled, nothing to do
+      return;
+    }
+
+    // Update config file
+    const workspaceRoot = await this.getWorkspaceRoot();
+    await updateDisabledServers(workspaceRoot, disabled);
+
+    // Reload config
+    await this.reloadConfig();
+
+    this.emitEvent("server:enabled", { serverId });
+  }
+
+  /**
+   * Disable a server by adding it to the disabled list.
+   * Stops the server if running, updates the config file, and reloads the configuration.
+   */
+  async disableServer(serverId: string): Promise<void> {
+    if (!this.config) {
+      await this.initialize();
+    }
+    if (!this.config) {
+      throw new Error("LSP config not loaded");
+    }
+
+    // Stop the server if running
+    if (this.isServerRunning(serverId)) {
+      await this.stopServer(serverId);
+    }
+
+    // Add to disabled list if not already present
+    if (this.config.disabled.includes(serverId)) {
+      // Server already disabled
+      return;
+    }
+
+    const disabled = [...this.config.disabled, serverId];
+
+    // Update config file
+    const workspaceRoot = await this.getWorkspaceRoot();
+    await updateDisabledServers(workspaceRoot, disabled);
+
+    // Reload config
+    await this.reloadConfig();
+
+    this.emitEvent("server:disabled", { serverId });
+  }
+
+  /**
+   * Check if a server is in the disabled list.
+   */
+  isServerDisabled(serverId: string): boolean {
+    return this.config?.disabled.includes(serverId) ?? false;
   }
 
   private async findCommandPaths(command: string): Promise<string[]> {

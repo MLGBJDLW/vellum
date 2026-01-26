@@ -77,10 +77,6 @@ class MockAgentLoop extends EventEmitter<MockAgentLoopEvents> {
   private _runPromise: Promise<void> | null = null;
   private _runResolve: (() => void) | null = null;
 
-  constructor() {
-    super();
-  }
-
   getState(): AgentState {
     return this._state;
   }
@@ -492,7 +488,10 @@ describe("Agent → Session Save", () => {
     // Verify saved to storage
     const saved = await result.storage.load("save-session");
     expect(saved).not.toBeNull();
-    expect(saved!.length).toBeGreaterThan(0);
+    if (!saved) {
+      throw new Error("Expected saved session to exist");
+    }
+    expect(saved.length).toBeGreaterThan(0);
   });
 
   it("messages persist correctly after execution", async () => {
@@ -545,7 +544,10 @@ describe("Agent → Session Save", () => {
     // Verify session contains tool call info
     const saved = await result.storage.load("tool-session");
     expect(saved).not.toBeNull();
-    expect(saved!.length).toBeGreaterThan(0);
+    if (!saved) {
+      throw new Error("Expected saved session to exist");
+    }
+    expect(saved.length).toBeGreaterThan(0);
   });
 
   it("handles save during streaming gracefully", async () => {
@@ -737,7 +739,7 @@ describe("Concurrent Operations", () => {
     await waitTicks(2);
 
     // All text should be accumulated
-    const hasContent = result.messages.some((m) => m.content && m.content.includes("Response"));
+    const hasContent = result.messages.some((m) => m.content?.includes("Response") ?? false);
     expect(hasContent).toBe(true);
   });
 

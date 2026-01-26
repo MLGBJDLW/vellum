@@ -21,6 +21,7 @@ nul
 .env
 .env.local
 .env.*.local
+lsp.json
 
 # Logs
 *.log

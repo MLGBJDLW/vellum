@@ -160,7 +160,7 @@ export function createLspCommand(): Command {
       }
 
       console.log(chalk.blue(`Installing ${language} server...`));
-      const installer = new ServerInstaller({ autoInstall: true });
+      const installer = new ServerInstaller({ autoInstall: "auto" });
 
       try {
         await installer.install(language, serverConfig);

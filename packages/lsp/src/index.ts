@@ -1,12 +1,18 @@
+export * from "./auto-mode/index.js";
 export { BrokenServerTracker } from "./broken-tracker.js";
 export { LspCache } from "./cache.js";
 export {
   buildDefaultConfig,
+  getGlobalConfigPath,
+  getProjectConfigPath,
   getServerConfig,
   type LspConfig,
   type LspServerConfig,
   loadLspConfig,
   mergeConfigs,
+  saveLspConfig,
+  updateAutoModeLanguageOverride,
+  updateDisabledServers,
 } from "./config.js";
 export { lspConfigJsonSchema } from "./config-schema.js";
 export { getUserFriendlyMessage, isRetryableError, requiresUserAction } from "./error-utils.js";

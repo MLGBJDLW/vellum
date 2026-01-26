@@ -38,6 +38,7 @@ import {
   shouldRunOnboarding,
   updateSessionMetadata,
 } from "@vellum/core";
+import { getProviderModels } from "@vellum/provider";
 import { createId } from "@vellum/shared";
 import { Box, Text, useApp as useInkApp, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -135,6 +136,7 @@ import { ErrorBoundary } from "./tui/components/common/ErrorBoundary.js";
 import { DEFAULT_HOTKEYS, HotkeyHelpModal } from "./tui/components/common/HotkeyHelpModal.js";
 import { MaxSizedBox } from "./tui/components/common/MaxSizedBox.js";
 import { LoadingIndicator } from "./tui/components/common/Spinner.js";
+import { LspConfirmDialog } from "./tui/components/Dialogs/LspConfirmDialog.js";
 import type { AutocompleteOption } from "./tui/components/Input/Autocomplete.js";
 import { EnhancedCommandInput } from "./tui/components/Input/EnhancedCommandInput.js";
 import type { SlashCommand } from "./tui/components/Input/slash-command-utils.js";
@@ -165,11 +167,22 @@ import { PermissionDialog } from "./tui/components/Tools/PermissionDialog.js";
 import { ToolsPanel } from "./tui/components/Tools/ToolsPanel.js";
 import { UpdateBanner } from "./tui/components/UpdateBanner.js";
 import { VimModeIndicator } from "./tui/components/VimModeIndicator.js";
+import { useLsp } from "./tui/context/LspContext.js";
 import { useMcp } from "./tui/context/McpContext.js";
 import type { Message } from "./tui/context/MessagesContext.js";
 import { useMessages } from "./tui/context/MessagesContext.js";
 import { RootProvider } from "./tui/context/RootProvider.js";
 import { type ToolExecution, useTools } from "./tui/context/ToolsContext.js";
+// =============================================================================
+// Feature Integrations-
+// =============================================================================
+// Enterprise integration
+import {
+  createEnterpriseHooks,
+  type EnterpriseHooks,
+  initializeEnterprise,
+  shutdownEnterprise,
+} from "./tui/enterprise-integration.js";
 import {
   type PersistenceStatus,
   usePersistence,
@@ -206,27 +219,14 @@ import {
   type LspIntegrationOptions,
   type LspIntegrationResult,
 } from "./tui/lsp-integration.js";
+// Metrics integration
+import { getMetricsManager, type TuiMetricsManager } from "./tui/metrics-integration.js";
 import {
   disposePlugins,
   getPluginCommands,
   initializePlugins,
   type PluginInitResult,
 } from "./tui/plugins.js";
-
-// =============================================================================
-// Feature Integrations-
-// =============================================================================
-
-import { getProviderModels } from "@vellum/provider";
-// Enterprise integration
-import {
-  createEnterpriseHooks,
-  type EnterpriseHooks,
-  initializeEnterprise,
-  shutdownEnterprise,
-} from "./tui/enterprise-integration.js";
-// Metrics integration
-import { getMetricsManager, type TuiMetricsManager } from "./tui/metrics-integration.js";
 // Resilience integration-
 import { createResilientProvider, type ResilientProvider } from "./tui/resilience.js";
 // Sandbox integration
@@ -4169,6 +4169,12 @@ interface AppOverlaysProps {
   readonly onRejectAll: () => void;
   readonly themeContext: ThemeContextValue;
   readonly updateAvailable: { current: string; latest: string } | null;
+  /** Current LSP confirmation request (null if no dialog active) */
+  readonly currentConfirmRequest: import("@vellum/lsp").ConfirmationRequest | null;
+  /** Callback when user responds to LSP confirmation */
+  readonly respondToConfirmation: (approved: boolean) => void;
+  /** Whether sidebar is currently visible */
+  readonly showSidebar: boolean;
 }
 
 /**
@@ -4179,7 +4185,7 @@ interface AppOverlaysProps {
  * - Medium (81-120): proportional margins (5-12% of width)
  * - Wide (>120): fixed comfortable margins
  */
-function useOverlayPositioning(): {
+function useOverlayPositioning(showSidebar: boolean): {
   margins: {
     /** Standard overlay margin (ModeSelector, PermissionDialog, etc.) */
     standard: { top: number; left: number };
@@ -4194,8 +4200,29 @@ function useOverlayPositioning(): {
   isNarrow: boolean;
   /** Terminal width */
   width: number;
+  /** Content area width (Message Area), accounting for sidebar */
+  contentWidth: number;
 } {
   const { width, isNarrow } = useTerminalDimensions();
+
+  // Calculate content width (Message Area width), accounting for sidebar
+  // Reference: Layout.tsx L358-375 sidebar width calculation
+  const contentWidth = (() => {
+    if (!showSidebar || isNarrow) {
+      return width - 2; // -2 for margins
+    }
+    // Sidebar width calculation (matching Layout.tsx)
+    const baseWidth = Math.floor(width * 0.25); // SIDEBAR_WIDTH_PERCENT = 25
+    let sidebarWidth: number;
+    if (width < 80) {
+      sidebarWidth = Math.max(baseWidth, 20); // SIDEBAR_MIN_WIDTH = 20
+    } else if (width < 120) {
+      sidebarWidth = Math.min(baseWidth, 35);
+    } else {
+      sidebarWidth = Math.min(baseWidth, 45); // SIDEBAR_MAX_WIDTH = 45
+    }
+    return width - sidebarWidth - 2; // -2 for borders/margins
+  })();
 
   // Narrow terminals (≤80 cols): minimal margins to prevent clipping
   if (isNarrow) {
@@ -4208,6 +4235,7 @@ function useOverlayPositioning(): {
       loadingMinWidth: Math.min(36, width - 4), // Leave 4 cols for border+padding
       isNarrow: true,
       width,
+      contentWidth,
     };
   }
 
@@ -4228,6 +4256,7 @@ function useOverlayPositioning(): {
       loadingMinWidth: Math.min(40, width - standardLeft * 2 - 4),
       isNarrow: false,
       width,
+      contentWidth,
     };
   }
 
@@ -4241,6 +4270,7 @@ function useOverlayPositioning(): {
     loadingMinWidth: 40,
     isNarrow: false,
     width,
+    contentWidth,
   };
 }
 
@@ -4278,8 +4308,12 @@ function AppOverlays({
   onRejectAll,
   themeContext,
   updateAvailable,
+  currentConfirmRequest,
+  respondToConfirmation,
+  showSidebar,
 }: AppOverlaysProps): React.JSX.Element {
-  const { margins, loadingMinWidth, isNarrow } = useOverlayPositioning();
+  const { margins, loadingMinWidth, isNarrow, contentWidth } = useOverlayPositioning(showSidebar);
+  const confirmWidth = Math.min(contentWidth, Math.max(24, contentWidth - margins.standard.left));
 
   return (
     <>
@@ -4346,6 +4380,21 @@ function AppOverlays({
             onApprove={handleApprove}
             onApproveAlways={handleApproveAlways}
             onReject={handleReject}
+            isFocused
+          />
+        </Box>
+      )}
+
+      {currentConfirmRequest && (
+        <Box
+          position="absolute"
+          marginTop={margins.standard.top}
+          marginLeft={margins.standard.left}
+          width={confirmWidth}
+        >
+          <LspConfirmDialog
+            request={currentConfirmRequest}
+            onConfirm={respondToConfirmation}
             isFocused
           />
         </Box>
@@ -4615,6 +4664,9 @@ function AppContentView({
   vimEnabled,
   vimMode,
 }: AppContentViewProps): React.JSX.Element {
+  // LSP Confirm Dialog State (exposed from LspContext)
+  const { currentConfirmRequest, respondToConfirmation } = useLsp();
+
   const sidebar = renderSidebarContent({
     announce,
     showSidebar,
@@ -4725,7 +4777,8 @@ function AppContentView({
     !showHelpModal &&
     !activeApproval &&
     !interactivePrompt &&
-    !pendingOperation;
+    !pendingOperation &&
+    !currentConfirmRequest;
 
   const headerContent = (
     <AppHeader
@@ -4989,6 +5042,9 @@ function AppContentView({
             onRejectAll={onRejectAll}
             themeContext={themeContext}
             updateAvailable={updateAvailable}
+            currentConfirmRequest={currentConfirmRequest}
+            respondToConfirmation={respondToConfirmation}
+            showSidebar={showSidebar}
           />
 
           <AdaptiveLayout

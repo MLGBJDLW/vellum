@@ -272,6 +272,8 @@ export interface LspHubOptions {
    * If not provided, pending installs will be tracked and can be queried via getPendingInstalls().
    */
   onInstallPrompt?: InstallPromptCallback;
+  /** Workspace root directory for auto-mode detection */
+  workspaceRoot?: string;
 }
 
 export interface LspHubEvents {
@@ -334,5 +336,33 @@ export interface LspHubEvents {
   "install:skipped": {
     readonly serverId: string;
     readonly reason: "user-declined" | "no-callback";
+  };
+  /**
+   * Emitted when a server is enabled (removed from disabled list).
+   */
+  "server:enabled": {
+    readonly serverId: string;
+  };
+  /**
+   * Emitted when a server is disabled (added to disabled list).
+   */
+  "server:disabled": {
+    readonly serverId: string;
+  };
+  /**
+   * Emitted when auto-mode server state changes.
+   * Forwarded from AutoModeController.
+   */
+  lspStateChange: {
+    readonly serverId: string;
+    readonly previousState: string;
+    readonly currentState: string;
+    readonly timestamp: number;
+    readonly error?: Error;
+    readonly progress?: {
+      current: number;
+      total: number;
+      message: string;
+    };
   };
 }

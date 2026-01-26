@@ -1,8 +1,14 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
 
+import {
+  type AutoModeConfig,
+  AutoModeConfigSchema,
+  DEFAULT_AUTO_MODE_CONFIG,
+  type LanguageOverride,
+} from "./auto-mode/config.js";
 import { getDefaultServers } from "./defaults/index.js";
 import type { LspTransportType } from "./types.js";
 
@@ -49,6 +55,7 @@ const LspConfigSchema = z.object({
       if (val === false) return "never";
       return val;
     }),
+  autoMode: AutoModeConfigSchema.default(DEFAULT_AUTO_MODE_CONFIG),
   maxConcurrentServers: z.number().default(5),
   requestTimeoutMs: z.number().default(30_000),
 });
@@ -117,6 +124,7 @@ export function buildDefaultConfig(): LspConfig {
     disabled: [],
     cache: { maxSize: 100, ttlSeconds: 300 },
     autoInstall: "prompt",
+    autoMode: DEFAULT_AUTO_MODE_CONFIG,
     maxConcurrentServers: 5,
     requestTimeoutMs: 30_000,
   });
@@ -142,4 +150,96 @@ export function getServerConfig(config: LspConfig, language: string): LspServerC
     return null;
   }
   return (config.servers[language] as LspServerConfig | undefined) ?? null;
+}
+
+/**
+ * Get the path to the project-level LSP config file.
+ */
+export function getProjectConfigPath(workspaceRoot: string): string {
+  return join(resolve(workspaceRoot), ".vellum", "lsp.json");
+}
+
+/**
+ * Get the path to the global LSP config file.
+ */
+export function getGlobalConfigPath(): string {
+  return join(homedir(), ".vellum", "lsp.json");
+}
+
+/**
+ * Save LSP config to a file.
+ * Creates the directory if it doesn't exist.
+ */
+export async function saveLspConfig(config: Partial<LspConfig>, configPath: string): Promise<void> {
+  // Ensure directory exists
+  const dir = dirname(configPath);
+  await mkdir(dir, { recursive: true });
+
+  // Write config with pretty formatting
+  const content = JSON.stringify(config, null, 2);
+  await writeFile(configPath, content, "utf-8");
+}
+
+/**
+ * Update the disabled array in a config file.
+ * If the file doesn't exist, creates a minimal config with just the disabled array.
+ */
+export async function updateDisabledServers(
+  workspaceRoot: string,
+  disabled: string[],
+  useProjectConfig = true
+): Promise<void> {
+  const configPath = useProjectConfig ? getProjectConfigPath(workspaceRoot) : getGlobalConfigPath();
+
+  // Try to load existing config
+  let existingConfig: Partial<LspConfig> = {};
+  try {
+    const content = await readFile(configPath, "utf-8");
+    if (content.trim()) {
+      existingConfig = JSON.parse(content) as Partial<LspConfig>;
+    }
+  } catch {
+    // File doesn't exist, start with empty config
+  }
+
+  // Update disabled array
+  existingConfig.disabled = disabled;
+
+  await saveLspConfig(existingConfig, configPath);
+}
+
+/**
+ * Update or insert a language override in auto-mode config.
+ */
+export async function updateAutoModeLanguageOverride(
+  workspaceRoot: string,
+  languageId: string,
+  override: LanguageOverride,
+  useProjectConfig = true
+): Promise<void> {
+  const configPath = useProjectConfig ? getProjectConfigPath(workspaceRoot) : getGlobalConfigPath();
+
+  let existingConfig: Partial<LspConfig> = {};
+  try {
+    const content = await readFile(configPath, "utf-8");
+    if (content.trim()) {
+      existingConfig = JSON.parse(content) as Partial<LspConfig>;
+    }
+  } catch {
+    // File doesn't exist, start with empty config
+  }
+
+  const languageOverrides = {
+    ...((existingConfig.autoMode?.languageOverrides ?? {}) as Record<string, LanguageOverride>),
+    [languageId]: override,
+  };
+
+  const updatedAutoMode: AutoModeConfig = AutoModeConfigSchema.parse({
+    ...(existingConfig.autoMode ?? {}),
+    languageOverrides,
+  });
+
+  existingConfig.autoMode = updatedAutoMode;
+
+  await saveLspConfig(existingConfig, configPath);
 }

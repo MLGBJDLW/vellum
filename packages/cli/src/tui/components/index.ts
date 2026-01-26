@@ -21,6 +21,8 @@ export {
 } from "./CostDisplay.js";
 // Common components
 export * from "./common/index.js";
+// Dialogs (confirmation prompts)
+export * from "./Dialogs/index.js";
 // Init Error Banner
 export { InitErrorBanner, type InitErrorBannerProps } from "./InitErrorBanner.js";
 // Component subdirectories

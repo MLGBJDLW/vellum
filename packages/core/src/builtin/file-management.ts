@@ -7,7 +7,8 @@
  * @module builtin/file-management
  */
 
-import { cp, mkdir, rename, rm, type Stats, stat } from "node:fs/promises";
+import type { Stats } from "node:fs";
+import { cp, mkdir, rename, rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
 

@@ -195,7 +195,6 @@ function formatStatus(status: string): string {
       return chalk.yellow("◐ starting");
     case "error":
       return chalk.red("✗ error");
-    case "stopped":
     default:
       return chalk.dim("○ stopped");
   }
@@ -307,7 +306,7 @@ async function handleInstall(ctx: CommandContext, target?: string): Promise<Comm
 
         if (!serverConfig?.install) {
           // Use default install info
-          const installer = new ServerInstaller({ autoInstall: true });
+          const installer = new ServerInstaller({ autoInstall: "auto" });
           await installer.install(target.toLowerCase(), {
             name: serverInfo.name,
             command: serverInfo.package,
@@ -324,7 +323,7 @@ async function handleInstall(ctx: CommandContext, target?: string): Promise<Comm
             },
           });
         } else {
-          const installer = new ServerInstaller({ autoInstall: true });
+          const installer = new ServerInstaller({ autoInstall: "auto" });
           await installer.install(target.toLowerCase(), serverConfig);
         }
 
@@ -566,18 +565,52 @@ async function handleEnable(ctx: CommandContext, target?: string): Promise<Comma
     ]);
   }
 
-  // Note: Full implementation would modify config file
-  // For Phase 1, we just return a message
-  return success(
-    [
-      chalk.yellow(`⚠ Enable/disable requires config file modification.`),
-      "",
-      chalk.dim("Edit your config file manually:"),
-      `  ${join(ctx.session.cwd, ".vellum", "lsp.json")}`,
-      "",
-      chalk.dim(`Remove "${target}" from the "disabled" array.`),
-    ].join("\n")
-  );
+  return pending({
+    message: `Enabling ${target}...`,
+    showProgress: true,
+    promise: (async (): Promise<CommandResult> => {
+      try {
+        const hub = getHub(ctx.session.cwd);
+        await hub.initialize();
+
+        // Check if server exists in config
+        const config = hub.getConfig();
+        if (!config?.servers[target]) {
+          return error("RESOURCE_NOT_FOUND", `No configuration found for server: ${target}`, [
+            "Available servers:",
+            ...Object.keys(config?.servers ?? {}).map((s) => `  - ${s}`),
+          ]);
+        }
+
+        // Check if already enabled
+        if (!config.disabled.includes(target)) {
+          return success(
+            [
+              chalk.yellow(`Server "${target}" is already enabled.`),
+              "",
+              chalk.dim(`Use ${chalk.cyan(`/lsp start ${target}`)} to start it.`),
+            ].join("\n")
+          );
+        }
+
+        // Enable the server
+        await hub.enableServer(target);
+
+        return success(
+          [
+            chalk.green(`✓ Enabled server: ${target}`),
+            "",
+            chalk.dim(`Use ${chalk.cyan(`/lsp start ${target}`)} to start the server.`),
+          ].join("\n")
+        );
+      } catch (err) {
+        return error(
+          "INTERNAL_ERROR",
+          `Failed to enable server: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    })(),
+  });
 }
 
 /**
@@ -590,18 +623,46 @@ async function handleDisable(ctx: CommandContext, target?: string): Promise<Comm
     ]);
   }
 
-  // Note: Full implementation would modify config file
-  // For Phase 1, we just return a message
-  return success(
-    [
-      chalk.yellow(`⚠ Enable/disable requires config file modification.`),
-      "",
-      chalk.dim("Edit your config file manually:"),
-      `  ${join(ctx.session.cwd, ".vellum", "lsp.json")}`,
-      "",
-      chalk.dim(`Add "${target}" to the "disabled" array.`),
-    ].join("\n")
-  );
+  return pending({
+    message: `Disabling ${target}...`,
+    showProgress: true,
+    promise: (async (): Promise<CommandResult> => {
+      try {
+        const hub = getHub(ctx.session.cwd);
+        await hub.initialize();
+
+        // Check if server exists in config
+        const config = hub.getConfig();
+        if (!config?.servers[target]) {
+          return error("RESOURCE_NOT_FOUND", `No configuration found for server: ${target}`, [
+            "Available servers:",
+            ...Object.keys(config?.servers ?? {}).map((s) => `  - ${s}`),
+          ]);
+        }
+
+        // Check if already disabled
+        if (config.disabled.includes(target)) {
+          return success(chalk.yellow(`Server "${target}" is already disabled.`));
+        }
+
+        // Disable the server
+        await hub.disableServer(target);
+
+        return success(
+          [
+            chalk.green(`✓ Disabled server: ${target}`),
+            "",
+            chalk.dim("The server has been stopped and will not start automatically."),
+          ].join("\n")
+        );
+      } catch (err) {
+        return error(
+          "INTERNAL_ERROR",
+          `Failed to disable server: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    })(),
+  });
 }
 
 // =============================================================================

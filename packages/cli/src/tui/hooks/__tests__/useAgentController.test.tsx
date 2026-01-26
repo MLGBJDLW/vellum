@@ -75,10 +75,6 @@ class MockAgentLoop extends EventEmitter<MockAgentLoopEvents> {
   private _runPromise: Promise<void> | null = null;
   private _runResolve: (() => void) | null = null;
 
-  constructor() {
-    super();
-  }
-
   getState(): AgentState {
     return this._state;
   }
