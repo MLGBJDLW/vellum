@@ -1,5 +1,61 @@
 # @butlerw/vellum
 
+## 0.1.18
+
+### Patch Changes
+
+- [#45](https://github.com/MLGBJDLW/vellum/pull/45) [`4c2f539`](https://github.com/MLGBJDLW/vellum/commit/4c2f539686cd51cc0d4ec2409269462d0c10e86a) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### feat(cli)
+
+  - Added `/lsp` slash command with subcommands: status, install, detect, start, stop, restart, config, enable, disable, update, export, import
+  - Added `LspSetupPanel.tsx` interactive UI with batch install and project detection
+  - Enhanced autocomplete with 3-level support (command → subcommand → argument)
+  - Added `Alt+L` keyboard shortcut to open LSP panel
+
+  ### feat(core)
+
+  - Added file management tools: `move_file`, `copy_file`, `delete_file`, `create_directory`
+  - Updated base.md and mode prompts with new tool groups (filesystem, lsp)
+
+  ### fix(core)
+
+  - Fixed markdown linting issues in prompt files (MD022, MD025, MD031, MD032, MD036, MD040, MD041, MD058)
+
+  ### feat(lsp)
+
+  - Added `lsp_rename` tool for symbol renaming via LSP
+  - Changed `autoInstall` from boolean to `"auto" | "prompt" | "never"` enum with backward compatibility
+  - Added pending install management with callbacks for "prompt" mode
+
+- [#45](https://github.com/MLGBJDLW/vellum/pull/45) [`def325a`](https://github.com/MLGBJDLW/vellum/commit/def325ae8d54ae3db957265a116090d9478c392c) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### feat(lsp): Add LSP Auto-Mode for automatic language detection and server lifecycle management
+
+  - Implement `AutoModeController` state machine for managing LSP server lifecycle with three modes:
+    - `auto`: Automatically install and start servers without user intervention
+    - `semi-auto`: Request user confirmation before install/start actions
+    - `manual`: Only detect languages, no automatic actions
+  - Add `LanguageDetector` for workspace scanning with efficient directory traversal
+  - Create confirmation UI components (`LspConfirmDialog`, `useLspConfirmation` hook)
+  - Add auto-mode state tracking in sidebar `SystemStatusPanel` with enhanced status indicators
+  - Implement `LspHub.enableServer()` and `disableServer()` APIs with config persistence
+  - Add `/lsp enable <server>` and `/lsp disable <server>` slash commands with async operation support
+
+  ### fix(lsp): Improve Windows compatibility and error handling
+
+  - Fix `LanguageClient` spawn with `shell: true` on Windows platform
+  - Add early exit detection to prevent write-after-destroy race condition
+  - Capture stderr for better error messages during server startup failures
+  - Enhance InitFailedError with early exit information
+
+  ### chore(cli): Improve development workflow
+
+  - Update `scripts/dev.mjs` to build and watch `@vellum/lsp` package alongside core
+  - Add separate log file for LSP dev output (`dev-lsp.log`)
+
+  ### refactor(core): Code quality improvements
+
+  - Fix type import for `Stats` in file-management tool
+  - Remove unnecessary constructor in test mock classes
+  - Fix non-null assertion warnings in controller integration tests
+
 ## 0.1.17
 
 ### Patch Changes
