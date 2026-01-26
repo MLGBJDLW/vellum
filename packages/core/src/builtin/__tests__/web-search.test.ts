@@ -340,12 +340,12 @@ describe("webSearchTool", () => {
 
       expect(result.success).toBe(true);
       if (result.success && result.output.results.length > 0) {
-        const firstResult = result.output.results[0]!;
+        const firstResult = result.output.results.at(0);
         // URL should have decoded &amp; to &
-        expect(firstResult.url).toContain("foo=1&bar=2");
+        expect(firstResult?.url).toContain("foo=1&bar=2");
         // Title should have decoded entities
-        expect(firstResult.title).toContain('"quotes"');
-        expect(firstResult.title).toContain("& ampersand");
+        expect(firstResult?.title).toContain('"quotes"');
+        expect(firstResult?.title).toContain("& ampersand");
       }
     });
 
@@ -369,11 +369,11 @@ describe("webSearchTool", () => {
 
       expect(result.success).toBe(true);
       if (result.success && result.output.results.length > 0) {
-        const firstResult = result.output.results[0]!;
+        const firstResult = result.output.results.at(0);
         // Should decode &#60; to < and &#62; to >
-        expect(firstResult.title).toContain("<angle>");
+        expect(firstResult?.title).toContain("<angle>");
         // Should decode hex entities &#x3C; to < and &#x3E; to >
-        expect(firstResult.title).toContain("<hex>");
+        expect(firstResult?.title).toContain("<hex>");
       }
     });
   });

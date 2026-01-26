@@ -1,6 +1,5 @@
 ---
-"@vellum/core": patch
-"@vellum/cli": patch
+"@butlerw/vellum": patch
 ---
 
 ### feat(tools)

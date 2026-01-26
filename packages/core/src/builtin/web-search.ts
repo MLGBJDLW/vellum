@@ -639,7 +639,7 @@ export const webSearchTool = defineTool({
             return await searchTavily(
               query,
               {
-                apiKey: tavilyApiKey!,
+                apiKey: tavilyApiKey as string,
                 maxResults,
                 searchDepth,
                 includeDomains,

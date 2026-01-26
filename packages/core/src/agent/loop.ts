@@ -596,7 +596,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
             skillCount: count,
           });
           // Wire up skill-tool module (T053 fix: setSkillManager was never called)
-          setSkillManager(this.skillManager!);
+          if (this.skillManager) {
+            setSkillManager(this.skillManager);
+          }
           if (config.skillConfig) {
             setSkillConfig(config.skillConfig);
           }

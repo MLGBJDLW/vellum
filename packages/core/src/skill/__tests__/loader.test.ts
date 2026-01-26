@@ -5,6 +5,7 @@
 import * as fs from "node:fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Logger } from "../../logger/logger.js";
 import { SkillLoader } from "../loader.js";
 import { SkillParser } from "../parser.js";
 import type { SkillLoaded, SkillLocation, SkillScan, SkillSource } from "../types.js";
@@ -93,7 +94,7 @@ function createMockedLoader(): {
     error: vi.fn(),
   };
 
-  const loader = new SkillLoader({ logger: mockLogger as any });
+  const loader = new SkillLoader({ logger: mockLogger as Partial<Logger> as Logger });
 
   // Create mock functions
   const mockParseMetadata = vi.fn();
