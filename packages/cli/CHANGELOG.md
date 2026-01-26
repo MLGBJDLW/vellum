@@ -1,5 +1,19 @@
 # @butlerw/vellum
 
+## 0.2.0
+
+### Minor Changes
+
+- [#48](https://github.com/MLGBJDLW/vellum/pull/48) [`6501547`](https://github.com/MLGBJDLW/vellum/commit/6501547ec3b9c23acde2aaccb644e46ab9b5b805) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### feat(tui)
+
+  - Added Git line statistics display (+xxx -xxx) after changed files count in HeaderBar
+  - Line stats use semantic colors: additions in green, deletions in red
+  - Added version number display to StatusBar
+
+  ### fix(tui)
+
+  - Wired checkUpdateOnStartup() to setUpdateAvailable state for update notifications
+
 ## 0.1.18
 
 ### Patch Changes
