@@ -10,6 +10,7 @@
 import type { CodingMode, SandboxPolicy } from "@vellum/core";
 import { Box, Text } from "ink";
 import { useMemo } from "react";
+import { version } from "../../../version.js";
 import { useResilienceOptional } from "../../context/ResilienceContext.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
@@ -335,9 +336,18 @@ export function StatusBar({
   // NOTE: Persistence status indicator moved to Sidebar's SystemStatusPanel (T034 UI cleanup)
   // The persistence prop is kept for API compatibility but no longer rendered in footer.
 
+  // Version indicator (always visible)
+  rightIndicators.push(
+    <Box key="version">
+      <Text color={theme.semantic.text.muted} dimColor>
+        v{version}
+      </Text>
+    </Box>
+  );
+
   // Sidebar toggle hint (show only if there's room - not shown when many indicators present)
   // Skip when there are 4+ indicators to avoid terminal overflow
-  if (rightIndicators.length < 4) {
+  if (rightIndicators.length < 5) {
     rightIndicators.push(
       <Box key="sidebar-hint">
         <Text color={theme.semantic.text.muted} dimColor>
