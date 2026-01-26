@@ -122,6 +122,9 @@ const DUCKDUCKGO_HTML_URL = CONFIG_DEFAULTS.externalApis.duckduckgoHtml;
 /** SerpAPI base URL */
 const SERPAPI_BASE_URL = CONFIG_DEFAULTS.externalApis.serpapi;
 
+/** Tavily API base URL */
+const TAVILY_API_URL = "https://api.tavily.com/search";
+
 /**
  * Sanitize sensitive parameters from URLs/strings to prevent API key leakage in logs
  */
@@ -144,12 +147,34 @@ export const webSearchParamsSchema = z.object({
     .optional()
     .default(DEFAULT_MAX_RESULTS)
     .describe("Maximum number of results to return (default: 10)"),
-  /** Search engine to use (default: duckduckgo) */
+  /** Search engine to use (default: auto) */
   engine: z
-    .enum(["google", "duckduckgo", "bing"])
+    .enum(["google", "duckduckgo", "bing", "tavily", "auto"])
     .optional()
-    .default("duckduckgo")
-    .describe("Search engine to use (default: duckduckgo)"),
+    .default("auto")
+    .describe(
+      "Search engine to use (default: auto - uses Tavily if API key available, else DuckDuckGo)"
+    ),
+  /** Time range filter for search results (Tavily only) */
+  timeRange: z
+    .enum(["day", "week", "month", "year"])
+    .optional()
+    .describe("Filter results by time range (Tavily only)"),
+  /** Domains to include in search (Tavily only) */
+  includeDomains: z
+    .array(z.string())
+    .optional()
+    .describe("Only include results from these domains (Tavily only)"),
+  /** Domains to exclude from search (Tavily only) */
+  excludeDomains: z
+    .array(z.string())
+    .optional()
+    .describe("Exclude results from these domains (Tavily only)"),
+  /** Search depth - basic is faster, advanced is more thorough (Tavily only) */
+  searchDepth: z
+    .enum(["basic", "advanced"])
+    .optional()
+    .describe("Search depth - basic is faster, advanced is more thorough (Tavily only)"),
 });
 
 /** Inferred type for web_search parameters */
@@ -173,10 +198,14 @@ export interface WebSearchOutput {
   query: string;
   /** Search engine used */
   engine: string;
+  /** Actual engine used (may differ from requested if fallback occurred) */
+  engineUsed: string;
   /** Array of search results */
   results: SearchResult[];
   /** Total number of results returned */
   totalResults: number;
+  /** AI-generated answer summary (Tavily only) */
+  answer?: string;
 }
 
 /**
@@ -206,9 +235,9 @@ function parseDuckDuckGoResults(html: string, maxResults: number, query: string)
     const [, url, title, snippet] = match;
     if (url && title) {
       results.push({
-        title: decodeHTMLEntities(title.trim()),
+        title: stripHtmlTags(decodeHTMLEntities(title.trim())),
         url: decodeHTMLEntities(url),
-        snippet: decodeHTMLEntities(snippet?.trim() || ""),
+        snippet: stripHtmlTags(decodeHTMLEntities(snippet?.trim() || "")),
         position,
       });
     }
@@ -223,9 +252,9 @@ function parseDuckDuckGoResults(html: string, maxResults: number, query: string)
       const [, url, title, snippet] = match;
       if (url && title) {
         results.push({
-          title: decodeHTMLEntities(title.trim()),
+          title: stripHtmlTags(decodeHTMLEntities(title.trim())),
           url: decodeHTMLEntities(url),
-          snippet: decodeHTMLEntities(snippet?.trim() || ""),
+          snippet: stripHtmlTags(decodeHTMLEntities(snippet?.trim() || "")),
           position,
         });
       }
@@ -245,7 +274,7 @@ function parseDuckDuckGoResults(html: string, maxResults: number, query: string)
       if (url && title && !url.includes("duckduckgo.com") && !seenUrls.has(url)) {
         seenUrls.add(url);
         results.push({
-          title: decodeHTMLEntities(title.trim()),
+          title: stripHtmlTags(decodeHTMLEntities(title.trim())),
           url: decodeHTMLEntities(url),
           snippet: "",
           position: results.length + 1,
@@ -282,6 +311,24 @@ function decodeHTMLEntities(text: string): string {
 }
 
 /**
+ * Strip HTML formatting tags from text (bold, italic, span, etc.)
+ * Preserves decoded angle brackets that are part of content text.
+ */
+function stripHtmlTags(html: string): string {
+  return (
+    html
+      // Remove common inline formatting tags (require word boundary or space after tag name)
+      .replace(/<\/?b\s*>/gi, "")
+      .replace(/<\/?i\s*>/gi, "")
+      .replace(/<\/?em\s*>/gi, "")
+      .replace(/<\/?strong\s*>/gi, "")
+      .replace(/<\/?span(?:\s[^>]*)?\s*>/gi, "")
+      .replace(/<br\s*\/?>/gi, " ")
+      .trim()
+  );
+}
+
+/**
  * Search using DuckDuckGo HTML interface
  */
 async function searchDuckDuckGo(
@@ -300,7 +347,7 @@ async function searchDuckDuckGo(
         method: "GET",
         headers: {
           "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
           Accept: "text/html,application/xhtml+xml",
           "Accept-Language": "en-US,en;q=0.9",
         },
@@ -321,6 +368,7 @@ async function searchDuckDuckGo(
       return ok({
         query,
         engine: "duckduckgo",
+        engineUsed: "duckduckgo",
         results,
         totalResults: results.length,
       });
@@ -398,6 +446,7 @@ async function searchWithSerpAPI(
       return ok({
         query,
         engine,
+        engineUsed: engine,
         results,
         totalResults: results.length,
       });
@@ -411,6 +460,89 @@ async function searchWithSerpAPI(
     }
     return fail("Unknown error during SerpAPI search");
   }
+}
+
+/** Tavily time range mapping from user-friendly to API format */
+const TAVILY_TIME_RANGE_MAP: Record<string, "d" | "w" | "m" | "y"> = {
+  day: "d",
+  week: "w",
+  month: "m",
+  year: "y",
+};
+
+/**
+ * Tavily API response types
+ */
+interface TavilyApiResult {
+  title: string;
+  url: string;
+  content: string;
+  score?: number;
+}
+
+interface TavilyApiResponse {
+  results: TavilyApiResult[];
+  answer?: string;
+  query: string;
+}
+
+/**
+ * Search using Tavily API (requires TAVILY_API_KEY)
+ * Tavily provides AI-powered search with optional answer generation.
+ */
+async function searchTavily(
+  query: string,
+  options: {
+    apiKey: string;
+    maxResults?: number;
+    searchDepth?: "basic" | "advanced";
+    includeDomains?: string[];
+    excludeDomains?: string[];
+    timeRange?: "d" | "w" | "m" | "y";
+  },
+  signal: AbortSignal
+): Promise<{ results: SearchResult[]; answer?: string }> {
+  const requestBody = {
+    api_key: options.apiKey,
+    query,
+    search_depth: options.searchDepth || "basic",
+    include_answer: true,
+    max_results: options.maxResults || DEFAULT_MAX_RESULTS,
+    ...(options.includeDomains?.length && { include_domains: options.includeDomains }),
+    ...(options.excludeDomains?.length && { exclude_domains: options.excludeDomains }),
+    ...(options.timeRange && { time_range: options.timeRange }),
+  };
+
+  const response = await fetch(TAVILY_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new HttpError(
+      `Tavily API request failed (${response.status}): ${sanitizeApiKey(errorText)}`,
+      response.status
+    );
+  }
+
+  const data = (await response.json()) as TavilyApiResponse;
+
+  const results: SearchResult[] = (data.results || []).map((item, index) => ({
+    title: item.title || "",
+    url: item.url || "",
+    snippet: item.content || "",
+    position: index + 1,
+  }));
+
+  return {
+    results,
+    answer: data.answer,
+  };
 }
 
 /**
@@ -438,7 +570,7 @@ async function searchWithSerpAPI(
 export const webSearchTool = defineTool({
   name: "web_search",
   description:
-    "Search the web for information. Returns ranked results with titles, URLs, and snippets. Uses DuckDuckGo by default (free, no API key needed). For Google or Bing, requires SERPAPI_KEY environment variable.",
+    "Search the web for information. Returns ranked results with titles, URLs, and snippets. Uses auto engine selection by default (Tavily if TAVILY_API_KEY is set, else DuckDuckGo). For Google or Bing, requires SERPAPI_KEY. Tavily supports advanced options like time filtering and domain restrictions.",
   parameters: webSearchParamsSchema,
   kind: "read",
   category: "network",
@@ -449,12 +581,38 @@ export const webSearchTool = defineTool({
       return fail("Operation was cancelled");
     }
 
-    const { query, maxResults = DEFAULT_MAX_RESULTS, engine = "duckduckgo" } = input;
+    const {
+      query,
+      maxResults = DEFAULT_MAX_RESULTS,
+      engine = "auto",
+      timeRange,
+      includeDomains,
+      excludeDomains,
+      searchDepth,
+    } = input;
+
+    // Determine actual engine to use
+    const tavilyApiKey = process.env.TAVILY_API_KEY;
+    let actualEngine: "google" | "duckduckgo" | "bing" | "tavily";
+
+    if (engine === "auto") {
+      // Auto: prefer Tavily if API key available, else DuckDuckGo
+      actualEngine = tavilyApiKey ? "tavily" : "duckduckgo";
+    } else if (engine === "tavily") {
+      if (!tavilyApiKey) {
+        return fail(
+          "Tavily API key not found. Set TAVILY_API_KEY environment variable, or use 'duckduckgo' engine instead."
+        );
+      }
+      actualEngine = "tavily";
+    } else {
+      actualEngine = engine;
+    }
 
     // Check permission for network access
-    const hasPermission = await ctx.checkPermission("network:read", `search:${engine}`);
+    const hasPermission = await ctx.checkPermission("network:read", `search:${actualEngine}`);
     if (!hasPermission) {
-      return fail(`Permission denied: cannot perform web search using ${engine}`);
+      return fail(`Permission denied: cannot perform web search using ${actualEngine}`);
     }
 
     // Create timeout controller
@@ -466,11 +624,68 @@ export const webSearchTool = defineTool({
     ctx.abortSignal.addEventListener("abort", abortHandler);
 
     try {
-      if (engine === "duckduckgo") {
+      // Tavily search with fallback to DuckDuckGo
+      if (actualEngine === "tavily") {
+        try {
+          const tavilyResult = await withHttpRetry(async () => {
+            return await searchTavily(
+              query,
+              {
+                apiKey: tavilyApiKey!,
+                maxResults,
+                searchDepth,
+                includeDomains,
+                excludeDomains,
+                timeRange: timeRange ? TAVILY_TIME_RANGE_MAP[timeRange] : undefined,
+              },
+              timeoutController.signal
+            );
+          }, timeoutController.signal);
+
+          return ok({
+            query,
+            engine: engine === "auto" ? "auto" : "tavily",
+            engineUsed: "tavily",
+            results: tavilyResult.results,
+            totalResults: tavilyResult.results.length,
+            answer: tavilyResult.answer,
+          });
+        } catch (tavilyError) {
+          // Fallback to DuckDuckGo on Tavily failure (only for non-abort errors)
+          if (
+            tavilyError instanceof Error &&
+            (tavilyError.name === "AbortError" || timeoutController.signal.aborted)
+          ) {
+            return fail("Search request was cancelled");
+          }
+
+          console.warn(
+            `[web-search] Tavily search failed, falling back to DuckDuckGo: ${tavilyError instanceof Error ? sanitizeApiKey(tavilyError.message) : "Unknown error"}`
+          );
+
+          const fallbackResult = await searchDuckDuckGo(
+            query,
+            maxResults,
+            timeoutController.signal
+          );
+          if (fallbackResult.success) {
+            // Mark as fallback in the response
+            return ok({
+              ...fallbackResult.output,
+              engine: engine === "auto" ? "auto" : "tavily",
+              engineUsed: "duckduckgo (fallback)",
+            });
+          }
+          return fallbackResult;
+        }
+      }
+
+      if (actualEngine === "duckduckgo") {
         return await searchDuckDuckGo(query, maxResults, timeoutController.signal);
       }
+
       // Google or Bing via SerpAPI
-      return await searchWithSerpAPI(query, maxResults, engine, timeoutController.signal);
+      return await searchWithSerpAPI(query, maxResults, actualEngine, timeoutController.signal);
     } finally {
       clearTimeout(timeoutId);
       ctx.abortSignal.removeEventListener("abort", abortHandler);

@@ -111,6 +111,7 @@ import {
   uninstallCommand,
   usageCommand,
   vimSlashCommands,
+  webSearchSlashCommands,
   workflowCommands,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
@@ -503,6 +504,11 @@ function createCommandRegistry(): CommandRegistry {
 
   // Register settings system commands
   for (const cmd of settingsSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // Register search commands (web search configuration)
+  for (const cmd of webSearchSlashCommands) {
     registry.register(cmd);
   }
 

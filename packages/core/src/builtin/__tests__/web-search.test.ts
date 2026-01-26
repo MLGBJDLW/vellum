@@ -593,4 +593,246 @@ describe("webSearchTool", () => {
       }
     });
   });
+
+  describe("Tavily search", () => {
+    const mockTavilyResponse = {
+      answer: "AI generated summary of search results",
+      query: "test query",
+      results: [
+        {
+          title: "Tavily Result 1",
+          url: "https://example.com/1",
+          content: "Content from Tavily search",
+          score: 0.95,
+        },
+        {
+          title: "Tavily Result 2",
+          url: "https://example.com/2",
+          content: "More content from Tavily",
+          score: 0.88,
+        },
+      ],
+    };
+
+    afterEach(() => {
+      delete process.env.TAVILY_API_KEY;
+    });
+
+    it("should search using Tavily when key is provided", async () => {
+      process.env.TAVILY_API_KEY = "test-tavily-key";
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockTavilyResponse),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "test query", maxResults: 10, engine: "tavily" },
+        ctx
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.engineUsed).toBe("tavily");
+        expect(result.output.results).toHaveLength(2);
+        expect(result.output.results[0]?.title).toBe("Tavily Result 1");
+        expect(result.output.answer).toBe("AI generated summary of search results");
+      }
+    });
+
+    it("should fail without API key for tavily engine", async () => {
+      delete process.env.TAVILY_API_KEY;
+
+      const result = await webSearchTool.execute(
+        { query: "test", maxResults: 10, engine: "tavily" },
+        ctx
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("TAVILY_API_KEY");
+      }
+    });
+
+    it("should use Tavily for auto engine when API key is available", async () => {
+      process.env.TAVILY_API_KEY = "test-tavily-key";
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockTavilyResponse),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "test query", maxResults: 10, engine: "auto" },
+        ctx
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.engineUsed).toBe("tavily");
+        expect(result.output.engine).toBe("auto");
+      }
+
+      // Verify POST to Tavily API
+      expect(fetchMock).toHaveBeenCalled();
+      const call = fetchMock.mock.calls[0];
+      expect(call?.[0]).toContain("tavily.com");
+    });
+
+    it("should fallback to DuckDuckGo when Tavily fails", async () => {
+      process.env.TAVILY_API_KEY = "test-tavily-key";
+
+      const duckDuckGoHtml = `
+        <html>
+          <a class="result__a" href="https://fallback.com">Fallback Result</a>
+          <a class="result__snippet">Fallback snippet</a>
+        </html>
+      `;
+
+      const fetchMock = vi
+        .fn()
+        // First call (Tavily) fails
+        .mockRejectedValueOnce(new Error("Tavily API error"))
+        // Second call (DuckDuckGo fallback) succeeds
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve(duckDuckGoHtml),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "test query", maxResults: 10, engine: "auto" },
+        ctx
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.engineUsed).toContain("fallback");
+      }
+    });
+
+    it("should include answer in output when available", async () => {
+      process.env.TAVILY_API_KEY = "test-tavily-key";
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockTavilyResponse),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "test", maxResults: 10, engine: "tavily" },
+        ctx
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.answer).toBe("AI generated summary of search results");
+      }
+    });
+
+    it("should pass advanced parameters to Tavily", async () => {
+      process.env.TAVILY_API_KEY = "test-tavily-key";
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockTavilyResponse),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await webSearchTool.execute(
+        {
+          query: "test",
+          maxResults: 10,
+          engine: "tavily",
+          searchDepth: "advanced",
+          includeDomains: ["example.com"],
+          excludeDomains: ["spam.com"],
+          timeRange: "week",
+        },
+        ctx
+      );
+
+      expect(fetchMock).toHaveBeenCalled();
+      const call = fetchMock.mock.calls[0];
+      const body = JSON.parse(call?.[1]?.body as string);
+      expect(body.search_depth).toBe("advanced");
+      expect(body.include_domains).toContain("example.com");
+      expect(body.exclude_domains).toContain("spam.com");
+      expect(body.time_range).toBe("w"); // "week" maps to "w"
+    });
+
+    it("should handle Tavily API HTTP errors", async () => {
+      process.env.TAVILY_API_KEY = "test-tavily-key";
+
+      const duckDuckGoHtml = `
+        <html>
+          <a class="result__a" href="https://fallback.com">DDG Result</a>
+        </html>
+      `;
+
+      const fetchMock = vi
+        .fn()
+        // Tavily returns error
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: () => Promise.resolve("Unauthorized"),
+        })
+        // Fallback to DDG
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve(duckDuckGoHtml),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "test", maxResults: 10, engine: "auto" },
+        ctx
+      );
+
+      // Should fallback successfully
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.engineUsed).toContain("fallback");
+      }
+    });
+
+    it("should respect maxResults limit", async () => {
+      process.env.TAVILY_API_KEY = "test-tavily-key";
+
+      const manyResults = {
+        query: "test",
+        results: Array.from({ length: 10 }, (_, i) => ({
+          title: `Result ${i + 1}`,
+          url: `https://example.com/${i + 1}`,
+          content: `Content ${i + 1}`,
+        })),
+      };
+
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(manyResults),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await webSearchTool.execute({ query: "test", maxResults: 3, engine: "tavily" }, ctx);
+
+      // Check that maxResults is passed to API
+      const call = fetchMock.mock.calls[0];
+      const body = JSON.parse(call?.[1]?.body as string);
+      expect(body.max_results).toBe(3);
+    });
+
+    it("should check network:read permission for tavily", async () => {
+      process.env.TAVILY_API_KEY = "test-tavily-key";
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockTavilyResponse),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await webSearchTool.execute({ query: "test", maxResults: 10, engine: "tavily" }, ctx);
+
+      expect(ctx.checkPermission).toHaveBeenCalledWith("network:read", "search:tavily");
+    });
+  });
 });
