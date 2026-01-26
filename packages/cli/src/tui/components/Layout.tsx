@@ -62,6 +62,10 @@ export interface LayoutProps {
   readonly branch?: string;
   /** Number of changed files to show in header separator */
   readonly changedFiles?: number;
+  /** Number of line additions */
+  readonly additions?: number;
+  /** Number of line deletions */
+  readonly deletions?: number;
 }
 
 // =============================================================================
@@ -87,6 +91,10 @@ interface SeparatorProps {
   readonly branch?: string;
   /** Number of changed files */
   readonly changedFiles?: number;
+  /** Number of line additions */
+  readonly additions?: number;
+  /** Number of line deletions */
+  readonly deletions?: number;
 }
 
 /** Minimum line chars on each side of embedded info */
@@ -98,8 +106,11 @@ function Separator({
   workspace,
   branch,
   changedFiles,
+  additions,
+  deletions,
 }: SeparatorProps): React.JSX.Element {
   const { width: columns } = useTerminalDimensions();
+  const { theme } = useTheme();
   const char = style === "double" ? "═" : "─";
 
   // If no embedded info, render simple line
@@ -114,20 +125,25 @@ function Separator({
     );
   }
 
-  // Build embedded info string: "[ workspace | branch *N ]"
-  const parts: string[] = [];
+  // Build embedded info parts for length calculation
+  // Format: "[ workspace | branch *N +A -D ]"
+  const hasLineStats = (additions && additions > 0) || (deletions && deletions > 0);
+  const lineStatsText = hasLineStats ? ` +${additions ?? 0} -${deletions ?? 0}` : "";
+
+  const infoParts: string[] = [];
   if (workspace) {
-    parts.push(workspace);
+    infoParts.push(workspace);
   }
   if (branch) {
-    let branchPart = branch;
+    let branchText = branch;
     if (changedFiles && changedFiles > 0) {
-      branchPart += ` *${changedFiles}`;
+      branchText += ` *${changedFiles}`;
     }
-    parts.push(branchPart);
+    // Include line stats length for calculation but render separately
+    infoParts.push(branchText + lineStatsText);
   }
 
-  const infoText = parts.length > 0 ? `[ ${parts.join(" | ")} ]` : "";
+  const infoText = infoParts.length > 0 ? `[ ${infoParts.join(" | ")} ]` : "";
   const infoLength = infoText.length;
 
   // Calculate available space for line chars
@@ -152,13 +168,35 @@ function Separator({
   const leftLine = char.repeat(leftPadding);
   const rightLine = char.repeat(Math.max(0, rightPadding));
 
+  // Build branch display text (without line stats - those are rendered with colors)
+  let branchDisplay = branch ?? "";
+  if (branch && changedFiles && changedFiles > 0) {
+    branchDisplay = `${branch} *${changedFiles}`;
+  }
+
+  // Build the prefix part: "[ workspace | branch *N" or "[ branch *N"
+  const prefixParts: string[] = [];
+  if (workspace) {
+    prefixParts.push(workspace);
+  }
+  if (branch) {
+    prefixParts.push(branchDisplay);
+  }
+  const prefixText = prefixParts.length > 0 ? `[ ${prefixParts.join(" | ")}` : "[";
+
+  // Render with colored line stats
   return (
     <Box width="100%">
-      <Text color={color} wrap="truncate-end">
-        {leftLine}
-        {infoText}
-        {rightLine}
-      </Text>
+      <Text color={color}>{leftLine}</Text>
+      <Text color={color}>{prefixText}</Text>
+      {hasLineStats && (
+        <>
+          <Text color={theme.colors.success}> +{additions ?? 0}</Text>
+          <Text color={theme.colors.error}> -{deletions ?? 0}</Text>
+        </>
+      )}
+      <Text color={color}> ]</Text>
+      <Text color={color}>{rightLine}</Text>
     </Box>
   );
 }
@@ -176,6 +214,10 @@ interface HeaderRegionProps {
   readonly branch?: string;
   /** Number of changed files */
   readonly changedFiles?: number;
+  /** Number of line additions */
+  readonly additions?: number;
+  /** Number of line deletions */
+  readonly deletions?: number;
 }
 
 function HeaderRegion({
@@ -184,6 +226,8 @@ function HeaderRegion({
   workspace,
   branch,
   changedFiles,
+  additions,
+  deletions,
 }: HeaderRegionProps): React.JSX.Element {
   return (
     <Box flexDirection="column" width="100%">
@@ -193,6 +237,8 @@ function HeaderRegion({
         workspace={workspace}
         branch={branch}
         changedFiles={changedFiles}
+        additions={additions}
+        deletions={deletions}
       />
     </Box>
   );
@@ -332,6 +378,8 @@ export function Layout({
   workspace,
   branch,
   changedFiles,
+  additions,
+  deletions,
 }: LayoutProps): React.JSX.Element {
   const { theme } = useTheme();
   const { width: columns, height: rows } = useTerminalDimensions();
@@ -402,6 +450,8 @@ export function Layout({
           workspace={workspace}
           branch={branch}
           changedFiles={changedFiles}
+          additions={additions}
+          deletions={deletions}
         >
           {header}
         </HeaderRegion>

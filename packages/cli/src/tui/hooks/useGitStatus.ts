@@ -29,6 +29,10 @@ export interface GitStatus {
   readonly isDirty: boolean;
   /** Number of changed files (staged + unstaged + untracked) */
   readonly changedFiles: number;
+  /** Number of lines added (from git diff) */
+  readonly additions: number;
+  /** Number of lines deleted (from git diff) */
+  readonly deletions: number;
   /** Whether the status is still loading */
   readonly isLoading: boolean;
   /** Whether this is a valid git repository */
@@ -76,31 +80,64 @@ async function runGitCommandAsync(command: string, cwd: string): Promise<string 
 }
 
 /**
+ * Parse git diff --shortstat output to extract additions and deletions.
+ * Format: " 3 files changed, 10 insertions(+), 5 deletions(-)"
+ */
+function parseDiffShortstat(output: string | null): { additions: number; deletions: number } {
+  if (!output) return { additions: 0, deletions: 0 };
+
+  let additions = 0;
+  let deletions = 0;
+
+  // Match insertions: "10 insertions(+)" or "1 insertion(+)"
+  const insertMatch = output.match(/(\d+)\s+insertion/);
+  if (insertMatch?.[1]) {
+    additions = parseInt(insertMatch[1], 10);
+  }
+
+  // Match deletions: "5 deletions(-)" or "1 deletion(-)"
+  const deleteMatch = output.match(/(\d+)\s+deletion/);
+  if (deleteMatch?.[1]) {
+    deletions = parseInt(deleteMatch[1], 10);
+  }
+
+  return { additions, deletions };
+}
+
+/**
  * Fetch git status using native git commands asynchronously.
  */
 async function fetchGitStatusAsync(cwd: string): Promise<{
   branch: string | null;
   isDirty: boolean;
   changedFiles: number;
+  additions: number;
+  deletions: number;
 }> {
-  // Run both commands in parallel for better performance
-  const [branch, statusOutput] = await Promise.all([
+  // Run all commands in parallel for better performance
+  const [branch, statusOutput, diffStatOutput] = await Promise.all([
     runGitCommandAsync("git rev-parse --abbrev-ref HEAD", cwd),
     runGitCommandAsync("git status --porcelain", cwd),
+    runGitCommandAsync("git diff --shortstat", cwd),
   ]);
 
   if (statusOutput === null) {
-    return { branch: null, isDirty: false, changedFiles: 0 };
+    return { branch: null, isDirty: false, changedFiles: 0, additions: 0, deletions: 0 };
   }
 
   const lines = statusOutput.split("\n").filter((line) => line.trim() !== "");
   const changedFiles = lines.length;
   const isDirty = changedFiles > 0;
 
+  // Parse diff statistics
+  const { additions, deletions } = parseDiffShortstat(diffStatOutput);
+
   return {
     branch,
     isDirty,
     changedFiles,
+    additions,
+    deletions,
   };
 }
 
@@ -130,6 +167,8 @@ export function useGitStatus(): GitStatus {
     branch: null,
     isDirty: false,
     changedFiles: 0,
+    additions: 0,
+    deletions: 0,
     isLoading: true,
     isGitRepo: false,
   });
@@ -169,6 +208,8 @@ export function useGitStatus(): GitStatus {
           branch: null,
           isDirty: false,
           changedFiles: 0,
+          additions: 0,
+          deletions: 0,
           isLoading: false,
           isGitRepo: false,
         });

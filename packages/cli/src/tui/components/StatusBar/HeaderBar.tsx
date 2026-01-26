@@ -94,7 +94,12 @@ export function HeaderBar({ snapshotCount, sandboxActive }: HeaderBarProps): Rea
       {showGit && (
         <>
           <Text color={theme.semantic.text.muted}>{SEPARATOR}</Text>
-          <GitIndicator maxWidth={gitMaxWidth} showDirty showChangedCount={!isCompact} />
+          <GitIndicator
+            maxWidth={gitMaxWidth}
+            showDirty
+            showChangedCount={!isCompact}
+            showLineStats={!isCompact}
+          />
         </>
       )}
 

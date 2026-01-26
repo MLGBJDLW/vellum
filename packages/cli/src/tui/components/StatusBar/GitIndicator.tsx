@@ -29,6 +29,8 @@ export interface GitIndicatorProps {
   readonly showDirty?: boolean;
   /** Whether to show the changed files count (default: false) */
   readonly showChangedCount?: boolean;
+  /** Whether to show line statistics (+additions -deletions) (default: false) */
+  readonly showLineStats?: boolean;
 }
 
 // =============================================================================
@@ -49,15 +51,18 @@ export interface GitIndicatorProps {
  * // Output:  main (clean)
  * // Output:  main * (dirty)
  * // Output:  feature/long… * (truncated + dirty)
+ * // Output:  main * +10 -5 (with line stats)
  * ```
  */
 export function GitIndicator({
   maxWidth = 15,
   showDirty = true,
   showChangedCount = false,
+  showLineStats = false,
 }: GitIndicatorProps): React.JSX.Element | null {
   const { theme } = useTheme();
-  const { branch, isDirty, changedFiles, isLoading, isGitRepo } = useGitStatus();
+  const { branch, isDirty, changedFiles, additions, deletions, isLoading, isGitRepo } =
+    useGitStatus();
   const icons = getIcons();
 
   const displayBranch = useMemo(() => {
@@ -75,6 +80,9 @@ export function GitIndicator({
   const dirtySuffix = showDirty && isDirty ? ` ${icons.dirty}` : "";
   const countSuffix = showChangedCount && changedFiles > 0 ? ` (${changedFiles})` : "";
 
+  // Show line stats if enabled and there are changes
+  const hasLineStats = showLineStats && (additions > 0 || deletions > 0);
+
   return (
     <Text color={theme.semantic.text.muted}>
       {icons.branch} {displayBranch}
@@ -83,6 +91,14 @@ export function GitIndicator({
           {dirtySuffix}
           {countSuffix}
         </Text>
+      )}
+      {hasLineStats && (
+        <>
+          <Text> </Text>
+          <Text color={theme.colors.success}>+{additions}</Text>
+          <Text> </Text>
+          <Text color={theme.colors.error}>-{deletions}</Text>
+        </>
       )}
     </Text>
   );

@@ -116,6 +116,7 @@ import {
 import { modeSlashCommands } from "./commands/mode.js";
 import { roleSlashCommands } from "./commands/role.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
+import { checkUpdateOnStartup } from "./commands/update.js";
 import { setShutdownCleanup } from "./shutdown.js";
 import { useAgentAdapter } from "./tui/adapters/agent-adapter.js";
 import { toUIMessages } from "./tui/adapters/message-adapter.js";
@@ -237,6 +238,7 @@ import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
 // Cursor management utilities
 import { CursorManager } from "./tui/utils/cursor-manager.js";
 import { calculateCost, getContextWindow, getModelInfo } from "./utils/index.js";
+import { version } from "./version.js";
 
 /**
  * Get default model for a given provider
@@ -753,7 +755,12 @@ function AppContent({
 
   // Workspace and git status for header separator
   const { name: workspaceName } = useWorkspace();
-  const { branch: gitBranch, changedFiles: gitChangedFiles } = useGitStatus();
+  const {
+    branch: gitBranch,
+    changedFiles: gitChangedFiles,
+    additions: gitAdditions,
+    deletions: gitDeletions,
+  } = useGitStatus();
 
   // Alternate buffer configuration
   // Enabled by default (config defaults to true)
@@ -1982,6 +1989,24 @@ function AppContent({
     current: string;
     latest: string;
   } | null>(null);
+
+  // Check for updates on startup (non-blocking)
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        const result = await checkUpdateOnStartup(version);
+        if (result) {
+          setUpdateAvailable({
+            current: version,
+            latest: result.latestVersion,
+          });
+        }
+      } catch {
+        // Silently ignore update check failures
+      }
+    };
+    checkUpdate();
+  }, []);
 
   // ==========================================================================
   // FIX 5: Mode & Theme Persistence
@@ -3837,6 +3862,8 @@ function AppContent({
       workspace={workspaceName}
       branch={gitBranch}
       changedFiles={gitChangedFiles}
+      additions={gitAdditions}
+      deletions={gitDeletions}
       persistence={{
         status: persistence.status,
         unsavedCount: persistence.unsavedCount,
@@ -3981,6 +4008,10 @@ interface AppContentViewProps {
   readonly branch: string | null;
   /** Number of changed files for header separator */
   readonly changedFiles: number;
+  /** Number of line additions for header separator */
+  readonly additions: number;
+  /** Number of line deletions for header separator */
+  readonly deletions: number;
   /** Persistence status for session save indicator */
   readonly persistence?: {
     status: PersistenceStatus;
@@ -4656,6 +4687,8 @@ function AppContentView({
   workspace,
   branch,
   changedFiles,
+  additions,
+  deletions,
   persistence,
   snapshots,
   providerStatus,
@@ -5057,6 +5090,8 @@ function AppContentView({
                 workspace={workspace}
                 branch={branch ?? undefined}
                 changedFiles={changedFiles}
+                additions={additions}
+                deletions={deletions}
               >
                 {layoutBody}
               </Layout>
