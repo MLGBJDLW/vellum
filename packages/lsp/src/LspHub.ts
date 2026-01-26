@@ -20,6 +20,7 @@ import type {
   LspServer,
   LspServerStatus,
   MergedDiagnostics,
+  PendingInstall,
 } from "./types.js";
 
 interface ServerEntry {
@@ -70,6 +71,8 @@ export class LspHub {
   private diagnosticTimers = new Map<string, ReturnType<typeof setTimeout>>();
   // Pending diagnostics waiting to be emitted after debounce
   private pendingDiagnostics = new Map<string, { serverId: string; diagnostics: Diagnostic[] }>();
+  // Track servers pending installation when autoInstall is "prompt"
+  private pendingInstalls = new Map<string, PendingInstall>();
 
   constructor(options: LspHubOptions) {
     this.options = options;
@@ -912,6 +915,36 @@ export class LspHub {
     return allResults;
   }
 
+  /**
+   * Rename a symbol across the workspace.
+   * Uses first valid response strategy since rename from multiple servers could conflict.
+   */
+  async rename(
+    filePath: string,
+    line: number,
+    character: number,
+    newName: string
+  ): Promise<unknown | null> {
+    // Rename is a mutating operation, don't cache
+    const connections = await this.getConnectionsForFile(filePath);
+
+    for (const conn of connections) {
+      try {
+        await conn.touchFile(filePath);
+        const result = await conn.rename(filePath, line, character, newName);
+        if (result) {
+          return result;
+        }
+      } catch (error) {
+        this.options.logger?.warn?.(`Rename failed for ${conn.serverId}:`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return null;
+  }
+
   async dispose(): Promise<void> {
     // FIX: Properly clean up all resources to prevent memory leaks
     for (const entry of this.servers.values()) {
@@ -925,6 +958,7 @@ export class LspHub {
     }
     this.servers.clear();
     this.startingServers.clear();
+    this.pendingInstalls.clear();
 
     // Clear diagnostic debounce timers
     this.clearDiagnosticTimers();
@@ -964,14 +998,142 @@ export class LspHub {
   private async ensureCommandAvailable(command: string, serverId: string): Promise<void> {
     const searched = await this.findCommandPaths(command);
     if (searched.length === 0) {
-      if (this.options.autoInstall) {
-        const config = this.config?.servers[serverId] as LspServerConfig | undefined;
+      const config = this.config?.servers[serverId] as LspServerConfig | undefined;
+      const serverName = config?.name ?? serverId;
+      const installInfo = config?.install;
+
+      // "auto" mode: install without prompting
+      if (this.options.autoInstall === "auto") {
         if (config) {
-          await this.installer.install(serverId, config);
+          await this.performInstall(serverId, config);
           return;
         }
       }
+
+      // "prompt" mode: ask user before installing
+      if (this.options.autoInstall === "prompt") {
+        const shouldInstall = await this.handleInstallPrompt(
+          serverId,
+          serverName,
+          command,
+          installInfo
+        );
+
+        if (shouldInstall && config) {
+          await this.performInstall(serverId, config);
+          return;
+        }
+
+        // User declined or no callback - throw error to prevent server start
+        throw new ServerNotFoundError(serverId, searched);
+      }
+
+      // "never" mode: never auto-install
       throw new ServerNotFoundError(serverId, searched);
+    }
+  }
+
+  /**
+   * Handle installation prompt logic for "prompt" mode.
+   * Returns true if installation should proceed, false otherwise.
+   */
+  private async handleInstallPrompt(
+    serverId: string,
+    serverName: string,
+    command: string,
+    installInfo?: { method?: "npm" | "pip" | "cargo" | "system"; package?: string; args?: string[] }
+  ): Promise<boolean> {
+    // If callback is provided, use it
+    if (this.options.onInstallPrompt) {
+      const result = await this.options.onInstallPrompt(serverId, serverName, {
+        method: installInfo?.method,
+        package: installInfo?.package,
+      });
+
+      if (!result) {
+        this.emitEvent("install:skipped", { serverId, reason: "user-declined" });
+      }
+      return result;
+    }
+
+    // No callback: track as pending and emit event
+    const pending: PendingInstall = {
+      serverId,
+      serverName,
+      command,
+      installMethod: installInfo?.method,
+      installPackage: installInfo?.package,
+      requestedAt: new Date(),
+    };
+    this.pendingInstalls.set(serverId, pending);
+
+    this.emitEvent("install:prompt", {
+      serverId,
+      serverName,
+      command,
+      installMethod: installInfo?.method,
+      installPackage: installInfo?.package,
+    });
+
+    this.emitEvent("install:skipped", { serverId, reason: "no-callback" });
+    return false;
+  }
+
+  /**
+   * Perform the actual installation and emit completion event.
+   */
+  private async performInstall(serverId: string, config: LspServerConfig): Promise<void> {
+    try {
+      await this.installer.install(serverId, config);
+      // Remove from pending if it was there
+      this.pendingInstalls.delete(serverId);
+      this.emitEvent("install:complete", { serverId, success: true });
+    } catch (error) {
+      this.emitEvent("install:complete", {
+        serverId,
+        success: false,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get list of servers pending installation approval.
+   * Used when autoInstall is "prompt" and no onInstallPrompt callback is provided.
+   */
+  getPendingInstalls(): readonly PendingInstall[] {
+    return Array.from(this.pendingInstalls.values());
+  }
+
+  /**
+   * Clear a pending install (e.g., user dismissed the prompt).
+   */
+  clearPendingInstall(serverId: string): void {
+    this.pendingInstalls.delete(serverId);
+  }
+
+  /**
+   * Approve and execute a pending installation.
+   * Returns true if installation succeeded, false otherwise.
+   */
+  async approvePendingInstall(serverId: string): Promise<boolean> {
+    const pending = this.pendingInstalls.get(serverId);
+    if (!pending) {
+      return false;
+    }
+
+    const config = this.config?.servers[serverId] as LspServerConfig | undefined;
+    if (!config) {
+      this.pendingInstalls.delete(serverId);
+      return false;
+    }
+
+    try {
+      await this.performInstall(serverId, config);
+      return true;
+    } catch {
+      return false;
     }
   }
 

@@ -103,6 +103,27 @@ export {
 } from "./doc-lookup.js";
 // Example tools (for demonstration)
 export { exampleReadFileTool, exampleWriteFileTool } from "./example-tools.js";
+// File management tools (move, copy, delete, mkdir)
+export {
+  type CopyFileOutput,
+  type CopyFileParams,
+  type CreateDirectoryOutput,
+  type CreateDirectoryParams,
+  copyFileParamsSchema,
+  copyFileTool,
+  createDirectoryParamsSchema,
+  createDirectoryTool,
+  type DeleteFileOutput,
+  type DeleteFileParams,
+  deleteFileParamsSchema,
+  deleteFileTool,
+  FILE_MANAGEMENT_TOOLS,
+  type MoveFileOutput,
+  type MoveFileParams,
+  moveFileParamsSchema,
+  moveFileTool,
+  registerFileManagementTools,
+} from "./file-management.js";
 // Glob pattern matching
 export {
   type GlobOutput,
@@ -301,11 +322,15 @@ export const ALL_BUILTIN_TOOLS = [
   batchTool,
   browserTool,
   codebaseSearchTool,
+  copyFileTool,
+  createDirectoryTool,
   delegateAgentTool,
+  deleteFileTool,
   docLookupTool,
   globTool,
   insertAtLineTool,
   listDirTool,
+  moveFileTool,
   multiEditTool,
   readFileTool,
   readManyFilesTool,
@@ -359,6 +384,12 @@ import { browserTool } from "./browser.js";
 import { codebaseSearchTool } from "./codebase-search.js";
 import { delegateAgentTool } from "./delegate-agent.js";
 import { docLookupTool } from "./doc-lookup.js";
+import {
+  copyFileTool,
+  createDirectoryTool,
+  deleteFileTool,
+  moveFileTool,
+} from "./file-management.js";
 import { globTool } from "./glob.js";
 import { insertAtLineTool } from "./insert-at-line.js";
 import { listDirTool } from "./list-dir.js";

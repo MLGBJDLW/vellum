@@ -18,6 +18,14 @@ import type {
 
 export type LspTransportType = "stdio" | "socket" | "ipc";
 
+/**
+ * Auto-install mode for LSP servers.
+ * - "auto": Automatically install missing servers
+ * - "prompt": Prompt user before installing (default)
+ * - "never": Never auto-install servers
+ */
+export type AutoInstallMode = "auto" | "prompt" | "never";
+
 // =============================================================================
 // Server Status
 // =============================================================================
@@ -212,13 +220,42 @@ export interface MergedDiagnostics {
   readonly sources: readonly string[];
 }
 
+/**
+ * Represents a pending server installation that requires user confirmation.
+ * Used when autoInstall is set to "prompt" mode.
+ */
+export interface PendingInstall {
+  /** Unique identifier of the server */
+  readonly serverId: string;
+  /** Display name of the server */
+  readonly serverName: string;
+  /** The command that needs to be installed */
+  readonly command: string;
+  /** Installation method (npm, pip, cargo, system) */
+  readonly installMethod?: "npm" | "pip" | "cargo" | "system";
+  /** Package name to install */
+  readonly installPackage?: string;
+  /** Timestamp when the install was requested */
+  readonly requestedAt: Date;
+}
+
+/**
+ * Callback function for prompting user about server installation.
+ * Return true to proceed with installation, false to skip.
+ */
+export type InstallPromptCallback = (
+  serverId: string,
+  serverName: string,
+  installInfo: { method?: string; package?: string }
+) => Promise<boolean>;
+
 export interface LspHubOptions {
   getGlobalConfigPath: () => Promise<string>;
   getProjectConfigPath?: () => Promise<string | undefined>;
   toolRegistry?: ToolRegistryLike;
   onEvent?: <K extends keyof LspHubEvents>(event: K, data: LspHubEvents[K]) => void;
   logger?: LoggerLike;
-  autoInstall?: boolean;
+  autoInstall?: AutoInstallMode;
   idleTimeoutMs?: number;
   cacheMaxEntries?: number;
   requestTimeoutMs?: number;
@@ -229,6 +266,12 @@ export interface LspHubOptions {
   enableMultiClient?: boolean;
   /** Multi-client configuration */
   multiClientConfig?: MultiClientOptions;
+  /**
+   * Callback invoked when a server needs installation and autoInstall is "prompt".
+   * Return true to proceed with installation, false to skip.
+   * If not provided, pending installs will be tracked and can be queried via getPendingInstalls().
+   */
+  onInstallPrompt?: InstallPromptCallback;
 }
 
 export interface LspHubEvents {
@@ -265,5 +308,31 @@ export interface LspHubEvents {
   // FIX: Added config:error event for config-related errors
   "config:error": {
     readonly error: Error;
+  };
+  /**
+   * Emitted when a server installation is pending user confirmation.
+   * Only emitted when autoInstall is "prompt" and no onInstallPrompt callback is provided.
+   */
+  "install:prompt": {
+    readonly serverId: string;
+    readonly serverName: string;
+    readonly command: string;
+    readonly installMethod?: "npm" | "pip" | "cargo" | "system";
+    readonly installPackage?: string;
+  };
+  /**
+   * Emitted when a server installation is completed.
+   */
+  "install:complete": {
+    readonly serverId: string;
+    readonly success: boolean;
+    readonly error?: Error;
+  };
+  /**
+   * Emitted when a server installation is skipped by user.
+   */
+  "install:skipped": {
+    readonly serverId: string;
+    readonly reason: "user-declined" | "no-callback";
   };
 }

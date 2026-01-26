@@ -16,6 +16,7 @@ export function unregisterLspTools(registry: ToolRegistryLike): void {
     "lsp_hover",
     "lsp_definition",
     "lsp_references",
+    "lsp_rename",
     "lsp_symbols",
     "lsp_workspace_symbol",
     "lsp_incoming_calls",

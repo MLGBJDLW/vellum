@@ -27,6 +27,8 @@ export { InitErrorBanner, type InitErrorBannerProps } from "./InitErrorBanner.js
 export * from "./Input/index.js";
 // Layout
 export { Layout, type LayoutProps } from "./Layout.js";
+// LSP Setup Panel
+export { LspSetupPanel, type LspSetupPanelProps } from "./LspSetupPanel.js";
 // MCP Panel
 export { McpPanel, type McpPanelProps } from "./McpPanel.js";
 // Memory Panel (Phase 31)

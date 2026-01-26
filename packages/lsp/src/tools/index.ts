@@ -8,4 +8,5 @@ export { createFormatTool } from "./format.js";
 export { createHoverTool } from "./hover.js";
 export { createReferencesTool } from "./references.js";
 export { registerLspTools, unregisterLspTools } from "./register.js";
+export { createRenameTool } from "./rename.js";
 export { createDocumentSymbolsTool, createWorkspaceSymbolsTool } from "./symbols.js";

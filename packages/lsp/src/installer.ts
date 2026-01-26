@@ -2,12 +2,13 @@ import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import type { LspServerConfig } from "./config.js";
 import { InstallFailedError } from "./errors.js";
+import type { AutoInstallMode } from "./types.js";
 
 export interface InstallerConfig {
   npmRegistry: string;
   pipIndexUrl: string;
   timeoutMs: number;
-  autoInstall: boolean;
+  autoInstall: AutoInstallMode;
 }
 
 export interface InstallProgress {
@@ -27,7 +28,7 @@ export class ServerInstaller extends EventEmitter {
       npmRegistry: config.npmRegistry ?? "https://registry.npmjs.org",
       pipIndexUrl: config.pipIndexUrl ?? "https://pypi.org/simple",
       timeoutMs: config.timeoutMs ?? 120_000,
-      autoInstall: config.autoInstall ?? true,
+      autoInstall: config.autoInstall ?? "prompt",
     };
   }
 

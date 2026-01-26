@@ -40,7 +40,15 @@ const LspConfigSchema = z.object({
       ttlSeconds: z.number().default(300),
     })
     .default({ maxSize: 100, ttlSeconds: 300 }),
-  autoInstall: z.boolean().default(true),
+  autoInstall: z
+    .union([z.boolean(), z.enum(["auto", "prompt", "never"])])
+    .default("prompt")
+    .transform((val) => {
+      // Backward compatibility: true → "auto", false → "never"
+      if (val === true) return "auto";
+      if (val === false) return "never";
+      return val;
+    }),
   maxConcurrentServers: z.number().default(5),
   requestTimeoutMs: z.number().default(30_000),
 });
@@ -108,7 +116,7 @@ export function buildDefaultConfig(): LspConfig {
     servers: getDefaultServers(),
     disabled: [],
     cache: { maxSize: 100, ttlSeconds: 300 },
-    autoInstall: true,
+    autoInstall: "prompt",
     maxConcurrentServers: 5,
     requestTimeoutMs: 30_000,
   });

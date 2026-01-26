@@ -135,6 +135,7 @@ When clarifying complex concepts:
    - Illustrate data shapes
 
 ```
+
 File Structure:
 project/
 ├── src/
@@ -156,6 +157,7 @@ Configuration Options:
 │ baseUrl     │ string     │ required  │ API base URL           │
 │ debug       │ boolean    │ false     │ Enable debug logging   │
 └─────────────┴────────────┴───────────┴────────────────────────┘
+
 ```markdown
 
 ## Tool Priorities

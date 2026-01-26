@@ -18,6 +18,7 @@ import type {
   Location,
   SymbolInformation,
   TextEdit,
+  WorkspaceEdit,
 } from "vscode-languageserver-protocol";
 import { timeoutError } from "./error-utils.js";
 import { ConnectionClosedError, InitFailedError } from "./errors.js";
@@ -306,6 +307,19 @@ export class LanguageClient implements LspConnection {
     return this.sendRequest("textDocument/formatting", {
       textDocument: { uri: pathToFileURL(filePath).toString() },
       options: { tabSize: 2, insertSpaces: true },
+    });
+  }
+
+  async rename(
+    filePath: string,
+    line: number,
+    character: number,
+    newName: string
+  ): Promise<WorkspaceEdit | null> {
+    return this.sendRequest("textDocument/rename", {
+      textDocument: { uri: pathToFileURL(filePath).toString() },
+      position: { line, character },
+      newName,
     });
   }
 

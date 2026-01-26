@@ -44,7 +44,10 @@ export const lspConfigJsonSchema = {
         ttlSeconds: { type: "number", default: 300 },
       },
     },
-    autoInstall: { type: "boolean", default: true },
+    autoInstall: {
+      oneOf: [{ type: "boolean" }, { type: "string", enum: ["auto", "prompt", "never"] }],
+      default: "prompt",
+    },
     maxConcurrentServers: { type: "number", default: 5 },
     requestTimeoutMs: { type: "number", default: 30000 },
   },

@@ -43,6 +43,7 @@ temp-skills-*/
 
 # pre docs
 docs/pre/
+docs/gaps/
 
 # AI generated files
 AGENTS.md

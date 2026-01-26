@@ -477,6 +477,7 @@ export {
 // =============================================================================
 
 export { createLspCommand } from "./lsp.js";
+export { lspSlashCommand } from "./lsp-slash.js";
 
 // =============================================================================
 // Memory Commands (Phase 31)

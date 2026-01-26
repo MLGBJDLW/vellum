@@ -178,6 +178,7 @@ When documenting findings, assess risk systematically:
    - Info: Awareness only
 
 ```
+
 Risk Assessment Matrix:
 ┌────────────────────────────────────────────────────────────┐
 │              │ Low Impact │ Medium    │ High      │ Critical│
@@ -186,6 +187,7 @@ Risk Assessment Matrix:
 │ Med Likely   │ Low        │ Medium    │ High      │ Critical│
 │ Low Likely   │ Info       │ Low       │ Medium    │ High    │
 └──────────────┴────────────┴───────────┴───────────┴─────────┘
+
 ```markdown
 
 ## Tool Priorities

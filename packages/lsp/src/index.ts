@@ -28,6 +28,8 @@ export { findNearestRoot, findRootForFile } from "./root-detection.js";
 export { createLspTools } from "./tools/factory.js";
 export { registerLspTools, unregisterLspTools } from "./tools/register.js";
 export type {
+  AutoInstallMode,
+  InstallPromptCallback,
   LspConnection,
   LspHubEvents,
   LspHubOptions,
@@ -38,5 +40,6 @@ export type {
   MergedDiagnostics,
   MultiClientFileRule,
   MultiClientOptions,
+  PendingInstall,
   ToolRegistryLike,
 } from "./types.js";

@@ -16,7 +16,7 @@ function createMockHubOptions(overrides?: Partial<LspHubOptions>): LspHubOptions
   return {
     getGlobalConfigPath: vi.fn().mockResolvedValue("/mock/.config/vellum/lsp.json"),
     getProjectConfigPath: vi.fn().mockResolvedValue(undefined),
-    autoInstall: false,
+    autoInstall: "never",
     enableMultiClient: true,
     ...overrides,
   };
@@ -156,11 +156,11 @@ describe("Tool Factory", () => {
     await hub.dispose();
   });
 
-  it("should create all 12 LSP tools (including implementation)", () => {
+  it("should create all 13 LSP tools (including implementation + rename)", () => {
     const tools = createLspTools(hub);
 
-    // Should have 12 tools total (11 original + implementation)
-    expect(tools).toHaveLength(12);
+    // Should have 13 tools total (11 original + implementation + rename)
+    expect(tools).toHaveLength(13);
   });
 
   it("should include all expected tool names", () => {
@@ -178,6 +178,7 @@ describe("Tool Factory", () => {
     expect(toolNames).toContain("lsp_outgoing_calls");
     expect(toolNames).toContain("lsp_code_actions");
     expect(toolNames).toContain("lsp_completion");
+    expect(toolNames).toContain("lsp_rename");
     expect(toolNames).toContain("lsp_format");
   });
 

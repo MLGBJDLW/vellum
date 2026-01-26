@@ -71,6 +71,7 @@ import {
   initSlashCommand,
   installCommand,
   languageCommand,
+  lspSlashCommand,
   mcpSlashCommands,
   memoryCommand,
   metricsCommands,
@@ -138,7 +139,7 @@ import type { AutocompleteOption } from "./tui/components/Input/Autocomplete.js"
 import { EnhancedCommandInput } from "./tui/components/Input/EnhancedCommandInput.js";
 import type { SlashCommand } from "./tui/components/Input/slash-command-utils.js";
 import { TextInput } from "./tui/components/Input/TextInput.js";
-import { InitErrorBanner, McpPanel } from "./tui/components/index.js";
+import { InitErrorBanner, LspSetupPanel, McpPanel } from "./tui/components/index.js";
 import { Layout } from "./tui/components/Layout.js";
 import { MemoryPanel, type MemoryPanelProps } from "./tui/components/MemoryPanel.js";
 import { MessageList } from "./tui/components/Messages/MessageList.js";
@@ -584,6 +585,11 @@ function createCommandRegistry(): CommandRegistry {
   registry.register(progressCommand);
   registry.register(installCommand);
   registry.register(uninstallCommand);
+
+  // ==========================================================================
+  // Register LSP Slash Command (Phase 30)
+  // ==========================================================================
+  registry.register(lspSlashCommand);
 
   //: Plugin commands are registered via registerPluginCommands()
   // after PluginManager initialization in AppContent
@@ -2285,6 +2291,17 @@ function AppContent({
         description: "Show snapshots panel",
         scope: "global",
       },
+      // LSP panel (Alt+L)
+      {
+        key: "l",
+        alt: true,
+        handler: () => {
+          setShowSidebar(true);
+          setSidebarContent("lsp");
+        },
+        description: "Show LSP setup panel",
+        scope: "global",
+      },
       {
         key: "s",
         ctrl: true,
@@ -3371,6 +3388,38 @@ function AppContent({
         return undefined; // status doesn't need level 3
       }
 
+      // /lsp command: level 3 shows server names for specific subcommands
+      if (commandName === "lsp") {
+        const lspSubcommandsWithArgs = ["install", "start", "stop", "restart", "enable", "disable"];
+        if (lspSubcommandsWithArgs.includes(arg1)) {
+          const servers = [
+            "typescript",
+            "python",
+            "go",
+            "rust",
+            "vue",
+            "svelte",
+            "java",
+            "csharp",
+            "php",
+            "ruby",
+            "yaml",
+            "json",
+            "html",
+            "bash",
+          ];
+          const lowerPartial = partial.toLowerCase();
+          const filtered = lowerPartial
+            ? servers.filter((s) => s.startsWith(lowerPartial))
+            : servers;
+          return filtered.map((s) => ({
+            name: s,
+            description: `${s} language server`,
+          }));
+        }
+        return undefined;
+      }
+
       return undefined;
     },
     []
@@ -4050,6 +4099,10 @@ function renderSidebarContent({
         }}
         onRefresh={() => void snapshots.refresh()}
       />
+    );
+  } else if (sidebarContent === "lsp") {
+    panelContent = (
+      <LspSetupPanel isActive={showSidebar} onClose={() => announce("LSP panel closed")} />
     );
   } else {
     panelContent = <MemoryPanel entries={memoryEntries} isFocused={showSidebar} maxHeight={20} />;
