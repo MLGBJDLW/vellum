@@ -1,19 +1,23 @@
 ---
-"@butlerw/vellum": minor
+"@vellum/core": patch
+"@vellum/cli": patch
 ---
 
 ### feat(tools)
-- 集成 Tavily 搜索引擎，支持 AI 智能总结功能
-- 新增高级搜索参数：searchDepth（basic/advanced）、timeRange（day/week/month/year）、domains 域名过滤
-- 扩展 WebSearchParams Schema 支持新参数
+- Integrate Tavily search engine with AI-powered summarization
+- Add advanced search parameters: searchDepth, timeRange, domains filtering
+- Extend WebSearchParams schema to support new parameters
 
 ### feat(cli)
-- 新增 `/websearch` 命令，支持交互式 web 搜索
+- Add `/websearch` command for search engine configuration
 
 ### fix(tools)
-- 增强 DuckDuckGo 搜索引擎稳定性
-- 更新 User-Agent 为 Chrome/131
-- 优化 HTML 标签清理逻辑
+- Fix position reset bug in DuckDuckGo alt pattern matching
+- Fix sleep timer memory leak during search retries
+- Migrate Tavily URL to CONFIG_DEFAULTS.externalApis
+- Add timeout budget tracking for search operations
+- Update User-Agent to Chrome/131
+- Improve HTML tag cleanup with stripHtmlTags()
 
 ### test(tools)
-- 新增 9 个 Tavily 搜索引擎测试用例
+- Add 9 test cases for Tavily search engine

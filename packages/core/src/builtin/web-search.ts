@@ -59,11 +59,15 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       return;
     }
 
-    const timeoutId = setTimeout(resolve, ms);
     const abortHandler = () => {
       clearTimeout(timeoutId);
       reject(signal?.reason ?? new Error("Aborted"));
     };
+
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener("abort", abortHandler);
+      resolve();
+    }, ms);
 
     signal?.addEventListener("abort", abortHandler, { once: true });
   });
@@ -123,7 +127,7 @@ const DUCKDUCKGO_HTML_URL = CONFIG_DEFAULTS.externalApis.duckduckgoHtml;
 const SERPAPI_BASE_URL = CONFIG_DEFAULTS.externalApis.serpapi;
 
 /** Tavily API base URL */
-const TAVILY_API_URL = "https://api.tavily.com/search";
+const TAVILY_API_URL = CONFIG_DEFAULTS.externalApis.tavily;
 
 /**
  * Sanitize sensitive parameters from URLs/strings to prevent API key leakage in logs
@@ -245,6 +249,7 @@ function parseDuckDuckGoResults(html: string, maxResults: number, query: string)
 
   // If no results, try alternative pattern
   if (results.length === 0) {
+    position = 0; // Reset position for alt pattern
     altResultRegex.lastIndex = 0;
     // biome-ignore lint/suspicious/noAssignInExpressions: Standard regex iteration pattern
     while ((match = altResultRegex.exec(html)) !== null && position < maxResults) {
@@ -576,6 +581,9 @@ export const webSearchTool = defineTool({
   category: "network",
 
   async execute(input, ctx) {
+    // Track start time for timeout budget management
+    const startTime = Date.now();
+
     // Check for cancellation
     if (ctx.abortSignal.aborted) {
       return fail("Operation was cancelled");
@@ -662,6 +670,18 @@ export const webSearchTool = defineTool({
           console.warn(
             `[web-search] Tavily search failed, falling back to DuckDuckGo: ${tavilyError instanceof Error ? sanitizeApiKey(tavilyError.message) : "Unknown error"}`
           );
+
+          // Check remaining timeout budget before fallback (5s safety margin)
+          const TIMEOUT_SAFETY_MARGIN = 5000;
+          const elapsed = Date.now() - startTime;
+          if (elapsed > DEFAULT_TIMEOUT - TIMEOUT_SAFETY_MARGIN) {
+            console.warn(
+              `[web-search] Timeout budget exhausted (${elapsed}ms elapsed), skipping fallback`
+            );
+            return fail(
+              `Tavily search failed and no time remaining for fallback: ${tavilyError instanceof Error ? sanitizeApiKey(tavilyError.message) : "Unknown error"}`
+            );
+          }
 
           const fallbackResult = await searchDuckDuckGo(
             query,
