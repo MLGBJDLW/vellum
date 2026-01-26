@@ -131,6 +131,12 @@ export {
   wrapLine,
   wrapText,
 } from "./useLineBuffer.js";
+// LSP confirmation queue hook
+export {
+  type UseLspConfirmationOptions,
+  type UseLspConfirmationResult,
+  useLspConfirmation,
+} from "./useLspConfirmation.js";
 // @ Mention autocomplete hooks (Phase: TUI Context Mentions)
 export {
   type MentionAutocompleteState,

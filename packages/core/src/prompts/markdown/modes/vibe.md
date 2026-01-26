@@ -111,9 +111,11 @@ export const bar = foo() + 1;
 |-------|--------|----------|
 | read | ✅ | `read_file`, `glob`, `search_files`, `codebase_search`, `list_dir` |
 | edit | ✅ | `write_file`, `apply_patch`, `apply_diff`, `multi_edit` |
+| filesystem | ✅ | `move_file`, `copy_file`, `delete_file`, `create_directory` |
 | execute | ✅ | `bash`, `shell` |
 | browser | ✅ | `web_fetch`, `web_search`, `browser` |
 | mcp | ✅ | external tools via MCP |
+| lsp | ✅ | `lsp_rename` |
 | git | ✅ | status, diff, commit |
 | agent | ✅ | `delegate_agent` |
 
@@ -134,7 +136,7 @@ export const bar = foo() + 1;
 
 ## Error Handling
 
-**On error: Diagnose → Fix → Retry (up to 3 times)**
+### On error: Diagnose → Fix → Retry (up to 3 times)
 
 ```text
 Error
@@ -147,6 +149,7 @@ Error
 ### Error Recovery by Type
 
 #### Type Error
+
 ```text
 [type error detected]
   → read affected file(s)
@@ -156,6 +159,7 @@ Error
 ```
 
 #### Test Failure
+
 ```text
 [test failure detected]
   → read test file + implementation
@@ -166,6 +170,7 @@ Error
 ```
 
 #### Build/Compile Error
+
 ```text
 [build error detected]
   → check error message for file:line
@@ -175,6 +180,7 @@ Error
 ```
 
 #### Runtime Error
+
 ```text
 [runtime error in logs]
   → identify error type + stack trace
@@ -217,19 +223,22 @@ Files: {list of files changed}
 ### Output Templates
 
 **Simple fix:**
-```
+
+```text
 Fixed {file}:{line} — {description}
 ```
 
 **Multi-file change:**
-```
+
+```text
 {Summary of change}
 Files: file1.ts, file2.ts, file3.ts
 Tests: ✓ pass
 ```
 
 **With warning:**
-```
+
+```text
 {What was done}
 ⚠️ {caveat or side effect}
 ```
@@ -238,7 +247,7 @@ Tests: ✓ pass
 
 **User:** "Fix the typo in config.ts"
 
-```
+```text
 [read_file: config.ts]
 [apply_patch: fix "recieve" → "receive"]
 
@@ -247,7 +256,7 @@ Fixed config.ts:42 — typo "recieve" → "receive"
 
 **User:** "Add error handling to the handler"
 
-```
+```text
 [read_file: src/handler.ts]
 [apply_patch: wrap in try/catch]
 [run: pnpm test]
@@ -257,8 +266,8 @@ Added try/catch with proper error response. Tests pass ✓
 
 **User:** "Update imports to use @ alias"
 
-```
-[search_files: 'from "../']
+```text
+[search_files: 'from "../
 [multi_edit: file1.ts, file2.ts, file3.ts]
 
 Updated 3 files to use @/ imports.
@@ -364,6 +373,7 @@ Even in vibe mode:
 ## Mode Transition
 
 Switch to Plan mode if:
+
 - Task spans > 5 files
 - Architecture decisions needed
 - Unfamiliar codebase area
@@ -376,7 +386,7 @@ User: "Why did you do it that way?"
 
 ## The Contract
 
-```
+```text
 ┌─────────────────────────────────────┐
 │       VIBE MODE CONTRACT           │
 ├─────────────────────────────────────┤

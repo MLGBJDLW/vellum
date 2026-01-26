@@ -321,7 +321,7 @@ program
         const lspHub = LspHub.getInstance({
           getGlobalConfigPath: async () => join(homedir(), ".vellum", "lsp.json"),
           getProjectConfigPath: async () => join(resolve(workspaceRoot), ".vellum", "lsp.json"),
-          autoInstall: false,
+          autoInstall: "never",
           idleTimeoutMs: 300000,
           maxRestartAttempts: 3,
         });

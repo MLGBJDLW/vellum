@@ -18,6 +18,7 @@ import type {
   Location,
   SymbolInformation,
   TextEdit,
+  WorkspaceEdit,
 } from "vscode-languageserver-protocol";
 import { timeoutError } from "./error-utils.js";
 import { ConnectionClosedError, InitFailedError } from "./errors.js";
@@ -108,6 +109,7 @@ export class LanguageClient implements LspConnection {
         ...env,
       },
       stdio: "pipe",
+      shell: process.platform === "win32",
     });
 
     const stdout = this.serverProcess.stdout;
@@ -125,19 +127,61 @@ export class LanguageClient implements LspConnection {
     this.bindNotifications(connection);
     connection.listen();
 
+    // Fix: Early exit detection to prevent write-after-destroy race condition
+    let processExitedEarly = false;
+    let earlyExitCode: number | null = null;
+    let earlyExitError = "";
+
+    // Capture stderr for better error messages
+    this.serverProcess.stderr?.on("data", (chunk: Buffer) => {
+      earlyExitError += chunk.toString();
+    });
+
     this.serverProcess.on("exit", (code) => {
       this.closed = true;
+      processExitedEarly = true;
+      earlyExitCode = code;
       this.rejectPendingDiagnostics(new ConnectionClosedError(this.serverId, code ?? undefined));
     });
 
+    this.serverProcess.on("error", (err: Error) => {
+      processExitedEarly = true;
+      earlyExitError = err.message;
+    });
+
     try {
+      // Wait one tick to allow process state to stabilize
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Check if process exited before initialize()
+      if (processExitedEarly || this.serverProcess.exitCode !== null) {
+        const errorMsg =
+          earlyExitError.trim() ||
+          `Server exited with code ${earlyExitCode ?? this.serverProcess.exitCode}`;
+        throw new InitFailedError(this.serverId, new Error(errorMsg));
+      }
+
       const initResult = await this.initialize(connection);
       this.capabilitiesInternal = this.extractCapabilities(initResult);
       this.initializedInternal = true;
       this.connection = connection;
     } catch (error) {
       await this.shutdown();
-      throw error;
+      // Enhance error with early exit info if available
+      if (error instanceof InitFailedError) {
+        throw error;
+      }
+      const enhancedMsg = earlyExitError.trim()
+        ? `${error instanceof Error ? error.message : String(error)} (stderr: ${earlyExitError.trim()})`
+        : undefined;
+      throw new InitFailedError(
+        this.serverId,
+        enhancedMsg
+          ? new Error(enhancedMsg)
+          : error instanceof Error
+            ? error
+            : new Error(String(error))
+      );
     }
   }
 
@@ -306,6 +350,19 @@ export class LanguageClient implements LspConnection {
     return this.sendRequest("textDocument/formatting", {
       textDocument: { uri: pathToFileURL(filePath).toString() },
       options: { tabSize: 2, insertSpaces: true },
+    });
+  }
+
+  async rename(
+    filePath: string,
+    line: number,
+    character: number,
+    newName: string
+  ): Promise<WorkspaceEdit | null> {
+    return this.sendRequest("textDocument/rename", {
+      textDocument: { uri: pathToFileURL(filePath).toString() },
+      position: { line, character },
+      newName,
     });
   }
 

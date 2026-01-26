@@ -225,13 +225,16 @@ export class LspIntegrationManager extends EventEmitter {
           options.onEvent?.(event, data);
         },
         logger: options.logger,
-        autoInstall: options.autoInstall ?? false,
+        autoInstall: options.autoInstall ? "auto" : "never",
         idleTimeoutMs: options.idleTimeoutMs ?? 300000,
         maxRestartAttempts: 3,
       });
 
       // Initialize the hub
       await this.hub.initialize();
+
+      // Initialize auto-mode for language detection and server lifecycle
+      await this.hub.initAutoMode();
 
       // Get available servers
       const servers = this.hub.getServers();

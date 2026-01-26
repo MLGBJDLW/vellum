@@ -35,7 +35,7 @@ All decisions documented for traceability.
 | 5. Validation | `spec-validator` | validation-report.md | Approval |
 | 6. Implementation | `coder` | Code changes | Auto |
 
-```
+```text
 ┌──────────┐   ┌──────────────┐   ┌──────────┐
 │ Research │ → │ Requirements │ → │  Design  │
 └────┬─────┘   └──────┬───────┘   └────┬─────┘
@@ -55,8 +55,10 @@ All decisions documented for traceability.
 |------------|-----|-----|-----|-----|-----|-----|
 | read | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | edit | ❌ | ⚠️* | ⚠️* | ⚠️* | ⚠️* | ✅ |
+| filesystem | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | execute | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | browser | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| lsp | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | git | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | mcp | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | agent | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -66,36 +68,42 @@ All decisions documented for traceability.
 ## Phase Summaries
 
 ### Phase 1: 🔍 Research
+
 - **Goal**: Understand codebase, patterns, constraints
 - **Tools**: read, search (READ-ONLY)
 - **Output**: `context.md`
 - **Checkpoint**: Present findings, confirm understanding
 
 ### Phase 2: 📋 Requirements
+
 - **Goal**: Define WHAT to build (EARS format)
 - **Tools**: read, write (.ouroboros/ only)
 - **Output**: `requirements.md`
 - **Checkpoint**: Requirements review and approval
 
 ### Phase 3: 🏗️ Design
+
 - **Goal**: Define HOW to build (ADRs, contracts)
 - **Tools**: read, write (.ouroboros/ only)
 - **Output**: `design.md`
 - **Checkpoint**: Design review and approval
 
 ### Phase 4: 📝 Tasks
+
 - **Goal**: Break into actionable tasks
 - **Tools**: read, write (.ouroboros/ only), todo_manage
 - **Output**: `tasks.md`
 - **Checkpoint**: Task list approval
 
 ### Phase 5: ✅ Validation
+
 - **Goal**: Validate plan completeness
 - **Tools**: read, execute (dry-run/lint)
 - **Output**: `validation-report.md`
 - **Checkpoint**: Plan validation approval
 
 ### Phase 6: ⚙️ Implementation
+
 - **Goal**: Execute the validated plan
 - **Tools**: ALL (full access unlocked)
 - **Output**: Code changes, tests, docs
@@ -121,7 +129,7 @@ All decisions documented for traceability.
 
 ## Checkpoint Format
 
-```
+```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📐 SPEC CHECKPOINT: Phase {N} Complete
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -149,7 +157,7 @@ Proceed to {Next Phase}? (yes/modify/abort)
 
 When changes are requested, update affected downstream phases:
 
-```
+```text
 Research change → All phases affected
 Requirements change → Design, Tasks, Validation affected
 Design change → Tasks, Validation affected
@@ -186,6 +194,7 @@ Validation issue → May cascade to any phase
    - Ensure traceability is maintained
 
 4. **Mark previous versions in document history**
+
    ```markdown
    ## Document History
    | Version | Date | Changes |
@@ -214,7 +223,7 @@ User: "Actually, we need OAuth instead of JWT"
 
 All spec documents go in: `.ouroboros/specs/{spec-name}/`
 
-```
+```text
 .ouroboros/specs/my-feature/
 ├── context.md           # Phase 1 output
 ├── requirements.md      # Phase 2 output
@@ -259,11 +268,10 @@ phase: research
 
 ### Execution Order
 
-1. **Follow tasks.md sequence strictly**
-   - Tasks are ordered by dependency
-   - Do not skip ahead
+1. **Follow tasks.md sequence strictly** — Tasks are ordered by dependency. Do not skip ahead.
 
 2. **Mark task status before starting**
+
    ```markdown
    | Task | Status |
    |------|--------|
@@ -272,34 +280,28 @@ phase: research
    | T3 | `pending` |
    ```
 
-3. **Execute task completely**
-   - All files in task scope
-   - All acceptance criteria met
+3. **Execute task completely** — All files in task scope. All acceptance criteria met.
 
 4. **Run verification after each task**
+
    ```text
    [edit files]
    [pnpm typecheck] → must pass
    [pnpm test --run] → relevant tests pass
    ```
 
-5. **Mark task completed**
-   - Update status in tracking
-   - Note any deviations
+5. **Mark task completed** — Update status in tracking. Note any deviations.
 
-6. **Move to next task**
-   - No user confirmation needed
-   - Continue autonomously
+6. **Move to next task** — No user confirmation needed. Continue autonomously.
 
-7. **Report only after ALL tasks done**
-   - Single summary at end
-   - Not per-task updates
+7. **Report only after ALL tasks done** — Single summary at end. Not per-task updates.
 
 ### Handling Blockers
 
 If a task is blocked during implementation:
 
 1. **Mark task `cancelled` with reason**
+
    ```markdown
    | T3 | `cancelled` | Blocked: external API unavailable |
    ```
@@ -309,6 +311,7 @@ If a task is blocked during implementation:
    - Skip dependent tasks
 
 3. **Report blockers in final summary**
+
    ```text
    ⚠️ Blocked Tasks:
    - T3: External API unavailable
@@ -354,6 +357,10 @@ If a task is blocked during implementation:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+### Phase 1: context.md
+
+```yaml
 version: "1.0"
 created: YYYY-MM-DD
 status: draft
@@ -405,6 +412,9 @@ status: draft
 | Risk | Likelihood | Mitigation |
 |------|------------|------------|
 | [Risk description] | Low/Med/High | [How to address] |
+
+```text
+(end of context.md template)
 ```
 
 ### Phase 2: requirements.md (EARS Format)
@@ -493,7 +503,7 @@ Once all 5 phases approved:
 
 ### Complexity Guide
 
-```
+```text
 Simple (Vibe)         Moderate (Plan)       Complex (Spec)
 ├── 1-2 files        ├── 3-10 files        ├── > 10 files
 ├── < 50 lines       ├── 50-500 lines      ├── > 500 lines
@@ -523,7 +533,7 @@ Simple (Vibe)         Moderate (Plan)       Complex (Spec)
 
 ## The Spec Contract
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │          THE SPEC MODE CONTRACT             │
 ├─────────────────────────────────────────────┤

@@ -21,12 +21,16 @@ export {
 } from "./CostDisplay.js";
 // Common components
 export * from "./common/index.js";
+// Dialogs (confirmation prompts)
+export * from "./Dialogs/index.js";
 // Init Error Banner
 export { InitErrorBanner, type InitErrorBannerProps } from "./InitErrorBanner.js";
 // Component subdirectories
 export * from "./Input/index.js";
 // Layout
 export { Layout, type LayoutProps } from "./Layout.js";
+// LSP Setup Panel
+export { LspSetupPanel, type LspSetupPanelProps } from "./LspSetupPanel.js";
 // MCP Panel
 export { McpPanel, type McpPanelProps } from "./McpPanel.js";
 // Memory Panel (Phase 31)

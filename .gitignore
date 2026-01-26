@@ -21,6 +21,7 @@ nul
 .env
 .env.local
 .env.*.local
+lsp.json
 
 # Logs
 *.log
@@ -43,6 +44,7 @@ temp-skills-*/
 
 # pre docs
 docs/pre/
+docs/gaps/
 
 # AI generated files
 AGENTS.md

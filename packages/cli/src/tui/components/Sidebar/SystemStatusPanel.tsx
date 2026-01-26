@@ -10,6 +10,7 @@
  * @module tui/components/Sidebar/SystemStatusPanel
  */
 
+import type { LspServerState } from "@vellum/lsp";
 import { Box, Text } from "ink";
 import type React from "react";
 import { useApp } from "../../context/AppContext.js";
@@ -111,25 +112,37 @@ function getMcpStatus(
   if (mcpError) return ["err", colors.error];
   if (isInitializing) return ["...", colors.warning];
   if (!isInitialized) return ["off", colors.muted];
-  if (connectedCount === 0 && totalCount === 0) return ["–", colors.muted];
-  if (connectedCount === totalCount) return [`${connectedCount} ✓`, colors.success];
+  if (connectedCount === 0 && totalCount === 0) return ["-", colors.muted];
+  if (connectedCount === totalCount) return [`${connectedCount} ok`, colors.success];
   return [`${connectedCount}/${totalCount}`, colors.warning];
 }
 
 /**
  * Compute LSP server status display
+ * Supports auto-mode states for enhanced status reporting
  */
 function getLspStatus(
   lspError: Error | null,
   isInitialized: boolean,
   runningCount: number,
   totalCount: number,
+  autoModeStates: Map<string, LspServerState> | null,
   colors: ThemeColors
 ): StatusDisplay {
+  // Check auto-mode states first (these take priority for display)
+  if (autoModeStates) {
+    const states = [...autoModeStates.values()];
+    if (states.some((s) => s === "installing")) return ["dl..", colors.info];
+    if (states.some((s) => s === "starting")) return ["init", colors.info];
+    if (states.some((s) => s === "detecting")) return ["...", colors.info];
+    if (states.some((s) => s === "waiting-confirm")) return ["[?]", colors.warning];
+  }
+
+  // Standard status checks
   if (lspError) return ["err", colors.error];
   if (!isInitialized) return ["off", colors.muted];
-  if (totalCount === 0) return ["–", colors.muted];
-  if (runningCount === totalCount) return [`${runningCount} ✓`, colors.success];
+  if (totalCount === 0) return ["-", colors.muted];
+  if (runningCount === totalCount) return [`${runningCount} ok`, colors.success];
   return [`${runningCount}/${totalCount}`, colors.warning];
 }
 
@@ -152,7 +165,7 @@ function getUpdateStatus(
   colors: ThemeColors
 ): StatusDisplay {
   if (updateVersion) return [compact ? "!" : updateVersion, colors.info];
-  return ["✓", colors.success];
+  return ["ok", colors.success];
 }
 
 /**
@@ -217,6 +230,7 @@ export function SystemStatusPanel({
     lsp?.isInitialized ?? false,
     lsp?.runningServers ?? 0,
     lsp?.totalServers ?? 0,
+    lsp?.autoModeStates ?? null,
     colors
   );
   const [rateStatus, rateColor] = getRateStatus(rateLimitPercent, colors);

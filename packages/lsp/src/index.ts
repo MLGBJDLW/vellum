@@ -1,12 +1,18 @@
+export * from "./auto-mode/index.js";
 export { BrokenServerTracker } from "./broken-tracker.js";
 export { LspCache } from "./cache.js";
 export {
   buildDefaultConfig,
+  getGlobalConfigPath,
+  getProjectConfigPath,
   getServerConfig,
   type LspConfig,
   type LspServerConfig,
   loadLspConfig,
   mergeConfigs,
+  saveLspConfig,
+  updateAutoModeLanguageOverride,
+  updateDisabledServers,
 } from "./config.js";
 export { lspConfigJsonSchema } from "./config-schema.js";
 export { getUserFriendlyMessage, isRetryableError, requiresUserAction } from "./error-utils.js";
@@ -28,6 +34,8 @@ export { findNearestRoot, findRootForFile } from "./root-detection.js";
 export { createLspTools } from "./tools/factory.js";
 export { registerLspTools, unregisterLspTools } from "./tools/register.js";
 export type {
+  AutoInstallMode,
+  InstallPromptCallback,
   LspConnection,
   LspHubEvents,
   LspHubOptions,
@@ -38,5 +46,6 @@ export type {
   MergedDiagnostics,
   MultiClientFileRule,
   MultiClientOptions,
+  PendingInstall,
   ToolRegistryLike,
 } from "./types.js";

@@ -160,6 +160,7 @@ When planning system migrations:
    - Have clear success criteria per phase
 
 ```
+
 Migration Phases:
 ┌────────────────────────────────────────────────┐
 │ PHASE 1: Preparation                           │
@@ -182,6 +183,7 @@ Migration Phases:
 │   - Remove abstraction if no longer needed     │
 │   - Update documentation                       │
 └────────────────────────────────────────────────┘
+
 ```markdown
 
 ## Tool Priorities

@@ -137,6 +137,7 @@ When implementing deployment systems:
    - Known issues and workarounds
 
 ```
+
 Deployment Rollback Matrix:
 ┌─────────────────────────────────────────────────────────┐
 │ Scenario              │ Detection      │ Action         │
@@ -150,6 +151,7 @@ Deployment Rollback Matrix:
 
 Rollback Command:
 $ kubectl rollout undo deployment/app --to-revision=N
+
 ```markdown
 
 ### Monitoring Setup
@@ -179,6 +181,7 @@ When establishing observability:
    - On-call: critical metrics for incidents
 
 ```
+
 Alerting Best Practices:
 ┌────────────────────────────────────────────────────────┐
 │ Severity  │ Response     │ Example                     │
@@ -188,6 +191,7 @@ Alerting Best Practices:
 │ Medium    │ < 4 hours    │ Disk > 80%                  │
 │ Low       │ Next day     │ Certificate expires in 30d  │
 └───────────┴──────────────┴─────────────────────────────┘
+
 ```markdown
 
 ## Tool Priorities

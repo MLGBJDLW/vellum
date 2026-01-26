@@ -268,13 +268,108 @@ export function computeHighlights(
 }
 
 // =============================================================================
+// Constants for Level 3 Completion
+// =============================================================================
+
+/**
+ * Known LSP server names for argument completion
+ * Used when completing `/lsp install <server>`, `/lsp start <server>`, etc.
+ */
+const LSP_SERVER_NAMES = [
+  "typescript",
+  "python",
+  "go",
+  "rust",
+  "vue",
+  "svelte",
+  "java",
+  "csharp",
+  "php",
+  "ruby",
+  "yaml",
+  "json",
+  "html",
+] as const;
+
+/**
+ * Subcommands that support server name argument completion
+ */
+const LSP_SUBCOMMANDS_WITH_ARGS = ["install", "start", "stop", "restart", "enable", "disable"];
+
+// =============================================================================
 // Helper Functions
 // =============================================================================
 
 /**
  * Compute candidates from registry for a given query
+ *
+ * Supports multi-level completion:
+ * - Level 1: Command name (e.g., `/lsp`, `/help`)
+ * - Level 2: Subcommand (e.g., `/lsp install`, `/lsp status`)
+ * - Level 3: Positional argument (e.g., `/lsp install typescript`)
  */
 function computeCandidates(
+  query: string,
+  registry: CommandRegistry
+): readonly AutocompleteCandidate[] {
+  const parts = query.split(/\s+/);
+  const endsWithSpace = query.endsWith(" ");
+
+  // Level 1: Command name completion
+  // - Single word without trailing space (e.g., "ls" or "lsp")
+  // - Two words but no trailing space means still typing first word (e.g., "ls")
+  if (parts.length === 1 || (parts.length === 2 && !endsWithSpace && parts[1] === "")) {
+    const firstPart = parts[0] ?? "";
+    return computeCommandCandidates(firstPart, registry);
+  }
+
+  // Get the main command
+  const commandName = parts[0] ?? "";
+  if (!commandName) {
+    return [];
+  }
+  const command = registry.get(commandName);
+  if (!command) {
+    return [];
+  }
+
+  // Level 2: Subcommand completion
+  // - Two words: completing subcommand (e.g., "lsp sta" → "status")
+  // - Three words without trailing space: still typing subcommand
+  const isLevel2 =
+    (parts.length === 2 && endsWithSpace) ||
+    (parts.length === 2 && !endsWithSpace) ||
+    (parts.length === 3 && !endsWithSpace && parts[2] === "");
+
+  if (isLevel2 && command.subcommands && command.subcommands.length > 0) {
+    const subQuery = endsWithSpace && parts.length === 2 ? "" : (parts[1] ?? "");
+    return computeSubcommandCandidates(commandName, subQuery, command);
+  }
+
+  // Level 3: Positional argument completion (server names for LSP)
+  // - Three words with trailing space: ready for argument
+  // - Three words: typing argument (e.g., "lsp install type")
+  // - Four words without trailing space: still typing argument
+  const isLevel3 =
+    (parts.length === 2 && endsWithSpace) ||
+    (parts.length === 3 && !endsWithSpace) ||
+    parts.length >= 3;
+
+  if (isLevel3 && command.name === "lsp") {
+    const subcommand = parts[1] ?? "";
+    if (subcommand && LSP_SUBCOMMANDS_WITH_ARGS.includes(subcommand)) {
+      const argQuery = parts.length >= 3 ? (parts[2] ?? "") : "";
+      return computeArgumentCandidates(commandName, subcommand, argQuery);
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Compute Level 1 candidates: command names
+ */
+function computeCommandCandidates(
   query: string,
   registry: CommandRegistry
 ): readonly AutocompleteCandidate[] {
@@ -320,6 +415,120 @@ function computeCandidates(
   }
 
   // Sort by score descending, then alphabetically for ties
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    return a.command.name.localeCompare(b.command.name);
+  });
+
+  return candidates;
+}
+
+/**
+ * Compute Level 2 candidates: subcommands
+ */
+function computeSubcommandCandidates(
+  commandName: string,
+  subQuery: string,
+  command: SlashCommand
+): readonly AutocompleteCandidate[] {
+  if (!command.subcommands) {
+    return [];
+  }
+
+  const candidates: AutocompleteCandidate[] = [];
+
+  for (const sub of command.subcommands) {
+    const result = fuzzyScore(subQuery, sub.name);
+    if (result) {
+      // Create a synthetic command for the subcommand candidate
+      const syntheticCommand: SlashCommand = {
+        name: `${commandName} ${sub.name}`,
+        description: sub.description,
+        kind: command.kind,
+        category: command.category,
+        execute: command.execute,
+      };
+
+      candidates.push({
+        command: syntheticCommand,
+        score: result.score,
+        matchRanges: result.ranges,
+      });
+    }
+
+    // Check subcommand aliases
+    if (sub.aliases) {
+      for (const alias of sub.aliases) {
+        const aliasResult = fuzzyScore(subQuery, alias);
+        if (aliasResult) {
+          const existing = candidates.find((c) => c.command.name === `${commandName} ${sub.name}`);
+          if (!existing || aliasResult.score > existing.score) {
+            if (existing) {
+              const index = candidates.indexOf(existing);
+              candidates.splice(index, 1);
+            }
+            const syntheticCommand: SlashCommand = {
+              name: `${commandName} ${sub.name}`,
+              description: sub.description,
+              kind: command.kind,
+              category: command.category,
+              execute: command.execute,
+            };
+            candidates.push({
+              command: syntheticCommand,
+              score: aliasResult.score,
+              matchRanges: aliasResult.ranges,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Sort by score descending, then alphabetically
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    return a.command.name.localeCompare(b.command.name);
+  });
+
+  return candidates;
+}
+
+/**
+ * Compute Level 3 candidates: positional arguments (LSP server names)
+ */
+function computeArgumentCandidates(
+  commandName: string,
+  subcommand: string,
+  argQuery: string
+): readonly AutocompleteCandidate[] {
+  const candidates: AutocompleteCandidate[] = [];
+
+  for (const server of LSP_SERVER_NAMES) {
+    const result = fuzzyScore(argQuery, server);
+    if (result) {
+      // Create a synthetic command for the argument candidate
+      const syntheticCommand: SlashCommand = {
+        name: `${commandName} ${subcommand} ${server}`,
+        description: `${subcommand} ${server} server`,
+        kind: "builtin",
+        category: "tools",
+        execute: async () => ({ kind: "success", message: "" }),
+      };
+
+      candidates.push({
+        command: syntheticCommand,
+        score: result.score,
+        matchRanges: result.ranges,
+      });
+    }
+  }
+
+  // Sort by score descending, then alphabetically
   candidates.sort((a, b) => {
     if (b.score !== a.score) {
       return b.score - a.score;

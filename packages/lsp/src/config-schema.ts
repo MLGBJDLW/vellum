@@ -44,7 +44,48 @@ export const lspConfigJsonSchema = {
         ttlSeconds: { type: "number", default: 300 },
       },
     },
-    autoInstall: { type: "boolean", default: true },
+    autoInstall: {
+      oneOf: [{ type: "boolean" }, { type: "string", enum: ["auto", "prompt", "never"] }],
+      default: "prompt",
+    },
+    autoMode: {
+      type: "object",
+      properties: {
+        mode: { type: "string", enum: ["auto", "semi-auto", "manual"], default: "semi-auto" },
+        triggers: {
+          type: "object",
+          properties: {
+            onStartup: { type: "boolean", default: true },
+            onFileOpen: { type: "boolean", default: true },
+            onProjectChange: { type: "boolean", default: true },
+          },
+        },
+        keepAlive: {
+          type: "object",
+          properties: {
+            enabled: { type: "boolean", default: true },
+            idleTimeoutMs: { type: "number", default: 0 },
+            heartbeatIntervalMs: { type: "number", default: 30000 },
+          },
+        },
+        languageOverrides: {
+          type: "object",
+          additionalProperties: {
+            type: "object",
+            properties: {
+              serverId: { type: "string" },
+              mode: { type: "string", enum: ["auto", "semi-auto", "manual"] },
+              enabled: { type: "boolean", default: true },
+              autoStart: { type: "boolean", default: true },
+            },
+            required: ["serverId"],
+          },
+        },
+        maxConcurrentServers: { type: "number", default: 5 },
+        installTimeout: { type: "number", default: 60000 },
+        startTimeout: { type: "number", default: 30000 },
+      },
+    },
     maxConcurrentServers: { type: "number", default: 5 },
     requestTimeoutMs: { type: "number", default: 30000 },
   },

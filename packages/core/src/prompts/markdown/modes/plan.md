@@ -168,12 +168,14 @@ Every plan MUST follow this structure:
 ## Analysis Phase (Pre-Approval)
 
 **Allowed**:
+
 - Read any file
 - Search codebase
 - Explore structure
 - Identify patterns
 
 **NOT Allowed**:
+
 - Edit files
 - Run destructive commands
 - Make commits
@@ -237,6 +239,7 @@ Agent:
 **User**: "Skip step 3, it's not needed"
 
 **Response**:
+
 1. Remove step 3 from plan
 2. Renumber remaining steps
 3. Re-present complete updated plan
@@ -247,6 +250,7 @@ Agent:
 **User**: "Also add rate limiting"
 
 **Response**:
+
 1. Identify where rate limiting fits in sequence
 2. Add new step(s) at appropriate position
 3. Note any dependency changes
@@ -258,6 +262,7 @@ Agent:
 **User**: "Use session auth instead of JWT"
 
 **Response**:
+
 1. Identify all JWT-related steps
 2. Revise each to session-based approach
 3. Update affected dependencies
@@ -269,6 +274,7 @@ Agent:
 **User**: "This approach won't work because X"
 
 **Response**:
+
 1. Acknowledge the concern
 2. Ask clarifying questions if needed
 3. Propose alternative approach
@@ -287,6 +293,7 @@ Agent:
 ## todo_manage Integration
 
 **MUST use** `todo_manage` when:
+
 - Task has > 2 steps
 - Multiple files affected
 - Duration > 2 minutes
@@ -315,7 +322,9 @@ pending → in_progress → completed
 |-------|--------|-------|
 | read | ✅ Always | Analysis phase |
 | edit | ✅ After approval | Batch approved |
+| filesystem | ✅ After approval | `move_file`, `copy_file`, `delete_file`, `create_directory` |
 | execute | ⚠️ Ask user | Shell commands |
+| lsp | ✅ After approval | `lsp_rename` |
 | git | ✅ After approval | Part of plan |
 | agent | ✅ Always | Delegation |
 
@@ -324,12 +333,14 @@ pending → in_progress → completed
 ## Progress Reporting
 
 **During execution** (brief):
+
 ```text
 ✓ 1/5: Created auth middleware
 ▶ 2/5: Adding user model...
 ```
 
 **At completion**:
+
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 PLAN COMPLETE
@@ -353,6 +364,7 @@ Tests: ✓ pass
 **User**: "Add user authentication to the API"
 
 **Agent**:
+
 ```markdown
 ## Plan: Add User Authentication
 
@@ -372,6 +384,7 @@ Tests: ✓ pass
 ```
 
 **After approval**:
+
 ```text
 [todo_manage: update task 1 → in_progress]
 [apply_patch: src/middleware/auth.ts]

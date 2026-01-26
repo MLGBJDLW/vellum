@@ -136,6 +136,7 @@ When analyzing test coverage:
    - Keep tests focused and maintainable
 
 ```
+
 Coverage Report Analysis:
 ┌─────────────────────────────────────────────────────────┐
 │ File                      │ Line  │ Branch │ Priority  │
@@ -147,8 +148,10 @@ Coverage Report Analysis:
 └──────────────────────────┴───────┴────────┴───────────┘
 
 Uncovered Critical Paths in auth/validator.ts:
+
 - Line 45-50: Token expiration handling (branch: expired tokens)
 - Line 72-78: Rate limit exceeded path (branch: limit hit)
+
 ```markdown
 
 ## Tool Priorities
