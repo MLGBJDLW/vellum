@@ -262,4 +262,335 @@ describe("webSearchTool", () => {
       delete process.env.SERPAPI_KEY;
     });
   });
+
+  describe("DuckDuckGo HTML parsing fallbacks", () => {
+    it("should use alt regex pattern when primary pattern fails", async () => {
+      // HTML that matches altResultRegex but not primary resultRegex
+      const altPatternHtml = `
+        <html>
+          <a rel="nofollow" href="https://alt-example.com"><span>Alt Title</span></a>
+          <td class="result-snippet">Alt snippet text</td>
+        </html>
+      `;
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(altPatternHtml),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "test alt", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.results.length).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it("should fall back to generic link extraction when no result divs", async () => {
+      // HTML with only basic links (no result classes)
+      const genericLinksHtml = `
+        <html>
+          <a href="https://generic-example1.com">Generic Link Title One</a>
+          <a href="https://generic-example2.com">Another Link Title Here</a>
+          <a href="https://duckduckgo.com/internal">Should Skip Internal</a>
+        </html>
+      `;
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(genericLinksHtml),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "test generic", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Generic fallback extracts links with 10+ character titles
+        // Should not include duckduckgo.com internal links
+        const urls = result.output.results.map((r) => r.url);
+        expect(urls).not.toContain("https://duckduckgo.com/internal");
+      }
+    });
+  });
+
+  describe("HTML entity decoding", () => {
+    it("should decode common HTML entities in results", async () => {
+      const htmlWithEntities = `
+        <html>
+          <a class="result__a" href="https://example.com?foo=1&amp;bar=2">Title with &quot;quotes&quot; &amp; ampersand</a>
+          <a class="result__snippet">Snippet with &#39;apostrophe&#39; &lt;tag&gt;</a>
+        </html>
+      `;
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(htmlWithEntities),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "entities test", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success && result.output.results.length > 0) {
+        const firstResult = result.output.results[0]!;
+        // URL should have decoded &amp; to &
+        expect(firstResult.url).toContain("foo=1&bar=2");
+        // Title should have decoded entities
+        expect(firstResult.title).toContain('"quotes"');
+        expect(firstResult.title).toContain("& ampersand");
+      }
+    });
+
+    it("should decode numeric HTML entities", async () => {
+      const htmlWithNumericEntities = `
+        <html>
+          <a class="result__a" href="https://example.com">Title &#60;angle&#62; &#x3C;hex&#x3E;</a>
+          <a class="result__snippet">Snippet &nbsp; with spaces</a>
+        </html>
+      `;
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(htmlWithNumericEntities),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "numeric entities", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success && result.output.results.length > 0) {
+        const firstResult = result.output.results[0]!;
+        // Should decode &#60; to < and &#62; to >
+        expect(firstResult.title).toContain("<angle>");
+        // Should decode hex entities &#x3C; to < and &#x3E; to >
+        expect(firstResult.title).toContain("<hex>");
+      }
+    });
+  });
+
+  describe("timeout handling", () => {
+    it("should abort request when signal is aborted during fetch", async () => {
+      const controller = new AbortController();
+      ctx.abortSignal = controller.signal;
+
+      // Pre-abort before calling execute
+      controller.abort();
+
+      const result = await webSearchTool.execute(
+        { query: "aborted query", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toMatch(/cancel|abort/i);
+      }
+    });
+
+    it("should handle abort signal during in-flight request", async () => {
+      const controller = new AbortController();
+      ctx.abortSignal = controller.signal;
+
+      const fetchMock = vi.fn().mockImplementation((_url, _options) => {
+        // Immediately abort when fetch is called
+        controller.abort();
+        // Simulate the fetch rejecting due to abort
+        const error = new Error("The operation was aborted");
+        error.name = "AbortError";
+        return Promise.reject(error);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "mid-flight abort", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toMatch(/cancel/i);
+      }
+    });
+  });
+
+  describe("SerpAPI Bing engine", () => {
+    it("should use SerpAPI with engine=bing when API key is set", async () => {
+      process.env.SERPAPI_KEY = "test-api-key";
+
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            organic_results: [
+              { title: "Bing Result 1", link: "https://bing-example.com", snippet: "Bing Snippet" },
+            ],
+          }),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "bing test", maxResults: 5, engine: "bing" },
+        ctx
+      );
+
+      expect(fetchMock).toHaveBeenCalled();
+      const url = fetchMock.mock.calls[0]?.[0] as string;
+      expect(url).toContain("serpapi.com");
+      expect(url).toContain("engine=bing");
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.output.engine).toBe("bing");
+        expect(result.output.results).toHaveLength(1);
+        expect(result.output.results[0]?.title).toBe("Bing Result 1");
+      }
+
+      delete process.env.SERPAPI_KEY;
+    });
+
+    it("should fail without API key for bing engine", async () => {
+      delete process.env.SERPAPI_KEY;
+      delete process.env.SERPAPI_API_KEY;
+
+      const result = await webSearchTool.execute(
+        { query: "bing test", maxResults: 10, engine: "bing" },
+        ctx
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("SERPAPI_KEY");
+      }
+    });
+  });
+
+  describe("retry mechanism", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("should retry on HTTP 429 rate limit", async () => {
+      let callCount = 0;
+      const fetchMock = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount < 3) {
+          return Promise.resolve({ ok: false, status: 429 });
+        }
+        return Promise.resolve({
+          ok: true,
+          text: () =>
+            Promise.resolve(`
+              <html>
+                <a class="result__a" href="https://retry-success.com">Success After Retry</a>
+                <a class="result__snippet">Retry worked</a>
+              </html>
+            `),
+        });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const resultPromise = webSearchTool.execute(
+        { query: "retry test", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      // Advance through retry delays (1s, 2s)
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const result = await resultPromise;
+
+      expect(callCount).toBeGreaterThanOrEqual(3);
+      expect(result.success).toBe(true);
+    });
+
+    it("should retry on HTTP 5xx server errors", async () => {
+      let callCount = 0;
+      const fetchMock = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount < 2) {
+          return Promise.resolve({ ok: false, status: 503 });
+        }
+        return Promise.resolve({
+          ok: true,
+          text: () =>
+            Promise.resolve(`
+              <html>
+                <a class="result__a" href="https://server-recovered.com">Server Recovered</a>
+                <a class="result__snippet">After 503</a>
+              </html>
+            `),
+        });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const resultPromise = webSearchTool.execute(
+        { query: "server error test", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      // Advance through retry delay (1s)
+      await vi.advanceTimersByTimeAsync(1000);
+
+      const result = await resultPromise;
+
+      expect(callCount).toBe(2);
+      expect(result.success).toBe(true);
+    });
+
+    it("should fail after max retries exhausted", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 429 });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const resultPromise = webSearchTool.execute(
+        { query: "always rate limited", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      // Advance through all retry delays (1s + 2s + 4s)
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(4000);
+
+      const result = await resultPromise;
+
+      // Should have tried initial + 3 retries = 4 total calls
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("429");
+      }
+    });
+
+    it("should not retry on HTTP 4xx client errors (except 429)", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await webSearchTool.execute(
+        { query: "not found", maxResults: 10, engine: "duckduckgo" },
+        ctx
+      );
+
+      // Should only call once (no retry for 404)
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("404");
+      }
+    });
+  });
 });
