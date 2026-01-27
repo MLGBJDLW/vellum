@@ -10,6 +10,7 @@ import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { Logger } from "../logger/logger.js";
 import { SKILL_MANIFEST_FILENAME } from "./parser.js";
@@ -123,6 +124,13 @@ export interface SkillDiscoveryOptions {
   customPaths?: Partial<Record<SkillSource, string>>;
   /** Whether to validate skill names strictly (default: true) */
   validateNames?: boolean;
+  /** Source enablement settings (undefined = all enabled) */
+  sources?: {
+    workspace?: boolean;
+    user?: boolean;
+    global?: boolean;
+    builtin?: boolean;
+  };
 }
 
 /**
@@ -199,6 +207,8 @@ export class SkillDiscovery {
   private followSymlinks: boolean;
   private customPaths: Partial<Record<SkillSource, string>>;
   private validateNames: boolean;
+  private builtinPath: string;
+  private sources?: SkillDiscoveryOptions["sources"];
 
   constructor(options: SkillDiscoveryOptions = {}) {
     this.workspacePath = options.workspacePath;
@@ -206,6 +216,11 @@ export class SkillDiscovery {
     this.followSymlinks = options.followSymlinks ?? true;
     this.customPaths = options.customPaths ?? {};
     this.validateNames = options.validateNames ?? true;
+    this.sources = options.sources;
+
+    // Resolve builtin path relative to this module
+    const currentDir = path.dirname(fileURLToPath(import.meta.url));
+    this.builtinPath = path.join(currentDir, "builtin");
   }
 
   /**
@@ -228,8 +243,11 @@ export class SkillDiscovery {
       validationErrors: [],
     };
 
-    // Discover from each source
-    const sources: SkillSource[] = ["workspace", "user", "global", "builtin"];
+    // Discover from each source, filtering by config (only explicit false disables)
+    const allSources: SkillSource[] = ["workspace", "user", "global", "builtin"];
+    const sources = allSources.filter(
+      (source) => this.sources?.[source as keyof NonNullable<typeof this.sources>] !== false
+    );
 
     for (const source of sources) {
       try {
@@ -476,9 +494,8 @@ export class SkillDiscovery {
         return this.workspacePath ? path.join(this.workspacePath, ".github", "skills") : null;
 
       case "builtin":
-        // Builtin skills are handled separately by the loader
-        // They're bundled in the package, not discovered from filesystem
-        return null;
+        // Return path to builtin skills directory (relative to this module)
+        return this.builtinPath;
 
       default:
         return null;

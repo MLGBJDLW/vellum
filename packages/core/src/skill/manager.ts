@@ -10,6 +10,7 @@ import picomatch from "picomatch";
 import type { Logger } from "../logger/logger.js";
 import { SkillLoader, type SkillLoaderOptions } from "./loader.js";
 import { type MatchContext, SkillMatcher } from "./matcher.js";
+import { checkSkillPermission } from "./permission.js";
 import type { SkillConfig, SkillLoaded, SkillPermission, SkillScan } from "./types.js";
 
 // ============================================
@@ -148,22 +149,31 @@ export class SkillManager {
     // Get all L1 scans
     const scans = this.loader.getAllScans();
 
-    // Match against context
+    // Match against context (already sorted by score descending)
     const matches = this.matcher.matchAll(scans, context);
+
+    // Apply maxActiveSkills limit (default: 10)
+    const maxActive = this.config.maxActiveSkills ?? 10;
+    const limitedMatches = matches.slice(0, maxActive);
 
     this.logger?.debug("Skill matching results", {
       totalSkills: scans.length,
       matchedSkills: matches.length,
+      limitedTo: limitedMatches.length,
+      maxActiveSkills: maxActive,
     });
 
-    // Load L2 content for matched skills
+    // Load L2 content for matched skills (respecting limit)
     const loadedSkills: SkillLoaded[] = [];
 
-    for (const match of matches) {
-      const loaded = await this.loader.loadL2(match.skill.scan.name);
-      if (loaded) {
-        loadedSkills.push(loaded);
+    for (const match of limitedMatches) {
+      const result = await this.loader.loadL2(match.skill.scan.name);
+      if (result.status === "success") {
+        loadedSkills.push(result.skill);
+      } else if (result.status === "error") {
+        this.logger?.warn(`Failed to load skill: ${result.skillId}`, { error: result.error });
       }
+      // 'not-found' is debug-level since skill was in cache during scan
     }
 
     return loadedSkills;
@@ -180,7 +190,14 @@ export class SkillManager {
     this.ensureInitialized();
 
     this.logger?.debug("Loading skill", { name });
-    return this.loader.loadL2(name);
+    const result = await this.loader.loadL2(name);
+    if (result.status === "success") {
+      return result.skill;
+    }
+    if (result.status === "error") {
+      this.logger?.warn(`Failed to load skill: ${result.skillId}`, { error: result.error });
+    }
+    return null;
   }
 
   /**
@@ -420,25 +437,24 @@ export class SkillManager {
     }
 
     const { rules = [], default: defaultPermission = "allow" } = permissions;
+    const result = checkSkillPermission(skillName, rules, defaultPermission);
 
-    // Check rules in order (first match wins)
-    for (const rule of rules) {
-      const isMatch = picomatch(rule.pattern, {
-        nocase: true,
-        bash: true,
+    // Log if a rule matched (not the default)
+    if (result !== defaultPermission) {
+      const matchedRule = rules.find((rule) => {
+        const isMatch = picomatch(rule.pattern, { nocase: true, bash: true });
+        return isMatch(skillName);
       });
-
-      if (isMatch(skillName)) {
+      if (matchedRule) {
         this.logger?.debug("Permission rule matched", {
           skillName,
-          pattern: rule.pattern,
-          permission: rule.permission,
+          pattern: matchedRule.pattern,
+          permission: matchedRule.permission,
         });
-        return rule.permission;
       }
     }
 
-    return defaultPermission;
+    return result;
   }
 
   /**

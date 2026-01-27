@@ -5,6 +5,7 @@
 import * as fs from "node:fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Logger } from "../../logger/logger.js";
 import { SkillLoader } from "../loader.js";
 import { SkillParser } from "../parser.js";
 import type { SkillLoaded, SkillLocation, SkillScan, SkillSource } from "../types.js";
@@ -78,8 +79,22 @@ function createMockedLoader(): {
     discoverAll: ReturnType<typeof vi.fn>;
     setWorkspacePath: ReturnType<typeof vi.fn>;
   };
+  mockLogger: {
+    debug: ReturnType<typeof vi.fn>;
+    info: ReturnType<typeof vi.fn>;
+    warn: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
+  };
 } {
-  const loader = new SkillLoader();
+  // Create mock logger
+  const mockLogger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
+
+  const loader = new SkillLoader({ logger: mockLogger as Partial<Logger> as Logger });
 
   // Create mock functions
   const mockParseMetadata = vi.fn();
@@ -116,6 +131,7 @@ function createMockedLoader(): {
       discoverAll: mockDiscoverAll,
       setWorkspacePath: mockSetWorkspacePath,
     },
+    mockLogger,
   };
 }
 
@@ -278,8 +294,10 @@ describe("SkillLoader", () => {
         .mockResolvedValueOnce(createMockScan("skill-a"))
         .mockResolvedValueOnce(createMockScan("skill-b"));
 
-      await loader.scanL1(locations);
+      const result = await loader.scanL1(locations);
 
+      expect(result.scanned).toBe(2);
+      expect(result.failed).toHaveLength(0);
       expect(loader.hasSkill("skill-a")).toBe(true);
       expect(loader.hasSkill("skill-b")).toBe(true);
 
@@ -299,9 +317,51 @@ describe("SkillLoader", () => {
         mockParser.parseMetadata.mockResolvedValueOnce(createMockScan(`skill-${i}`));
       }
 
-      await loader.scanL1(locations);
+      const result = await loader.scanL1(locations);
 
+      expect(result.scanned).toBe(10);
+      expect(result.failed).toHaveLength(0);
       expect(loader.getSkillNames()).toHaveLength(10);
+    });
+
+    it("should return failed scans when parsing fails", async () => {
+      const { loader, mockParser } = createMockedLoader();
+
+      const locations: SkillLocation[] = [
+        createMockLocation("skill-good"),
+        createMockLocation("skill-bad"),
+      ];
+
+      mockParser.parseMetadata
+        .mockResolvedValueOnce(createMockScan("skill-good"))
+        .mockResolvedValueOnce(null); // Simulate parse failure
+
+      const result = await loader.scanL1(locations);
+
+      expect(result.scanned).toBe(1);
+      expect(result.failed).toHaveLength(1);
+      expect(result.failed[0]?.path).toBe("/skills/skill-bad");
+      expect(result.failed[0]?.error).toContain("Failed to parse");
+    });
+
+    it("should return failed scans when exception is thrown", async () => {
+      const { loader, mockParser } = createMockedLoader();
+
+      const locations: SkillLocation[] = [
+        createMockLocation("skill-good"),
+        createMockLocation("skill-error"),
+      ];
+
+      mockParser.parseMetadata
+        .mockResolvedValueOnce(createMockScan("skill-good"))
+        .mockRejectedValueOnce(new Error("Network error"));
+
+      const result = await loader.scanL1(locations);
+
+      expect(result.scanned).toBe(1);
+      expect(result.failed).toHaveLength(1);
+      expect(result.failed[0]?.path).toBe("/skills/skill-error");
+      expect(result.failed[0]?.error).toBe("Network error");
     });
   });
 
@@ -325,11 +385,13 @@ describe("SkillLoader", () => {
 
       mockParser.parseFull.mockResolvedValue(createMockLoaded("test-skill"));
 
-      const loaded = await loader.loadL2("test-skill");
+      const result = await loader.loadL2("test-skill");
 
-      expect(loaded).not.toBeNull();
-      expect(loaded?.name).toBe("test-skill");
-      expect(loaded?.rules).toContain("Rules for test-skill");
+      expect(result.status).toBe("success");
+      if (result.status === "success") {
+        expect(result.skill.name).toBe("test-skill");
+        expect(result.skill.rules).toContain("Rules for test-skill");
+      }
 
       const entry = loader.getCacheEntry("test-skill");
       expect(entry?.level).toBe(2);
@@ -350,26 +412,29 @@ describe("SkillLoader", () => {
       mockParser.parseFull.mockResolvedValue(createMockLoaded("test-skill"));
 
       // First call
-      const loaded1 = await loader.loadL2("test-skill");
-      expect(loaded1).not.toBeNull();
+      const result1 = await loader.loadL2("test-skill");
+      expect(result1.status).toBe("success");
 
       // Second call - should not call parser again
-      const loaded2 = await loader.loadL2("test-skill");
-      expect(loaded2).not.toBeNull();
+      const result2 = await loader.loadL2("test-skill");
+      expect(result2.status).toBe("success");
 
       // Parser should only be called once for full parse
       expect(mockParser.parseFull).toHaveBeenCalledTimes(1);
     });
 
-    it("should return null for unknown skill", async () => {
+    it("should return not-found for unknown skill", async () => {
       const { loader } = createMockedLoader();
 
-      const loaded = await loader.loadL2("unknown-skill");
+      const result = await loader.loadL2("unknown-skill");
 
-      expect(loaded).toBeNull();
+      expect(result.status).toBe("not-found");
+      if (result.status === "not-found") {
+        expect(result.skillId).toBe("unknown-skill");
+      }
     });
 
-    it("should return null if L2 parsing fails", async () => {
+    it("should return error if L2 parsing fails", async () => {
       const { loader, mockParser, mockDiscovery } = createMockedLoader();
 
       const locations: SkillLocation[] = [createMockLocation("test-skill")];
@@ -383,9 +448,13 @@ describe("SkillLoader", () => {
 
       mockParser.parseFull.mockResolvedValue(null);
 
-      const loaded = await loader.loadL2("test-skill");
+      const result = await loader.loadL2("test-skill");
 
-      expect(loaded).toBeNull();
+      expect(result.status).toBe("error");
+      if (result.status === "error") {
+        expect(result.skillId).toBe("test-skill");
+        expect(result.error).toBe("Failed to parse skill content");
+      }
     });
 
     it("should handle parser errors gracefully", async () => {
@@ -402,9 +471,13 @@ describe("SkillLoader", () => {
 
       mockParser.parseFull.mockRejectedValue(new Error("Parse error"));
 
-      const loaded = await loader.loadL2("test-skill");
+      const result = await loader.loadL2("test-skill");
 
-      expect(loaded).toBeNull();
+      expect(result.status).toBe("error");
+      if (result.status === "error") {
+        expect(result.skillId).toBe("test-skill");
+        expect(result.error).toBe("Parse error");
+      }
     });
 
     it("should update lastAccessedAt on cache hit", async () => {
@@ -773,8 +846,8 @@ describe("SkillLoader", () => {
       expect(deps).toEqual(["skill-c", "skill-b"]);
     });
 
-    it("should detect circular dependencies", async () => {
-      const { loader, mockParser, mockDiscovery } = createMockedLoader();
+    it("should handle circular dependencies gracefully", async () => {
+      const { loader, mockParser, mockDiscovery, mockLogger } = createMockedLoader();
 
       // Setup circular: skill-a -> skill-b -> skill-a
       const scanA = createMockScan("skill-a");
@@ -795,7 +868,20 @@ describe("SkillLoader", () => {
 
       await loader.initialize();
 
-      await expect(loader.resolveDependencies("skill-a")).rejects.toThrow("Circular dependency");
+      // Should not throw, instead skip the circular dependency gracefully
+      const deps = await loader.resolveDependencies("skill-a");
+
+      // skill-b is resolved, but skill-a (the circular one) is skipped
+      expect(deps).toEqual(["skill-b"]);
+
+      // Should have logged a warning about circular dependency
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        "Circular dependency detected, skipping skill",
+        expect.objectContaining({
+          skill: "skill-a",
+          cycle: expect.stringContaining("skill-a"),
+        })
+      );
     });
 
     it("should handle missing dependencies gracefully", async () => {

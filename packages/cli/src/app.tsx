@@ -111,6 +111,7 @@ import {
   uninstallCommand,
   usageCommand,
   vimSlashCommands,
+  webSearchSlashCommands,
   workflowCommands,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
@@ -503,6 +504,11 @@ function createCommandRegistry(): CommandRegistry {
 
   // Register settings system commands
   for (const cmd of settingsSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // Register search commands (web search configuration)
+  for (const cmd of webSearchSlashCommands) {
     registry.register(cmd);
   }
 
@@ -2868,6 +2874,30 @@ function AppContent({
     }
   }, [interactivePrompt, handleCommandResult]);
 
+  // Handler for select option (used by OptionSelector in layoutBody)
+  const handlePromptSelectOption = useCallback(
+    async (option: string) => {
+      if (!interactivePrompt) {
+        return;
+      }
+
+      const prompt = interactivePrompt;
+      setInteractivePrompt(null);
+      setPromptValue("");
+
+      try {
+        const result = await prompt.handler(option);
+        await handleCommandResult(result);
+      } catch (error) {
+        addMessage({
+          role: "assistant",
+          content: `[x] ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    },
+    [interactivePrompt, handleCommandResult, addMessage]
+  );
+
   const resolveFollowupResponse = useCallback(
     (rawValue: string, suggestions: readonly string[]): string => {
       const trimmed = rawValue.trim();
@@ -3807,6 +3837,8 @@ function AppContent({
       handleModelSelect={handleModelSelect}
       handleOnboardingComplete={handleOnboardingComplete}
       handlePromptSubmit={handlePromptSubmit}
+      handlePromptCancel={handlePromptCancel}
+      handlePromptSelectOption={handlePromptSelectOption}
       handleReject={handleReject}
       handleSessionSelected={handleSessionSelected}
       handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
@@ -3939,6 +3971,8 @@ interface AppContentViewProps {
     credentialsConfigured: boolean;
   }) => void;
   readonly handlePromptSubmit: () => void;
+  readonly handlePromptCancel: () => void;
+  readonly handlePromptSelectOption: (option: string) => Promise<void>;
   readonly handleReject: () => void;
   readonly handleSessionSelected: (id: string) => void;
   readonly handleSwitchBacktrackBranch: (branchId: string) => void;
@@ -4636,6 +4670,8 @@ function AppContentView({
   handleModelSelect,
   handleOnboardingComplete,
   handlePromptSubmit,
+  handlePromptCancel,
+  handlePromptSelectOption,
   handleReject,
   handleSessionSelected,
   handleSwitchBacktrackBranch,
@@ -4857,7 +4893,7 @@ function AppContentView({
 
       <Box flexShrink={0} flexDirection="column">
         {/* Followup prompt with suggestions - use OptionSelector for keyboard navigation */}
-        {followupPrompt && followupPrompt.suggestions.length > 0 && (
+        {followupPrompt && followupPrompt.suggestions.length > 0 && !interactivePrompt && (
           <OptionSelector
             question={followupPrompt.question}
             options={followupPrompt.suggestions}
@@ -4925,33 +4961,43 @@ function AppContentView({
             <Box flexDirection="column" marginTop={1}>
               {/* Original message (e.g., "API Key:") */}
               <Text>{interactivePrompt.message}</Text>
-              {/* Select options */}
-              {interactivePrompt.inputType === "select" && interactivePrompt.options && (
-                <Box flexDirection="column" marginTop={1}>
-                  {interactivePrompt.options.map((option, index) => (
-                    <Text key={option}>{`${index + 1}. ${option}`}</Text>
-                  ))}
+              {/* Select options - using OptionSelector with arrow key navigation */}
+              {interactivePrompt.inputType === "select" && interactivePrompt.options ? (
+                <OptionSelector
+                  question="" // Message already shown above
+                  options={interactivePrompt.options}
+                  onSelect={(option) => {
+                    void handlePromptSelectOption(option);
+                  }}
+                  onCancel={handlePromptCancel}
+                  isFocused={!suppressPromptEnter}
+                  showHelpText={false}
+                />
+              ) : (
+                /* Text input for text/password/confirm types */
+                <Box marginTop={1} flexGrow={1}>
+                  <Text color={themeContext.theme.semantic.text.muted}>{promptPlaceholder} </Text>
+                  <Box flexGrow={1}>
+                    <TextInput
+                      value={promptValue}
+                      onChange={setPromptValue}
+                      onSubmit={handlePromptSubmit}
+                      mask={interactivePrompt.inputType === "password" ? "*" : undefined}
+                      focused={!suppressPromptEnter}
+                      suppressEnter={suppressPromptEnter}
+                      showBorder={false}
+                    />
+                  </Box>
                 </Box>
               )}
-              {/* Input field */}
-              <Box marginTop={1} flexGrow={1}>
-                <Text color={themeContext.theme.semantic.text.muted}>{promptPlaceholder} </Text>
-                <Box flexGrow={1}>
-                  <TextInput
-                    value={promptValue}
-                    onChange={setPromptValue}
-                    onSubmit={handlePromptSubmit}
-                    mask={interactivePrompt.inputType === "password" ? "*" : undefined}
-                    focused={!suppressPromptEnter}
-                    suppressEnter={suppressPromptEnter}
-                    showBorder={false}
-                  />
-                </Box>
-              </Box>
             </Box>
-            {/* Footer hint */}
+            {/* Footer hint - different for select vs text input */}
             <Box marginTop={1}>
-              <Text dimColor>Press Enter to submit, Esc to cancel</Text>
+              <Text dimColor>
+                {interactivePrompt.inputType === "select"
+                  ? "↑↓: Navigate | 1-9: Quick select | Enter: Confirm | Esc: Cancel"
+                  : "Press Enter to submit, Esc to cancel"}
+              </Text>
             </Box>
           </Box>
         )}

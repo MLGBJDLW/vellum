@@ -28,6 +28,8 @@ export interface MatchContext {
   command?: string;
   /** Key-value project context (e.g., { language: "typescript", framework: "react" }) */
   projectContext?: Record<string, string>;
+  /** Current coding mode (e.g., "code", "plan", "spec") */
+  mode?: string;
 }
 
 // ============================================
@@ -153,6 +155,12 @@ export class SkillMatcher {
 
       case "context":
         if (this.matchContext(trigger.pattern, context.projectContext)) {
+          return multiplier;
+        }
+        break;
+
+      case "mode":
+        if (context.mode && trigger.pattern === context.mode) {
           return multiplier;
         }
         break;

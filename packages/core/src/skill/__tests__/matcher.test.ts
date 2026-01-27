@@ -57,6 +57,7 @@ describe("SkillMatcher", () => {
     it("should have correct multiplier values", () => {
       expect(TRIGGER_TYPE_MULTIPLIERS.command).toBe(100);
       expect(TRIGGER_TYPE_MULTIPLIERS.keyword).toBe(10);
+      expect(TRIGGER_TYPE_MULTIPLIERS.mode).toBe(8);
       expect(TRIGGER_TYPE_MULTIPLIERS.file_pattern).toBe(5);
       expect(TRIGGER_TYPE_MULTIPLIERS.context).toBe(3);
       expect(TRIGGER_TYPE_MULTIPLIERS.always).toBe(1);
@@ -64,9 +65,8 @@ describe("SkillMatcher", () => {
 
     it("should maintain priority ordering", () => {
       expect(TRIGGER_TYPE_MULTIPLIERS.command).toBeGreaterThan(TRIGGER_TYPE_MULTIPLIERS.keyword);
-      expect(TRIGGER_TYPE_MULTIPLIERS.keyword).toBeGreaterThan(
-        TRIGGER_TYPE_MULTIPLIERS.file_pattern
-      );
+      expect(TRIGGER_TYPE_MULTIPLIERS.keyword).toBeGreaterThan(TRIGGER_TYPE_MULTIPLIERS.mode);
+      expect(TRIGGER_TYPE_MULTIPLIERS.mode).toBeGreaterThan(TRIGGER_TYPE_MULTIPLIERS.file_pattern);
       expect(TRIGGER_TYPE_MULTIPLIERS.file_pattern).toBeGreaterThan(
         TRIGGER_TYPE_MULTIPLIERS.context
       );
@@ -249,6 +249,49 @@ describe("SkillMatcher", () => {
       const match = matcher.matchSkill(skill, context);
 
       expect(match?.score).toBe(50 * TRIGGER_TYPE_MULTIPLIERS.keyword);
+    });
+  });
+
+  // ===========================================================================
+  // "mode" Trigger Tests
+  // ===========================================================================
+
+  describe("mode trigger", () => {
+    it("should match exact mode", () => {
+      const skill = createSkillScan("test-skill", [{ type: "mode", pattern: "code" }]);
+      const context = createContext({ mode: "code" });
+
+      const match = matcher.matchSkill(skill, context);
+
+      expect(match).not.toBeNull();
+      expect(match?.matchedTrigger.type).toBe("mode");
+    });
+
+    it("should not match different mode", () => {
+      const skill = createSkillScan("test-skill", [{ type: "mode", pattern: "code" }]);
+      const context = createContext({ mode: "plan" });
+
+      const match = matcher.matchSkill(skill, context);
+
+      expect(match).toBeNull();
+    });
+
+    it("should not match when no mode provided", () => {
+      const skill = createSkillScan("test-skill", [{ type: "mode", pattern: "code" }]);
+      const context = createContext({});
+
+      const match = matcher.matchSkill(skill, context);
+
+      expect(match).toBeNull();
+    });
+
+    it("should calculate score as priority × mode_multiplier", () => {
+      const skill = createSkillScan("test-skill", [{ type: "mode", pattern: "spec" }], 50);
+      const context = createContext({ mode: "spec" });
+
+      const match = matcher.matchSkill(skill, context);
+
+      expect(match?.score).toBe(50 * TRIGGER_TYPE_MULTIPLIERS.mode);
     });
   });
 

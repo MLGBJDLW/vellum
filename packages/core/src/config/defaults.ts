@@ -118,6 +118,7 @@ export const CONFIG_DEFAULTS = {
     mdnApi: "https://developer.mozilla.org/api/v1/search",
     duckduckgoHtml: "https://html.duckduckgo.com/html/",
     serpapi: "https://serpapi.com/search",
+    tavily: "https://api.tavily.com/search",
   },
 
   /** Path defaults */
