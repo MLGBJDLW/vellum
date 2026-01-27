@@ -61,6 +61,21 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Wait for watcher to be ready after start.
+ * Chokidar needs time to initialize the underlying fs watcher before it can detect events.
+ */
+async function waitForReady(watcher: FileWatcher): Promise<void> {
+  return new Promise((resolve) => {
+    if (watcher.running) {
+      // Already ready if running - but add small delay for fs watcher stabilization
+      setTimeout(resolve, 50);
+    } else {
+      watcher.once("ready", () => setTimeout(resolve, 50));
+    }
+  });
+}
+
 // =============================================================================
 // FileWatcher Tests
 // =============================================================================
@@ -168,6 +183,7 @@ describe("FileWatcher", () => {
     it("should detect file creation", async () => {
       watcher = new FileWatcher({ path: tempDir, debounceMs: 50 });
       await watcher.start();
+      await waitForReady(watcher);
 
       const changePromise = new Promise<string[]>((resolve) => {
         watcher?.once("change", (events) => resolve(events.map((e) => e.relativePath)));
@@ -186,6 +202,7 @@ describe("FileWatcher", () => {
 
       watcher = new FileWatcher({ path: tempDir, debounceMs: 50 });
       await watcher.start();
+      await waitForReady(watcher);
 
       const changePromise = new Promise<string[]>((resolve) => {
         watcher?.once("change", (events) => resolve(events.map((e) => e.type)));
@@ -203,6 +220,7 @@ describe("FileWatcher", () => {
 
       watcher = new FileWatcher({ path: tempDir, debounceMs: 50 });
       await watcher.start();
+      await waitForReady(watcher);
 
       const changePromise = new Promise<string[]>((resolve) => {
         watcher?.once("change", (events) => resolve(events.map((e) => e.type)));
@@ -221,6 +239,7 @@ describe("FileWatcher", () => {
         awaitWriteFinish: false, // Disable for test reliability
       });
       await watcher.start();
+      await waitForReady(watcher);
 
       let changeCount = 0;
       watcher.on("change", () => changeCount++);
