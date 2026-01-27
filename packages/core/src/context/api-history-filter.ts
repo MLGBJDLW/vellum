@@ -253,6 +253,15 @@ export function getEffectiveApiHistory(
   const maxMessages = options?.maxMessages;
   const maxTokens = options?.maxTokens;
   const tokenizer = options?.tokenizer;
+  const includeSummaries = options?.includeSummaries ?? true;
+  const includeCompressed = options?.includeCompressed ?? false;
+
+  const summaryIds = new Set<string>();
+  for (const message of messages) {
+    if (message.isSummary && message.condenseId) {
+      summaryIds.add(message.condenseId);
+    }
+  }
 
   const filteredMessages: ContextMessage[] = [];
   const excludedIds: string[] = [];
@@ -267,9 +276,16 @@ export function getEffectiveApiHistory(
     }
 
     // Check inclusion criteria
-    if (!shouldIncludeInApiHistory(message, messages, options)) {
-      excludedIds.push(message.id);
-      continue;
+    if (message.isSummary) {
+      if (!includeSummaries) {
+        excludedIds.push(message.id);
+        continue;
+      }
+    } else if (!includeCompressed) {
+      if (message.condenseParent && summaryIds.has(message.condenseParent)) {
+        excludedIds.push(message.id);
+        continue;
+      }
     }
 
     // Calculate token count if needed
