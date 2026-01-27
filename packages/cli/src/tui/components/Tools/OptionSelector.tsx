@@ -30,6 +30,8 @@ export interface OptionSelectorProps {
   readonly onCancel?: () => void;
   /** Whether the selector is focused/active */
   readonly isFocused?: boolean;
+  /** Whether to show the default help text footer */
+  readonly showHelpText?: boolean;
 }
 
 // =============================================================================
@@ -67,6 +69,7 @@ export function OptionSelector({
   onSelect,
   onCancel,
   isFocused = true,
+  showHelpText = true,
 }: OptionSelectorProps): React.ReactElement {
   const { theme } = useTheme();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -144,11 +147,13 @@ export function OptionSelector({
       </Box>
 
       {/* Help text */}
-      <Box marginTop={1}>
-        <Text dimColor>
-          ↑↓: Navigate | 1-{maxShortcut}: Quick select | Enter: Confirm | Esc: Skip
-        </Text>
-      </Box>
+      {showHelpText && (
+        <Box marginTop={1}>
+          <Text dimColor>
+            ↑↓: Navigate | 1-{maxShortcut}: Quick select | Enter: Confirm | Esc: Skip
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 }
