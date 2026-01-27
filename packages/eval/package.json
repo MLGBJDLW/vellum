@@ -1,6 +1,7 @@
 {
   "name": "@vellum/eval",
   "version": "0.1.0",
+  "private": true,
   "description": "Agent evaluation framework for Vellum CLI",
   "type": "module",
   "main": "dist/index.js",
@@ -32,8 +33,5 @@
   },
   "files": [
     "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  }
+  ]
 }
