@@ -1,5 +1,29 @@
 # @butlerw/vellum
 
+## 0.2.5
+
+### Patch Changes
+
+- [#63](https://github.com/MLGBJDLW/vellum/pull/63) [`d37fa3b`](https://github.com/MLGBJDLW/vellum/commit/d37fa3b39b7d6363198f0634a3689668fc9eab0a) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### fix(security)
+
+  - Complete P0 security fix integration
+
+  ### fix(lint)
+
+  - Replace non-null assertion with proper null check
+
+  ### feat(shared)
+
+  - Add HTTP connection pool module and migrate fetch calls
+
+  ### refactor(core)
+
+  - Extract 6 modules from AgentLoop (3214→2443 lines)
+
+  ### test(mcp)
+
+  - Fix filterTools test after refactoring
+
 ## 0.2.4
 
 ### Patch Changes
