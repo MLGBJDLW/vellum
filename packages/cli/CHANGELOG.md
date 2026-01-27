@@ -1,5 +1,12 @@
 # @butlerw/vellum
 
+## 0.2.4
+
+### Patch Changes
+
+- [#61](https://github.com/MLGBJDLW/vellum/pull/61) [`daad1f9`](https://github.com/MLGBJDLW/vellum/commit/daad1f98ef4e113021ca38291c998d8b20fc2667) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### fix(tui)
+  - Skip Kitty keyboard protocol probing on ConPTY terminals to prevent DA1 responses from appearing in the input line
+
 ## 0.2.3
 
 ### Patch Changes
