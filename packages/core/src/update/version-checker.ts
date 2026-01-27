@@ -9,6 +9,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { fetchWithPool } from "@vellum/shared";
 
 import type {
   NpmPackageMetadata,
@@ -181,7 +182,7 @@ export class VersionChecker {
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeoutMs);
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithPool(url, {
         headers: {
           Accept: "application/json",
         },

@@ -6,6 +6,17 @@
 export * from "./config-parser/index.js";
 // Error codes
 export { ErrorCode, ErrorSeverity, inferSeverity } from "./errors/index.js";
+// HTTP utilities (connection pooling)
+export {
+  closeDefaultPool,
+  createHttpPool,
+  DEFAULT_POOL_OPTIONS,
+  defaultHttpPool,
+  type FetchWithPoolOptions,
+  fetchWithPool,
+  type HttpPool,
+  type HttpPoolOptions,
+} from "./http/index.js";
 // @ Mention System (Phase: TUI Context Mentions)
 export {
   countMentions,

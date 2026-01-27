@@ -4,6 +4,7 @@
 
 import { promises as fs } from "node:fs";
 import { dirname } from "node:path";
+import { fetchWithPool } from "@vellum/shared";
 import {
   type AuditDestination,
   type FullEnterpriseConfig,
@@ -220,7 +221,7 @@ export class AuditLogger {
     const body = batch.join("");
 
     try {
-      await fetch(dest.url, {
+      await fetchWithPool(dest.url, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-ndjson",

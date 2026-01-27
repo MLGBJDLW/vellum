@@ -4,6 +4,7 @@
 // Parses and resolves import directives in AGENTS.md content.
 // Implements REQ-006: @file:, @dir:, @url: import resolution.
 
+import { fetchWithPool } from "@vellum/shared";
 import type { AgentsWarning } from "../types.js";
 import {
   DirectoryImportResolver,
@@ -353,7 +354,7 @@ export class ImportParser {
 
     // Fetch URL content
     try {
-      const response = await fetch(normalizedUrl);
+      const response = await fetchWithPool(normalizedUrl);
 
       if (!response.ok) {
         warnings.push({

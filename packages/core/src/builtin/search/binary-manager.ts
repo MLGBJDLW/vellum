@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { fetchWithPool } from "@vellum/shared";
 import {
   getBinaryCacheDir,
   getCachedBinaryPath,
@@ -279,7 +280,7 @@ async function downloadFile(url: string, destPath: string, timeout: number): Pro
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetchWithPool(url, { signal: controller.signal });
 
     if (!response.ok) {
       throw new Error(`Download failed: ${response.status} ${response.statusText}`);

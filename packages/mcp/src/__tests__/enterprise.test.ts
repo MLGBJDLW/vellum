@@ -3,8 +3,19 @@
 // ============================================
 
 import { promises as fs } from "node:fs";
+import { fetchWithPool } from "@vellum/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuditLogger } from "../enterprise/AuditLogger.js";
+
+// Mock @vellum/shared to intercept fetchWithPool calls
+vi.mock("@vellum/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@vellum/shared")>();
+  return {
+    ...mod,
+    fetchWithPool: vi.fn().mockResolvedValue({ ok: true }),
+  };
+});
+
 import {
   clearFullEnterpriseConfigCache,
   DEFAULT_FULL_ENTERPRISE_CONFIG,
@@ -519,6 +530,8 @@ describe("AuditLogger", () => {
 
   beforeEach(() => {
     logger = new AuditLogger({ sessionId: "test-session", userId: "test-user" });
+    // Clear fetchWithPool mock call history between tests
+    vi.mocked(fetchWithPool).mockClear();
   });
 
   afterEach(async () => {
@@ -696,8 +709,8 @@ describe("AuditLogger", () => {
 
   describe("logging (http mode)", () => {
     it("should buffer events for http destination", async () => {
-      const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-      vi.stubGlobal("fetch", mockFetch);
+      const mockFetchWithPool = vi.mocked(fetchWithPool);
+      mockFetchWithPool.mockResolvedValue({ ok: true } as Response);
 
       await logger.initialize({
         version: 1,
@@ -716,22 +729,23 @@ describe("AuditLogger", () => {
 
       // Log one event - should buffer, not send
       await logger.logToolCall("server", "tool1");
-      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockFetchWithPool).not.toHaveBeenCalled();
 
       // Log second event - should trigger batch send
       await logger.logToolCall("server", "tool2");
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetchWithPool).toHaveBeenCalledTimes(1);
 
       // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by expect toHaveBeenCalledTimes
-      const fetchCall = mockFetch.mock.calls[0]!;
+      const fetchCall = mockFetchWithPool.mock.calls[0]!;
       expect(fetchCall[0]).toBe("https://logs.example.com");
       expect(fetchCall[1]?.method).toBe("POST");
-      expect(fetchCall[1]?.headers["Content-Type"]).toBe("application/x-ndjson");
+      const headers = fetchCall[1]?.headers as Record<string, string> | undefined;
+      expect(headers?.["Content-Type"]).toBe("application/x-ndjson");
     });
 
     it("should include custom headers in http requests", async () => {
-      const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-      vi.stubGlobal("fetch", mockFetch);
+      const mockFetchWithPool = vi.mocked(fetchWithPool);
+      mockFetchWithPool.mockResolvedValue({ ok: true } as Response);
 
       await logger.initialize({
         version: 1,
@@ -756,14 +770,15 @@ describe("AuditLogger", () => {
 
       await logger.logToolCall("server", "tool");
 
-      // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by mockFetch being called
-      const fetchCall = mockFetch.mock.calls[0]!;
-      expect(fetchCall[1]?.headers.Authorization).toBe("Bearer token123");
+      // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by mockFetchWithPool being called
+      const fetchCall = mockFetchWithPool.mock.calls[0]!;
+      const headers = fetchCall[1]?.headers as Record<string, string> | undefined;
+      expect(headers?.["Authorization"]).toBe("Bearer token123");
     });
 
     it("should re-buffer events on http failure", async () => {
-      const mockFetch = vi.fn().mockRejectedValue(new Error("Network error"));
-      vi.stubGlobal("fetch", mockFetch);
+      const mockFetchWithPool = vi.mocked(fetchWithPool);
+      mockFetchWithPool.mockRejectedValue(new Error("Network error"));
 
       await logger.initialize({
         version: 1,
@@ -878,8 +893,8 @@ describe("AuditLogger", () => {
     });
 
     it("should flush http buffer on shutdown", async () => {
-      const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-      vi.stubGlobal("fetch", mockFetch);
+      const mockFetchWithPool = vi.mocked(fetchWithPool);
+      mockFetchWithPool.mockResolvedValue({ ok: true } as Response);
 
       await logger.initialize({
         version: 1,
@@ -903,11 +918,11 @@ describe("AuditLogger", () => {
 
       // Log event (won't trigger immediate send due to high batchSize)
       await logger.logToolCall("server", "tool");
-      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockFetchWithPool).not.toHaveBeenCalled();
 
       // Shutdown should flush
       await logger.shutdown();
-      expect(mockFetch).toHaveBeenCalled();
+      expect(mockFetchWithPool).toHaveBeenCalled();
     });
 
     it("should clear flush timer on shutdown", async () => {

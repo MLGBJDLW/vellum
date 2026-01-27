@@ -7,6 +7,7 @@
  * @module builtin/web-search
  */
 
+import { fetchWithPool } from "@vellum/shared";
 import { z } from "zod";
 import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { defineTool, fail, ok } from "../types/index.js";
@@ -348,7 +349,7 @@ async function searchDuckDuckGo(
 
   try {
     return await withHttpRetry(async () => {
-      const response = await fetch(`${DUCKDUCKGO_HTML_URL}?${params.toString()}`, {
+      const response = await fetchWithPool(`${DUCKDUCKGO_HTML_URL}?${params.toString()}`, {
         method: "GET",
         headers: {
           "User-Agent":
@@ -415,7 +416,7 @@ async function searchWithSerpAPI(
 
   try {
     return await withHttpRetry(async () => {
-      const response = await fetch(`${SERPAPI_BASE_URL}?${params.toString()}`, {
+      const response = await fetchWithPool(`${SERPAPI_BASE_URL}?${params.toString()}`, {
         method: "GET",
         headers: {
           Accept: "application/json",
@@ -518,7 +519,7 @@ async function searchTavily(
     ...(options.timeRange && { time_range: options.timeRange }),
   };
 
-  const response = await fetch(TAVILY_API_URL, {
+  const response = await fetchWithPool(TAVILY_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

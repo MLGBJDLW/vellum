@@ -11,6 +11,8 @@
  * @module @vellum/provider/local
  */
 
+import { fetchWithPool } from "@vellum/shared";
+
 import { LMSTUDIO_MODELS, OLLAMA_MODELS } from "./models/providers/local.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type {
@@ -69,7 +71,7 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
    */
   async validateCredential(_credential: ProviderCredential): Promise<CredentialValidationResult> {
     try {
-      const response = await fetch(`${this.defaultBaseUrl}/models`, {
+      const response = await fetchWithPool(`${this.defaultBaseUrl}/models`, {
         method: "GET",
         signal: AbortSignal.timeout(5000), // 5 second timeout
       });
@@ -94,7 +96,7 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
    */
   async isServerRunning(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.defaultBaseUrl}/models`, {
+      const response = await fetchWithPool(`${this.defaultBaseUrl}/models`, {
         method: "GET",
         signal: AbortSignal.timeout(5000),
       });
@@ -229,7 +231,7 @@ export class OllamaProvider extends LocalProvider {
   async listModelsAsync(): Promise<ModelInfo[]> {
     try {
       // Ollama uses /api/tags for listing models (not OpenAI-compatible)
-      const response = await fetch(`${this.ollamaBaseUrl}/api/tags`, {
+      const response = await fetchWithPool(`${this.ollamaBaseUrl}/api/tags`, {
         method: "GET",
         signal: AbortSignal.timeout(10000),
       });
@@ -314,7 +316,7 @@ export class OllamaProvider extends LocalProvider {
   async validateCredential(_credential: ProviderCredential): Promise<CredentialValidationResult> {
     try {
       // Use Ollama-native endpoint for validation
-      const response = await fetch(`${this.ollamaBaseUrl}/api/tags`, {
+      const response = await fetchWithPool(`${this.ollamaBaseUrl}/api/tags`, {
         method: "GET",
         signal: AbortSignal.timeout(5000),
       });
@@ -391,7 +393,7 @@ export class LMStudioProvider extends LocalProvider {
    */
   async listModelsAsync(): Promise<ModelInfo[]> {
     try {
-      const response = await fetch(`${this.defaultBaseUrl}/models`, {
+      const response = await fetchWithPool(`${this.defaultBaseUrl}/models`, {
         method: "GET",
         signal: AbortSignal.timeout(10000),
       });
