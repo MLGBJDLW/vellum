@@ -1,5 +1,25 @@
 # @butlerw/vellum
 
+## 0.2.6
+
+### Patch Changes
+
+- [#67](https://github.com/MLGBJDLW/vellum/pull/67) [`781cfd1`](https://github.com/MLGBJDLW/vellum/commit/781cfd1ad594ba6d0a12086ec2b0c3d804e6d7f0) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### security(credentials)
+
+  - Upgraded scrypt cost parameter from N=16384 to N=65536 (OWASP 2023 compliant)
+  - Added maxmem parameter to prevent Node.js memory limit errors
+
+  ### fix(credentials)
+
+  - Fixed migration state rollback on failure - prevents corrupted state
+  - Implemented atomic file writes (write-temp + rename) to prevent data loss on crash
+
+  ### feat(credentials)
+
+  - Added scrypt version tracking in encrypted credential files
+  - Added transparent v1→v2 migration support with autoMigrate option
+  - Added `requiresScryptMigration()` and `migrate()` public methods
+
 ## 0.2.5
 
 ### Patch Changes
