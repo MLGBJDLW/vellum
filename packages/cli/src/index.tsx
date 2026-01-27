@@ -45,6 +45,7 @@ import type { CommandResult } from "./commands/types.js";
 import { getOrCreateOrchestrator } from "./orchestrator-singleton.js";
 import { executeShutdownCleanup, getShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
 import { BufferedStdout, createCompatStdout, setActiveStdout } from "./tui/buffered-stdout.js";
+import { initializeKittyDetection } from "./tui/hooks/useKittyKeyboard.js";
 import { initI18n } from "./tui/i18n/index.js";
 
 import {
@@ -444,6 +445,10 @@ program
           incrementalRendering,
           debug: isStaticOutputMode,
         };
+
+    // Initialize Kitty keyboard detection BEFORE Ink takes over stdin
+    // This prevents terminal DA1 responses from appearing in the input field
+    await initializeKittyDetection();
 
     render(
       <App

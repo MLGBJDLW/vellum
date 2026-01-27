@@ -19,6 +19,37 @@ import { getActiveStdout } from "../buffered-stdout.js";
 import { lockRawMode, unlockRawMode } from "./raw-mode-manager.js";
 
 // =============================================================================
+// Environment Detection
+// =============================================================================
+
+function isVsCodeTerminal(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (
+    env.TERM_PROGRAM === "vscode" ||
+    env.VSCODE_INJECTION === "1" ||
+    Boolean(env.VSCODE_GIT_IPC_HANDLE)
+  );
+}
+
+function shouldSkipKittyDetection(env: NodeJS.ProcessEnv = process.env): boolean {
+  // ConPTY-backed terminals (Windows Terminal, VS Code) do not support
+  // Kitty keyboard protocol and may emit delayed DA1 responses that
+  // show up in the input field if we probe them.
+  if (env.WT_SESSION || isVsCodeTerminal(env)) {
+    return true;
+  }
+
+  if (process.platform === "win32") {
+    // Only probe on Windows if we detect a terminal known to support Kitty.
+    const hasKnownSupport = Boolean(env.WEZTERM_PANE || env.KITTY_WINDOW_ID);
+    if (!hasKnownSupport) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// =============================================================================
 // Constants
 // =============================================================================
 
@@ -92,6 +123,14 @@ let kittyEnabled = false;
 // =============================================================================
 
 /**
+ * Check if detection has already been completed.
+ * Used by hooks to determine if early initialization ran.
+ */
+export function isDetectionComplete(): boolean {
+  return detectionComplete;
+}
+
+/**
  * Check if Kitty keyboard protocol is supported by the terminal.
  * Must call detectKittyKeyboardProtocol() first.
  */
@@ -124,6 +163,13 @@ export async function detectKittyKeyboardProtocol(): Promise<boolean> {
     // Require TTY for protocol detection
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
       detectionComplete = true;
+      resolve(false);
+      return;
+    }
+
+    if (shouldSkipKittyDetection()) {
+      detectionComplete = true;
+      kittySupported = false;
       resolve(false);
       return;
     }
