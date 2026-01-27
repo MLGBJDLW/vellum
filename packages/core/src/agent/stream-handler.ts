@@ -416,7 +416,10 @@ export class AgentStreamHandler {
     stream: AsyncIterable<LLMStreamEvent>,
     pendingToolCalls: PendingToolCall[]
   ): Promise<StreamProcessResult> {
-    const processor = this.deps.streamProcessor!;
+    const processor = this.deps.streamProcessor;
+    if (!processor) {
+      throw new Error("StreamProcessor not available");
+    }
     const wrappedStream = this.wrapStreamForProcessor(stream);
 
     const result = await processor.processStream(wrappedStream);
