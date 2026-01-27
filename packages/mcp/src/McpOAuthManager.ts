@@ -19,6 +19,7 @@ import type {
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { DEFAULT_OAUTH_PORT, OAUTH_TIMEOUT_MS } from "./constants.js";
+import { DynamicClientRegistration } from "./oauth/DynamicClientRegistration.js";
 
 // ============================================
 // Types
@@ -111,6 +112,16 @@ export interface OAuthResult {
 }
 
 /**
+ * Result of token claim validation.
+ */
+export type TokenValidationResult = {
+  /** Whether the token claims are valid */
+  valid: boolean;
+  /** Reason for validation failure (if not valid) */
+  reason?: string;
+};
+
+/**
  * Configuration for McpOAuthManager.
  */
 export interface McpOAuthManagerConfig {
@@ -183,6 +194,8 @@ export class VellumOAuthClientProvider implements OAuthClientProvider {
   private readonly config: McpOAuthManagerConfig;
   private readonly credentialManager?: OAuthCredentialManager;
   private readonly providerData: ProviderData;
+  /** Expected token issuer (set from OAuth authorization server metadata) */
+  private expectedIssuer?: string;
 
   constructor(
     serverName: string,
@@ -259,6 +272,96 @@ export class VellumOAuthClientProvider implements OAuthClientProvider {
   }
 
   /**
+   * Set the expected token issuer from OAuth authorization server metadata.
+   * @param issuer - The issuer URL from server metadata
+   */
+  setExpectedIssuer(issuer: string): void {
+    this.expectedIssuer = issuer;
+  }
+
+  /**
+   * Validate JWT token claims.
+   * Validates issuer (iss), audience (aud), and not-before (nbf) claims.
+   * For opaque tokens (non-JWT), validation is skipped with a warning.
+   *
+   * @param token - The access token to validate
+   * @returns Validation result with reason on failure
+   */
+  private validateTokenClaims(token: string): TokenValidationResult {
+    // Check if token is a JWT (has 3 dot-separated parts)
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      // Opaque token - cannot validate claims, warn and allow
+      console.warn(
+        `[OAuth] Token for ${this.serverName} is opaque (non-JWT). ` +
+          "Claim validation skipped. Consider using JWT tokens for enhanced security."
+      );
+      return { valid: true };
+    }
+
+    try {
+      // Decode JWT payload (middle part)
+      const payloadBase64 = parts[1] as string; // Safe: we verified parts.length === 3
+      // Handle URL-safe base64
+      const payloadJson = Buffer.from(payloadBase64, "base64url").toString("utf-8");
+      const payload = JSON.parse(payloadJson) as {
+        iss?: string;
+        aud?: string | string[];
+        nbf?: number;
+        exp?: number;
+      };
+
+      // Validate issuer (iss) claim
+      if (this.expectedIssuer && payload.iss) {
+        if (payload.iss !== this.expectedIssuer) {
+          return {
+            valid: false,
+            reason: `Token issuer mismatch: expected "${this.expectedIssuer}", got "${payload.iss}"`,
+          };
+        }
+      } else if (this.expectedIssuer && !payload.iss) {
+        // Expected issuer but token has none - suspicious
+        console.warn(
+          `[OAuth] Token for ${this.serverName} has no issuer claim but expected "${this.expectedIssuer}"`
+        );
+      }
+
+      // Validate audience (aud) claim if present
+      if (payload.aud && this.providerData.clientInfo?.client_id) {
+        const clientId = this.providerData.clientInfo.client_id;
+        const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+        if (!audiences.includes(clientId)) {
+          return {
+            valid: false,
+            reason: `Token audience does not include client ID "${clientId}". Audiences: ${audiences.join(", ")}`,
+          };
+        }
+      }
+
+      // Validate not-before (nbf) claim
+      if (payload.nbf !== undefined) {
+        const now = Math.floor(Date.now() / 1000);
+        // Allow 60 seconds of clock skew
+        if (payload.nbf > now + 60) {
+          return {
+            valid: false,
+            reason: `Token not yet valid: nbf=${payload.nbf}, current=${now}`,
+          };
+        }
+      }
+
+      return { valid: true };
+    } catch (error) {
+      // Failed to parse JWT - treat as opaque token
+      console.warn(
+        `[OAuth] Failed to parse token claims for ${this.serverName}: ${error instanceof Error ? error.message : "unknown error"}. ` +
+          "Treating as opaque token."
+      );
+      return { valid: true };
+    }
+  }
+
+  /**
    * Get stored OAuth tokens.
    */
   async tokens(): Promise<OAuthTokens | undefined> {
@@ -279,6 +382,13 @@ export class VellumOAuthClientProvider implements OAuthClientProvider {
       if (isExpired && !credential.metadata?.refreshToken) {
         return undefined;
       }
+    }
+
+    // Validate token claims (issuer, audience, not-before)
+    const validation = this.validateTokenClaims(credential.value);
+    if (!validation.valid) {
+      console.warn(`[OAuth] Token validation failed for ${this.serverName}: ${validation.reason}`);
+      return undefined;
     }
 
     // Calculate expires_in from expiresAt
@@ -496,6 +606,17 @@ export class McpOAuthManager {
       this.config,
       this.credentialManager
     );
+
+    // Discover OAuth metadata and set expected issuer for token validation
+    try {
+      const dcr = new DynamicClientRegistration();
+      const metadata = await dcr.discoverMetadata(serverUrl);
+      if (metadata.issuer) {
+        provider.setExpectedIssuer(metadata.issuer);
+      }
+    } catch {
+      // Continue without issuer validation (opaque tokens or discovery failure)
+    }
 
     this.providers.set(key, provider);
     return provider;

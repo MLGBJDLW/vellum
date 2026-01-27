@@ -7,6 +7,7 @@
  * @module builtin/web-fetch
  */
 
+import { fetchWithPool } from "@vellum/shared";
 import { z } from "zod";
 import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { CloudMetadataError, PrivateIPError, UnsafeRedirectError } from "../errors/web.js";
@@ -238,14 +239,12 @@ export const webFetchTool = defineTool({
     const startTime = Date.now();
 
     try {
-      const fetchOptions: RequestInit = {
+      const response = await fetchWithPool(input.url, {
         method,
         headers: input.headers,
         body: input.body,
         signal: timeoutController.signal,
-      };
-
-      const response = await fetch(input.url, fetchOptions);
+      });
 
       // Validate redirected URL for SSRF protection
       if (response.redirected) {

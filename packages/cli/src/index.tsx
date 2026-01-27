@@ -519,6 +519,7 @@ credentialsCmd
 
 program
   .command("init")
+  .alias("w")
   .description("Initialize AGENTS.md for your project")
   .option("-f, --force", "Overwrite existing AGENTS.md without prompting")
   .option("-m, --minimal", "Skip wizard prompts, use defaults")

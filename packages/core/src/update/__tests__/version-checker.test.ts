@@ -7,7 +7,7 @@
  * @module core/update/__tests__/version-checker.test
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import {
   compareSemVer,
@@ -16,6 +16,18 @@ import {
   parseSemVer,
   VersionChecker,
 } from "../version-checker.js";
+
+vi.mock("@vellum/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@vellum/shared")>();
+  return {
+    ...mod,
+    fetchWithPool: vi.fn(),
+  };
+});
+
+import { fetchWithPool } from "@vellum/shared";
+
+const mockFetchWithPool = fetchWithPool as Mock;
 
 // =============================================================================
 // Semver Parsing Tests
@@ -238,7 +250,7 @@ describe("VersionChecker", () => {
         },
       };
 
-      vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      mockFetchWithPool.mockResolvedValueOnce({
         ok: true,
         json: async () => mockMetadata,
       } as Response);
@@ -261,7 +273,7 @@ describe("VersionChecker", () => {
         },
       };
 
-      vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      mockFetchWithPool.mockResolvedValueOnce({
         ok: true,
         json: async () => mockMetadata,
       } as Response);
@@ -273,7 +285,7 @@ describe("VersionChecker", () => {
     });
 
     it("should return error on fetch failure", async () => {
-      vi.spyOn(global, "fetch").mockRejectedValueOnce(new Error("Network error"));
+      mockFetchWithPool.mockRejectedValueOnce(new Error("Network error"));
 
       const result = await checker.check("1.0.0", true);
 
@@ -282,7 +294,7 @@ describe("VersionChecker", () => {
     });
 
     it("should return error on non-ok response", async () => {
-      vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      mockFetchWithPool.mockResolvedValueOnce({
         ok: false,
         status: 404,
         statusText: "Not Found",

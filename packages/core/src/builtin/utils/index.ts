@@ -8,6 +8,9 @@
 
 export {
   isWithinWorkingDir,
+  isWithinWorkingDirSecure,
+  isWithinWorkingDirSecureSync,
+  type PathSecurityResult,
   sanitizePath,
   validatePath,
 } from "./path-security.js";

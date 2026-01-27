@@ -13,6 +13,7 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { fetchWithPool } from "@vellum/shared";
 
 import type {
   Base64ImageSource,
@@ -163,7 +164,7 @@ export class VisionService {
   private async loadImageFromUrl(
     url: string
   ): Promise<Base64ImageSource & { metadata: ImageMetadata }> {
-    const response = await fetch(url);
+    const response = await fetchWithPool(url);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch image from URL: ${response.status} ${response.statusText}`);

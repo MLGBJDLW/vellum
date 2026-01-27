@@ -10,6 +10,7 @@ vi.mock("../../utils/kitty-keyboard-protocol.js", () => ({
   disableKittyKeyboardProtocol: vi.fn(),
   isKittyKeyboardEnabled: vi.fn(() => false),
   isKittyKeyboardSupported: vi.fn(() => false),
+  isDetectionComplete: vi.fn(() => false),
   reEnableKittyProtocol: vi.fn(),
   KittyFlags: {
     DISAMBIGUATE: 1,

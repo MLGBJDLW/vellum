@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
+    "undici": "^7.10.0",
     "zod": "^4.3.6"
   }
 }

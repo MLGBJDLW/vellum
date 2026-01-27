@@ -2,9 +2,22 @@
  * Tests for web_search tool
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { ToolContext } from "../../types/tool.js";
 import { webSearchTool } from "../web-search.js";
+
+// Mock fetchWithPool from @vellum/shared
+vi.mock("@vellum/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@vellum/shared")>();
+  return {
+    ...mod,
+    fetchWithPool: vi.fn(),
+  };
+});
+
+import { fetchWithPool } from "@vellum/shared";
+
+const mockFetchWithPool = fetchWithPool as Mock;
 
 describe("webSearchTool", () => {
   let ctx: ToolContext;
@@ -44,7 +57,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve("<html></html>"),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       await webSearchTool.execute({ query: "test", maxResults: 10, engine: "duckduckgo" }, ctx);
 
@@ -90,7 +103,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve("<html></html>"),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       await webSearchTool.execute(
         { query: "test query", maxResults: 10, engine: "duckduckgo" },
@@ -107,7 +120,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve("<html></html>"),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       await webSearchTool.execute(
         { query: "typescript tutorials", maxResults: 10, engine: "duckduckgo" },
@@ -129,7 +142,7 @@ describe("webSearchTool", () => {
             </html>
           `),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "duckduckgo" },
@@ -145,7 +158,7 @@ describe("webSearchTool", () => {
 
     it("should handle fetch errors", async () => {
       const fetchMock = vi.fn().mockRejectedValue(new Error("Network error"));
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "duckduckgo" },
@@ -163,7 +176,7 @@ describe("webSearchTool", () => {
         ok: false,
         status: 429,
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "duckduckgo" },
@@ -210,7 +223,7 @@ describe("webSearchTool", () => {
             ],
           }),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "google" },
@@ -247,7 +260,7 @@ describe("webSearchTool", () => {
             ],
           }),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", engine: "google", maxResults: 2 },
@@ -276,7 +289,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve(altPatternHtml),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test alt", maxResults: 10, engine: "duckduckgo" },
@@ -302,7 +315,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve(genericLinksHtml),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test generic", maxResults: 10, engine: "duckduckgo" },
@@ -331,7 +344,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve(htmlWithEntities),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "entities test", maxResults: 10, engine: "duckduckgo" },
@@ -360,7 +373,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve(htmlWithNumericEntities),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "numeric entities", maxResults: 10, engine: "duckduckgo" },
@@ -409,7 +422,7 @@ describe("webSearchTool", () => {
         error.name = "AbortError";
         return Promise.reject(error);
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "mid-flight abort", maxResults: 10, engine: "duckduckgo" },
@@ -436,7 +449,7 @@ describe("webSearchTool", () => {
             ],
           }),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "bing test", maxResults: 5, engine: "bing" },
@@ -501,7 +514,7 @@ describe("webSearchTool", () => {
             `),
         });
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const resultPromise = webSearchTool.execute(
         { query: "retry test", maxResults: 10, engine: "duckduckgo" },
@@ -536,7 +549,7 @@ describe("webSearchTool", () => {
             `),
         });
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const resultPromise = webSearchTool.execute(
         { query: "server error test", maxResults: 10, engine: "duckduckgo" },
@@ -554,7 +567,7 @@ describe("webSearchTool", () => {
 
     it("should fail after max retries exhausted", async () => {
       const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 429 });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const resultPromise = webSearchTool.execute(
         { query: "always rate limited", maxResults: 10, engine: "duckduckgo" },
@@ -578,7 +591,7 @@ describe("webSearchTool", () => {
 
     it("should not retry on HTTP 4xx client errors (except 429)", async () => {
       const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "not found", maxResults: 10, engine: "duckduckgo" },
@@ -624,7 +637,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test query", maxResults: 10, engine: "tavily" },
@@ -660,7 +673,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test query", maxResults: 10, engine: "auto" },
@@ -698,7 +711,7 @@ describe("webSearchTool", () => {
           ok: true,
           text: () => Promise.resolve(duckDuckGoHtml),
         });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test query", maxResults: 10, engine: "auto" },
@@ -717,7 +730,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "tavily" },
@@ -736,7 +749,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       await webSearchTool.execute(
         {
@@ -782,7 +795,7 @@ describe("webSearchTool", () => {
           ok: true,
           text: () => Promise.resolve(duckDuckGoHtml),
         });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "auto" },
@@ -812,7 +825,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(manyResults),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       await webSearchTool.execute({ query: "test", maxResults: 3, engine: "tavily" }, ctx);
 
@@ -828,7 +841,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      vi.stubGlobal("fetch", fetchMock);
+      mockFetchWithPool.mockImplementation(fetchMock);
 
       await webSearchTool.execute({ query: "test", maxResults: 10, engine: "tavily" }, ctx);
 

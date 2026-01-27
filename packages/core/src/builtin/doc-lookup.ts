@@ -7,6 +7,7 @@
  * @module builtin/doc-lookup
  */
 
+import { fetchWithPool } from "@vellum/shared";
 import { z } from "zod";
 import { CloudMetadataError, PrivateIPError } from "../errors/web.js";
 import { defineTool, fail, ok } from "../types/index.js";
@@ -92,7 +93,7 @@ async function secureFetch(url: string): Promise<Response> {
     throw new PrivateIPError(validation.resolvedIPs[0] ?? "unknown", url);
   }
 
-  return fetch(url, {
+  return fetchWithPool(url, {
     headers: {
       "User-Agent": "Vellum-DocLookup/1.0",
       Accept: "application/json",

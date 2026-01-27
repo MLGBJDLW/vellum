@@ -10,8 +10,7 @@
 import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { Mention } from "@vellum/shared";
-import { parseMentions } from "@vellum/shared";
+import { fetchWithPool, type Mention, parseMentions } from "@vellum/shared";
 import { simpleGit } from "simple-git";
 import {
   DEFAULT_EXPANSION_OPTIONS,
@@ -276,7 +275,7 @@ const handleUrlMention: MentionHandler = async (mention, _context, options) => {
     const timeoutId = setTimeout(() => controller.abort(), options.urlTimeout);
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithPool(url, {
         signal: controller.signal,
         redirect: options.followRedirects ? "follow" : "manual",
         headers: {

@@ -44,11 +44,41 @@ export {
   NeedsClientRegistrationError,
   OAuthTimeoutError,
 } from "./errors.js";
+// McpCapabilityDiscovery - Capability Discovery & Operations
+export {
+  type CapabilityDiscoveryOptions,
+  type ConnectionProvider,
+  filterTools,
+  McpCapabilityDiscovery,
+} from "./McpCapabilityDiscovery.js";
+// McpConfigManager - Config File Management
+export {
+  type ConfigReadResult,
+  type McpConfigChangeHandler,
+  McpConfigManager,
+  type McpConfigManagerOptions,
+} from "./McpConfigManager.js";
 // McpHub - Central MCP Server Manager
 export {
   McpHub,
   type McpHubOptions,
 } from "./McpHub.js";
+// McpIncrementalUpdater - Incremental Server Update Logic
+export {
+  type ConnectionCallbacks,
+  type ConnectionProvider as UpdaterConnectionProvider,
+  McpIncrementalUpdater,
+  type ServerChanges,
+  type UpdaterOptions,
+} from "./McpIncrementalUpdater.js";
+// McpServerLifecycle - Connection Lifecycle Management
+export {
+  type ConnectionStore,
+  type LifecycleOptions,
+  McpServerLifecycle,
+} from "./McpServerLifecycle.js";
+// McpServerRegistry - Server UID Management
+export { McpServerRegistry } from "./McpServerRegistry.js";
 // Schemas
 export {
   // Individual schemas

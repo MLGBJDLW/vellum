@@ -4,13 +4,22 @@
  * @module builtin/__tests__/doc-lookup.test
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { ToolContext } from "../../types/tool.js";
 import { docLookupParamsSchema, docLookupTool, truncateContent } from "../doc-lookup.js";
 
-// Mock global fetch
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
+// Mock fetchWithPool from @vellum/shared
+vi.mock("@vellum/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@vellum/shared")>();
+  return {
+    ...mod,
+    fetchWithPool: vi.fn(),
+  };
+});
+
+import { fetchWithPool } from "@vellum/shared";
+
+const mockFetch = fetchWithPool as Mock;
 
 // Mock security validation functions
 vi.mock("../security/url-validator.js", () => ({

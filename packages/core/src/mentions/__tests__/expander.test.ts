@@ -7,7 +7,7 @@
  */
 
 import * as fs from "node:fs/promises";
-import type { Mention } from "@vellum/shared";
+import { fetchWithPool, type Mention } from "@vellum/shared";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { expandAllMentions, expandMention, previewMention } from "../expander.js";
 import type { MentionExpansionContext } from "../types.js";
@@ -23,6 +23,13 @@ vi.mock("simple-git", () => ({
     status: vi.fn(),
   })),
 }));
+vi.mock("@vellum/shared", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@vellum/shared")>();
+  return {
+    ...mod,
+    fetchWithPool: vi.fn(),
+  };
+});
 
 const mockFs = fs as unknown as {
   stat: Mock;
@@ -244,10 +251,11 @@ describe("expandMention - @folder", () => {
 // URL Mention Tests
 // =============================================================================
 
+const mockFetchWithPool = fetchWithPool as Mock;
+
 describe("expandMention - @url", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    global.fetch = vi.fn();
   });
 
   afterEach(() => {
@@ -255,7 +263,7 @@ describe("expandMention - @url", () => {
   });
 
   it("expands URL mention successfully", async () => {
-    (global.fetch as Mock).mockResolvedValue({
+    mockFetchWithPool.mockResolvedValue({
       ok: true,
       headers: new Headers({ "content-type": "text/html" }),
       text: () => Promise.resolve("<html>content</html>"),
@@ -269,7 +277,7 @@ describe("expandMention - @url", () => {
   });
 
   it("adds https protocol if missing", async () => {
-    (global.fetch as Mock).mockResolvedValue({
+    mockFetchWithPool.mockResolvedValue({
       ok: true,
       headers: new Headers({ "content-type": "text/html" }),
       text: () => Promise.resolve("content"),
@@ -278,11 +286,11 @@ describe("expandMention - @url", () => {
     const mention = createMention("url", "example.com");
     await expandMention(mention, createContext());
 
-    expect(global.fetch).toHaveBeenCalledWith("https://example.com", expect.any(Object));
+    expect(mockFetchWithPool).toHaveBeenCalledWith("https://example.com", expect.any(Object));
   });
 
   it("returns error for HTTP error response", async () => {
-    (global.fetch as Mock).mockResolvedValue({
+    mockFetchWithPool.mockResolvedValue({
       ok: false,
       status: 404,
       statusText: "Not Found",
@@ -304,7 +312,7 @@ describe("expandMention - @url", () => {
   });
 
   it("handles fetch timeout", async () => {
-    (global.fetch as Mock).mockRejectedValue(
+    mockFetchWithPool.mockRejectedValue(
       Object.assign(new Error("Timeout"), { name: "AbortError" })
     );
 

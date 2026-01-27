@@ -67,6 +67,13 @@ export {
   sessionsToContexts,
   sessionToContext,
 } from "./context-integration.js";
+// Context Manager (T403)
+export {
+  AgentContextManager,
+  type AgentContextManagerConfig,
+  type AgentContextManagerDeps,
+  type ContextCompactedEvent,
+} from "./context-manager.js";
 // Cost Limit Integration (Phase 35+)
 export {
   type CostCheckResult,
@@ -75,6 +82,12 @@ export {
   type CostLimitIntegrationEvents,
   createCostLimitIntegration,
 } from "./cost-limit-integration.js";
+// Cost Manager (Phase 35+)
+export {
+  AgentCostManager,
+  type CostManagerCallbacks,
+  type CostManagerConfig,
+} from "./cost-manager.js";
 // Doom Loop Detection (T018)
 export {
   countConsecutiveIdenticalCalls,
@@ -247,6 +260,13 @@ export {
   type ToolGroupEntry,
   ToolGroupEntrySchema,
 } from "./restrictions.js";
+// Retry Manager (Step 6 - Extracted from AgentLoop)
+export {
+  AgentRetryManager,
+  type HandleErrorResult,
+  type RetryConfig,
+  type RetryManagerDeps,
+} from "./retry-manager.js";
 // Role Manager (Specialist Roles)
 export {
   AGENT_ROLES,
@@ -278,6 +298,12 @@ export {
   textSimilarity,
   tokenize,
 } from "./similarity.js";
+// Skills Integration (T053)
+export {
+  AgentSkillsIntegration,
+  type AgentSkillsIntegrationConfig,
+  type AgentSkillsIntegrationDeps,
+} from "./skills-integration.js";
 export {
   AGENT_STATES,
   type AgentState,
@@ -301,6 +327,16 @@ export {
   type SnapshotContext,
   type StatePersister,
 } from "./state-persister.js";
+// Stream Handler (Step 7 - Extracted from AgentLoop)
+export {
+  AgentStreamHandler,
+  type AgentStreamHandlerConfig,
+  type AgentStreamHandlerDeps,
+  type PendingToolCall,
+  type StreamHandlerCallbacks,
+  type StreamProcessResult,
+  type StreamState,
+} from "./stream-handler.js";
 // Streaming Loop Detection
 export {
   DEFAULT_STREAMING_LOOP_CONFIG,
@@ -334,3 +370,12 @@ export {
   type TerminationTokenUsage,
   type ToolCallInfo,
 } from "./termination.js";
+// Termination Manager (Step 5 - Extracted from AgentLoop)
+export {
+  AgentTerminationManager,
+  type AgentTerminationManagerConfig,
+  type AgentTerminationManagerDeps,
+  type MetadataTokens,
+  type TerminationManagerCallbacks,
+  type TurnUsage,
+} from "./termination-manager.js";

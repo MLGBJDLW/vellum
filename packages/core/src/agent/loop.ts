@@ -10,7 +10,6 @@ import type { SubsessionManager } from "../agents/session/subsession-manager.js"
 import type { UserPromptSignal } from "../builtin/ask-followup.js";
 import type { AttemptCompletionOutput } from "../builtin/attempt-completion.js";
 import type { DelegateAgentSignal } from "../builtin/delegate-agent.js";
-import { setSkillConfig, setSkillManager } from "../builtin/skill-tool.js";
 import { SessionAgentsIntegration } from "../context/agents/session-integration.js";
 import type { CostService } from "../cost/service.js";
 import type { CostLimitsConfig } from "../cost/types-limits.js";
@@ -20,7 +19,6 @@ import type { Logger } from "../logger/logger.js";
 import { DefaultPermissionChecker } from "../permission/checker.js";
 import type { TrustPreset } from "../permission/types.js";
 import type { PromptBuilder } from "../prompts/prompt-builder.js";
-import { classifyError, type ErrorInfo, isFatal, isRetryable } from "../session/errors.js";
 import {
   createAssistantMessage,
   createToolResultMessage,
@@ -32,14 +30,12 @@ import {
   toModelMessages,
 } from "../session/index.js";
 import { RetryAbortedError } from "../session/retry.js";
-import { SkillManager, type SkillManagerOptions } from "../skill/manager.js";
-import type { MatchContext } from "../skill/matcher.js";
+import type { SkillManager, SkillManagerOptions } from "../skill/manager.js";
 import type { SkillConfig, SkillLoaded } from "../skill/types.js";
 import {
   StreamProcessor,
   type StreamProcessorConfig,
   type StreamProcessorHooks,
-  type UiEvent,
 } from "../streaming/processor.js";
 import type { TelemetryInstrumentor } from "../telemetry/instrumentor.js";
 import {
@@ -51,7 +47,6 @@ import {
   ToolNotFoundError,
 } from "../tool/index.js";
 import { getToolsForMode } from "../tool/mode-filter.js";
-import type { Result } from "../types/result.js";
 import type { ToolContext } from "../types/tool.js";
 import { CancellationToken } from "./cancellation.js";
 import {
@@ -60,33 +55,32 @@ import {
   type ContextManagerConfig,
   createContextIntegrationFromLoopConfig,
 } from "./context-integration.js";
-import { CostLimitIntegration } from "./cost-limit-integration.js";
+import { AgentContextManager } from "./context-manager.js";
+import type { CostLimitIntegration } from "./cost-limit-integration.js";
+import { AgentCostManager } from "./cost-manager.js";
 import type { AgentLevel } from "./level.js";
 import type { LLMLoopVerifier } from "./llm-loop-verifier.js";
-import {
-  type CombinedLoopResult,
-  detectLoop,
-  detectLoopWithVerification,
-  type ExtendedLoopDetectionContext,
-} from "./loop-detection.js";
+import type { CombinedLoopResult } from "./loop-detection.js";
 import type { ModeConfig } from "./modes.js";
 import { fromPromptBuilder } from "./prompt.js";
+import { AgentRetryManager } from "./retry-manager.js";
+import { AgentSkillsIntegration } from "./skills-integration.js";
 import type { AgentState, StateContext } from "./state.js";
 import { createStateContext, isValidTransition } from "./state.js";
-import {
-  type StreamingLoopConfig,
+import { AgentStreamHandler } from "./stream-handler.js";
+import type {
+  StreamingLoopConfig,
   StreamingLoopDetector,
-  type StreamingLoopResult,
+  StreamingLoopResult,
 } from "./streaming-loop-detector.js";
 import {
-  createTerminationContext,
-  TerminationChecker,
+  type TerminationChecker,
   type TerminationContext,
   type TerminationLimits,
   TerminationReason,
   type TerminationResult,
-  type ToolCallInfo,
 } from "./termination.js";
+import { AgentTerminationManager } from "./termination-manager.js";
 
 /**
  * Configuration for the AgentLoop.
@@ -415,20 +409,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     resolve: (granted: boolean) => void;
   } | null = null;
 
-  /** Termination checker instance (T021) */
-  private readonly terminationChecker: TerminationChecker;
+  /** Termination manager for loop detection and termination logic (Step 5 refactor) */
+  private readonly terminationManager: AgentTerminationManager;
 
-  /** Termination context for tracking loop state (T021) */
-  private terminationContext: TerminationContext;
-
-  /** Recent tool calls for loop detection (T021) */
-  private recentToolCalls: ToolCallInfo[] = [];
-
-  /** Recent LLM responses for stuck detection (T021) */
-  private recentResponses: string[] = [];
-
-  /** Current retry attempt count (T025) */
-  private retryAttempt = 0;
+  /** Retry manager for error handling and backoff (Step 6 refactor) */
+  private readonly retryManager: AgentRetryManager;
 
   /** Logger instance for state transitions (T041) */
   private readonly logger?: Logger;
@@ -454,26 +439,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** AGENTS.md integration for tool filtering and prompt sections */
   private agentsIntegration?: SessionAgentsIntegration;
 
-  /** SkillManager for skills system integration (T053) */
-  private skillManager?: SkillManager;
-
-  /** Promise that resolves when skillManager initialization completes (T053 race fix) */
-  private skillManagerInitPromise?: Promise<void>;
-
-  /** Currently active skills for this session (T053) */
-  private activeSkills: SkillLoaded[] = [];
+  /** Skills integration for loading, matching, and prompt building (T053) */
+  private readonly skillsIntegration: AgentSkillsIntegration;
 
   /** ModeManager for coding mode integration (T057) */
   private readonly modeManager?: import("./mode-manager.js").ModeManager;
-
-  /** LLM Loop Verifier for borderline case verification (T041) */
-  private llmLoopVerifier?: LLMLoopVerifier;
-
-  /** Streaming loop detector for real-time loop detection */
-  private readonly streamingLoopDetector?: StreamingLoopDetector;
-
-  /** Whether to interrupt stream on loop detection */
-  private readonly interruptOnStreamingLoop: boolean;
 
   /** Current iteration count for the agentic loop (T058) */
   private iterationCount = 0;
@@ -485,20 +455,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     resolve: (response: string) => void;
   } | null = null;
 
-  /** Track whether the current stream produced any text content */
-  private streamHasText = false;
-
-  /** Track whether the current stream produced any reasoning content */
-  private streamHasThinking = false;
-
-  /** Track whether the current stream produced any tool calls */
-  private streamHasToolCalls = false;
-
-  /** Accumulated text content from streaming (for pure text responses) */
-  private accumulatedText = "";
-
-  /** Accumulated reasoning content from streaming (for pure text responses) */
-  private accumulatedReasoning = "";
+  /** Stream handler for processing LLM streams (Step 7 refactor) */
+  private readonly streamHandler: AgentStreamHandler;
 
   /** Flag to signal completion was attempted (GAP 2 fix) */
   private completionAttempted = false;
@@ -512,8 +470,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** Context integration for automatic context management (T403) */
   private contextIntegration?: ContextIntegration;
 
-  /** Cost limit integration for guardrails (Phase 35+) */
-  private costLimitIntegration?: CostLimitIntegration;
+  /** Context manager for public context operations (T403) */
+  private readonly contextManager: AgentContextManager;
+
+  /** Cost manager for guardrails (Phase 35+) */
+  private readonly costManager: AgentCostManager;
 
   constructor(config: AgentLoopConfig) {
     super();
@@ -533,9 +494,35 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         permissionChecker: config.permissionChecker,
       });
 
-    // Initialize termination checker (T021)
-    this.terminationChecker = new TerminationChecker(config.terminationLimits);
-    this.terminationContext = createTerminationContext();
+    // Initialize termination manager (Step 5 refactor - extracted from AgentLoop)
+    this.terminationManager = new AgentTerminationManager(
+      {
+        terminationLimits: config.terminationLimits,
+        llmLoopVerification: config.llmLoopVerification,
+        streamingLoopDetection: config.streamingLoopDetection,
+      },
+      {
+        logger: this.logger,
+        getMessages: () => this.messages,
+        isCancelled: () => this.cancellation.isCancelled,
+        emitTerminated: (reason, result) => this.emit("terminated", reason, result),
+        emitLoopDetected: (result) => this.emit("loopDetected", result),
+        emitStreamingLoopDetected: (result) => this.emit("streaming:loopDetected", result),
+      }
+    );
+
+    // Initialize retry manager (Step 6 refactor - extracted from AgentLoop)
+    this.retryManager = new AgentRetryManager({
+      config: {
+        maxRetries: config.maxRetries ?? 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 30000,
+      },
+      logger: this.logger,
+      getCancellationToken: () => this.cancellation,
+      emitRetryAttempt: (attempt, error, delay) => this.emit("retry", attempt, error, delay),
+      emitRetryExhausted: (error, attempts) => this.emit("retryExhausted", error, attempts),
+    });
 
     // Initialize logger and telemetry (T041, T042)
     this.logger = config.logger;
@@ -549,8 +536,45 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       if (config.streamProcessorHooks) {
         this.streamProcessor.setHooks(config.streamProcessorHooks);
       }
-      // Wire up StreamProcessor UI events to existing emitters
-      this.streamProcessor.setUiHandler((event) => this.handleUiEvent(event));
+      // Note: UI events are handled by streamHandler.handleUiEvent()
+    }
+
+    // Initialize stream handler (Step 7 refactor - extracted from AgentLoop)
+    this.streamHandler = new AgentStreamHandler(
+      { useStreamProcessor: this.useStreamProcessor },
+      {
+        streamProcessor: this.streamProcessor,
+        logger: this.logger,
+        isCancelled: () => this.cancellation.isCancelled,
+        emitText: (text) => this.emit("text", text),
+        emitThinking: (text) => this.emit("thinking", text),
+        emitToolCall: (id, name, input) => this.emit("toolCall", id, name, input),
+        emitError: (err) => this.emit("error", err),
+        recordUsage: (usage) => this.recordUsage(usage),
+        checkStreamingLoop: (event) => {
+          const detector = this.terminationManager.getStreamingLoopDetector();
+          if (!detector) return { detected: false };
+          const result = detector.addAndCheck(event);
+          if (result.detected) {
+            this.emit("streaming:loopDetected", result);
+            this.logger?.warn("Streaming loop detected", {
+              type: result.type,
+              evidence: result.evidence,
+              confidence: result.confidence,
+            });
+            return {
+              detected: this.terminationManager.shouldInterruptOnStreamingLoop(),
+              result,
+            };
+          }
+          return { detected: false };
+        },
+      }
+    );
+
+    // Wire up StreamProcessor UI events to stream handler
+    if (this.streamProcessor) {
+      this.streamProcessor.setUiHandler((event) => this.streamHandler.handleUiEvent(event));
     }
 
     // Initialize AGENTS.md integration if enabled
@@ -573,41 +597,28 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         });
     }
 
-    // Initialize Skills System integration if enabled (T053)
-    if (config.enableSkillsIntegration && config.cwd) {
-      this.skillManager = new SkillManager({
-        ...config.skillManagerOptions,
+    // Initialize Skills System integration (T053)
+    this.skillsIntegration = new AgentSkillsIntegration(
+      {
+        enabled: config.enableSkillsIntegration ?? false,
+        cwd: config.cwd,
+        skillManagerOptions: config.skillManagerOptions,
+        skillConfig: config.skillConfig,
+        providerType: config.providerType,
+        model: config.model,
+        modeName: config.mode?.name,
+      },
+      {
         logger: this.logger,
-        config: config.skillConfig,
-        loader: {
-          ...config.skillManagerOptions?.loader,
-          discovery: {
-            ...config.skillManagerOptions?.loader?.discovery,
-            workspacePath: config.cwd,
-          },
-        },
-      });
+        getMessages: () => this.messages,
+      }
+    );
 
-      // Initialize asynchronously - store promise to await before first use (T053 race fix)
-      this.skillManagerInitPromise = this.skillManager
-        .initialize()
-        .then((count) => {
-          this.logger?.debug("Skills System initialized", {
-            skillCount: count,
-          });
-          // Wire up skill-tool module (T053 fix: setSkillManager was never called)
-          if (this.skillManager) {
-            setSkillManager(this.skillManager);
-          }
-          if (config.skillConfig) {
-            setSkillConfig(config.skillConfig);
-          }
-        })
-        .catch((error) => {
-          this.logger?.warn("Failed to initialize Skills System", { error });
-          // Clear manager on failure to avoid partial state
-          this.skillManager = undefined;
-        });
+    // Initialize skills asynchronously if enabled
+    if (config.enableSkillsIntegration && config.cwd) {
+      this.skillsIntegration.initialize().catch((error) => {
+        this.logger?.warn("Failed to initialize Skills System", { error });
+      });
     }
 
     // Initialize ModeManager integration if provided (T057)
@@ -635,49 +646,38 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       });
     }
 
-    // Initialize Cost Limit integration if configured (Phase 35+)
-    if (config.costLimits && config.costService) {
-      this.costLimitIntegration = new CostLimitIntegration({
-        costService: config.costService,
-        limits: config.costLimits,
-        providerType: config.providerType,
-        model: config.model,
+    // Initialize context manager for public API (T403)
+    this.contextManager = new AgentContextManager({
+      contextIntegration: this.contextIntegration,
+      logger: this.logger,
+      getMessages: () => this.messages,
+      setMessages: (messages) => {
+        this.messages = messages;
+      },
+      emitContextManaged: (result) => this.emit("contextManaged", result),
+    });
+
+    // Initialize Cost Manager (Phase 35+)
+    this.costManager = new AgentCostManager(
+      {
+        integrationConfig:
+          config.costLimits && config.costService
+            ? {
+                costService: config.costService,
+                limits: config.costLimits,
+                providerType: config.providerType,
+                model: config.model,
+                logger: this.logger,
+              }
+            : undefined,
         logger: this.logger,
-      });
-
-      // Forward cost events to AgentLoop events
-      this.costLimitIntegration.on("cost:warning", (event) => {
-        this.emit("cost:warning", event);
-      });
-
-      this.costLimitIntegration.on("cost:limitReached", (event) => {
-        this.emit("cost:limitReached", event);
-      });
-
-      this.costLimitIntegration.on("cost:awaitingApproval", (limits) => {
-        this.emit("cost:awaitingApproval", limits);
-      });
-
-      this.logger?.debug("Cost limit integration initialized", {
-        maxCostPerSession: config.costLimits.maxCostPerSession,
-        maxRequestsPerSession: config.costLimits.maxRequestsPerSession,
-        warningThreshold: config.costLimits.warningThreshold,
-        pauseOnLimitReached: config.costLimits.pauseOnLimitReached,
-      });
-    }
-
-    // Initialize streaming loop detector if enabled
-    if (config.streamingLoopDetection?.enabled) {
-      this.streamingLoopDetector = new StreamingLoopDetector(config.streamingLoopDetection.config);
-      this.interruptOnStreamingLoop = config.streamingLoopDetection.interruptOnDetection ?? false;
-
-      this.logger?.debug("Streaming loop detector initialized", {
-        interruptOnDetection: this.interruptOnStreamingLoop,
-        config: this.streamingLoopDetector.getConfig(),
-      });
-    } else {
-      this.interruptOnStreamingLoop = false;
-    }
+      },
+      {
+        onCostWarning: (event) => this.emit("cost:warning", event),
+        onCostLimitReached: (event) => this.emit("cost:limitReached", event),
+        onCostAwaitingApproval: (limits) => this.emit("cost:awaitingApproval", limits),
+      }
+    );
 
     // Note: LLM Loop Verifier is lazy-initialized when first needed
     // via setLLMLoopVerifier() method, as it requires an LLMProvider instance.
@@ -796,35 +796,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @returns Result of the context management operation, or null if not enabled
    */
   async compactContext(): Promise<ContextManageResult | null> {
-    if (!this.contextIntegration?.enabled) {
-      this.logger?.debug("Context compaction requested but context management is disabled");
-      return null;
-    }
-
-    this.logger?.debug("Manual context compaction requested", {
-      currentMessageCount: this.messages.length,
-    });
-
-    const result = await this.contextIntegration.beforeApiCall(this.messages);
-
-    if (result.modified) {
-      // Update internal messages with compacted version
-      this.messages = result.messages;
-      this.emit("contextManaged", result);
-
-      this.logger?.info("Context compacted successfully", {
-        originalCount: this.messages.length + (result.messages.length - this.messages.length),
-        newCount: result.messages.length,
-        state: result.state,
-        actions: result.actions,
-      });
-    } else {
-      this.logger?.debug("Context compaction: no changes needed", {
-        state: result.state,
-      });
-    }
-
-    return result;
+    return this.contextManager.compactContext();
   }
 
   /**
@@ -833,7 +805,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @returns Current context state or null if context management is disabled
    */
   getContextState(): import("../context/types.js").ContextState | null {
-    return this.contextIntegration?.getState() ?? null;
+    return this.contextManager.getContextState();
   }
 
   /**
@@ -842,7 +814,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @returns true if context management is enabled and active
    */
   isContextManagementEnabled(): boolean {
-    return this.contextIntegration?.enabled ?? false;
+    return this.contextManager.isContextManagementEnabled();
   }
 
   /**
@@ -966,29 +938,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   }
 
   /**
-   * Gets the termination checker instance (T021).
-   */
-  getTerminationChecker(): TerminationChecker {
-    return this.terminationChecker;
-  }
-
-  /**
-   * Gets the current termination context (T021).
-   */
-  getTerminationContext(): TerminationContext {
-    return { ...this.terminationContext };
-  }
-
-  /**
    * Updates the termination context with new token usage (T021).
+   * Delegates to TerminationManager.
    */
   updateTokenUsage(usage: TokenUsage): void {
-    this.terminationContext.tokenUsage = {
-      inputTokens: this.terminationContext.tokenUsage.inputTokens + usage.inputTokens,
-      outputTokens: this.terminationContext.tokenUsage.outputTokens + usage.outputTokens,
-      totalTokens:
-        this.terminationContext.tokenUsage.totalTokens + usage.inputTokens + usage.outputTokens,
-    };
+    this.terminationManager.recordTokenUsage(usage);
   }
 
   private normalizeUsage(usage: TokenUsage): TokenUsage {
@@ -1019,15 +973,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // Emit usage statistics (including thinkingTokens for extended thinking models)
     this.emit("usage", usage);
 
-    // Track usage with cost limit integration (Phase 35+)
-    if (this.costLimitIntegration) {
-      const costResult = this.costLimitIntegration.trackUsage(usage);
-      this.logger?.debug("Cost limit check after usage", {
-        withinLimits: costResult.limits.withinLimits,
-        percentUsed: costResult.limits.percentUsed.toFixed(1),
-        awaitingApproval: costResult.awaitingApproval,
-      });
-    }
+    // Track usage with cost manager (Phase 35+)
+    this.costManager.trackUsage(usage);
   }
 
   private buildAssistantMetadata(): Partial<Omit<SessionMessageMetadata, "createdAt">> {
@@ -1060,162 +1007,171 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
   /**
    * Records a tool call for loop detection (T021).
+   * Delegates to TerminationManager.
    */
   recordToolCall(id: string, name: string, input: Record<string, unknown>): void {
-    this.recentToolCalls.push({ id, name, input });
-    // Keep only last 10 tool calls
-    if (this.recentToolCalls.length > 10) {
-      this.recentToolCalls.shift();
-    }
-    this.terminationContext.recentToolCalls = [...this.recentToolCalls];
+    this.terminationManager.recordToolCall(id, name, input);
+  }
+
+  /**
+   * Records tool execution for termination tracking.
+   * Delegates to TerminationManager.
+   */
+  recordToolExecution(tool: { id: string; name: string; input: Record<string, unknown> }): void {
+    this.terminationManager.recordToolExecution(tool);
   }
 
   /**
    * Records an LLM response for stuck detection (T021).
+   * Delegates to TerminationManager.
    */
   recordResponse(text: string): void {
-    if (text.trim().length > 0) {
-      this.recentResponses.push(text);
-      // Keep only last 10 responses
-      if (this.recentResponses.length > 10) {
-        this.recentResponses.shift();
-      }
-      this.terminationContext.recentResponses = [...this.recentResponses];
-    }
+    this.terminationManager.recordResponse(text);
+  }
+
+  /**
+   * Records a stuck state from an assistant message.
+   * Delegates to TerminationManager.
+   */
+  recordStuckState(assistantMessage: string): void {
+    this.terminationManager.recordStuckState(assistantMessage);
+  }
+
+  /**
+   * Records token usage for loop detection.
+   * Delegates to TerminationManager.
+   */
+  recordTokenUsage(tokens: TokenUsage): void {
+    this.terminationManager.recordTokenUsage(tokens);
+  }
+
+  /**
+   * Gets the last assistant token usage.
+   * Delegates to TerminationManager.
+   */
+  getLastAssistantTokens(): TokenUsage | undefined {
+    return this.terminationManager.getLastAssistantTokens();
+  }
+
+  /**
+   * Gets the current loop state.
+   * Delegates to TerminationManager.
+   */
+  getLoopState(): CombinedLoopResult | undefined {
+    return this.terminationManager.getLoopState();
   }
 
   /**
    * Checks termination conditions and emits event if triggered (T021).
+   * Delegates to TerminationManager.
    *
    * @returns TerminationResult indicating whether to terminate
    */
   checkTermination(): TerminationResult {
-    // Update cancellation status
-    this.terminationContext.isCancelled = this.cancellation.isCancelled;
+    return this.terminationManager.checkTermination();
+  }
 
-    // Increment step count
-    this.terminationContext.stepCount++;
+  /**
+   * Synchronous termination check.
+   * Delegates to TerminationManager.
+   *
+   * @returns TerminationResult indicating whether to terminate
+   */
+  checkTerminationSync(): TerminationResult {
+    return this.terminationManager.checkTerminationSync();
+  }
 
-    // Check termination
-    const result = this.terminationChecker.shouldTerminate(this.terminationContext);
-
-    if (result.shouldTerminate && result.reason) {
-      this.emit("terminated", result.reason, result);
-    }
-
-    return result;
+  /**
+   * Async termination check with optional LLM verification.
+   * Delegates to TerminationManager.
+   *
+   * @returns Promise resolving to TerminationResult
+   */
+  async checkTerminationWithVerification(): Promise<TerminationResult> {
+    return this.terminationManager.checkTerminationWithVerification();
   }
 
   /**
    * Runs loop detection and emits event if detected (T021).
+   * Delegates to TerminationManager.
    *
    * @returns CombinedLoopResult from loop detection
    */
   checkLoopDetection(): CombinedLoopResult {
-    const result = detectLoop({
-      toolCalls: this.recentToolCalls,
-      responses: this.recentResponses,
-    });
-
-    if (result.detected) {
-      this.emit("loopDetected", result);
-    }
-
-    return result;
+    return this.terminationManager.checkLoopDetection();
   }
 
   /**
    * Runs enhanced loop detection with LLM verification for borderline cases (T041).
-   *
-   * Uses the LLM loop verifier when:
-   * - LLM verification is enabled in config
-   * - A verifier instance is set
-   * - The similarity-based detection is in a borderline state
+   * Delegates to TerminationManager.
    *
    * @returns Promise resolving to CombinedLoopResult with optional LLM verification
    */
   async checkLoopDetectionAsync(): Promise<CombinedLoopResult> {
-    const llmVerificationConfig = this.config.llmLoopVerification;
-
-    // If LLM verification is not enabled or no verifier is set, use sync detection
-    if (!llmVerificationConfig?.enabled || !this.llmLoopVerifier) {
-      return this.checkLoopDetection();
-    }
-
-    // Build extended context for verification
-    const extendedContext: ExtendedLoopDetectionContext = {
-      toolCalls: this.recentToolCalls,
-      responses: this.recentResponses,
-      llmVerifier: this.llmLoopVerifier,
-      messages: this.messages,
-    };
-
-    // Run detection with LLM verification support
-    const result = await detectLoopWithVerification(extendedContext, {
-      enableLLMVerification: true,
-      llmVerifierConfig: {
-        confidenceThreshold: llmVerificationConfig.confidenceThreshold,
-        checkIntervalTurns: llmVerificationConfig.checkIntervalTurns,
-        maxHistoryMessages: llmVerificationConfig.maxHistoryMessages,
-      },
-    });
-
-    if (result.detected) {
-      this.emit("loopDetected", result);
-    }
-
-    // Log LLM verification if it was performed
-    if (result.llmVerification) {
-      this.logger?.debug("LLM loop verification performed", {
-        isStuck: result.llmVerification.isStuck,
-        confidence: result.llmVerification.confidence,
-        analysis: result.llmVerification.analysis,
-      });
-    }
-
-    return result;
+    return this.terminationManager.checkLoopDetectionAsync();
   }
 
   /**
    * Sets the LLM loop verifier instance for borderline case verification (T041).
-   *
-   * The verifier requires an initialized LLMProvider, so it must be set
-   * externally after the provider is ready.
+   * Delegates to TerminationManager.
    *
    * @param verifier - LLMLoopVerifier instance
    */
   setLLMLoopVerifier(verifier: LLMLoopVerifier): void {
-    this.llmLoopVerifier = verifier;
-    this.logger?.debug("LLM loop verifier set", {
+    this.terminationManager.setLLMLoopVerifier(verifier);
+    this.logger?.debug("LLM loop verifier set via AgentLoop", {
       config: verifier.getConfig(),
     });
   }
 
   /**
    * Gets the LLM loop verifier instance if set.
+   * Delegates to TerminationManager.
    */
   getLLMLoopVerifier(): LLMLoopVerifier | undefined {
-    return this.llmLoopVerifier;
+    return this.terminationManager.getLLMLoopVerifier();
   }
 
   /**
    * Gets the streaming loop detector instance if enabled.
+   * Delegates to TerminationManager.
    */
   getStreamingLoopDetector(): StreamingLoopDetector | undefined {
-    return this.streamingLoopDetector;
+    return this.terminationManager.getStreamingLoopDetector();
+  }
+
+  /**
+   * Gets the underlying termination checker instance.
+   * Delegates to TerminationManager.
+   */
+  getTerminationChecker(): TerminationChecker {
+    return this.terminationManager.getTerminationChecker();
   }
 
   /**
    * Resets the termination context for a new run (T021).
+   * Delegates to TerminationManager.
    */
-  resetTerminationContext(): void {
-    this.terminationContext = createTerminationContext();
-    this.recentToolCalls = [];
-    this.recentResponses = [];
+  resetTerminationTracking(): void {
+    this.terminationManager.resetTerminationTracking();
     // GAP 2 FIX: Reset completion state as well
     this.completionAttempted = false;
-    // Reset streaming loop detector
-    this.streamingLoopDetector?.reset();
+  }
+
+  /**
+   * Legacy alias for resetTerminationTracking.
+   * @deprecated Use resetTerminationTracking() instead.
+   */
+  resetTerminationContext(): void {
+    this.resetTerminationTracking();
+  }
+
+  /**
+   * Gets the current termination context (T021).
+   * Delegates to TerminationManager.
+   */
+  getTerminationContext(): TerminationContext {
+    return this.terminationManager.getTerminationContext();
   }
 
   /**
@@ -1244,7 +1200,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       from,
       to,
       durationInPreviousStateMs: durationInState,
-      stepCount: this.terminationContext.stepCount,
+      stepCount: this.terminationManager.getStepCount(),
     });
 
     this.emit("stateChange", from, to, this.context);
@@ -1283,28 +1239,14 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       }
     }
 
-    // Match and load skills - await init to avoid race condition (T053 race fix)
-    if (this.skillManagerInitPromise) {
-      await this.skillManagerInitPromise;
-    }
-    if (this.skillManager?.isInitialized()) {
-      try {
-        const matchContext = this.buildSkillMatchContext();
-        this.activeSkills = await this.skillManager.getActiveSkills(matchContext);
-
-        if (this.activeSkills.length > 0) {
-          const skillPrompt = this.skillManager.buildCombinedPrompt(this.activeSkills);
-          if (skillPrompt) {
-            systemPrompt += `\n\n## Active Skills\n\n${skillPrompt}`;
-            this.logger?.debug("Added skill sections to system prompt", {
-              skillCount: this.activeSkills.length,
-              skillNames: this.activeSkills.map((s) => s.name),
-            });
-          }
-        }
-      } catch (error) {
-        this.logger?.warn("Failed to match skills", { error });
+    // Match and load skills via skills integration (T053)
+    try {
+      const skillPrompt = await this.skillsIntegration.matchAndBuildPrompt();
+      if (skillPrompt) {
+        systemPrompt += `\n\n## Active Skills\n\n${skillPrompt}`;
       }
+    } catch (error) {
+      this.logger?.warn("Failed to match skills", { error });
     }
 
     return systemPrompt;
@@ -1312,61 +1254,29 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
   /**
    * Processes the LLM stream and collects tool calls.
+   * Delegates to AgentStreamHandler for stream processing (Step 7 refactor).
    */
   private async processStreamResponse(
     stream: AsyncIterable<StreamEvent>,
     pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
   ): Promise<{ interrupted: boolean }> {
     // Reset streaming loop detector at start of new stream
-    this.streamingLoopDetector?.reset();
+    this.terminationManager.getStreamingLoopDetector()?.reset();
 
-    if (this.useStreamProcessor && this.streamProcessor) {
-      const wrappedStream = this.wrapStreamForProcessor(stream);
-      const result = await this.streamProcessor.processStream(wrappedStream);
+    // Delegate to stream handler
+    const result = await this.streamHandler.processStream(stream as AsyncIterable<LLMStreamEvent>);
 
-      if (result.ok) {
-        const hasTextPart = result.value.parts.some(
-          (part) => part.type === "text" && part.content.trim().length > 0
-        );
-        const hasThinkingPart = result.value.parts.some(
-          (part) => part.type === "reasoning" && part.content.trim().length > 0
-        );
-
-        if (hasTextPart) {
-          this.streamHasText = true;
-        }
-        if (hasThinkingPart) {
-          this.streamHasThinking = true;
-        }
-
-        for (const part of result.value.parts) {
-          if (part.type === "tool") {
-            this.streamHasToolCalls = true;
-            pendingToolCalls.push({
-              id: part.id,
-              name: part.name,
-              input: part.arguments,
-            });
-          }
-        }
-      }
-      this.streamProcessor.reset();
-      return { interrupted: false };
-    } else {
-      for await (const event of stream) {
-        if (this.cancellation.isCancelled) {
-          break;
-        }
-        const result = await this.handleStreamEvent(event, pendingToolCalls);
-        if (result.loopDetected) {
-          // Loop detected and interrupt requested - abort stream
-          this.logger?.warn("Interrupting stream due to loop detection");
-          this.abortController?.abort();
-          return { interrupted: true };
-        }
-      }
-      return { interrupted: false };
+    // Copy pending tool calls from result
+    for (const toolCall of result.pendingToolCalls) {
+      pendingToolCalls.push(toolCall);
     }
+
+    // Handle abort on interruption
+    if (result.interrupted) {
+      this.abortController?.abort();
+    }
+
+    return { interrupted: result.interrupted };
   }
 
   /**
@@ -1397,10 +1307,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return true;
     }
 
-    const errorInfo = classifyError(err);
+    // Delegate retry decision to RetryManager (Step 6 refactor)
+    const result = this.retryManager.handleError(err);
 
-    if (isFatal(errorInfo)) {
-      this.logger?.error("Fatal error encountered", { errorInfo });
+    if (result.isFatal) {
       this.emit("error", err);
       if (this.state !== "terminated" && this.state !== "shutdown") {
         this.transitionTo("recovering");
@@ -1408,21 +1318,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return false; // Signal to rethrow
     }
 
-    if (isRetryable(errorInfo) && this.shouldRetry(errorInfo)) {
-      this.retryAttempt++;
-      const delay = errorInfo.retryDelay ?? this.calculateRetryDelay(this.retryAttempt);
-
-      this.logger?.debug("Retrying after error", {
-        attempt: this.retryAttempt,
-        delay,
-        errorType: errorInfo.severity,
-      });
-
-      this.emit("retry", this.retryAttempt, err, delay);
+    if (result.shouldRetry && result.delay !== undefined) {
       this.transitionTo("recovering");
 
       try {
-        await this.retryDelay(delay);
+        await this.retryManager.waitForRetry(result.delay);
         await this.run();
         return true;
       } catch (retryError) {
@@ -1436,9 +1336,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
     // Non-retryable or retries exhausted
     this.emit("error", err);
-    if (this.retryAttempt > 0) {
-      this.emit("retryExhausted", err, this.retryAttempt);
-    }
     if (this.state !== "terminated" && this.state !== "shutdown") {
       this.transitionTo("recovering");
     }
@@ -1471,11 +1368,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     }
 
     // Reset stream state for this run
-    this.streamHasText = false;
-    this.streamHasThinking = false;
-    this.streamHasToolCalls = false;
-    this.accumulatedText = "";
-    this.accumulatedReasoning = "";
+    this.streamHandler.resetState();
     this.lastTurnUsage = null;
 
     // Check max iterations limit (T058)
@@ -1591,20 +1484,21 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
       // Handle stream interruption due to loop detection
       if (streamResult.interrupted) {
+        const streamState = this.streamHandler.getState();
         this.logger?.warn("Stream interrupted due to loop detection", {
-          accumulatedTextLength: this.accumulatedText.length,
+          accumulatedTextLength: streamState.accumulatedText.length,
           pendingToolCalls: pendingToolCalls.length,
         });
 
         // Add partial response to history if we have any content
-        if (this.accumulatedText.trim() || this.accumulatedReasoning.trim()) {
+        if (streamState.accumulatedText.trim() || streamState.accumulatedReasoning.trim()) {
           const assistantParts: import("../session/index.js").SessionMessagePart[] = [];
-          if (this.accumulatedReasoning.trim()) {
-            assistantParts.push(SessionParts.reasoning(this.accumulatedReasoning));
+          if (streamState.accumulatedReasoning.trim()) {
+            assistantParts.push(SessionParts.reasoning(streamState.accumulatedReasoning));
           }
-          if (this.accumulatedText.trim()) {
+          if (streamState.accumulatedText.trim()) {
             assistantParts.push(
-              SessionParts.text(`${this.accumulatedText}\n[Interrupted: Loop detected]`)
+              SessionParts.text(`${streamState.accumulatedText}\n[Interrupted: Loop detected]`)
             );
           }
           const assistantMessage = createAssistantMessage(
@@ -1614,22 +1508,19 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           this.messages.push(assistantMessage);
         }
 
-        // Reset accumulators
-        this.accumulatedText = "";
-        this.accumulatedReasoning = "";
-
         this.transitionTo("idle");
         this.emit("complete");
         return;
       }
 
+      const streamState = this.streamHandler.getState();
       if (
         !this.cancellation.isCancelled &&
         pendingToolCalls.length === 0 &&
-        !this.streamHasText &&
-        !this.streamHasToolCalls
+        !streamState.hasText &&
+        !streamState.hasToolCalls
       ) {
-        const hasThinkingOnly = this.streamHasThinking;
+        const hasThinkingOnly = streamState.hasThinking;
         throw new VellumError(
           hasThinkingOnly
             ? "Model stream ended with only reasoning content."
@@ -1651,31 +1542,34 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Calculate duration (T041)
       const durationMs = this.llmRequestStartTime ? Date.now() - this.llmRequestStartTime : 0;
 
+      // Get token usage from termination manager
+      const terminationContext = this.terminationManager.getTerminationContext();
+
       // Log LLM request completion (T041)
       this.llmLogger?.logRequestComplete({
         provider: this.config.providerType,
         model: this.config.model,
         requestId: this.currentRequestId,
-        inputTokens: this.terminationContext.tokenUsage.inputTokens,
-        outputTokens: this.terminationContext.tokenUsage.outputTokens,
+        inputTokens: terminationContext.tokenUsage.inputTokens,
+        outputTokens: terminationContext.tokenUsage.outputTokens,
         durationMs,
       });
 
       this.logger?.debug("LLM stream completed", {
         requestId: this.currentRequestId,
         durationMs,
-        tokenUsage: this.terminationContext.tokenUsage,
+        tokenUsage: terminationContext.tokenUsage,
         cancelled: this.cancellation.isCancelled,
       });
 
       // GAP 3 & 4 FIX: Update termination flags based on stream result
       // Set hasTextOnly if we got a response with no tool calls
       if (pendingToolCalls.length === 0) {
-        this.terminationContext.hasTextOnly = true;
+        this.terminationManager.setTextOnly(true);
       }
       // Set hasNaturalStop - the stream completed normally (done event received)
       // This flag indicates the LLM finished its turn without requesting more action
-      this.terminationContext.hasNaturalStop = pendingToolCalls.length === 0;
+      this.terminationManager.setNaturalStop(pendingToolCalls.length === 0);
 
       // Determine next state based on stream completion
       if (this.cancellation.isCancelled) {
@@ -1685,12 +1579,13 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         await this.executeToolCalls(pendingToolCalls);
       } else {
         // Pure text response - add assistant message to history
+        const finalStreamState = this.streamHandler.getState();
         const assistantParts: import("../session/index.js").SessionMessagePart[] = [];
-        if (this.accumulatedReasoning.trim()) {
-          assistantParts.push(SessionParts.reasoning(this.accumulatedReasoning));
+        if (finalStreamState.accumulatedReasoning.trim()) {
+          assistantParts.push(SessionParts.reasoning(finalStreamState.accumulatedReasoning));
         }
-        if (this.accumulatedText.trim()) {
-          assistantParts.push(SessionParts.text(this.accumulatedText));
+        if (finalStreamState.accumulatedText.trim()) {
+          assistantParts.push(SessionParts.text(finalStreamState.accumulatedText));
         }
         if (assistantParts.length > 0) {
           const assistantMessage = createAssistantMessage(
@@ -1699,9 +1594,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           );
           this.messages.push(assistantMessage);
         }
-        // Reset accumulators
-        this.accumulatedText = "";
-        this.accumulatedReasoning = "";
 
         this.transitionTo("idle");
         this.emit("complete");
@@ -1716,83 +1608,40 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     }
   }
 
-  /**
-   * Determines if a retry should be attempted based on error and config (T025).
-   *
-   * @param errorInfo - Classified error information
-   * @returns true if retry should be attempted
-   */
-  private shouldRetry(errorInfo: ErrorInfo): boolean {
-    const maxRetries = this.config.maxRetries ?? 3;
-    const maxErrorRetries = errorInfo.maxRetries ?? maxRetries;
-    return this.retryAttempt < Math.min(maxRetries, maxErrorRetries);
-  }
-
-  /**
-   * Calculates retry delay using exponential backoff (T025).
-   *
-   * @param attempt - Current retry attempt (1-based)
-   * @returns Delay in milliseconds
-   */
-  private calculateRetryDelay(attempt: number): number {
-    const baseDelay = 1000;
-    const maxDelay = 30000;
-    const exponentialDelay = baseDelay * 2 ** (attempt - 1);
-    return Math.min(exponentialDelay, maxDelay);
-  }
-
-  /**
-   * Waits for retry delay with cancellation support (T025).
-   *
-   * @param delay - Delay in milliseconds
-   * @throws RetryAbortedError if cancelled during wait
-   */
-  private async retryDelay(delay: number): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      if (this.cancellation.isCancelled) {
-        reject(new RetryAbortedError("Retry cancelled"));
-        return;
-      }
-
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      let unsubscribe: (() => void) | undefined;
-
-      const cleanup = () => {
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-        if (unsubscribe) {
-          unsubscribe();
-        }
-      };
-
-      const cancelHandler = () => {
-        cleanup();
-        reject(new RetryAbortedError("Retry cancelled"));
-      };
-
-      unsubscribe = this.cancellation.onCancel(cancelHandler);
-
-      timeoutId = setTimeout(() => {
-        cleanup();
-        resolve();
-      }, delay);
-    });
-  }
+  // ============================================
+  // Retry Methods (delegate to RetryManager)
+  // ============================================
 
   /**
    * Resets retry state (T025).
    * Call this when starting a fresh operation.
+   * @deprecated Use resetRetryCounter() instead
    */
   resetRetryState(): void {
-    this.retryAttempt = 0;
+    this.retryManager.resetRetryCounter();
+  }
+
+  /**
+   * Resets the retry counter (T025).
+   * Call this when starting a fresh operation.
+   */
+  resetRetryCounter(): void {
+    this.retryManager.resetRetryCounter();
+  }
+
+  /**
+   * Gets current retry attempt count (T025).
+   * @deprecated Use getRetryAttempts() instead
+   */
+  getRetryAttempt(): number {
+    return this.retryManager.getRetryAttempts();
   }
 
   /**
    * Gets current retry attempt count (T025).
    */
-  getRetryAttempt(): number {
-    return this.retryAttempt;
+  getRetryAttempts(): number {
+    return this.retryManager.getRetryAttempts();
   }
 
   /**
@@ -2514,7 +2363,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.completionAttempted = true;
 
     // Set termination flags for the termination checker
-    this.terminationContext.hasNaturalStop = true;
+    this.terminationManager.setNaturalStop(true);
 
     // Emit event for TUI/CLI to display completion
     this.emit("completion:attempted", {
@@ -2773,258 +2622,13 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   }
 
   /**
-   * Handles a single stream event.
+   * Returns the stream handler instance (Step 7 refactor).
    *
-   * @param event - Stream event from LLM
-   * @param pendingToolCalls - Array to collect pending tool calls
+   * This allows external consumers to access stream state
+   * or configure callbacks.
    */
-  private async handleStreamEvent(
-    event: LLMStreamEvent,
-    pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>
-  ): Promise<{ loopDetected: boolean }> {
-    // Check streaming loop detector if enabled
-    if (this.streamingLoopDetector) {
-      // Convert LLMStreamEvent to StreamEvent for detector
-      const streamEvent = this.convertToStreamEvent(event);
-      if (streamEvent) {
-        const loopResult = this.streamingLoopDetector.addAndCheck(streamEvent);
-        if (loopResult.detected) {
-          this.emit("streaming:loopDetected", loopResult);
-          this.logger?.warn("Streaming loop detected", {
-            type: loopResult.type,
-            evidence: loopResult.evidence,
-            confidence: loopResult.confidence,
-          });
-
-          if (this.interruptOnStreamingLoop) {
-            return { loopDetected: true };
-          }
-        }
-      }
-    }
-
-    switch (event.type) {
-      case "text": {
-        const textContent = event.content ?? (event as { text?: string }).text ?? "";
-        if (textContent.trim().length > 0) {
-          this.streamHasText = true;
-        }
-        // Accumulate text for message history
-        this.accumulatedText += textContent;
-        // Emit text delta
-        this.emit("text", textContent);
-        break;
-      }
-
-      case "reasoning": {
-        const thinkingContent = event.content ?? (event as { text?: string }).text ?? "";
-        if (thinkingContent.trim().length > 0) {
-          this.streamHasThinking = true;
-        }
-        // Accumulate reasoning for message history
-        this.accumulatedReasoning += thinkingContent;
-        // Emit thinking/reasoning delta
-        this.emit("thinking", thinkingContent);
-        break;
-      }
-
-      case "toolCall":
-        this.streamHasToolCalls = true;
-        // Collect tool call for execution (Phase 3)
-        pendingToolCalls.push({
-          id: event.id,
-          name: event.name,
-          input: event.input,
-        });
-        // Emit tool call event
-        this.emit("toolCall", event.id, event.name, event.input);
-        break;
-
-      case "toolCallDelta":
-        // Partial tool call - ignore for now, handled when complete
-        break;
-
-      case "usage": {
-        const usagePayload =
-          "usage" in event && event.usage && typeof event.usage === "object"
-            ? (event.usage as TokenUsage)
-            : event;
-
-        this.recordUsage({
-          inputTokens: usagePayload.inputTokens,
-          outputTokens: usagePayload.outputTokens,
-          thinkingTokens: usagePayload.thinkingTokens,
-          cacheReadTokens: usagePayload.cacheReadTokens,
-          cacheWriteTokens: usagePayload.cacheWriteTokens,
-        });
-        break;
-      }
-
-      case "error":
-        // Emit error
-        this.emit("error", new Error(`[${event.code}] ${event.message}`));
-        break;
-
-      case "done":
-        // Stream complete - handle in run() after loop exits
-        break;
-    }
-
-    return { loopDetected: false };
-  }
-
-  /**
-   * Wraps LLM stream for StreamProcessor consumption (T042).
-   *
-   * Converts LLMStreamEvent to Result<StreamEvent, Error> format
-   * expected by StreamProcessor.
-   *
-   * @param stream - Raw LLM stream
-   * @returns Wrapped stream compatible with StreamProcessor
-   */
-  private async *wrapStreamForProcessor(
-    stream: AsyncIterable<LLMStreamEvent>
-  ): AsyncIterable<Result<StreamEvent, Error>> {
-    try {
-      for await (const event of stream) {
-        // Check for cancellation
-        if (this.cancellation.isCancelled) {
-          return;
-        }
-
-        if (event.type === "error") {
-          yield {
-            ok: false as const,
-            error: new Error(`[${event.code}] ${event.message}`),
-          };
-          return;
-        }
-
-        // Convert LLMStreamEvent to StreamEvent
-        const streamEvent = this.convertToStreamEvent(event);
-        if (streamEvent) {
-          yield { ok: true as const, value: streamEvent };
-        }
-      }
-    } catch (error) {
-      yield {
-        ok: false as const,
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
-  }
-
-  /**
-   * Converts LLMStreamEvent to StreamEvent format (T042).
-   *
-   * @param event - LLM stream event
-   * @returns Converted StreamEvent or undefined if not mappable
-   */
-  private convertToStreamEvent(event: LLMStreamEvent): StreamEvent | undefined {
-    switch (event.type) {
-      case "text":
-        return {
-          type: "text",
-          content: event.content ?? (event as { text?: string }).text ?? "",
-        };
-
-      case "reasoning":
-        return {
-          type: "reasoning",
-          content: event.content ?? (event as { text?: string }).text ?? "",
-        };
-
-      case "toolCall":
-        // Complete tool call - emit as tool_call_start + end combo
-        return {
-          type: "toolCall",
-          id: event.id,
-          name: event.name,
-          input: event.input,
-        };
-
-      case "toolCallDelta":
-        return {
-          type: "tool_call_delta",
-          id: event.id,
-          arguments: event.inputDelta,
-          index: 0,
-        };
-
-      case "usage":
-        return {
-          type: "usage",
-          inputTokens: event.inputTokens,
-          outputTokens: event.outputTokens,
-          ...(event.thinkingTokens !== undefined ? { thinkingTokens: event.thinkingTokens } : {}),
-          ...(event.cacheReadTokens !== undefined
-            ? { cacheReadTokens: event.cacheReadTokens }
-            : {}),
-          ...(event.cacheWriteTokens !== undefined
-            ? { cacheWriteTokens: event.cacheWriteTokens }
-            : {}),
-        };
-
-      case "error":
-        // StreamEvent has a different error format
-        // Return undefined since error is handled via Result
-        return undefined;
-
-      case "done":
-        return { type: "end", stopReason: "end_turn" };
-
-      default:
-        return undefined;
-    }
-  }
-
-  /**
-   * Handles UI events from StreamProcessor (T042).
-   *
-   * Dispatches events to existing emitters for backward compatibility.
-   *
-   * @param event - UI event from StreamProcessor
-   */
-  private handleUiEvent(event: UiEvent): void {
-    switch (event.type) {
-      case "text_chunk":
-        this.emit("text", event.content);
-        break;
-
-      case "reasoning_chunk":
-        this.emit("thinking", event.content);
-        break;
-
-      case "tool_started":
-        // Tool started events don't have direct mapping yet
-        // Tool calls are collected from the result
-        break;
-
-      case "tool_completed":
-        // Tool completed events don't have direct mapping yet
-        break;
-
-      case "tool_error":
-        this.emit("error", new Error(`Tool ${event.id} error: ${event.error}`));
-        break;
-
-      case "usage":
-        this.recordUsage(event.usage);
-        break;
-
-      case "complete":
-        // Complete is handled after processStream returns
-        break;
-
-      case "error":
-        this.emit("error", new Error(`[${event.error.code}] ${event.error.message}`));
-        break;
-
-      case "citation":
-        // Citations can be logged but don't have an existing emitter
-        this.logger?.debug("Citation received", { chunk: event.chunk });
-        break;
-    }
+  getStreamHandler(): AgentStreamHandler {
+    return this.streamHandler;
   }
 
   /**
@@ -3045,14 +2649,14 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * Returns the SkillManager instance if enabled.
    */
   getSkillManager(): SkillManager | undefined {
-    return this.skillManager;
+    return this.skillsIntegration.getSkillManager();
   }
 
   /**
    * Returns currently active skills for this session.
    */
   getActiveSkills(): SkillLoaded[] {
-    return [...this.activeSkills];
+    return this.skillsIntegration.getActiveSkills();
   }
 
   // ============================================
@@ -3063,7 +2667,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * Returns the CostLimitIntegration instance if configured.
    */
   getCostLimitIntegration(): CostLimitIntegration | undefined {
-    return this.costLimitIntegration;
+    return this.costManager.getIntegration();
   }
 
   /**
@@ -3072,10 +2676,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @returns true if within limits or no limits configured
    */
   checkCostLimits(): boolean {
-    if (!this.costLimitIntegration) {
-      return true;
-    }
-    return this.costLimitIntegration.checkLimits().withinLimits;
+    return this.costManager.checkLimits();
   }
 
   /**
@@ -3084,86 +2685,14 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @param extendLimit - Optional new limits to set
    */
   grantCostApproval(extendLimit?: { cost?: number; requests?: number }): void {
-    this.costLimitIntegration?.grantApproval(extendLimit);
+    this.costManager.grantApproval(extendLimit);
   }
 
   /**
    * Deny approval (stop execution due to cost limit).
    */
   denyCostApproval(): void {
-    this.costLimitIntegration?.denyApproval();
-  }
-
-  /**
-   * Extracts file paths from tool invocations in messages.
-   * Used by buildSkillMatchContext to determine files involved in the session.
-   */
-  private extractFilePathsFromMessages(): string[] {
-    const files: string[] = [];
-    for (const msg of this.messages) {
-      if (msg.role === "assistant") {
-        for (const part of msg.parts) {
-          if (part.type === "tool") {
-            const input = part.input as Record<string, unknown>;
-            if (input.path && typeof input.path === "string") {
-              files.push(input.path);
-            }
-            if (input.paths && Array.isArray(input.paths)) {
-              files.push(...input.paths.filter((p): p is string => typeof p === "string"));
-            }
-          }
-        }
-      }
-    }
-    return files;
-  }
-
-  /**
-   * Build match context from current session state.
-   * Used to match skills against the current request.
-   */
-  private buildSkillMatchContext(): MatchContext {
-    // Extract the last user message as the request
-    const lastUserMessage = [...this.messages].reverse().find((m) => m.role === "user");
-
-    // Extract text from parts
-    const request =
-      lastUserMessage?.parts
-        .filter((p): p is { type: "text"; text: string } => p.type === "text")
-        .map((p) => p.text)
-        .join(" ") ?? "";
-
-    // Extract file paths from tool results
-    const files = this.extractFilePathsFromMessages();
-
-    // Extract slash command if present
-    const command = request.startsWith("/") ? request.split(/\s/)[0]?.slice(1) : undefined;
-
-    // Build project context from available config
-    const projectContext: Record<string, string> = {};
-
-    // Provider info (e.g., "anthropic", "openai")
-    if (this.config.providerType) {
-      projectContext.provider = this.config.providerType;
-    }
-
-    // Model info (e.g., "claude-3-5-sonnet-20241022")
-    if (this.config.model) {
-      projectContext.model = this.config.model;
-    }
-
-    // Current coding mode (e.g., "code", "plan", "ask")
-    if (this.config.mode?.name) {
-      projectContext.mode = this.config.mode.name;
-    }
-
-    return {
-      request,
-      files,
-      command,
-      projectContext: Object.keys(projectContext).length > 0 ? projectContext : undefined,
-      mode: this.config.mode?.name,
-    };
+    this.costManager.denyApproval();
   }
 
   /**
@@ -3171,11 +2700,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * Returns allowed and denied tool lists based on skill compatibility settings.
    */
   getSkillToolRestrictions(): { allowed: string[]; denied: string[] } {
-    if (!this.skillManager || this.activeSkills.length === 0) {
-      return { allowed: [], denied: [] };
-    }
-
-    return this.skillManager.getToolRestrictions(this.activeSkills);
+    return this.skillsIntegration.getSkillToolRestrictions();
   }
 
   /**
@@ -3197,7 +2722,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.emit("terminated", TerminationReason.CANCELLED, {
       shouldTerminate: true,
       reason: TerminationReason.CANCELLED,
-      metadata: reason ? { stepsExecuted: this.terminationContext.stepCount } : undefined,
+      metadata: reason ? { stepsExecuted: this.terminationManager.getStepCount() } : undefined,
     });
 
     // Also emit complete to finalize any pending operations (T038 fix)
