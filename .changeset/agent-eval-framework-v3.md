@@ -1,6 +1,4 @@
 ---
-"@vellum/eval": minor
-"@vellum/provider": minor
 "@butlerw/vellum": minor
 ---
 
