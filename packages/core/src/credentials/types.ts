@@ -353,6 +353,7 @@ export const CredentialStoreErrorCodeSchema = z.enum([
   "INVALID_CREDENTIAL",
   "ENCRYPTION_ERROR",
   "DECRYPTION_ERROR",
+  "MIGRATION_ERROR",
   "READ_ONLY",
   "IO_ERROR",
   "UNKNOWN",

@@ -1065,4 +1065,274 @@ describe("EncryptedFileStore", () => {
       expect(data.credentials.test1.iv).not.toBe(data.credentials.test2.iv);
     });
   });
+
+  // ===========================================================================
+  // Scrypt Migration (v1 -> v2)
+  // ===========================================================================
+
+  describe("Scrypt Migration", () => {
+    it("should read v1 (legacy) encrypted files", async () => {
+      // Create a store that will use v1 params (test environment)
+      const store = new EncryptedFileStore({
+        filePath: join(testDir, "v1-credentials.json"),
+        password: "test-password",
+      });
+
+      // Set a credential (will be v1 in test env due to isTestEnvironment())
+      await store.set({
+        id: "test:anthropic",
+        provider: "anthropic",
+        type: "api_key",
+        value: "sk-ant-test-key",
+        source: "file",
+        metadata: {},
+        createdAt: new Date(),
+      });
+
+      // Verify file has scryptVersion: 1 (test environment uses v1)
+      const fileContent = await readFile(join(testDir, "v1-credentials.json"), "utf-8");
+      const parsed = JSON.parse(fileContent);
+      expect(parsed.scryptVersion).toBe(1);
+
+      // Verify can read back
+      const result = await store.get("anthropic");
+      expect(result.ok).toBe(true);
+      if (result.ok && result.value) {
+        expect(result.value.value).toBe("sk-ant-test-key");
+      }
+
+      store.clearCache();
+    });
+
+    it("should report migration status via checkNeedsMigration()", async () => {
+      const filePath = join(testDir, "migration-status-test.json");
+      const store = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+
+      await store.set({
+        id: "test:test",
+        provider: "test",
+        type: "api_key",
+        value: "test-value",
+        source: "file",
+        metadata: {},
+        createdAt: new Date(),
+      });
+
+      // In test env, file will be v1, so needs migration to v2
+      const needsMigration = await store.checkNeedsMigration();
+      expect(needsMigration.ok).toBe(true);
+      if (needsMigration.ok) {
+        expect(needsMigration.value).toBe(true);
+      }
+
+      store.clearCache();
+    });
+
+    it("should handle migrate() on non-existent file gracefully", async () => {
+      const filePath = join(testDir, "nonexistent-migrate.json");
+      const store = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+
+      // migrate() on non-existent file should succeed (nothing to migrate)
+      const result = await store.migrate();
+      expect(result.ok).toBe(true);
+    });
+
+    it("should return false for checkNeedsMigration() on non-existent file", async () => {
+      const filePath = join(testDir, "nonexistent-check.json");
+      const store = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+
+      const result = await store.checkNeedsMigration();
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toBe(false);
+      }
+    });
+
+    // Note: These tests previously required 64MB+ RAM before the maxmem fix.
+    // With the maxmem parameter properly configured, v2 scrypt params now work in all environments.
+
+    it("should migrate v1 to v2 when migrate() is called", async () => {
+      // Setup: Create v1 file
+      const filePath = join(testDir, "migrate-test.json");
+      const store1 = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+
+      await store1.set({
+        id: "test:openai",
+        provider: "openai",
+        type: "api_key",
+        value: "sk-openai-test",
+        source: "file",
+        metadata: {},
+        createdAt: new Date(),
+      });
+      store1.clearCache();
+
+      // Verify v1 (test env creates v1 files)
+      let content = JSON.parse(await readFile(filePath, "utf-8"));
+      expect(content.scryptVersion).toBe(1);
+
+      // Migrate: Call migrate() explicitly
+      const store2 = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+
+      const migrateResult = await store2.migrate();
+      expect(migrateResult.ok).toBe(true);
+
+      // Verify data still readable after migration
+      const result = await store2.get("openai");
+      expect(result.ok).toBe(true);
+      if (result.ok && result.value) {
+        expect(result.value.value).toBe("sk-openai-test");
+      }
+      store2.clearCache();
+
+      // Verify v2 after migration
+      content = JSON.parse(await readFile(filePath, "utf-8"));
+      expect(content.scryptVersion).toBe(2);
+
+      // Verify data still readable with new store instance after migration
+      const store3 = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+      const result3 = await store3.get("openai");
+      expect(result3.ok).toBe(true);
+      if (result3.ok && result3.value) {
+        expect(result3.value.value).toBe("sk-openai-test");
+      }
+      store3.clearCache();
+    });
+
+    it("should migrate v1 to v2 when autoMigrate is enabled", async () => {
+      // Setup: Create v1 file
+      const filePath = join(testDir, "auto-migrate-test.json");
+      const store1 = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+
+      await store1.set({
+        id: "test:google",
+        provider: "google",
+        type: "api_key",
+        value: "google-api-key-123",
+        source: "file",
+        metadata: {},
+        createdAt: new Date(),
+      });
+      store1.clearCache();
+
+      // Verify v1
+      let content = JSON.parse(await readFile(filePath, "utf-8"));
+      expect(content.scryptVersion).toBe(1);
+
+      // Open with autoMigrate: true - load triggers migration
+      const store2 = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+        autoMigrate: true,
+      });
+
+      // First access triggers auto-migration
+      const result = await store2.get("google");
+      expect(result.ok).toBe(true);
+      if (result.ok && result.value) {
+        expect(result.value.value).toBe("google-api-key-123");
+      }
+      store2.clearCache();
+
+      // Verify v2 after auto-migration
+      content = JSON.parse(await readFile(filePath, "utf-8"));
+      expect(content.scryptVersion).toBe(2);
+    });
+
+    it("should handle autoMigrate and upgrade v1 to v2 successfully", async () => {
+      // After maxmem fix, v2 migration should now succeed even in test environments.
+      // This test verifies autoMigrate works correctly when enabled.
+      const filePath = join(testDir, "auto-migrate-fallback.json");
+      const store1 = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+
+      await store1.set({
+        id: "test:fallback",
+        provider: "fallback",
+        type: "api_key",
+        value: "fallback-key-123",
+        source: "file",
+        metadata: {},
+        createdAt: new Date(),
+      });
+      store1.clearCache();
+
+      // Open with autoMigrate: true - migration should succeed with maxmem fix
+      const store2 = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+        autoMigrate: true,
+      });
+
+      // Data should be readable after successful migration
+      const result = await store2.get("fallback");
+      expect(result.ok).toBe(true);
+      if (result.ok && result.value) {
+        expect(result.value.value).toBe("fallback-key-123");
+      }
+
+      // File should be upgraded to v2 after successful migration
+      store2.clearCache();
+      const content = JSON.parse(await readFile(filePath, "utf-8"));
+      expect(content.scryptVersion).toBe(2);
+    });
+
+    it("should persist multiple credentials with v1 scrypt params", async () => {
+      const filePath = join(testDir, "multi-cred-v1.json");
+      const store1 = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+
+      // Create multiple credentials
+      await store1.set(createTestCredential("anthropic", "ant-key-123"));
+      await store1.set(createTestCredential("openai", "openai-key-456"));
+      await store1.set(createTestCredential("google", "google-key-789"));
+      store1.clearCache();
+
+      // Verify v1 and all credentials saved
+      const content = JSON.parse(await readFile(filePath, "utf-8"));
+      expect(content.scryptVersion).toBe(1);
+      expect(Object.keys(content.credentials).length).toBe(3);
+
+      // Verify all credentials readable with new store instance
+      const store2 = new EncryptedFileStore({
+        filePath,
+        password: "test-password",
+      });
+
+      const r1 = await store2.get("anthropic");
+      const r2 = await store2.get("openai");
+      const r3 = await store2.get("google");
+
+      expect(r1.ok && r1.value?.value).toBe("ant-key-123");
+      expect(r2.ok && r2.value?.value).toBe("openai-key-456");
+      expect(r3.ok && r3.value?.value).toBe("google-key-789");
+
+      store2.clearCache();
+    });
+  });
 });
