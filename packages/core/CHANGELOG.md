@@ -1,5 +1,12 @@
 # @vellum/core
 
+## 0.1.15
+
+### Patch Changes
+
+- Updated dependencies [[`b9eee03`](https://github.com/MLGBJDLW/vellum/commit/b9eee03cbe78c884814703fd76823e6b64aeaa65)]:
+  - @vellum/provider@0.2.0
+
 ## 0.1.14
 
 ### Minor Changes
