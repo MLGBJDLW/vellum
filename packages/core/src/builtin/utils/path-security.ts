@@ -9,7 +9,7 @@
 
 import { lstatSync, realpathSync } from "node:fs";
 import { lstat, realpath } from "node:fs/promises";
-import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 
 /**
  * Result of secure path validation that resolves symlinks.
@@ -189,10 +189,19 @@ export async function isWithinWorkingDirSecure(
     // Resolve to real path (follows all symlinks recursively)
     realPath = await realpath(lexicalPath);
   } catch (error: unknown) {
-    // Handle file not found - fall back to lexical check
+    // Handle file not found - resolve parent to handle symlinked working directories
+    // (e.g., macOS /var -> /private/var symlink causing asymmetric resolution)
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-      // File doesn't exist yet, use lexical path
-      realPath = lexicalPath;
+      // File doesn't exist yet - resolve parent directory and re-append filename
+      // This ensures consistent resolution even when working dir is symlinked
+      const parentDir = dirname(lexicalPath);
+      try {
+        const realParent = await realpath(parentDir);
+        realPath = join(realParent, basename(lexicalPath));
+      } catch {
+        // Parent also doesn't exist, keep lexical path
+        realPath = lexicalPath;
+      }
       isSymlink = false;
     } else if (error instanceof Error && "code" in error && error.code === "EACCES") {
       // Permission denied - treat as unsafe
@@ -269,8 +278,18 @@ export function isWithinWorkingDirSecureSync(
     // Resolve to real path
     realPath = realpathSync(lexicalPath);
   } catch (error: unknown) {
+    // Handle file not found - resolve parent to handle symlinked working directories
+    // (e.g., macOS /var -> /private/var symlink causing asymmetric resolution)
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-      realPath = lexicalPath;
+      // File doesn't exist yet - resolve parent directory and re-append filename
+      const parentDir = dirname(lexicalPath);
+      try {
+        const realParent = realpathSync(parentDir);
+        realPath = join(realParent, basename(lexicalPath));
+      } catch {
+        // Parent also doesn't exist, keep lexical path
+        realPath = lexicalPath;
+      }
       isSymlink = false;
     } else if (error instanceof Error && "code" in error && error.code === "EACCES") {
       return {
