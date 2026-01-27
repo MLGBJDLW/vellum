@@ -13,9 +13,42 @@ import {
   detectKittyKeyboardProtocol,
   disableKittyKeyboardProtocol,
   enableKittyKeyboardProtocol,
+  isDetectionComplete,
   isKittyKeyboardEnabled,
   isKittyKeyboardSupported,
   reEnableKittyProtocol,
+} from "../utils/kitty-keyboard-protocol.js";
+
+// =============================================================================
+// Early Initialization API
+// =============================================================================
+
+/**
+ * Initialize Kitty keyboard protocol detection before Ink takes over stdin.
+ * This MUST be called before render(<App />) to prevent terminal DA1 responses
+ * from appearing in the input field.
+ *
+ * @example
+ * ```typescript
+ * // In index.tsx, before render()
+ * await initializeKittyDetection();
+ * render(<App />, options);
+ * ```
+ *
+ * @returns Promise that resolves when detection is complete
+ */
+export async function initializeKittyDetection(): Promise<void> {
+  if (isDetectionComplete()) return;
+  await detectKittyKeyboardProtocol();
+  if (isKittyKeyboardSupported()) {
+    enableKittyKeyboardProtocol();
+  }
+}
+
+// Re-export state query functions for convenience
+export {
+  isKittyKeyboardEnabled,
+  isKittyKeyboardSupported,
 } from "../utils/kitty-keyboard-protocol.js";
 
 // =============================================================================
@@ -154,11 +187,23 @@ export function useKittyKeyboard(options: UseKittyKeyboardOptions = {}): UseKitt
   }, [log]);
 
   // Detection and initialization effect
+  // If initializeKittyDetection() was called before render(), this effect
+  // will simply read the cached state. Otherwise, it falls back to runtime detection.
   useEffect(() => {
     let cancelled = false;
 
     const init = async (): Promise<void> => {
-      log("Detecting protocol support...");
+      // Check if early initialization already completed
+      if (isDetectionComplete()) {
+        const supported = isKittyKeyboardSupported();
+        setIsSupported(supported);
+        setIsEnabled(isKittyKeyboardEnabled());
+        log(`Using cached detection: supported=${supported}, enabled=${isKittyKeyboardEnabled()}`);
+        return;
+      }
+
+      // Fallback: runtime detection (may cause DA1 response in input)
+      log("Detecting protocol support (fallback - consider using initializeKittyDetection)...");
 
       const supported = await detectKittyKeyboardProtocol();
 
