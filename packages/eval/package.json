@@ -1,0 +1,39 @@
+{
+  "name": "@vellum/eval",
+  "version": "0.0.1",
+  "description": "Agent evaluation framework for Vellum CLI",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@vellum/core": "workspace:*",
+    "@vellum/provider": "workspace:*",
+    "@vellum/shared": "workspace:*",
+    "glob": "^11.0.0",
+    "jest-diff": "^29.7.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.7",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.4"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

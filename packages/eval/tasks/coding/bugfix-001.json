@@ -1,0 +1,32 @@
+{
+  "id": "coding-bugfix-001",
+  "name": "Fix off-by-one error in array loop",
+  "category": "coding:bugfix",
+  "difficulty": "easy",
+  "description": "The function has an off-by-one error causing the last element to be skipped",
+  "prompt": "Fix the bug in src/utils.ts that causes the last element of the array to be skipped in the forEach loop.",
+  "files": [
+    {
+      "path": "src/utils.ts",
+      "content": "export function processItems(items: string[]) {\n  for (let i = 0; i < items.length - 1; i++) {\n    console.log(items[i]);\n  }\n}"
+    },
+    {
+      "path": "src/utils.test.ts",
+      "content": "import { processItems } from './utils';\nimport { vi, test, expect } from 'vitest';\n\ntest('processes all items', () => {\n  const spy = vi.spyOn(console, 'log');\n  processItems(['a', 'b', 'c']);\n  expect(spy).toHaveBeenCalledTimes(3);\n});"
+    }
+  ],
+  "expected": {
+    "files": [
+      {
+        "path": "src/utils.ts",
+        "match": "contains",
+        "content": "i < items.length",
+        "weight": 1.0
+      }
+    ],
+    "testCommand": "npx vitest run src/utils.test.ts --reporter=dot"
+  },
+  "timeout": 60000,
+  "tags": ["typescript", "arrays", "loops"],
+  "passingThreshold": 1.0
+}

@@ -658,4 +658,12 @@ registerDelegateCommand(program);
 
 program.addCommand(createLspCommand());
 
+// =============================================================================
+// Eval Command (Agent Evaluation Framework)
+// =============================================================================
+
+import { createEvalCommand } from "./commands/eval.js";
+
+program.addCommand(createEvalCommand());
+
 program.parse();

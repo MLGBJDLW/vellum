@@ -61,6 +61,7 @@
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.9",
     "@vellum/core": "workspace:*",
+    "@vellum/eval": "workspace:*",
     "@vellum/lsp": "workspace:*",
     "@vellum/mcp": "workspace:*",
     "@vellum/plugin": "workspace:*",

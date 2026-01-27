@@ -29,6 +29,18 @@ export { YiProvider } from "./yi.js";
 export { generateZhipuToken, ZhipuProvider } from "./zhipu.js";
 
 // =============================================================================
+// Mock Provider (Testing)
+// =============================================================================
+
+export type { MockResponse, MockScript } from "./mock.js";
+export {
+  createMockProvider,
+  createSimpleMockProvider,
+  createToolUseMockProvider,
+  MockProvider,
+} from "./mock.js";
+
+// =============================================================================
 // T036-T037: Provider Registry (Recommended API)
 // =============================================================================
 

@@ -1,0 +1,50 @@
+{
+  "id": "coding-refactor-001",
+  "name": "Refactor callback hell to async/await",
+  "category": "coding:refactor",
+  "difficulty": "hard",
+  "description": "Refactor nested callbacks to clean async/await with proper error handling",
+  "prompt": "Refactor the processUserData function in src/processor.ts from callback-based to async/await. Requirements:\n- Convert all callbacks to async/await\n- Add proper try/catch error handling\n- Maintain the same functionality\n- Use Promise.all where operations can run in parallel\n- Keep the code clean and readable",
+  "files": [
+    {
+      "path": "src/processor.ts",
+      "content": "import { readFile, writeFile } from 'fs';\n\nexport function processUserData(\n  userId: string,\n  callback: (error: Error | null, result?: string) => void\n) {\n  readFile(`users/${userId}.json`, 'utf-8', (err, userData) => {\n    if (err) {\n      callback(err);\n      return;\n    }\n    \n    const user = JSON.parse(userData);\n    \n    readFile(`profiles/${user.profileId}.json`, 'utf-8', (err, profileData) => {\n      if (err) {\n        callback(err);\n        return;\n      }\n      \n      readFile(`settings/${user.settingsId}.json`, 'utf-8', (err, settingsData) => {\n        if (err) {\n          callback(err);\n          return;\n        }\n        \n        const result = JSON.stringify({\n          user: JSON.parse(userData),\n          profile: JSON.parse(profileData),\n          settings: JSON.parse(settingsData)\n        });\n        \n        writeFile(`output/${userId}.json`, result, (err) => {\n          if (err) {\n            callback(err);\n            return;\n          }\n          callback(null, result);\n        });\n      });\n    });\n  });\n}"
+    }
+  ],
+  "expected": {
+    "files": [
+      {
+        "path": "src/processor.ts",
+        "match": "contains",
+        "content": "async",
+        "weight": 0.2
+      },
+      {
+        "path": "src/processor.ts",
+        "match": "contains",
+        "content": "await",
+        "weight": 0.2
+      },
+      {
+        "path": "src/processor.ts",
+        "match": "regex",
+        "content": "try\\s*\\{",
+        "weight": 0.2
+      },
+      {
+        "path": "src/processor.ts",
+        "match": "regex",
+        "content": "catch\\s*\\(",
+        "weight": 0.2
+      }
+    ],
+    "llmJudge": {
+      "rubric": "Evaluate the refactored code for:\n1. (0.25) All callbacks converted to async/await\n2. (0.25) Proper try/catch error handling\n3. (0.25) Code readability and cleanliness\n4. (0.25) Use of Promise.all for parallel operations where appropriate",
+      "passingScore": 0.7,
+      "judgeModel": "claude-sonnet-4-20250514"
+    }
+  },
+  "timeout": 180000,
+  "tags": ["typescript", "refactoring", "async", "promises"],
+  "passingThreshold": 0.7
+}

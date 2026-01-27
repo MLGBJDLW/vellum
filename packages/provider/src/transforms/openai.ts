@@ -143,6 +143,9 @@ interface OpenAIUsage {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number;
+  };
 }
 
 /**
@@ -572,6 +575,9 @@ export class OpenAITransform extends AbstractProviderTransform<
       usage: {
         inputTokens: response.usage?.prompt_tokens ?? 0,
         outputTokens: response.usage?.completion_tokens ?? 0,
+        ...(response.usage?.prompt_tokens_details?.cached_tokens !== undefined && {
+          cacheReadTokens: response.usage.prompt_tokens_details.cached_tokens,
+        }),
       },
       ...(toolCalls.length > 0 && { toolCalls }),
     };

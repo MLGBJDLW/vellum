@@ -1,0 +1,42 @@
+{
+  "id": "coding-feature-001",
+  "name": "Add retry logic with exponential backoff",
+  "category": "coding:feature",
+  "difficulty": "medium",
+  "description": "Add exponential backoff retry logic to HTTP fetch function",
+  "prompt": "Add retry logic with exponential backoff to the fetchData function in src/api.ts. Requirements:\n- Max 3 retries\n- Starting delay: 1 second, doubling each retry\n- Retry on 5xx errors and network failures\n- Return the response on success\n- Throw after all retries exhausted",
+  "files": [
+    {
+      "path": "src/api.ts",
+      "content": "export async function fetchData(url: string): Promise<Response> {\n  return fetch(url);\n}"
+    },
+    {
+      "path": "src/api.test.ts",
+      "content": "import { fetchData } from './api';\nimport { vi, test, expect, beforeEach, afterEach } from 'vitest';\n\nlet fetchMock: ReturnType<typeof vi.fn>;\n\nbeforeEach(() => {\n  fetchMock = vi.fn();\n  global.fetch = fetchMock as any;\n});\n\nafterEach(() => {\n  vi.restoreAllMocks();\n});\n\ntest('retries on 500 error', async () => {\n  fetchMock\n    .mockResolvedValueOnce({ ok: false, status: 500 })\n    .mockResolvedValueOnce({ ok: true, status: 200 });\n  \n  const result = await fetchData('http://test.com');\n  expect(result.status).toBe(200);\n  expect(fetchMock).toHaveBeenCalledTimes(2);\n});\n\ntest('throws after max retries', async () => {\n  fetchMock.mockResolvedValue({ ok: false, status: 500 });\n  \n  await expect(fetchData('http://test.com')).rejects.toThrow();\n  expect(fetchMock).toHaveBeenCalledTimes(4); // 1 initial + 3 retries\n});"
+    },
+    {
+      "path": "package.json",
+      "content": "{\n  \"name\": \"test-project\",\n  \"type\": \"module\",\n  \"devDependencies\": {\n    \"vitest\": \"^1.0.0\"\n  }\n}"
+    }
+  ],
+  "expected": {
+    "files": [
+      {
+        "path": "src/api.ts",
+        "match": "contains",
+        "content": "retry",
+        "weight": 0.3
+      },
+      {
+        "path": "src/api.ts",
+        "match": "regex",
+        "content": "(Math\\.pow|\\*\\s*2|<<)",
+        "weight": 0.3
+      }
+    ],
+    "testCommand": "npx vitest run src/api.test.ts --reporter=dot"
+  },
+  "timeout": 120000,
+  "tags": ["typescript", "http", "retry", "async"],
+  "passingThreshold": 0.8
+}

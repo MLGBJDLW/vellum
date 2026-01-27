@@ -374,14 +374,34 @@ export class OpenAICompatTransform extends AbstractProviderTransform<
     const baseResult = openaiTransform.parseResponse(response, config);
 
     // Extract reasoning content if available and provider supports it
+    let result = baseResult;
     if (this.compatConfig.handleReasoningContent) {
       const thinking = this.extractReasoningContent(response);
       if (thinking) {
-        return this.createResult({ ...baseResult.data, thinking }, baseResult.warnings);
+        result = this.createResult({ ...result.data, thinking }, result.warnings);
       }
     }
 
-    return baseResult;
+    // Handle DeepSeek-specific cache token fields
+    // DeepSeek uses prompt_cache_hit_tokens instead of OpenAI's prompt_tokens_details.cached_tokens
+    const usage = response.usage as Record<string, unknown> | undefined;
+    if (
+      usage?.prompt_cache_hit_tokens !== undefined &&
+      result.data.usage.cacheReadTokens === undefined
+    ) {
+      result = this.createResult(
+        {
+          ...result.data,
+          usage: {
+            ...result.data.usage,
+            cacheReadTokens: usage.prompt_cache_hit_tokens as number,
+          },
+        },
+        result.warnings
+      );
+    }
+
+    return result;
   }
 
   // ===========================================================================
