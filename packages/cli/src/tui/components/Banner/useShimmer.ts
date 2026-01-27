@@ -7,7 +7,8 @@
  * @module tui/components/Banner/useShimmer
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAnimation } from "../../context/AnimationContext.js";
 
 // =============================================================================
 // Types
@@ -117,22 +118,17 @@ export function useShimmer(config: ShimmerConfig = {}): ShimmerState {
   const cycleCountRef = useRef(0);
   const lastTickRef = useRef<number | null>(null);
   const lastDebugRef = useRef<number>(0);
+  const hasAnimationTickRef = useRef(false);
+
+  const { timestamp, isPaused } = useAnimation();
 
   // Track onComplete callback in ref to avoid effect re-runs
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
-  useEffect(() => {
-    if (!isActive || isComplete) return;
-
-    lastTickRef.current = Date.now();
-
-    const timer = setInterval(() => {
-      const now = Date.now();
-      const lastTick = lastTickRef.current ?? now;
-      lastTickRef.current = now;
-
-      const deltaMs = now - lastTick;
+  const advancePosition = useCallback(
+    (deltaMs: number, nowMs: number) => {
+      if (deltaMs <= 0) return;
       const step = deltaMs / cycleDuration;
       let nextPosition = positionRef.current + step;
 
@@ -143,7 +139,6 @@ export function useShimmer(config: ShimmerConfig = {}): ShimmerState {
         setCycleCount(updatedCycleCount);
 
         if (maxCycles !== undefined && updatedCycleCount >= maxCycles) {
-          clearInterval(timer);
           setIsActive(false);
           setIsComplete(true);
           // Set final position to a nice resting state (golden ratio position)
@@ -161,17 +156,53 @@ export function useShimmer(config: ShimmerConfig = {}): ShimmerState {
 
       if (SHIMMER_DEBUG_ENABLED) {
         const lastDebug = lastDebugRef.current;
-        if (now - lastDebug >= 1000) {
-          lastDebugRef.current = now;
+        if (nowMs - lastDebug >= 1000) {
+          lastDebugRef.current = nowMs;
           debugShimmer(
             `deltaMs=${deltaMs.toFixed(1)} position=${nextPosition.toFixed(3)} cycle=${cycleCountRef.current}`
           );
         }
       }
+    },
+    [cycleDuration, maxCycles]
+  );
+
+  useEffect(() => {
+    if (timestamp !== 0) {
+      hasAnimationTickRef.current = true;
+    }
+  }, [timestamp]);
+
+  const useGlobalClock = hasAnimationTickRef.current && !isPaused;
+
+  useEffect(() => {
+    lastTickRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!useGlobalClock || !isActive || isComplete) return;
+
+    const lastTick = lastTickRef.current ?? timestamp;
+    lastTickRef.current = timestamp;
+    const deltaMs = timestamp - lastTick;
+    advancePosition(deltaMs, timestamp);
+  }, [useGlobalClock, isActive, isComplete, timestamp, advancePosition]);
+
+  useEffect(() => {
+    if (useGlobalClock || !isActive || isComplete) return;
+
+    lastTickRef.current = Date.now();
+
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const lastTick = lastTickRef.current ?? now;
+      lastTickRef.current = now;
+      const deltaMs = now - lastTick;
+      advancePosition(deltaMs, now);
     }, updateInterval);
 
     return () => clearInterval(timer);
-  }, [isActive, cycleDuration, updateInterval, maxCycles, isComplete]);
+  }, [useGlobalClock, isActive, isComplete, updateInterval, advancePosition]);
 
   useEffect(() => {
     if (enabled && !isComplete) {

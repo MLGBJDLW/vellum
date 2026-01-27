@@ -40,16 +40,151 @@ export interface BannerShimmerTextProps {
 // =============================================================================
 
 /**
+ * Map of CSS named colors to hex values.
+ * Covers the 16 basic ANSI terminal colors plus common web colors.
+ */
+const NAMED_COLORS: Record<string, string> = {
+  black: "#000000",
+  red: "#FF0000",
+  green: "#008000",
+  yellow: "#FFFF00",
+  blue: "#0000FF",
+  magenta: "#FF00FF",
+  cyan: "#00FFFF",
+  white: "#FFFFFF",
+  gray: "#808080",
+  grey: "#808080",
+  orange: "#FFA500",
+  pink: "#FFC0CB",
+  purple: "#800080",
+  brown: "#A52A2A",
+  lime: "#00FF00",
+  navy: "#000080",
+  teal: "#008080",
+  olive: "#808000",
+  maroon: "#800000",
+  aqua: "#00FFFF",
+  fuchsia: "#FF00FF",
+  silver: "#C0C0C0",
+};
+
+/**
+ * Clamp RGB values to 0-255.
+ */
+function clampRgb(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+/**
  * Parse hex color to RGB components.
  */
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const cleaned = hex.replace("#", "");
-  const bigint = parseInt(cleaned, 16);
-  return {
-    r: (bigint >> 16) & 255,
-    g: (bigint >> 8) & 255,
-    b: bigint & 255,
-  };
+function parseHexColor(hex: string): { r: number; g: number; b: number } | null {
+  const cleaned = hex.replace("#", "").trim();
+  if (cleaned.length === 3) {
+    const rChar = cleaned[0];
+    const gChar = cleaned[1];
+    const bChar = cleaned[2];
+    if (!rChar || !gChar || !bChar) return null;
+    const r = parseInt(rChar + rChar, 16);
+    const g = parseInt(gChar + gChar, 16);
+    const b = parseInt(bChar + bChar, 16);
+    if ([r, g, b].some((value) => Number.isNaN(value))) return null;
+    return { r, g, b };
+  }
+  if (cleaned.length === 6) {
+    const bigint = parseInt(cleaned, 16);
+    if (Number.isNaN(bigint)) return null;
+    return {
+      r: (bigint >> 16) & 255,
+      g: (bigint >> 8) & 255,
+      b: bigint & 255,
+    };
+  }
+  return null;
+}
+
+/**
+ * Convert ANSI 256 color code to RGB.
+ */
+function ansi256ToRgb(code: number): { r: number; g: number; b: number } | null {
+  if (!Number.isFinite(code)) return null;
+  if (code < 0 || code > 255) return null;
+
+  // Standard 16 colors
+  const ansi16: Array<{ r: number; g: number; b: number }> = [
+    { r: 0, g: 0, b: 0 }, // 0 black
+    { r: 128, g: 0, b: 0 }, // 1 red
+    { r: 0, g: 128, b: 0 }, // 2 green
+    { r: 128, g: 128, b: 0 }, // 3 yellow
+    { r: 0, g: 0, b: 128 }, // 4 blue
+    { r: 128, g: 0, b: 128 }, // 5 magenta
+    { r: 0, g: 128, b: 128 }, // 6 cyan
+    { r: 192, g: 192, b: 192 }, // 7 white (light gray)
+    { r: 128, g: 128, b: 128 }, // 8 bright black (dark gray)
+    { r: 255, g: 0, b: 0 }, // 9 bright red
+    { r: 0, g: 255, b: 0 }, // 10 bright green
+    { r: 255, g: 255, b: 0 }, // 11 bright yellow
+    { r: 0, g: 0, b: 255 }, // 12 bright blue
+    { r: 255, g: 0, b: 255 }, // 13 bright magenta
+    { r: 0, g: 255, b: 255 }, // 14 bright cyan
+    { r: 255, g: 255, b: 255 }, // 15 bright white
+  ];
+
+  if (code < 16) {
+    return ansi16[code] ?? null;
+  }
+
+  if (code >= 232) {
+    const gray = (code - 232) * 10 + 8;
+    return { r: gray, g: gray, b: gray };
+  }
+
+  const index = code - 16;
+  const r = Math.floor(index / 36);
+  const g = Math.floor((index % 36) / 6);
+  const b = index % 6;
+  const toChannel = (value: number) => (value === 0 ? 0 : value * 40 + 55);
+
+  return { r: toChannel(r), g: toChannel(g), b: toChannel(b) };
+}
+
+/**
+ * Parse color string to RGB components.
+ * Supports hex, named colors, rgb()/rgba(), and ansi256().
+ */
+function parseColorToRgb(color: string): { r: number; g: number; b: number } {
+  const trimmed = color.trim().toLowerCase();
+  if (!trimmed) {
+    return { r: 128, g: 128, b: 128 };
+  }
+
+  const named = NAMED_COLORS[trimmed];
+  if (named) {
+    return parseHexColor(named) ?? { r: 128, g: 128, b: 128 };
+  }
+
+  const hexMatch = trimmed.match(/^#?[0-9a-f]{3}$|^#?[0-9a-f]{6}$/i);
+  if (hexMatch) {
+    return parseHexColor(trimmed) ?? { r: 128, g: 128, b: 128 };
+  }
+
+  const rgbMatch = trimmed.match(
+    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*([\d.]+))?\s*\)$/
+  );
+  if (rgbMatch) {
+    const r = clampRgb(Number.parseInt(rgbMatch[1] ?? "0", 10));
+    const g = clampRgb(Number.parseInt(rgbMatch[2] ?? "0", 10));
+    const b = clampRgb(Number.parseInt(rgbMatch[3] ?? "0", 10));
+    return { r, g, b };
+  }
+
+  const ansiMatch = trimmed.match(/^ansi256\(\s*(\d{1,3})\s*\)$/i);
+  if (ansiMatch) {
+    const code = Number.parseInt(ansiMatch[1] ?? "", 10);
+    return ansi256ToRgb(code) ?? { r: 128, g: 128, b: 128 };
+  }
+
+  return { r: 128, g: 128, b: 128 };
 }
 
 /**
@@ -68,8 +203,8 @@ export function interpolateColor(
   highlightColor: string,
   intensity: number
 ): string {
-  const base = hexToRgb(baseColor);
-  const highlight = hexToRgb(highlightColor);
+  const base = parseColorToRgb(baseColor);
+  const highlight = parseColorToRgb(highlightColor);
 
   const r = base.r + (highlight.r - base.r) * intensity;
   const g = base.g + (highlight.g - base.g) * intensity;

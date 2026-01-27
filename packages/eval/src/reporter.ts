@@ -3,7 +3,7 @@
  * @module @vellum/eval
  */
 
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { aggregateTokenUsage } from "./pricing.js";
 import type {
   CostSummary,
@@ -165,7 +165,11 @@ export class Reporter {
           `⚠️  REGRESSION DETECTED in ${report.regression.regressedTasks.length} task(s):`
         );
         for (const taskId of report.regression.regressedTasks) {
-          const comp = report.regression.comparisons.find((c) => c.taskId === taskId)!;
+          const comp = report.regression.comparisons.find((c) => c.taskId === taskId);
+          if (!comp) {
+            console.log(`  - ${taskId}: regression details unavailable`);
+            continue;
+          }
           console.log(`  - ${taskId}: ${comp.regressionReason}`);
         }
       } else {

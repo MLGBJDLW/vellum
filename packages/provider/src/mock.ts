@@ -162,7 +162,10 @@ export class MockProvider implements LLMProvider {
     if (response.toolCalls && response.toolCalls.length > 0) {
       const toolCalls = response.toolCalls;
       for (let i = 0; i < toolCalls.length; i++) {
-        const toolCall = toolCalls[i]!;
+        const toolCall = toolCalls[i];
+        if (!toolCall) {
+          continue;
+        }
 
         // Tool call start
         const startEvent: StreamToolCallStartEvent = {
@@ -302,11 +305,16 @@ export class MockProvider implements LLMProvider {
         this.currentIndex = 0;
       } else {
         // Return last response for any extra calls
-        return responses[responses.length - 1]!;
+        const lastResponse = responses.at(-1);
+        if (lastResponse) return lastResponse;
+        return { content: "[No mock responses configured]" };
       }
     }
 
-    const response = responses[this.currentIndex]!;
+    const response = responses[this.currentIndex];
+    if (!response) {
+      return { content: "[No mock responses configured]" };
+    }
     this.currentIndex++;
     return response;
   }

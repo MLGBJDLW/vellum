@@ -3,8 +3,8 @@
  * @module @vellum/eval
  */
 
+import { EventEmitter } from "node:events";
 import type { TokenUsage } from "@vellum/shared";
-import { EventEmitter } from "events";
 import { type LLMJudgeProvider, ResultChecker } from "./checker.js";
 import { EvalHarness } from "./harness.js";
 import { TaskLoader } from "./loader.js";

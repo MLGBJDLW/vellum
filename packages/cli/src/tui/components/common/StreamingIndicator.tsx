@@ -15,6 +15,7 @@ import { Box, Text } from "ink";
 import type React from "react";
 import { memo, useEffect, useRef, useState } from "react";
 import { useTheme } from "../../theme/index.js";
+import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { formatDuration, useElapsedTime } from "./EnhancedLoadingIndicator.js";
 import { SPINNER_STYLES, Spinner } from "./Spinner.js";
 
@@ -269,6 +270,30 @@ function StreamingIndicatorImpl({
 
   const phaseColor = getPhaseColor();
 
+  const highlightColor = theme.brand.highlight ?? "#FFD700";
+  const shouldShimmerLabel =
+    phase === "thinking" ||
+    phase === "generating" ||
+    phase === "tool_call" ||
+    phase === "tool_executing";
+
+  const renderLabel = () => {
+    if (!shouldShimmerLabel) {
+      return <Text color={phaseColor}> {displayLabel}</Text>;
+    }
+    return (
+      <BannerShimmerText
+        baseColor={phaseColor}
+        highlightColor={highlightColor}
+        shimmerConfig={{ cycleDuration: 2000 }}
+        shimmerWidth={0.2}
+        bold
+      >
+        {` ${displayLabel}`}
+      </BannerShimmerText>
+    );
+  };
+
   if (narrow) {
     // Narrow layout: stack vertically with icon
     const icon = PHASE_ICONS[phase];
@@ -278,7 +303,7 @@ function StreamingIndicatorImpl({
         <Box>
           <Spinner color={phaseColor} frames={spinnerFrames} />
           {icon && <Text> {icon}</Text>}
-          <Text color={phaseColor}> {displayLabel}</Text>
+          {renderLabel()}
         </Box>
         {meta && (
           <Box>
@@ -294,7 +319,7 @@ function StreamingIndicatorImpl({
   return (
     <Box flexDirection="row" alignItems="center">
       <Spinner color={phaseColor} frames={spinnerFrames} />
-      <Text color={phaseColor}> {displayLabel}</Text>
+      {renderLabel()}
       {meta && (
         <>
           <Text> </Text>
