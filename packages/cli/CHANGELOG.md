@@ -1,5 +1,23 @@
 # @butlerw/vellum
 
+## 0.2.2
+
+### Patch Changes
+
+- [#56](https://github.com/MLGBJDLW/vellum/pull/56) [`da77e45`](https://github.com/MLGBJDLW/vellum/commit/da77e4547f773209deb76da74b4f862dcd497982) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - # Shimmer fixes
+
+  ## fix(tui)
+
+  - Hardened shimmer color parsing to support hex, named, rgb(), and ansi256() inputs.
+
+  ## fix(tui)
+
+  - Switched shimmer timing to use the global animation clock with a safe local fallback.
+
+  ## fix(tui)
+
+  - Enabled shimmer labels for thinking, generating, and tool streaming indicators.
+
 ## 0.2.1
 
 ### Minor Changes
@@ -7,7 +25,7 @@
 - [`b9eee03`](https://github.com/MLGBJDLW/vellum/commit/b9eee03cbe78c884814703fd76823e6b64aeaa65) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### feat(eval)
 
   - fix the changeset error
-    
+
   ### feat(cli)
 
   - New `eval` command with full options: --task, --model, --temperature, --samples
