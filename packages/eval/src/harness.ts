@@ -3,10 +3,10 @@
  * @module @vellum/eval
  */
 
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import type { ModeConfig, TerminationLimits } from "@vellum/core";
-import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
-import { tmpdir } from "os";
-import { dirname, join } from "path";
 
 import type { EvalEnvironment, EvalTask, HarnessOptions } from "./types.js";
 

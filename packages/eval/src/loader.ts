@@ -105,7 +105,8 @@ export class TaskLoader {
   async loadTask(taskId: string): Promise<EvalTask> {
     // Check cache first
     if (this.cache.has(taskId)) {
-      return this.cache.get(taskId)!;
+      const cached = this.cache.get(taskId);
+      if (cached) return cached;
     }
 
     // Search for task file

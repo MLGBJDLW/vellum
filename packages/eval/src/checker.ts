@@ -3,10 +3,10 @@
  * @module @vellum/eval
  */
 
-import { readFile } from "fs/promises";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { glob } from "glob";
 import { diff } from "jest-diff";
-import { join } from "path";
 import type {
   CheckDetail,
   CheckResult,
@@ -303,7 +303,7 @@ Respond in JSON: { "score": 0.X, "reasoning": "..." }`;
           // Truncate large files
           const truncated =
             content.length > MAX_FILE_SIZE
-              ? content.slice(0, MAX_FILE_SIZE) + "\n... (truncated)"
+              ? `${content.slice(0, MAX_FILE_SIZE)}\n... (truncated)`
               : content;
 
           contents.push(`### ${file}\n\`\`\`\n${truncated}\n\`\`\``);
@@ -327,8 +327,8 @@ Respond in JSON: { "score": 0.X, "reasoning": "..." }`;
     command: string,
     cwd: string
   ): Promise<{ pass: boolean; message?: string }> {
-    const { exec } = await import("child_process");
-    const { promisify } = await import("util");
+    const { exec } = await import("node:child_process");
+    const { promisify } = await import("node:util");
     const execAsync = promisify(exec);
 
     try {
