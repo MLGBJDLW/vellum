@@ -1,5 +1,18 @@
 # @butlerw/vellum
 
+## 0.2.1
+
+### Minor Changes
+
+- [`b9eee03`](https://github.com/MLGBJDLW/vellum/commit/b9eee03cbe78c884814703fd76823e6b64aeaa65) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### feat(eval)
+
+  - fix the changeset error
+    
+  ### feat(cli)
+
+  - New `eval` command with full options: --task, --model, --temperature, --samples
+  - Three example tasks included: easy, medium, hard difficulty levels
+
 ## 0.2.0
 
 ### Minor Changes
