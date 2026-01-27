@@ -1,5 +1,70 @@
 # @butlerw/vellum
 
+## 0.1.21
+
+### Patch Changes
+
+- [#52](https://github.com/MLGBJDLW/vellum/pull/52) [`69bff4a`](https://github.com/MLGBJDLW/vellum/commit/69bff4a3ec9671aef9df7c22d1e6904cfe1ec248) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### feat(skill)
+
+  - Implemented mode trigger type matching in evaluateTrigger()
+  - Return ScanResult from scanAll() with scanned count and failed list
+  - Return discriminated union from loadL2() - distinguish not-found vs error
+
+  ### fix(skill)
+
+  - Fixed async initialization race condition - added skillInitPromise to await before skill matching
+  - Enforce maxActiveSkills limit (default 10) in getActiveSkills()
+  - Populate projectContext with provider/model/mode info instead of empty object
+  - Wire up builtin skills loading - discovery now returns actual path
+  - Apply sources config filter in discoverAll()
+  - Graceful circular dependency handling - warn and skip instead of crash
+  - Add guard clause for ctx.checkPermission in skill-tool
+  - Wire up setSkillManager() call in AgentLoop to enable skill tool
+
+  ### refactor(skill)
+
+  - Unified permission checking logic into shared checkSkillPermission() function
+
+  ### test(skill)
+
+  - Add permission.test.ts and skill-tool.test.ts for test coverage
+
+- [#52](https://github.com/MLGBJDLW/vellum/pull/52) [`4366e25`](https://github.com/MLGBJDLW/vellum/commit/4366e250cd5c492eeeaa5880d6272911a8813436) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### fix(web-search)
+
+  - Sanitize SerpAPI key from error messages to prevent log leaks
+
+  ### feat(web-search)
+
+  - Add exponential backoff retry for 429 and 5xx errors (max 3 retries)
+  - Add warning log when all DuckDuckGo HTML parsers fail
+
+  ### test(web-search)
+
+  - Add 12 new tests for fallback patterns, retry, timeout, Bing engine
+
+- [#52](https://github.com/MLGBJDLW/vellum/pull/52) [`1febcaa`](https://github.com/MLGBJDLW/vellum/commit/1febcaa252db17a53692e42b84201a56c9132524) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### feat(tools)
+
+  - Integrate Tavily search engine with AI-powered summarization
+  - Add advanced search parameters: searchDepth, timeRange, domains filtering
+  - Extend WebSearchParams schema to support new parameters
+
+  ### feat(cli)
+
+  - Add `/websearch` command for search engine configuration
+
+  ### fix(tools)
+
+  - Fix position reset bug in DuckDuckGo alt pattern matching
+  - Fix sleep timer memory leak during search retries
+  - Migrate Tavily URL to CONFIG_DEFAULTS.externalApis
+  - Add timeout budget tracking for search operations
+  - Update User-Agent to Chrome/131
+  - Improve HTML tag cleanup with stripHtmlTags()
+
+  ### test(tools)
+
+  - Add 9 test cases for Tavily search engine
+
 ## 0.1.20
 
 ### Patch Changes
