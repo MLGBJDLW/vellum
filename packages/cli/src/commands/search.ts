@@ -361,11 +361,17 @@ function setApiKey(
 ): CommandResult {
   if (provider === "tavily") {
     search.tavilyApiKey = key;
+    // Ensure the web_search tool, which reads from environment variables,
+    // can see this key immediately.
+    process.env.TAVILY_API_KEY = key;
     saveSettings({ ...settings, search });
     return success("✅ Tavily API key saved");
   }
   if (provider === "serpapi") {
     search.serpApiKey = key;
+    // Ensure the web_search tool, which reads from environment variables,
+    // can see this key immediately.
+    process.env.SERPAPI_KEY = key;
     saveSettings({ ...settings, search });
     return success("✅ SerpAPI key saved");
   }
