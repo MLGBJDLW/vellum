@@ -323,16 +323,17 @@ export function validatePath(
     ? sanitizePath(filePath)
     : sanitizePath(resolve(workingDir, filePath));
 
-  if (!isWithinWorkingDir(sanitizedPath, workingDir)) {
+  const securityResult = isWithinWorkingDirSecureSync(sanitizedPath, workingDir);
+  if (!securityResult.safe) {
     return {
       valid: false,
-      sanitizedPath,
+      sanitizedPath: securityResult.realPath,
       error: `Path "${filePath}" escapes working directory "${workingDir}"`,
     };
   }
 
   return {
     valid: true,
-    sanitizedPath,
+    sanitizedPath: securityResult.realPath,
   };
 }

@@ -19,6 +19,7 @@ import type {
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { DEFAULT_OAUTH_PORT, OAUTH_TIMEOUT_MS } from "./constants.js";
+import { DynamicClientRegistration } from "./oauth/DynamicClientRegistration.js";
 
 // ============================================
 // Types
@@ -605,6 +606,17 @@ export class McpOAuthManager {
       this.config,
       this.credentialManager
     );
+
+    // Discover OAuth metadata and set expected issuer for token validation
+    try {
+      const dcr = new DynamicClientRegistration();
+      const metadata = await dcr.discoverMetadata(serverUrl);
+      if (metadata.issuer) {
+        provider.setExpectedIssuer(metadata.issuer);
+      }
+    } catch {
+      // Continue without issuer validation (opaque tokens or discovery failure)
+    }
 
     this.providers.set(key, provider);
     return provider;
