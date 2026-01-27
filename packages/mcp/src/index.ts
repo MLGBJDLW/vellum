@@ -48,6 +48,7 @@ export {
 export {
   type CapabilityDiscoveryOptions,
   type ConnectionProvider,
+  filterTools,
   McpCapabilityDiscovery,
 } from "./McpCapabilityDiscovery.js";
 // McpConfigManager - Config File Management

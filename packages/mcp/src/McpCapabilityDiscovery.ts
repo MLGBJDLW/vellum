@@ -19,6 +19,49 @@ import type {
 } from "./types.js";
 
 // ============================================
+// Standalone Utility Functions
+// ============================================
+
+/**
+ * Filter tools based on include/exclude configuration.
+ * This is a pure function with no side effects.
+ *
+ * Filtering order:
+ * 1. Apply includeTools whitelist first (if specified)
+ * 2. Apply excludeTools blacklist second (if specified)
+ *
+ * @param tools - Array of discovered MCP tools
+ * @param filter - Tool filter configuration from server config
+ * @returns Filtered array of tools (returns all if no filter)
+ *
+ * @example
+ * ```typescript
+ * const tools = [{ name: 'read_file', ... }, { name: 'write_file', ... }];
+ * const filtered = filterTools(tools, { includeTools: ['read_file'] });
+ * // filtered = [{ name: 'read_file', ... }]
+ * ```
+ */
+export function filterTools(tools: McpTool[], filter?: ToolFilter): McpTool[] {
+  if (!filter) return tools;
+
+  let filtered = tools;
+
+  // Apply whitelist first
+  if (filter.includeTools?.length) {
+    const includeSet = new Set(filter.includeTools);
+    filtered = filtered.filter((tool) => includeSet.has(tool.name));
+  }
+
+  // Apply blacklist second
+  if (filter.excludeTools?.length) {
+    const excludeSet = new Set(filter.excludeTools);
+    filtered = filtered.filter((tool) => !excludeSet.has(tool.name));
+  }
+
+  return filtered;
+}
+
+// ============================================
 // Interfaces
 // ============================================
 
@@ -112,34 +155,14 @@ export class McpCapabilityDiscovery {
 
   /**
    * Filter tools based on server's include/exclude configuration.
-   * This is a pure function with no side effects.
-   *
-   * Filtering order:
-   * 1. Apply includeTools whitelist first (if specified)
-   * 2. Apply excludeTools blacklist second (if specified)
+   * Delegates to the standalone filterTools function.
    *
    * @param tools - Array of discovered MCP tools
    * @param filter - Tool filter configuration from server config
    * @returns Filtered array of tools (returns all if no filter)
    */
   filterTools(tools: McpTool[], filter?: ToolFilter): McpTool[] {
-    if (!filter) return tools;
-
-    let filtered = tools;
-
-    // Apply whitelist first
-    if (filter.includeTools?.length) {
-      const includeSet = new Set(filter.includeTools);
-      filtered = filtered.filter((tool) => includeSet.has(tool.name));
-    }
-
-    // Apply blacklist second
-    if (filter.excludeTools?.length) {
-      const excludeSet = new Set(filter.excludeTools);
-      filtered = filtered.filter((tool) => !excludeSet.has(tool.name));
-    }
-
-    return filtered;
+    return filterTools(tools, filter);
   }
 
   // ============================================
