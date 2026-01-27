@@ -1,5 +1,12 @@
 # @butlerw/vellum
 
+## 0.2.3
+
+### Patch Changes
+
+- [#59](https://github.com/MLGBJDLW/vellum/pull/59) [`5e4b095`](https://github.com/MLGBJDLW/vellum/commit/5e4b09593a5df4f97cfaf1e48159bd685b793a54) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### fix(eval)
+  - Fixed eval package by marking it as private and internal-only to prevent npm publish errors
+
 ## 0.2.2
 
 ### Patch Changes
