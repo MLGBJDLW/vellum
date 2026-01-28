@@ -12,7 +12,65 @@ import type { ModelInfo } from "../types.js";
  */
 export const GOOGLE_MODELS: ModelInfo[] = [
   // ==========================================================================
-  // Gemini 3 Series (Latest)
+  // Gemini 3 Series (Latest - Stable)
+  // ==========================================================================
+  {
+    id: "gemini-3-pro",
+    name: "Gemini 3 Pro",
+    provider: "google",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    inputPrice: 2.0,
+    outputPrice: 12.0,
+    cacheReadsPrice: 0.5,
+    cacheWritesPrice: 3.0,
+    reasoningEfforts: ["low", "high"],
+    defaultReasoningEffort: "low",
+    tiers: [
+      {
+        name: "up to 200K",
+        contextWindow: 200_000,
+        inputPrice: 2.0,
+        outputPrice: 12.0,
+      },
+      {
+        name: "above 200K",
+        contextWindow: 1_000_000,
+        inputPrice: 4.0,
+        outputPrice: 18.0,
+      },
+    ],
+    deprecated: false,
+    description: "Google's flagship multimodal model with advanced reasoning (stable)",
+  },
+  {
+    id: "gemini-3-flash",
+    name: "Gemini 3 Flash",
+    provider: "google",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 8_192,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    inputPrice: 0.3,
+    outputPrice: 2.5,
+    cacheReadsPrice: 0.075,
+    cacheWritesPrice: 1.0,
+    reasoningEfforts: ["minimal", "low", "medium", "high"],
+    defaultReasoningEffort: "medium",
+    deprecated: false,
+    description: "Balanced speed and intelligence with strong reasoning (stable)",
+  },
+
+  // ==========================================================================
+  // Gemini 3 Series (Preview)
   // ==========================================================================
   {
     id: "gemini-3-pro-preview",

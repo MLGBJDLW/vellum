@@ -10,6 +10,7 @@
 import { AnthropicProvider } from "./anthropic.js";
 import { BaichuanProvider } from "./baichuan.js";
 import { DeepSeekProvider } from "./deepseek.js";
+import { DoubaoProvider } from "./doubao.js";
 import { GoogleProvider } from "./google.js";
 import { GroqProvider } from "./groq.js";
 import { LMStudioProvider, OllamaProvider } from "./local.js";
@@ -148,6 +149,8 @@ function createProviderInstance(type: ProviderType): Provider {
       return new YiProvider();
     case "baichuan":
       return new BaichuanProvider();
+    case "doubao":
+      return new DoubaoProvider();
     default:
       throw new Error(`Unknown provider: ${type}`);
   }

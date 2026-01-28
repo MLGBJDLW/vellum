@@ -216,6 +216,41 @@
       "name": "Ollama (Local)",
       "description": "Run models locally - No API key needed",
       "shortcut": "[L]"
+    },
+    "xai": {
+      "name": "xAI (Grok)",
+      "description": "Grok - xAI's flagship model",
+      "shortcut": "[X]"
+    },
+    "lmstudio": {
+      "name": "LM Studio",
+      "description": "Local LLM with LM Studio",
+      "shortcut": "[S]"
+    },
+    "zhipu": {
+      "name": "Zhipu AI",
+      "description": "GLM-4 - Chinese language model",
+      "shortcut": "[Z]"
+    },
+    "yi": {
+      "name": "Yi (01.AI)",
+      "description": "Yi series models",
+      "shortcut": "[Y]"
+    },
+    "baichuan": {
+      "name": "Baichuan AI",
+      "description": "Baichuan Chinese AI model",
+      "shortcut": "[B]"
+    },
+    "doubao": {
+      "name": "Doubao",
+      "description": "ByteDance's AI assistant",
+      "shortcut": "[T]"
+    },
+    "minimax": {
+      "name": "MiniMax",
+      "description": "MiniMax AI model",
+      "shortcut": "[I]"
     }
   },
   "update": {

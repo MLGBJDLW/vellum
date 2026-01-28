@@ -188,16 +188,26 @@ export interface OnboardingResult {
  * Order: International first, then Chinese, then Local
  */
 export const ONBOARDING_PROVIDERS = [
+  // International providers
   "anthropic",
   "openai",
   "google",
   "mistral",
   "groq",
   "openrouter",
+  "xai",
+  // Chinese providers
   "deepseek",
   "qwen",
   "moonshot",
+  "zhipu",
+  "yi",
+  "baichuan",
+  "doubao",
+  "minimax",
+  // Local providers
   "ollama",
+  "lmstudio",
 ] as const;
 
 export type OnboardingProvider = (typeof ONBOARDING_PROVIDERS)[number];
@@ -297,6 +307,54 @@ export const PROVIDER_INFO: Record<OnboardingProvider, ProviderInfo> = {
     requiresApiKey: true,
     icon: "K",
   },
+  xai: {
+    id: "xai",
+    name: "xai",
+    description: "xai",
+    envVar: "XAI_API_KEY",
+    requiresApiKey: true,
+    icon: "X",
+  },
+  zhipu: {
+    id: "zhipu",
+    name: "zhipu",
+    description: "zhipu",
+    envVar: "ZHIPU_API_KEY",
+    requiresApiKey: true,
+    icon: "Z",
+  },
+  yi: {
+    id: "yi",
+    name: "yi",
+    description: "yi",
+    envVar: "YI_API_KEY",
+    requiresApiKey: true,
+    icon: "Y",
+  },
+  baichuan: {
+    id: "baichuan",
+    name: "baichuan",
+    description: "baichuan",
+    envVar: "BAICHUAN_API_KEY",
+    requiresApiKey: true,
+    icon: "B",
+  },
+  doubao: {
+    id: "doubao",
+    name: "doubao",
+    description: "doubao",
+    envVar: "DOUBAO_API_KEY",
+    requiresApiKey: true,
+    icon: "T",
+  },
+  minimax: {
+    id: "minimax",
+    name: "minimax",
+    description: "minimax",
+    envVar: "MINIMAX_API_KEY",
+    requiresApiKey: true,
+    icon: "N",
+  },
   ollama: {
     id: "ollama",
     name: "ollama",
@@ -304,6 +362,14 @@ export const PROVIDER_INFO: Record<OnboardingProvider, ProviderInfo> = {
     envVar: "OLLAMA_HOST",
     requiresApiKey: false,
     icon: "L",
+  },
+  lmstudio: {
+    id: "lmstudio",
+    name: "lmstudio",
+    description: "lmstudio",
+    envVar: "LMSTUDIO_HOST",
+    requiresApiKey: false,
+    icon: "S",
   },
 };
 

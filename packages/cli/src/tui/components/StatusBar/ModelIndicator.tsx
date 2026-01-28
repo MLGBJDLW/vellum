@@ -43,6 +43,18 @@ const PROVIDER_ICONS: Record<string, string> = {
   bedrock: "▣", // Square with fill
   mistral: "◆", // Filled diamond
   ollama: "○", // Circle outline
+  deepseek: "◐",
+  qwen: "◑",
+  groq: "◒",
+  xai: "✕",
+  openrouter: "◓",
+  lmstudio: "◔",
+  zhipu: "智",
+  moonshot: "☽",
+  yi: "壹",
+  baichuan: "川",
+  doubao: "豆",
+  minimax: "迷",
   default: "●", // Filled circle
 };
 
@@ -57,6 +69,18 @@ const PROVIDER_NAMES: Record<string, string> = {
   bedrock: "Bedrock",
   mistral: "Mistral",
   ollama: "Ollama",
+  deepseek: "DeepSeek",
+  qwen: "Qwen",
+  groq: "Groq",
+  xai: "xAI",
+  openrouter: "OpenRouter",
+  lmstudio: "LM Studio",
+  zhipu: "智谱 AI",
+  moonshot: "Moonshot",
+  yi: "零一万物",
+  baichuan: "百川",
+  doubao: "豆包",
+  minimax: "MiniMax",
 };
 
 // =============================================================================

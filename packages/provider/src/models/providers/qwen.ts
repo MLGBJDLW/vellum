@@ -12,7 +12,201 @@ import type { ModelInfo } from "../types.js";
  */
 export const QWEN_MODELS: ModelInfo[] = [
   // ==========================================================================
-  // Qwen Max Series (Premium)
+  // Qwen3 Max Series (Flagship - Jan 2026)
+  // ==========================================================================
+  {
+    id: "qwen3-max",
+    name: "Qwen3 Max",
+    provider: "qwen",
+    contextWindow: 262_144,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 2.0,
+    outputPrice: 6.0,
+    deprecated: false,
+    description: "Alibaba's flagship Qwen3 Max model with 256K context",
+  },
+  {
+    id: "qwen3-max-2026-01-23",
+    name: "Qwen3 Max (Jan 2026)",
+    provider: "qwen",
+    contextWindow: 82_000,
+    maxOutputTokens: 8_192,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 2.0,
+    outputPrice: 6.0,
+    deprecated: false,
+    description: "Qwen3 Max snapshot with web search tools support",
+  },
+  // ==========================================================================
+  // Qwen Plus/Flash Series (1M Context)
+  // ==========================================================================
+  {
+    id: "qwen-plus",
+    name: "Qwen Plus",
+    provider: "qwen",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.4,
+    outputPrice: 1.2,
+    deprecated: false,
+    description: "Alibaba's balanced Qwen Plus with 1M context",
+  },
+  {
+    id: "qwen-flash",
+    name: "Qwen Flash",
+    provider: "qwen",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 8_192,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.05,
+    outputPrice: 0.2,
+    deprecated: false,
+    description: "Alibaba's fast Qwen Flash with 1M context",
+  },
+  // ==========================================================================
+  // QwQ/QVQ Reasoning Series
+  // ==========================================================================
+  {
+    id: "qwq-plus",
+    name: "QwQ Plus",
+    provider: "qwen",
+    contextWindow: 131_072,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.8,
+    outputPrice: 2.4,
+    deprecated: false,
+    description: "Alibaba's advanced reasoning model QwQ Plus",
+  },
+  {
+    id: "qvq-max",
+    name: "QVQ Max",
+    provider: "qwen",
+    contextWindow: 131_072,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 1.5,
+    outputPrice: 4.5,
+    deprecated: false,
+    description: "Alibaba's vision reasoning model QVQ Max",
+  },
+  {
+    id: "qvq-plus",
+    name: "QVQ Plus",
+    provider: "qwen",
+    contextWindow: 131_072,
+    maxOutputTokens: 8_192,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 1.0,
+    outputPrice: 3.0,
+    deprecated: false,
+    description: "Alibaba's vision reasoning model QVQ Plus",
+  },
+  // ==========================================================================
+  // Qwen3 Vision Language Models
+  // ==========================================================================
+  {
+    id: "qwen3-vl-plus",
+    name: "Qwen3 VL Plus",
+    provider: "qwen",
+    contextWindow: 262_144,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.6,
+    outputPrice: 1.8,
+    deprecated: false,
+    description: "Alibaba's vision-language Qwen3 VL Plus with 256K context",
+  },
+  {
+    id: "qwen3-vl-flash",
+    name: "Qwen3 VL Flash",
+    provider: "qwen",
+    contextWindow: 262_144,
+    maxOutputTokens: 8_192,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.3,
+    outputPrice: 0.9,
+    deprecated: false,
+    description: "Alibaba's fast vision-language Qwen3 VL Flash",
+  },
+  // ==========================================================================
+  // Qwen3 Omni (Multimodal - Text/Image/Audio/Video)
+  // ==========================================================================
+  {
+    id: "qwen3-omni-flash",
+    name: "Qwen3 Omni Flash",
+    provider: "qwen",
+    contextWindow: 65_536,
+    maxOutputTokens: 8_192,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.4,
+    outputPrice: 1.2,
+    deprecated: false,
+    description: "Alibaba's multimodal Qwen3 Omni (text/image/audio/video)",
+  },
+  // ==========================================================================
+  // Qwen Long (10M Context)
+  // ==========================================================================
+  {
+    id: "qwen-long",
+    name: "Qwen Long",
+    provider: "qwen",
+    contextWindow: 10_000_000,
+    maxOutputTokens: 8_192,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: false,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.5,
+    outputPrice: 2.0,
+    deprecated: false,
+    description: "Alibaba's ultra-long context Qwen Long with 10M tokens",
+  },
+  // ==========================================================================
+  // Legacy Qwen Max/Turbo Series
   // ==========================================================================
   {
     id: "qwen-max",
@@ -30,28 +224,6 @@ export const QWEN_MODELS: ModelInfo[] = [
     deprecated: false,
     description: "Alibaba's most capable Qwen model",
   },
-  // ==========================================================================
-  // Qwen Plus Series (Balanced)
-  // ==========================================================================
-  {
-    id: "qwen-plus",
-    name: "Qwen Plus",
-    provider: "qwen",
-    contextWindow: 128_000,
-    maxOutputTokens: 8_192,
-    supportsTools: true,
-    supportsVision: false,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    supportsPromptCache: false,
-    inputPrice: 0.4,
-    outputPrice: 1.2,
-    deprecated: false,
-    description: "Alibaba's balanced Qwen Plus model",
-  },
-  // ==========================================================================
-  // Qwen Turbo Series (Fast)
-  // ==========================================================================
   {
     id: "qwen-turbo",
     name: "Qwen Turbo",
@@ -69,7 +241,7 @@ export const QWEN_MODELS: ModelInfo[] = [
     description: "Alibaba's fast and cost-effective Qwen model",
   },
   // ==========================================================================
-  // QwQ (Reasoning Model)
+  // QwQ Legacy (Reasoning Model)
   // ==========================================================================
   {
     id: "qwq-32b",

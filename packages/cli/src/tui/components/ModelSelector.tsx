@@ -74,6 +74,14 @@ const PROVIDER_INFO: Record<string, { name: string; icon: string }> = {
   qwen: { name: "Qwen", icon: "[W]" },
   ollama: { name: "Ollama", icon: "[L]" },
   lmstudio: { name: "LM Studio", icon: "[S]" },
+  mistral: { name: "Mistral", icon: "[M]" },
+  openrouter: { name: "OpenRouter", icon: "[R]" },
+  moonshot: { name: "Moonshot", icon: "[O]" },
+  zhipu: { name: "智谱 AI", icon: "[Z]" },
+  yi: { name: "零一万物", icon: "[Y]" },
+  baichuan: { name: "百川", icon: "[B]" },
+  doubao: { name: "豆包", icon: "[D]" },
+  minimax: { name: "MiniMax", icon: "[N]" },
 };
 
 // =============================================================================
