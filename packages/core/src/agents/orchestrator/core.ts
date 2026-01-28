@@ -26,28 +26,66 @@ import type { TaskChain, TaskChainManager } from "./task-chain.js";
 import { createTaskChainManager, MAX_DELEGATION_DEPTH } from "./task-chain.js";
 
 // ============================================
-// Helper: Get agent level from mode slug
+// Helper: Get agent level from mode or worker slug
 // ============================================
 
 /**
- * Get the agent level for a mode slug by looking up the corresponding agent.
+ * Mode/worker slug to agent name mapping.
  *
- * Maps mode slugs to agent names and retrieves the level from BUILT_IN_AGENTS.
- * Returns worker level (2) as default if not found.
+ * Maps both:
+ * - Mode slugs (code, plan, spec, vibe) → corresponding agent
+ * - Worker slugs don't have agents, so they're not listed here
  */
-function getAgentLevelForMode(modeSlug: string): AgentLevel {
-  const modeToAgent: Record<string, keyof typeof BUILT_IN_AGENTS> = {
-    code: "vibe-agent",
-    plan: "plan-agent",
-    // spec mode uses "plan" as its name, but references spec-orchestrator
-  };
+const SLUG_TO_AGENT: Record<string, keyof typeof BUILT_IN_AGENTS> = {
+  // Mode slugs → agents
+  code: "vibe-agent", // Legacy mode → vibe-agent (level 2)
+  vibe: "vibe-agent", // Current mode → vibe-agent (level 2)
+  plan: "plan-agent", // Plan mode → plan-agent (level 1)
+  spec: "spec-orchestrator", // Spec mode → spec-orchestrator (level 0)
+} as const;
 
-  const agentName = modeToAgent[modeSlug];
+/**
+ * Worker slugs that are always level 2.
+ * These don't have corresponding agents in BUILT_IN_AGENTS.
+ */
+const WORKER_SLUGS = new Set([
+  "coder",
+  "qa",
+  "writer",
+  "analyst",
+  "devops",
+  "architect",
+  "security",
+  "researcher",
+  "requirements",
+  "tasks",
+  "validator",
+]);
+
+/**
+ * Get the agent level for a mode or worker slug.
+ *
+ * Resolution order:
+ * 1. Check if slug maps to a known agent in SLUG_TO_AGENT
+ * 2. Check if slug is a known worker (WORKER_SLUGS)
+ * 3. Default to worker level (2) for unknown slugs
+ *
+ * @param slug - Mode slug (code, plan, spec, vibe) or worker slug (coder, qa, etc.)
+ * @returns AgentLevel (0=orchestrator, 1=workflow, 2=worker)
+ */
+function getAgentLevel(slug: string): AgentLevel {
+  // Check if slug maps to a known agent
+  const agentName = SLUG_TO_AGENT[slug];
   if (agentName && agentName in BUILT_IN_AGENTS) {
     return BUILT_IN_AGENTS[agentName].level;
   }
 
-  // Default to worker level
+  // Worker slugs are always level 2
+  if (WORKER_SLUGS.has(slug)) {
+    return 2 as AgentLevel;
+  }
+
+  // Unknown slugs default to worker level (safe fallback)
   return 2 as AgentLevel;
 }
 
@@ -136,6 +174,18 @@ export interface SubagentHandle {
   startedAt: Date;
   /** Timestamp when the subagent completed (if applicable) */
   completedAt?: Date;
+  /**
+   * Promise that resolves when the subagent reaches a terminal state
+   * (completed, failed, or cancelled). Use with Promise.race() for
+   * event-based waiting instead of polling.
+   */
+  completion: Promise<void>;
+  /**
+   * Internal resolver for the completion promise.
+   * Called automatically when status transitions to terminal.
+   * @internal
+   */
+  _resolveCompletion?: () => void;
 }
 
 /**
@@ -259,6 +309,14 @@ export interface OrchestratorCore {
    * @param handler - The handler function to remove
    */
   off(event: OrchestratorEventType, handler: OrchestratorEventHandler): void;
+
+  /**
+   * Clean up all terminal (completed/failed/cancelled) handles.
+   *
+   * Call during orchestrator shutdown to release resources.
+   * Safe to call multiple times.
+   */
+  cleanupAll(): void;
 }
 
 // ============================================
@@ -341,6 +399,38 @@ function generateTaskId(): string {
 }
 
 /**
+ * Terminal statuses that indicate the subagent has finished execution.
+ */
+const TERMINAL_STATUSES = new Set<SubagentHandle["status"]>(["completed", "failed", "cancelled"]);
+
+/**
+ * Set the status on a SubagentHandle, resolving the completion promise
+ * if the status is terminal (completed, failed, or cancelled).
+ *
+ * @param handle - The handle to update
+ * @param status - The new status value
+ */
+function setHandleStatus(handle: SubagentHandle, status: SubagentHandle["status"]): void {
+  handle.status = status;
+  if (TERMINAL_STATUSES.has(status) && handle._resolveCompletion) {
+    handle._resolveCompletion();
+    handle._resolveCompletion = undefined; // Prevent double-resolve
+  }
+}
+
+/**
+ * Create completion promise and resolver for a SubagentHandle.
+ * Returns an object with the promise and resolver function.
+ */
+function createCompletionPromise(): { promise: Promise<void>; resolve: () => void } {
+  let resolve: () => void;
+  const promise = new Promise<void>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve: resolve! };
+}
+
+/**
  * Internal implementation of OrchestratorCore.
  */
 class OrchestratorCoreImpl implements OrchestratorCore {
@@ -353,6 +443,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
   private readonly handles = new Map<string, SubagentHandle>();
   private readonly taskToChain = new Map<string, string>(); // taskId -> chainId
   private readonly taskDeadlines = new Map<string, number>(); // taskId -> deadline timestamp
+  private readonly deadlineTimers = new Map<string, NodeJS.Timeout>(); // taskId -> deadline timer
   private readonly maxConcurrent: number;
   private readonly defaultTaskTimeout: number;
   private readonly eventListeners = new Map<OrchestratorEventType, Set<OrchestratorEventHandler>>();
@@ -390,6 +481,55 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     }
   }
 
+  /**
+   * Enforce deadline for a task. Called by setTimeout when deadline passes.
+   * Cancels the task if it's still running or spawning.
+   */
+  private enforceDeadline(taskId: string): void {
+    // Clean up the timer reference
+    this.deadlineTimers.delete(taskId);
+
+    // Find handle by taskId
+    let targetHandle: SubagentHandle | undefined;
+    for (const handle of this.handles.values()) {
+      if (handle.taskId === taskId) {
+        targetHandle = handle;
+        break;
+      }
+    }
+
+    if (!targetHandle) {
+      return; // Task already cleaned up
+    }
+
+    // Only cancel if still active
+    if (targetHandle.status === "running" || targetHandle.status === "spawning") {
+      setHandleStatus(targetHandle, "cancelled");
+      targetHandle.completedAt = new Date();
+
+      // Update chain status
+      const chainId = this.taskToChain.get(taskId);
+      if (chainId) {
+        this.taskChainManager.updateStatus(chainId, taskId, "failed");
+      }
+
+      // Emit timeout event
+      this.emit({
+        type: "task_failed",
+        timestamp: new Date(),
+        data: {
+          taskId,
+          agentSlug: targetHandle.agentSlug,
+          handleId: targetHandle.id,
+          error: new Error("Task exceeded deadline"),
+        },
+      });
+
+      // Cleanup the handle
+      this.cleanup(targetHandle.id);
+    }
+  }
+
   on(event: OrchestratorEventType, handler: OrchestratorEventHandler): void {
     let handlers = this.eventListeners.get(event);
     if (!handlers) {
@@ -406,12 +546,87 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     }
   }
 
+  /**
+   * Clean up resources for a completed/failed/cancelled handle.
+   * Removes entries from handles, taskToChain, and taskDeadlines maps.
+   * Safe to call with non-existent handleId.
+   */
+  private cleanup(handleId: string): void {
+    const handle = this.handles.get(handleId);
+    if (!handle) {
+      return;
+    }
+
+    // Only cleanup terminal statuses
+    if (
+      handle.status !== "completed" &&
+      handle.status !== "failed" &&
+      handle.status !== "cancelled"
+    ) {
+      return;
+    }
+
+    const taskId = handle.taskId;
+
+    // Clear deadline timer if exists (prevent timer leak)
+    const timer = this.deadlineTimers.get(taskId);
+    if (timer) {
+      clearTimeout(timer);
+      this.deadlineTimers.delete(taskId);
+    }
+
+    // Remove from all maps (safe - Map.delete handles missing keys)
+    this.handles.delete(handleId);
+    this.taskToChain.delete(taskId);
+    this.taskDeadlines.delete(taskId);
+  }
+
+  /**
+   * Clean up all terminal handles. Call during orchestrator shutdown.
+   */
+  cleanupAll(): void {
+    // Clear all deadline timers first to prevent leaks
+    for (const timer of this.deadlineTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.deadlineTimers.clear();
+
+    const terminalHandleIds: string[] = [];
+
+    for (const [handleId, handle] of this.handles) {
+      if (
+        handle.status === "completed" ||
+        handle.status === "failed" ||
+        handle.status === "cancelled"
+      ) {
+        terminalHandleIds.push(handleId);
+      }
+    }
+
+    for (const handleId of terminalHandleIds) {
+      this.cleanup(handleId);
+    }
+  }
+
   async spawnSubagent(
     agentSlug: string,
     _task: string,
     options?: SpawnOptions
   ): Promise<SubagentHandle> {
     // Note: _task is available for future use in task execution/logging
+
+    // Check concurrent limit before spawning (Issue #8)
+    const activeCount = this.getActiveSubagents().filter(
+      (h) => h.status === "running" || h.status === "spawning"
+    ).length;
+
+    if (activeCount >= this.maxConcurrent) {
+      throw new Error(
+        `Concurrent subagent limit exceeded: ${activeCount}/${this.maxConcurrent} subagents active. ` +
+          `Cannot spawn "${agentSlug}" until a slot becomes available.`
+      );
+    }
+
     // Validate agent exists
     const targetMode = this.config.modeRegistry.get(agentSlug);
     if (!targetMode) {
@@ -444,8 +659,8 @@ class OrchestratorCoreImpl implements OrchestratorCore {
       }
 
       // Get levels from agent config lookup
-      const parentLevel = getAgentLevelForMode(parentNode.agentSlug);
-      const targetLevel = getAgentLevelForMode(agentSlug);
+      const parentLevel = getAgentLevel(parentNode.agentSlug);
+      const targetLevel = getAgentLevel(agentSlug);
 
       if (!canSpawn(parentLevel, targetLevel)) {
         throw new Error(
@@ -483,16 +698,23 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     const deadline = Date.now() + timeout;
     this.taskDeadlines.set(taskId, deadline);
 
+    // Set timer to enforce deadline (Issue #7: deadline enforcement)
+    const timer = setTimeout(() => this.enforceDeadline(taskId), timeout);
+    this.deadlineTimers.set(taskId, timer);
+
     // Create subsession for isolation if manager is configured
     let subsessionId: string | undefined;
     if (this.subsessionManager && options?.parentTaskId) {
       const subsession = this.subsessionManager.create({
         parentId: options.parentTaskId,
         agentSlug,
-        level: getAgentLevelForMode(agentSlug),
+        level: getAgentLevel(agentSlug),
       });
       subsessionId = subsession.id;
     }
+
+    // Create completion promise for event-based waiting (Issue #5 fix)
+    const { promise: completion, resolve: resolveCompletion } = createCompletionPromise();
 
     // Create handle
     const handle: SubagentHandle = {
@@ -502,6 +724,8 @@ class OrchestratorCoreImpl implements OrchestratorCore {
       subsessionId,
       status: "spawning",
       startedAt: new Date(),
+      completion,
+      _resolveCompletion: resolveCompletion,
     };
 
     this.handles.set(handleId, handle);
@@ -574,20 +798,17 @@ class OrchestratorCoreImpl implements OrchestratorCore {
       // Spawn single agent
       const handle = await this.spawnSubagent(routeResult.selectedAgent, task);
 
-      // Mark as completed (actual execution would be handled externally)
-      handle.status = "completed";
-      handle.completedAt = new Date();
-      const chainId = this.taskToChain.get(handle.taskId);
-      if (chainId) {
-        this.taskChainManager.updateStatus(chainId, handle.taskId, "completed");
-      }
+      // Execute the worker task (Issue #3 fix: actually run the task)
+      const execResult = await this.runWorkerTask(handle, task);
 
       const result: TaskResult<unknown> = {
         taskId: handle.taskId,
         agentSlug: handle.agentSlug,
-        status: "success",
+        status: execResult.success ? "success" : "failure",
+        data: execResult.output,
+        error: execResult.error,
         startedAt: handle.startedAt,
-        completedAt: handle.completedAt,
+        completedAt: handle.completedAt ?? new Date(),
       };
 
       this.aggregator.addResult(result);
@@ -602,6 +823,9 @@ class OrchestratorCoreImpl implements OrchestratorCore {
           handleId: handle.id,
         },
       });
+
+      // Cleanup completed handle (Issue #6: memory leak prevention)
+      this.cleanup(handle.id);
 
       return this.aggregator.aggregate();
     }
@@ -653,23 +877,23 @@ class OrchestratorCoreImpl implements OrchestratorCore {
               taskId: subtaskId,
             });
 
-            // Mark completed
-            handle.status = "completed";
-            handle.completedAt = new Date();
-            const chainId = this.taskToChain.get(handle.taskId);
-            if (chainId) {
-              this.taskChainManager.updateStatus(chainId, handle.taskId, "completed");
-            }
+            // Execute the worker task (Issue #3 fix: actually run the task)
+            const execResult = await this.runWorkerTask(handle, subtask.description);
 
             const result: TaskResult<unknown> = {
               taskId: handle.taskId,
               agentSlug: handle.agentSlug,
-              status: "success",
+              status: execResult.success ? "success" : "failure",
+              data: execResult.output,
+              error: execResult.error,
               startedAt: handle.startedAt,
-              completedAt: handle.completedAt,
+              completedAt: handle.completedAt ?? new Date(),
             };
 
             this.aggregator.addResult(result);
+
+            // Cleanup completed handle (Issue #6: memory leak prevention)
+            this.cleanup(handle.id);
           } catch (error) {
             const failResult: TaskResult<unknown> = {
               taskId: subtaskId,
@@ -733,7 +957,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
     // Only cancel if still active
     if (handle.status === "spawning" || handle.status === "running") {
-      handle.status = "cancelled";
+      setHandleStatus(handle, "cancelled");
       handle.completedAt = new Date();
 
       // Update chain status
@@ -753,6 +977,9 @@ class OrchestratorCoreImpl implements OrchestratorCore {
         },
       });
 
+      // Cleanup cancelled handle (Issue #6: memory leak prevention)
+      this.cleanup(handleId);
+
       return true;
     }
 
@@ -767,6 +994,103 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
   getTaskChain(chainId: string): TaskChain | undefined {
     return this.taskChainManager.getChain(chainId);
+  }
+
+  /**
+   * Execute a worker task using the worker executor.
+   *
+   * This method is used by executeTask to actually run spawned subagents.
+   * It mirrors the execution logic in handleSpecHandoff but is reusable
+   * for any task execution path.
+   *
+   * @param handle - The subagent handle from spawnSubagent
+   * @param taskDescription - Description of the task to execute
+   * @returns Promise resolving to execution result with success/failure status
+   */
+  private async runWorkerTask(
+    handle: SubagentHandle,
+    taskDescription: string
+  ): Promise<{ success: boolean; output?: unknown; error?: Error }> {
+    // Execute actual task using worker executor if subsession manager is available
+    if (this.subsessionManager && handle.subsessionId) {
+      const subsession = this.subsessionManager.get(handle.subsessionId);
+      if (subsession) {
+        // Create task packet for the worker
+        const taskPacket = createTaskPacket(
+          taskDescription,
+          { kind: "builtin", slug: handle.agentSlug },
+          "orchestrator",
+          {
+            context: {
+              chainId: this.taskToChain.get(handle.taskId),
+            },
+          }
+        );
+
+        // Configure worker execution
+        const execConfig: WorkerExecutionConfig = {
+          maxIterations: 20, // Standard iterations for task execution
+          timeout: 180000, // 3 minutes for standard tasks
+        };
+
+        try {
+          // Execute the worker task
+          const workerResult = await executeWorkerTask(
+            handle.agentSlug,
+            {
+              subsession,
+              taskPacket,
+            },
+            execConfig
+          );
+
+          // Update handle based on result
+          if (workerResult.success) {
+            setHandleStatus(handle, "completed");
+          } else {
+            setHandleStatus(handle, "failed");
+          }
+
+          handle.completedAt = new Date();
+          const chainId = this.taskToChain.get(handle.taskId);
+          if (chainId) {
+            this.taskChainManager.updateStatus(
+              chainId,
+              handle.taskId,
+              workerResult.success ? "completed" : "failed"
+            );
+          }
+
+          return {
+            success: workerResult.success,
+            output: workerResult.data,
+            error: workerResult.error,
+          };
+        } catch (error) {
+          setHandleStatus(handle, "failed");
+          handle.completedAt = new Date();
+          const chainId = this.taskToChain.get(handle.taskId);
+          if (chainId) {
+            this.taskChainManager.updateStatus(chainId, handle.taskId, "failed");
+          }
+
+          return {
+            success: false,
+            error: error instanceof Error ? error : new Error(String(error)),
+          };
+        }
+      }
+    }
+
+    // Fallback: No subsession manager - mark as completed (legacy behavior)
+    setHandleStatus(handle, "completed");
+    handle.completedAt = new Date();
+    const chainId = this.taskToChain.get(handle.taskId);
+    if (chainId) {
+      this.taskChainManager.updateStatus(chainId, handle.taskId, "completed");
+    }
+
+    return { success: true };
   }
 
   /**
@@ -836,18 +1160,18 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
           // Update handle based on result
           if (workerResult.success) {
-            handle.status = "completed";
+            setHandleStatus(handle, "completed");
           } else {
-            handle.status = "failed";
+            setHandleStatus(handle, "failed");
             throw workerResult.error ?? new Error("Worker execution failed");
           }
         } else {
           // Subsession not found, mark as completed (fallback behavior)
-          handle.status = "completed";
+          setHandleStatus(handle, "completed");
         }
       } else {
         // No subsession manager - use legacy behavior (mark as completed)
-        handle.status = "completed";
+        setHandleStatus(handle, "completed");
       }
 
       handle.completedAt = new Date();
@@ -873,6 +1197,9 @@ class OrchestratorCoreImpl implements OrchestratorCore {
           result,
         },
       });
+
+      // Cleanup completed handle (Issue #6: memory leak prevention)
+      this.cleanup(handle.id);
 
       // Verify callback target is spec before invoking
       if (callback.returnTo === "spec") {

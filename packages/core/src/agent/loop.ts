@@ -2139,7 +2139,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     }
 
     const signal = this.extractDelegationSignal(output);
-    const agent = signal.task.split(" ")[0] ?? "subagent"; // Extract agent hint from task
+    // Use explicit targetAgent if provided, fallback to first word of task for backward compat
+    const agent = signal.targetAgent ?? signal.task.split(" ")[0] ?? "subagent";
 
     // Emit delegation start event
     this.emit("delegationStart", signal.delegationId, agent, signal.task);
@@ -2434,6 +2435,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
   /**
    * Spawn subagent and wire up event forwarding (GAP 2 fix - T059).
+   * Uses executeTask to actually run the delegated work (Issue A fix).
    *
    * @param signal - Delegation signal with task details
    * @param agentSlug - Agent slug to spawn
@@ -2448,16 +2450,38 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       throw new Error("Orchestrator not configured for delegation");
     }
 
-    // Spawn the subagent
-    const handle = await orchestrator.spawnSubagent(agentSlug, signal.task, {
-      timeout: signal.maxTurns ? signal.maxTurns * 60000 : undefined, // Convert turns to rough timeout
-    });
+    // Get agent level for executeTask (default to worker level 2)
+    const level = 2 as import("./level.js").AgentLevel;
 
-    this.logger?.debug("Subagent spawned", {
+    // Use executeTask to spawn AND execute the task (Issue A fix)
+    // This ensures runWorkerTask is called and work actually executes
+    const result = await orchestrator.executeTask(signal.task, level);
+
+    // Get the handle from the orchestrator's active subagents or create a synthetic one
+    // for compatibility with waitForSubagentCompletion
+    const activeSubagents = orchestrator.getActiveSubagents();
+    let handle = activeSubagents.find((h) => h.agentSlug === agentSlug);
+
+    // If no active handle (task already completed), create a completed handle for the flow
+    if (!handle) {
+      // Create a synthetic completed handle to maintain API compatibility
+      handle = {
+        id: `handle-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        agentSlug,
+        taskId: `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        status: result.overallStatus === "success" ? "completed" : "failed",
+        startedAt: new Date(),
+        completedAt: new Date(),
+        completion: Promise.resolve(),
+      };
+    }
+
+    this.logger?.debug("Subagent executed via executeTask", {
       delegationId: signal.delegationId,
       handleId: handle.id,
       agentSlug: handle.agentSlug,
       taskId: handle.taskId,
+      overallStatus: result.overallStatus,
     });
 
     return handle;
@@ -2465,6 +2489,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
   /**
    * Wait for subagent completion and forward events (GAP 2 fix - T059).
+   * Uses event-based completion notification with timeout fallback (Issue #5 fix).
    *
    * @param handle - Subagent handle to wait on
    * @param delegationId - Delegation ID for event correlation
@@ -2475,34 +2500,66 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     delegationId: string,
     agent: string
   ): Promise<void> {
-    // For now, poll the handle status until complete
-    // In a full implementation, this would use proper event subscription
-    const pollInterval = 1000; // 1 second
-    const maxWaitTime = 300000; // 5 minutes default
-    const startTime = Date.now();
+    const maxWaitTime = 300000; // 5 minutes default timeout
 
-    while (Date.now() - startTime < maxWaitTime) {
-      if (this.cancellation.isCancelled) {
-        throw new Error("Delegation cancelled");
-      }
+    // Helper to get current status (avoids TypeScript control flow narrowing)
+    const getStatus = (): SubagentHandle["status"] => handle.status;
 
-      // Check handle status
-      if (handle.status === "completed") {
-        return;
-      }
-
-      if (handle.status === "failed" || handle.status === "cancelled") {
-        throw new Error(`Subagent ${handle.status}: ${handle.agentSlug}`);
-      }
-
-      // Emit periodic progress for UI
-      this.emit("subagentTool", delegationId, agent, "processing...");
-
-      // Wait before next poll
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    // Check if already in terminal state
+    const initialStatus = getStatus();
+    if (initialStatus === "completed") {
+      return;
+    }
+    if (initialStatus === "failed" || initialStatus === "cancelled") {
+      throw new Error(`Subagent ${initialStatus}: ${handle.agentSlug}`);
     }
 
-    throw new Error("Subagent execution timed out");
+    // AbortController to stop the polling loop when race resolves (Issue B fix)
+    const abortController = new AbortController();
+
+    // Create timeout promise as fallback safety
+    const timeoutPromise = new Promise<"timeout">((resolve) => {
+      const timer = setTimeout(() => resolve("timeout"), maxWaitTime);
+      // Clean up timer if aborted
+      abortController.signal.addEventListener("abort", () => clearTimeout(timer));
+    });
+
+    // Create cancellation check promise with abort support (Issue B fix)
+    const cancellationCheck = async (): Promise<"cancelled"> => {
+      // Poll for cancellation at lower frequency (avoids busy loop but catches cancellation)
+      const checkInterval = 500;
+      while (!this.cancellation.isCancelled && !abortController.signal.aborted) {
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
+      }
+      return "cancelled";
+    };
+
+    // Emit initial progress
+    this.emit("subagentTool", delegationId, agent, "processing...");
+
+    // Race between completion, timeout, and cancellation
+    const result = await Promise.race([
+      handle.completion.then(() => "completed" as const),
+      timeoutPromise,
+      cancellationCheck(),
+    ]);
+
+    // Stop the polling loop and clear timeout (Issue B fix)
+    abortController.abort();
+
+    if (result === "cancelled") {
+      throw new Error("Delegation cancelled");
+    }
+
+    if (result === "timeout") {
+      throw new Error("Subagent execution timed out");
+    }
+
+    // Completion resolved - check final status (status may have changed after promise resolved)
+    const finalStatus = getStatus();
+    if (finalStatus === "failed" || finalStatus === "cancelled") {
+      throw new Error(`Subagent ${finalStatus}: ${handle.agentSlug}`);
+    }
   }
 
   /**

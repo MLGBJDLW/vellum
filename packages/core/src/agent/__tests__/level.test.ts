@@ -222,7 +222,8 @@ describe("canAgentSpawn (T013)", () => {
       expect(canAgentSpawn(SPEC_ORCHESTRATOR, PLAN_AGENT)).toBe(true);
     });
 
-    it("spec-orchestrator can spawn vibe-agent", () => {
+    it("spec-orchestrator can spawn vibe-agent (lenient mode allows level skipping)", () => {
+      // LENIENT MODE: Orchestrator can spawn any lower-level agent
       expect(canAgentSpawn(SPEC_ORCHESTRATOR, VIBE_AGENT)).toBe(true);
     });
 
@@ -295,23 +296,25 @@ describe("canAgentSpawn (T013)", () => {
       expect(canAgentSpawn(workflowAgent, orchestratorAgent)).toBe(false);
     });
 
-    it("orchestrator (0) can spawn any lower level with permission", () => {
+    it("orchestrator (0) can spawn both workflow (1) and worker (2) - lenient mode", () => {
+      // LENIENT MODE: Level skipping allowed (0→2)
       const orchestrator: AgentConfig = {
         name: "orch",
         level: AgentLevel.orchestrator,
         canSpawnAgents: true,
       };
-      expect(canAgentSpawn(orchestrator, PLAN_AGENT)).toBe(true); // level 1
-      expect(canAgentSpawn(orchestrator, VIBE_AGENT)).toBe(true); // level 2
+      expect(canAgentSpawn(orchestrator, PLAN_AGENT)).toBe(true); // level 1 - allowed
+      expect(canAgentSpawn(orchestrator, VIBE_AGENT)).toBe(true); // level 2 - allowed (lenient)
     });
   });
 
   describe("complete spawn matrix with AgentConfig", () => {
     it("verifies full spawn matrix for built-in agents", () => {
       // SPEC_ORCHESTRATOR (level 0, canSpawnAgents: true)
+      // LENIENT MODE: Parent can spawn any lower-level agent
       expect(canAgentSpawn(SPEC_ORCHESTRATOR, SPEC_ORCHESTRATOR)).toBe(false); // same level
-      expect(canAgentSpawn(SPEC_ORCHESTRATOR, PLAN_AGENT)).toBe(true); // lower level
-      expect(canAgentSpawn(SPEC_ORCHESTRATOR, VIBE_AGENT)).toBe(true); // lower level
+      expect(canAgentSpawn(SPEC_ORCHESTRATOR, PLAN_AGENT)).toBe(true); // one level below - allowed
+      expect(canAgentSpawn(SPEC_ORCHESTRATOR, VIBE_AGENT)).toBe(true); // two levels below - allowed (lenient)
 
       // PLAN_AGENT (level 1, canSpawnAgents: true)
       expect(canAgentSpawn(PLAN_AGENT, SPEC_ORCHESTRATOR)).toBe(false); // higher level
