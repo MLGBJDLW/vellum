@@ -233,15 +233,19 @@ describe("MoonshotProvider", () => {
       expect(thinkingModel?.supportsReasoning).toBe(true);
     });
 
-    it("should have all models with tools support but no vision", async () => {
+    it("should have all models with tools support, some with vision", async () => {
       const provider = new MoonshotProvider();
       const models = await provider.listModelsAsync();
 
       for (const model of models) {
         expect(model.supportsTools).toBe(true);
-        expect(model.supportsVision).toBe(false);
         expect(model.provider).toBe("moonshot");
       }
+
+      // Verify vision models
+      const visionModels = models.filter((m) => m.supportsVision);
+      expect(visionModels.length).toBeGreaterThan(0);
+      expect(visionModels.some((m) => m.id.includes("kimi"))).toBe(true);
     });
   });
 
