@@ -1,5 +1,28 @@
 # @butlerw/vellum
 
+## 0.2.10
+
+### Patch Changes
+
+- [#75](https://github.com/MLGBJDLW/vellum/pull/75) [`cf0feef`](https://github.com/MLGBJDLW/vellum/commit/cf0feef7dc029b252b858b912f57ff55d5d2eca8) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### feat(core): add tool timeout warning mechanism
+
+  - Add `toolTimeoutWarning` event definition
+  - ToolExecutor emits warning at 80% of timeout threshold
+  - Include 6 unit tests for timeout warning behavior
+
+  ### feat(core): add stream pause/resume functionality
+
+  - Add PauseSignal class for pause state management
+  - AgentStreamHandler supports pause checking during streaming
+  - AgentLoop exposes pause()/resume()/isPaused() API
+  - Include 26 unit tests for pause/resume behavior
+
+  ### feat(tui): add timeout and pause UI components
+
+  - Add ToolTimeoutContext and ToolTimeoutIndicator for timeout warnings
+  - Add usePauseShortcut hook (Space key binding)
+  - Add PauseIndicator component for visual feedback
+
 ## 0.2.9
 
 ### Patch Changes
