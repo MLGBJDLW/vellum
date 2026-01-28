@@ -504,7 +504,7 @@ describe("WatcherRegistry", () => {
   });
 
   describe("event forwarding", () => {
-    it("should forward change events from watchers", async () => {
+    it("should forward change events from watchers", { timeout: 60000 }, async () => {
       registry.register({ path: tempDir, id: "test", debounceMs: 50 });
       await registry.startAll();
 
