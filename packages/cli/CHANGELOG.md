@@ -1,5 +1,25 @@
 # @butlerw/vellum
 
+## 0.2.8
+
+### Patch Changes
+
+- [#71](https://github.com/MLGBJDLW/vellum/pull/71) [`18edbea`](https://github.com/MLGBJDLW/vellum/commit/18edbeac55f0a8480838eec5f7dfb010ce1a02d9) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### feat(shell)
+
+  - Added `isBackground` parameter for detached process support with PID return
+  - Implemented cross-platform `killProcessTree()` for process group management
+  - Added output truncation warning instead of silent discard
+  - Added output persistence to `~/.vellum/tool-output/` when truncated
+  - Added `inactivityTimeout` option with output-based timeout reset
+
+  ### feat(security)
+
+  - Extended environment variable filtering for sensitive tokens (JWT, AWS, GitHub, etc.)
+
+  ### fix(security)
+
+  - Whitelisted SSH_AUTH_SOCK and related SSH/GPG/X11 variables from filtering
+
 ## 0.2.7
 
 ### Patch Changes
