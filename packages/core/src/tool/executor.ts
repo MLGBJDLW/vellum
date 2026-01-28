@@ -6,6 +6,8 @@ import type { z } from "zod";
 
 import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { ErrorCode, VellumError } from "../errors/index.js";
+import type { EventBus } from "../events/bus.js";
+import { toolTimeoutWarning } from "../events/definitions.js";
 import type { IGitSnapshotService } from "../git/types.js";
 import type { Logger } from "../logger/logger.js";
 import { createDefaultPermissionChecker } from "../permission/checker.js";
@@ -450,6 +452,19 @@ export interface ToolExecutorConfig {
    * Optional logger for enterprise hook errors.
    */
   enterpriseLogger?: Logger;
+
+  /**
+   * Optional event bus for emitting timeout warning events.
+   * When provided, a warning event is emitted before tool execution times out.
+   */
+  eventBus?: EventBus;
+
+  /**
+   * Threshold for timeout warning as a fraction of total timeout (0-1).
+   * When this percentage of the timeout has elapsed, a warning event is emitted.
+   * Default: 0.8 (warning at 80% of timeout)
+   */
+  timeoutWarningThreshold?: number;
 }
 
 /**
@@ -502,6 +517,12 @@ export class ToolExecutor {
   /** T024: Optional git snapshot service for tracking file changes */
   private readonly gitSnapshotService?: IGitSnapshotService;
 
+  /** Optional event bus for emitting timeout warning events */
+  private readonly eventBus?: EventBus;
+
+  /** Threshold for timeout warning (0-1), default 0.8 */
+  private readonly timeoutWarningThreshold: number;
+
   /** T068: Optional enterprise hooks for validation and audit logging */
   private enterpriseHooks?: EnterpriseHooks;
 
@@ -526,6 +547,9 @@ export class ToolExecutor {
     // T068: Store enterprise hooks reference
     this.enterpriseHooks = config.enterpriseHooks;
     this.enterpriseLogger = config.enterpriseLogger;
+    // Timeout warning configuration
+    this.eventBus = config.eventBus;
+    this.timeoutWarningThreshold = config.timeoutWarningThreshold ?? 0.8;
   }
 
   /**
@@ -932,6 +956,24 @@ export class ToolExecutor {
     // Create an internal abort controller for timeout
     const timeoutController = new AbortController();
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let warningId: ReturnType<typeof setTimeout> | undefined;
+
+    // Set up timeout warning timer
+    const warningThreshold = this.timeoutWarningThreshold;
+    const warningDelay = timeout * warningThreshold;
+    if (this.eventBus && warningDelay > 0) {
+      warningId = setTimeout(() => {
+        const elapsedMs = Date.now() - startedAt;
+        this.eventBus?.emit(toolTimeoutWarning, {
+          callId: context.callId,
+          toolName,
+          elapsedMs,
+          timeoutMs: timeout,
+          remainingMs: timeout - elapsedMs,
+          percentComplete: Math.round(warningThreshold * 100),
+        });
+      }, warningDelay);
+    }
 
     // Set up abort signal listener
     const abortHandler = () => {
@@ -991,6 +1033,9 @@ export class ToolExecutor {
       // Clean up
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId);
+      }
+      if (warningId !== undefined) {
+        clearTimeout(warningId);
       }
       abortSignal?.removeEventListener("abort", abortHandler);
     }

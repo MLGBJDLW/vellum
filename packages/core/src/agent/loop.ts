@@ -32,6 +32,7 @@ import {
 import { RetryAbortedError } from "../session/retry.js";
 import type { SkillManager, SkillManagerOptions } from "../skill/manager.js";
 import type { SkillConfig, SkillLoaded } from "../skill/types.js";
+import { PauseSignal } from "../streaming/pause-signal.js";
 import {
   StreamProcessor,
   type StreamProcessorConfig,
@@ -458,6 +459,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** Stream handler for processing LLM streams (Step 7 refactor) */
   private readonly streamHandler: AgentStreamHandler;
 
+  /** Pause signal for controlling stream flow */
+  private readonly pauseSignal: PauseSignal;
+
   /** Flag to signal completion was attempted (GAP 2 fix) */
   private completionAttempted = false;
 
@@ -539,6 +543,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Note: UI events are handled by streamHandler.handleUiEvent()
     }
 
+    // Initialize pause signal for stream flow control
+    this.pauseSignal = new PauseSignal();
+
     // Initialize stream handler (Step 7 refactor - extracted from AgentLoop)
     this.streamHandler = new AgentStreamHandler(
       { useStreamProcessor: this.useStreamProcessor },
@@ -546,6 +553,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         streamProcessor: this.streamProcessor,
         logger: this.logger,
         isCancelled: () => this.cancellation.isCancelled,
+        isPaused: () => this.pauseSignal.isPaused(),
+        waitForResume: () => this.pauseSignal.waitIfPaused(),
         emitText: (text) => this.emit("text", text),
         emitThinking: (text) => this.emit("thinking", text),
         emitToolCall: (id, name, input) => this.emit("toolCall", id, name, input),
@@ -2761,6 +2770,34 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   }
 
   /**
+   * Pause stream processing.
+   * Call resume() to continue.
+   */
+  pause(): void {
+    if (this.state === "streaming") {
+      this.pauseSignal.pause();
+      this.transitionTo("paused");
+    }
+  }
+
+  /**
+   * Resume paused stream processing.
+   */
+  resume(): void {
+    if (this.state === "paused") {
+      this.pauseSignal.resume();
+      this.transitionTo("streaming");
+    }
+  }
+
+  /**
+   * Check if stream processing is currently paused.
+   */
+  isPaused(): boolean {
+    return this.pauseSignal.isPaused();
+  }
+
+  /**
    * Cancels the current operation.
    *
    * This will:
@@ -2773,6 +2810,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   cancel(reason?: string): void {
     this.cancellation.cancel(reason);
     this.abortController?.abort();
+    this.pauseSignal.reset();
     this.transitionTo("terminated");
 
     // Emit terminated event with reason (T038 fix)

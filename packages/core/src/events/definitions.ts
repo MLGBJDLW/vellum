@@ -83,6 +83,28 @@ export const toolEnd = defineEvent(
   })
 );
 
+/**
+ * Emitted when a tool execution is approaching timeout.
+ * Allows TUI to display warning before actual timeout occurs.
+ */
+export const toolTimeoutWarning = defineEvent(
+  "tool:timeoutWarning",
+  z.object({
+    /** Unique identifier for this tool call */
+    callId: z.string(),
+    /** Name of the tool being executed */
+    toolName: z.string(),
+    /** Time elapsed since execution started in milliseconds */
+    elapsedMs: z.number(),
+    /** Total timeout duration in milliseconds */
+    timeoutMs: z.number(),
+    /** Time remaining until timeout in milliseconds */
+    remainingMs: z.number(),
+    /** Percentage of timeout elapsed (0-100) */
+    percentComplete: z.number(),
+  })
+);
+
 // ============================================
 // T053 - Stream Events
 // ============================================

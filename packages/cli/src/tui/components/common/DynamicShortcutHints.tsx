@@ -70,6 +70,7 @@ const STATE_HINTS: Record<UIState, readonly HotkeyHint[]> = {
     { keys: "↑/↓", label: "History" },
   ],
   running: [
+    { keys: "Space", label: "Pause" },
     { keys: "Esc", label: "Stop" },
     { keys: "PgUp/Dn", label: "Scroll" },
     { keys: "Ctrl+C", label: "Cancel" },
@@ -105,6 +106,7 @@ const COMPACT_HINTS: Record<UIState, readonly HotkeyHint[]> = {
     { keys: "Tab", label: "Complete" },
   ],
   running: [
+    { keys: "Space", label: "Pause" },
     { keys: "Esc", label: "Stop" },
     { keys: "Ctrl+C", label: "Cancel" },
   ],

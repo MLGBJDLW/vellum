@@ -137,6 +137,14 @@ export interface UseAgentLoopReturn {
   cancel: (reason?: string) => void;
   /** Clear the conversation */
   clear: () => void;
+  /** Pause stream processing */
+  pause: () => void;
+  /** Resume paused stream processing */
+  resume: () => void;
+  /** Whether stream processing is paused */
+  isPaused: boolean;
+  /** Toggle pause state */
+  togglePause: () => void;
 }
 
 /**
@@ -691,6 +699,28 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     [loop]
   );
 
+  // Pause stream processing
+  const pause = useCallback(() => {
+    loop.pause();
+  }, [loop]);
+
+  // Resume paused stream processing
+  const resume = useCallback(() => {
+    loop.resume();
+  }, [loop]);
+
+  // Check if currently paused
+  const isPaused = loop.isPaused();
+
+  // Toggle pause state
+  const togglePause = useCallback(() => {
+    if (loop.isPaused()) {
+      loop.resume();
+    } else {
+      loop.pause();
+    }
+  }, [loop]);
+
   return {
     status,
     agentState,
@@ -706,6 +736,10 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     run,
     cancel,
     clear,
+    pause,
+    resume,
+    isPaused,
+    togglePause,
   };
 }
 

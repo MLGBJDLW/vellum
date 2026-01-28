@@ -23,7 +23,15 @@ export {
   HeaderBar,
   type HeaderBarProps,
 } from "./HeaderBar.js";
-export { ModelIndicator, type ModelIndicatorProps } from "./ModelIndicator.js";
+export {
+  ModelIndicator,
+  type ModelIndicatorProps,
+} from "./ModelIndicator.js";
+// Pause Indicator
+export {
+  PauseIndicator,
+  type PauseIndicatorProps,
+} from "./PauseIndicator.js";
 // Persistence Status Indicator
 export {
   PersistenceStatusIndicator,
@@ -49,6 +57,11 @@ export {
   type TokenStats,
 } from "./TokenBreakdown.js";
 export { TokenCounter, type TokenCounterProps } from "./TokenCounter.js";
+export {
+  ToolTimeoutIndicator,
+  type ToolTimeoutIndicatorProps,
+  ToolTimeoutStatusSegment,
+} from "./ToolTimeoutIndicator.js";
 export {
   type TrustMode,
   TrustModeIndicator,

@@ -12,6 +12,7 @@ import { Box, Text } from "ink";
 import { useMemo } from "react";
 import { version } from "../../../version.js";
 import { useResilienceOptional } from "../../context/ResilienceContext.js";
+import { useToolTimeoutOptional } from "../../context/ToolTimeoutContext.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { GradientText } from "../common/GradientText.js";
@@ -23,6 +24,7 @@ import { ResilienceStatusSegment } from "./ResilienceIndicator.js";
 import { SandboxIndicator } from "./SandboxIndicator.js";
 import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
 import { TokenBreakdown, type TokenStats } from "./TokenBreakdown.js";
+import { ToolTimeoutStatusSegment } from "./ToolTimeoutIndicator.js";
 import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeIndicator.js";
 
 // =============================================================================
@@ -141,6 +143,33 @@ function ResilienceSegmentWithSeparator({
   return (
     <>
       <ResilienceStatusSegment />
+      {hasFollowingItems && <Text color={theme.semantic.border.muted}>{SEPARATOR}</Text>}
+    </>
+  );
+}
+
+/**
+ * Wrapper that conditionally renders tool timeout segment with separator.
+ * Uses the same context as ToolTimeoutStatusSegment to determine visibility.
+ * Returns null when no active warning, avoiding double separators in the status bar.
+ */
+function ToolTimeoutSegmentWithSeparator({
+  hasFollowingItems,
+}: {
+  hasFollowingItems: boolean;
+}): React.JSX.Element | null {
+  const { theme } = useTheme();
+  const context = useToolTimeoutOptional();
+
+  // Same visibility logic as ToolTimeoutStatusSegment
+  if (!context || !context.feedbackEnabled || !context.status.active) {
+    return null;
+  }
+
+  // Render segment with trailing separator when there are following items
+  return (
+    <>
+      <ToolTimeoutStatusSegment />
       {hasFollowingItems && <Text color={theme.semantic.border.muted}>{SEPARATOR}</Text>}
     </>
   );
@@ -358,10 +387,14 @@ export function StatusBar({
   }
 
   // Render right indicators with separators (compact layout)
-  // ResilienceStatusSegment is rendered first with its own conditional separator
+  // ResilienceStatusSegment and ToolTimeoutStatusSegment are rendered first with their own conditional separators
   const renderedRightItems: React.ReactNode[] = [
     <ResilienceSegmentWithSeparator
       key="resilience-with-sep"
+      hasFollowingItems={rightIndicators.length > 0}
+    />,
+    <ToolTimeoutSegmentWithSeparator
+      key="tool-timeout-with-sep"
       hasFollowingItems={rightIndicators.length > 0}
     />,
   ];

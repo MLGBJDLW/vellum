@@ -71,6 +71,10 @@ export {
   type NewlineGateConfig,
 } from "./newline-gate.js";
 export {
+  // Classes
+  PauseSignal,
+} from "./pause-signal.js";
+export {
   type BlockProcessor,
   // Functions
   processMultiBlockStream,
