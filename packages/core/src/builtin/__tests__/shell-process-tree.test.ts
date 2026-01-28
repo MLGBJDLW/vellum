@@ -143,7 +143,7 @@ describe("shell-helpers - process tree management", () => {
       // Use pgrep -c to get COUNT (not PIDs). pgrep returns exit 1 if no match, so || echo "0"
       const checkCommand = isWindows
         ? `Get-Process | Where-Object { $_.ProcessName -like '*sleep*' } | Measure-Object | Select-Object -ExpandProperty Count`
-        : `pgrep -cf "VELLUM_MARKER=${marker}" || echo "0"`;
+        : `pgrep -cf "[V]ELLUM_MARKER=${marker}" || echo "0"`;
 
       const checkResult = await executeShell(checkCommand, { timeout: 15000 });
 
