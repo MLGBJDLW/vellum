@@ -11,6 +11,7 @@ import {
   type CodingMode,
   OnboardingWizard as CoreOnboardingWizard,
   createAgentFactory,
+  getToolEventBus,
   LLM,
   normalizeMode,
   SANDBOX_POLICIES,
@@ -309,9 +310,13 @@ program
       // Register cleanup for graceful shutdown
       setShutdownCleanup(cleanup);
 
+      // Get global tool event bus for timeout warnings
+      const toolEventBus = getToolEventBus();
+
       // Create unified tool container (T045: Single source of truth for tools)
       const toolContainer = new UnifiedToolContainer({
         cwd: process.cwd(),
+        eventBus: toolEventBus,
       });
       toolContainer.registerBuiltins();
 

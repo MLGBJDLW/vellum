@@ -81,6 +81,10 @@ export interface AgentStreamHandlerDeps {
   recordUsage: (usage: TokenUsage) => void;
   /** Check streaming loop detection (optional callback) */
   checkStreamingLoop?: (event: StreamEvent) => { detected: boolean; result?: unknown };
+  /** Check if stream should be paused (optional) */
+  isPaused?: () => boolean;
+  /** Wait for resume signal if paused (optional) */
+  waitForResume?: () => Promise<void>;
 }
 
 /**
@@ -465,8 +469,14 @@ export class AgentStreamHandler {
     pendingToolCalls: PendingToolCall[]
   ): Promise<StreamProcessResult> {
     for await (const event of stream) {
+      // Check cancellation
       if (this.deps.isCancelled()) {
         break;
+      }
+
+      // Check pause signal - wait if paused
+      if (this.deps.isPaused?.()) {
+        await this.deps.waitForResume?.();
       }
 
       const result = await this.handleStreamEvent(event, pendingToolCalls);
@@ -496,6 +506,11 @@ export class AgentStreamHandler {
         // Check for cancellation
         if (this.deps.isCancelled()) {
           return;
+        }
+
+        // Check pause signal - wait if paused
+        if (this.deps.isPaused?.()) {
+          await this.deps.waitForResume?.();
         }
 
         if (event.type === "error") {

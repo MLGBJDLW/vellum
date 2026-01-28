@@ -159,6 +159,14 @@ export {
   type UseModeShortcutsReturn,
   useModeShortcuts,
 } from "./useModeShortcuts.js";
+// Pause shortcut hook for pause/resume toggle
+export {
+  PAUSE_SHORTCUT_DISPLAY,
+  PAUSE_SHORTCUT_KEY,
+  type UsePauseShortcutOptions,
+  type UsePauseShortcutReturn,
+  usePauseShortcut,
+} from "./usePauseShortcut.js";
 export {
   type PendingPermission,
   type UsePermissionHandlerReturn,

@@ -23,6 +23,7 @@ import { OverflowProvider } from "./OverflowContext.js";
 import { ResilienceProvider } from "./ResilienceContext.js";
 import { ScrollProvider } from "./ScrollContext.js";
 import { ToolsProvider } from "./ToolsContext.js";
+import { ToolTimeoutProvider } from "./ToolTimeoutContext.js";
 
 // =============================================================================
 // Types
@@ -118,13 +119,15 @@ export function RootProvider({
             <ScrollProvider autoScrollToBottom>
               <AppProvider initialState={initialAppState}>
                 <ResilienceProvider>
-                  <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
-                    <LspProvider>
-                      <MessagesProvider initialMessages={initialMessages}>
-                        <ToolsProvider>{children}</ToolsProvider>
-                      </MessagesProvider>
-                    </LspProvider>
-                  </McpProvider>
+                  <ToolTimeoutProvider>
+                    <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
+                      <LspProvider>
+                        <MessagesProvider initialMessages={initialMessages}>
+                          <ToolsProvider>{children}</ToolsProvider>
+                        </MessagesProvider>
+                      </LspProvider>
+                    </McpProvider>
+                  </ToolTimeoutProvider>
                 </ResilienceProvider>
               </AppProvider>
             </ScrollProvider>

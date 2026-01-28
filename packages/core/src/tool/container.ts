@@ -6,6 +6,7 @@ import type { ToolDefinition as ProviderToolDefinition } from "@vellum/provider"
 import { z } from "zod";
 
 import { ALL_BUILTIN_TOOLS } from "../builtin/index.js";
+import type { EventBus } from "../events/bus.js";
 import type { Tool, ToolKind } from "../types/tool.js";
 import type { PermissionChecker, ToolExecutorConfig } from "./executor.js";
 import { ToolExecutor } from "./executor.js";
@@ -33,9 +34,15 @@ export interface ToolContainerConfig {
   cwd?: string;
 
   /**
+   * Optional event bus for emitting tool events (e.g., timeout warnings).
+   * If provided, enables tool timeout warning events to be emitted.
+   */
+  eventBus?: EventBus;
+
+  /**
    * Additional ToolExecutor configuration options.
    */
-  executorConfig?: Omit<ToolExecutorConfig, "permissionChecker">;
+  executorConfig?: Omit<ToolExecutorConfig, "permissionChecker" | "eventBus">;
 }
 
 // =============================================================================
@@ -100,6 +107,7 @@ export class UnifiedToolContainer {
     this.executor = new ToolExecutor({
       ...config.executorConfig,
       permissionChecker: config.permissionChecker,
+      eventBus: config.eventBus,
     });
   }
 

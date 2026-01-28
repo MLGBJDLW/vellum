@@ -2,7 +2,7 @@
 // ToolExecutor Tests - T016
 // ============================================
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defineTool, fail, ok, type ToolContext } from "../../types/tool.js";
 import {
@@ -700,6 +700,297 @@ describe("ToolExecutor", () => {
       const error = new ToolAbortedError("test_tool", { partial: "result" });
 
       expect(error.partialOutput).toEqual({ partial: "result" });
+    });
+  });
+
+  // =============================================================================
+  // Timeout Warning Tests
+  // =============================================================================
+
+  describe("timeout warning", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("should emit toolTimeoutWarning before timeout", async () => {
+      const { EventBus } = await import("../../events/bus.js");
+      const { toolTimeoutWarning } = await import("../../events/definitions.js");
+
+      const eventBus = new EventBus();
+      const warningHandler = vi.fn();
+      eventBus.on(toolTimeoutWarning, warningHandler);
+
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          // This will take longer than timeout
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          return ok({ done: true });
+        },
+      });
+
+      // Timeout = 100ms, warning threshold = 0.8, so warning at 80ms
+      const executor = new ToolExecutor({
+        defaultTimeout: 100,
+        eventBus,
+        timeoutWarningThreshold: 0.8,
+      });
+      executor.registerTool(slowTool);
+      const ctx = createMockContext();
+
+      // Start execution
+      const executePromise = executor.execute("slow_tool", {}, ctx);
+
+      // Advance to warning threshold (80ms)
+      await vi.advanceTimersByTimeAsync(80);
+
+      // Warning should have been emitted
+      expect(warningHandler).toHaveBeenCalledTimes(1);
+      expect(warningHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callId: ctx.callId,
+          toolName: "slow_tool",
+          timeoutMs: 100,
+          percentComplete: 80,
+        })
+      );
+
+      // Advance past timeout to complete execution
+      await vi.advanceTimersByTimeAsync(50);
+
+      // Wait for promise to settle
+      const result = await executePromise;
+      expect(result.timedOut).toBe(true);
+    });
+
+    it("should not emit warning if eventBus not provided", async () => {
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          return ok({ done: true });
+        },
+      });
+
+      // No eventBus provided
+      const executor = new ToolExecutor({
+        defaultTimeout: 100,
+        timeoutWarningThreshold: 0.8,
+      });
+      executor.registerTool(slowTool);
+      const ctx = createMockContext();
+
+      // Start execution - should not throw even without eventBus
+      const executePromise = executor.execute("slow_tool", {}, ctx);
+
+      // Advance past warning threshold - no error should occur
+      await vi.advanceTimersByTimeAsync(80);
+
+      // Advance past timeout
+      await vi.advanceTimersByTimeAsync(50);
+
+      const result = await executePromise;
+      expect(result.timedOut).toBe(true);
+    });
+
+    it("should clean up warning timer on success", async () => {
+      const { EventBus } = await import("../../events/bus.js");
+      const { toolTimeoutWarning } = await import("../../events/definitions.js");
+
+      const eventBus = new EventBus();
+      const warningHandler = vi.fn();
+      eventBus.on(toolTimeoutWarning, warningHandler);
+
+      const fastTool = defineTool({
+        name: "fast_tool",
+        description: "A fast tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          // Completes quickly (10ms)
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return ok({ done: true });
+        },
+      });
+
+      // Timeout = 100ms, warning at 80ms, but tool completes in 10ms
+      const executor = new ToolExecutor({
+        defaultTimeout: 100,
+        eventBus,
+        timeoutWarningThreshold: 0.8,
+      });
+      executor.registerTool(fastTool);
+      const ctx = createMockContext();
+
+      // Start execution
+      const executePromise = executor.execute("fast_tool", {}, ctx);
+
+      // Advance 10ms - tool completes
+      await vi.advanceTimersByTimeAsync(10);
+
+      const result = await executePromise;
+      expect(result.result.success).toBe(true);
+
+      // Advance past warning threshold - should not emit because timer was cleared
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(warningHandler).not.toHaveBeenCalled();
+    });
+
+    it("should clean up warning timer on abort", async () => {
+      const { EventBus } = await import("../../events/bus.js");
+      const { toolTimeoutWarning } = await import("../../events/definitions.js");
+
+      const eventBus = new EventBus();
+      const warningHandler = vi.fn();
+      eventBus.on(toolTimeoutWarning, warningHandler);
+
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          return ok({ done: true });
+        },
+      });
+
+      // Timeout = 100ms, warning at 80ms
+      const executor = new ToolExecutor({
+        defaultTimeout: 100,
+        eventBus,
+        timeoutWarningThreshold: 0.8,
+      });
+      executor.registerTool(slowTool);
+
+      const controller = new AbortController();
+      const ctx = createMockContext();
+
+      // Start execution
+      const executePromise = executor.execute("slow_tool", {}, ctx, {
+        abortSignal: controller.signal,
+      });
+
+      // Advance 30ms then abort (before warning threshold)
+      await vi.advanceTimersByTimeAsync(30);
+      controller.abort();
+
+      // Wait for abort to settle
+      await vi.advanceTimersByTimeAsync(1);
+
+      const result = await executePromise;
+      expect(result.aborted).toBe(true);
+
+      // Advance past warning threshold - should not emit because timer was cleared
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(warningHandler).not.toHaveBeenCalled();
+    });
+
+    it("should include correct elapsedMs and remainingMs in warning payload", async () => {
+      const { EventBus } = await import("../../events/bus.js");
+      const { toolTimeoutWarning } = await import("../../events/definitions.js");
+
+      const eventBus = new EventBus();
+      const warningHandler = vi.fn();
+      eventBus.on(toolTimeoutWarning, warningHandler);
+
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          return ok({ done: true });
+        },
+      });
+
+      // Timeout = 200ms, warning at 160ms (80%)
+      const executor = new ToolExecutor({
+        defaultTimeout: 200,
+        eventBus,
+        timeoutWarningThreshold: 0.8,
+      });
+      executor.registerTool(slowTool);
+      const ctx = createMockContext();
+
+      const executePromise = executor.execute("slow_tool", {}, ctx);
+
+      // Advance to warning threshold
+      await vi.advanceTimersByTimeAsync(160);
+
+      expect(warningHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          timeoutMs: 200,
+          percentComplete: 80,
+        })
+      );
+
+      // The elapsedMs should be approximately 160ms
+      const payload = warningHandler.mock.calls[0]?.[0];
+      expect(payload.elapsedMs).toBeGreaterThanOrEqual(160);
+      expect(payload.remainingMs).toBeLessThanOrEqual(40);
+
+      // Clean up
+      await vi.advanceTimersByTimeAsync(100);
+      await executePromise;
+    });
+
+    it("should use custom warning threshold", async () => {
+      const { EventBus } = await import("../../events/bus.js");
+      const { toolTimeoutWarning } = await import("../../events/definitions.js");
+
+      const eventBus = new EventBus();
+      const warningHandler = vi.fn();
+      eventBus.on(toolTimeoutWarning, warningHandler);
+
+      const slowTool = defineTool({
+        name: "slow_tool",
+        description: "A slow tool",
+        parameters: z.object({}),
+        kind: "read",
+        async execute() {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          return ok({ done: true });
+        },
+      });
+
+      // Timeout = 100ms, warning at 50ms (50% threshold)
+      const executor = new ToolExecutor({
+        defaultTimeout: 100,
+        eventBus,
+        timeoutWarningThreshold: 0.5,
+      });
+      executor.registerTool(slowTool);
+      const ctx = createMockContext();
+
+      const executePromise = executor.execute("slow_tool", {}, ctx);
+
+      // Advance to 50ms - should trigger warning at 50%
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(warningHandler).toHaveBeenCalledTimes(1);
+      expect(warningHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          percentComplete: 50,
+        })
+      );
+
+      // Clean up
+      await vi.advanceTimersByTimeAsync(100);
+      await executePromise;
     });
   });
 });
