@@ -423,11 +423,11 @@ function setHandleStatus(handle: SubagentHandle, status: SubagentHandle["status"
  * Returns an object with the promise and resolver function.
  */
 function createCompletionPromise(): { promise: Promise<void>; resolve: () => void } {
-  let resolve: () => void;
+  let resolve!: () => void; // Definite assignment - Promise executor runs synchronously
   const promise = new Promise<void>((res) => {
     resolve = res;
   });
-  return { promise, resolve: resolve! };
+  return { promise, resolve };
 }
 
 /**
