@@ -82,10 +82,18 @@ export function canSpawn(fromLevel: AgentLevel, toLevel: AgentLevel): boolean {
  *
  * This function checks spawn permissions based on AgentConfig properties:
  * 1. The current agent must have `canSpawnAgents === true`
- * 2. The current agent's level must be lower (numerically) than the target's level
+ * 2. The target agent must be at a LOWER level (higher number) than the current agent
  *
- * Unlike `canSpawn` which only checks level hierarchy, this function also
- * respects the `canSpawnAgents` permission flag in AgentConfig.
+ * LENIENT HIERARCHY RULE (differs from `canSpawn`):
+ * - orchestrator (0) can spawn workflow (1) OR worker (2)
+ * - workflow (1) can spawn worker (2)
+ * - worker (2) cannot spawn any agent
+ * - Level skipping IS allowed (orchestrator can directly spawn worker)
+ * - Spawning at the same or higher level is NOT allowed
+ *
+ * This intentionally differs from `canSpawn` which enforces strict adjacent-level
+ * transitions. `canAgentSpawn` is used by the Agent Registry for flexible routing,
+ * while `canSpawn` is used by the Orchestrator Core for structured pipelines.
  *
  * @param currentAgent - The AgentConfig of the agent attempting to spawn
  * @param targetAgent - The AgentConfig of the agent to be spawned
@@ -104,6 +112,9 @@ export function canSpawn(fromLevel: AgentLevel, toLevel: AgentLevel): boolean {
  *
  * // Spec orchestrator (level 0) can spawn plan agent (level 1)
  * canAgentSpawn(SPEC_ORCHESTRATOR, PLAN_AGENT); // true
+ *
+ * // Spec orchestrator (level 0) CAN spawn vibe agent (level 2) - level skipping allowed
+ * canAgentSpawn(SPEC_ORCHESTRATOR, VIBE_AGENT); // true
  * ```
  */
 export function canAgentSpawn(currentAgent: AgentConfig, targetAgent: AgentConfig): boolean {
@@ -112,9 +123,7 @@ export function canAgentSpawn(currentAgent: AgentConfig, targetAgent: AgentConfi
     return false;
   }
 
-  // Current agent's level must be lower (numerically) than target's level
-  // orchestrator (0) can spawn workflow (1) or worker (2)
-  // workflow (1) can spawn worker (2)
-  // worker (2) cannot spawn anything (already blocked by canSpawnAgents check)
+  // Lenient check: current agent can spawn any agent at a lower level (higher number)
+  // This allows orchestrator (0) to directly spawn worker (2), skipping workflow (1)
   return currentAgent.level < targetAgent.level;
 }

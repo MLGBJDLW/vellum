@@ -19,6 +19,11 @@ const DEFAULT_MAX_TURNS = 10;
 export const delegateAgentParamsSchema = z.object({
   /** Task description for the subagent */
   task: z.string().min(1).describe("The task description for the subagent to complete"),
+  /** Target agent slug to spawn (e.g. 'coder', 'reviewer'). If not provided, defaults to 'subagent' */
+  targetAgent: z
+    .string()
+    .optional()
+    .describe("Target agent slug to spawn (e.g. 'coder', 'reviewer')"),
   /** Additional context to provide to the subagent */
   context: z.string().optional().describe("Additional context to help the subagent"),
   /** Model to use for the subagent (optional, uses default if not specified) */
@@ -44,6 +49,8 @@ export type DelegateAgentParams = z.infer<typeof delegateAgentParamsSchema>;
 export interface DelegateAgentSignal {
   /** Signal type identifier */
   type: "delegate_agent";
+  /** Target agent slug to spawn (e.g. 'coder', 'reviewer') */
+  targetAgent?: string;
   /** Task for the subagent */
   task: string;
   /** Additional context */
@@ -111,12 +118,13 @@ export const delegateAgentTool = defineTool({
   async execute(input, _ctx) {
     // Note: Cancellation is handled at the agent loop level for delegations
 
-    const { task, context, model, maxTurns = DEFAULT_MAX_TURNS } = input;
+    const { task, targetAgent, context, model, maxTurns = DEFAULT_MAX_TURNS } = input;
 
     const delegationId = generateDelegationId();
 
     const signal: DelegateAgentSignal = {
       type: "delegate_agent",
+      targetAgent,
       task,
       context,
       model,

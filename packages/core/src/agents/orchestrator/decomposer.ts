@@ -481,6 +481,11 @@ function createSubtasksFromKeywords(task: string, keywords: string[]): SubtaskDe
     // Create description based on agent type and keywords
     const description = createSubtaskDescription(task, agent, agentKeywords);
 
+    // Only depend on immediate predecessor to allow parallelization
+    // when tasks are actually independent (findParallelGroups can now detect parallel groups)
+    const immediatePredecessor =
+      previousIds.length > 0 ? previousIds[previousIds.length - 1] : null;
+
     const subtask: SubtaskDefinition = {
       id,
       description,
@@ -488,7 +493,7 @@ function createSubtasksFromKeywords(task: string, keywords: string[]): SubtaskDe
       estimatedEffort: estimateEffort(description),
       dependencies: {
         taskId: id,
-        dependsOn: [...previousIds], // Each subtask depends on all previous
+        dependsOn: immediatePredecessor ? [immediatePredecessor] : [],
       },
     };
 
