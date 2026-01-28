@@ -216,6 +216,41 @@
       "name": "Ollama (本地)",
       "description": "本地运行模型 - 无需 API Key",
       "shortcut": "[L]"
+    },
+    "xai": {
+      "name": "xAI (Grok)",
+      "description": "Grok - xAI 旗舰模型",
+      "shortcut": "[X]"
+    },
+    "lmstudio": {
+      "name": "LM Studio",
+      "description": "使用 LM Studio 本地运行模型",
+      "shortcut": "[S]"
+    },
+    "zhipu": {
+      "name": "智谱 AI",
+      "description": "GLM-4 - 中文语言模型",
+      "shortcut": "[Z]"
+    },
+    "yi": {
+      "name": "零一万物",
+      "description": "Yi 系列模型",
+      "shortcut": "[Y]"
+    },
+    "baichuan": {
+      "name": "百川智能",
+      "description": "百川中文 AI 模型",
+      "shortcut": "[B]"
+    },
+    "doubao": {
+      "name": "豆包",
+      "description": "字节跳动 AI 助手",
+      "shortcut": "[T]"
+    },
+    "minimax": {
+      "name": "MiniMax",
+      "description": "MiniMax AI 模型",
+      "shortcut": "[I]"
     }
   },
   "update": {

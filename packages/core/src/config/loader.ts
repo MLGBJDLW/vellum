@@ -429,27 +429,29 @@ export async function hasProviderCredentials(
 
 /**
  * Provider display names for user-friendly prompts
+ * Synced with ProviderNameSchema
  */
 const PROVIDER_DISPLAY_NAMES: Record<ProviderName, string> = {
+  // Major providers
   anthropic: "Anthropic (Claude)",
   openai: "OpenAI (GPT)",
-  "azure-openai": "Azure OpenAI",
-  google: "Google AI",
-  gemini: "Google Gemini",
-  "vertex-ai": "Google Vertex AI",
-  cohere: "Cohere",
+  google: "Google AI (Gemini)",
   mistral: "Mistral AI",
   groq: "Groq",
-  fireworks: "Fireworks AI",
-  together: "Together AI",
-  perplexity: "Perplexity",
-  bedrock: "AWS Bedrock",
-  ollama: "Ollama (Local)",
+  xai: "xAI (Grok)",
+  // Aggregators & local
   openrouter: "OpenRouter",
+  ollama: "Ollama (Local)",
+  lmstudio: "LM Studio (Local)",
   // Chinese providers
   deepseek: "DeepSeek",
   qwen: "Qwen (通义千问)",
   moonshot: "Moonshot (Kimi)",
+  zhipu: "Zhipu AI (智谱)",
+  yi: "01.AI (Yi)",
+  baichuan: "Baichuan (百川)",
+  doubao: "Doubao (豆包)",
+  minimax: "MiniMax",
 };
 
 /**

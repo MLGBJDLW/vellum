@@ -120,27 +120,29 @@ export type {
 
 /**
  * T028 - Provider name enum supporting all major LLM providers
+ * Synced with ProviderType from @vellum/provider
  */
 export const ProviderNameSchema = z.enum([
-  "anthropic",
-  "openai",
-  "azure-openai",
-  "google",
-  "gemini",
-  "vertex-ai",
-  "cohere",
-  "mistral",
-  "groq",
-  "fireworks",
-  "together",
-  "perplexity",
-  "bedrock",
-  "ollama",
-  "openrouter",
+  // Major providers
+  "anthropic", // Claude models
+  "openai", // GPT models
+  "google", // Gemini models (covers gemini functionality)
+  "mistral", // Mistral AI models
+  "groq", // Groq inference
+  "xai", // xAI Grok models
+  // Aggregators & local
+  "openrouter", // Multi-provider router
+  "ollama", // Local models
+  "lmstudio", // Local models via LM Studio
   // Chinese providers
-  "deepseek",
-  "qwen",
-  "moonshot",
+  "deepseek", // DeepSeek models
+  "qwen", // Alibaba Qwen models
+  "moonshot", // Moonshot AI (Kimi)
+  "zhipu", // Zhipu AI (GLM)
+  "yi", // 01.AI Yi models
+  "baichuan", // Baichuan AI models
+  "doubao", // ByteDance Doubao models
+  "minimax", // MiniMax models
 ]);
 
 export type ProviderName = z.infer<typeof ProviderNameSchema>;

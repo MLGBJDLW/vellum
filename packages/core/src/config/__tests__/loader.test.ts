@@ -951,8 +951,8 @@ describe("getProviderDisplayName", () => {
   it("returns friendly name for known providers", () => {
     expect(getProviderDisplayName("anthropic")).toBe("Anthropic (Claude)");
     expect(getProviderDisplayName("openai")).toBe("OpenAI (GPT)");
-    expect(getProviderDisplayName("google")).toBe("Google AI");
-    expect(getProviderDisplayName("azure-openai")).toBe("Azure OpenAI");
+    expect(getProviderDisplayName("google")).toBe("Google AI (Gemini)");
+    expect(getProviderDisplayName("deepseek")).toBe("DeepSeek");
   });
 
   it("returns provider name as fallback for unknown providers", () => {

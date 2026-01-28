@@ -12,7 +12,58 @@ import type { ModelInfo } from "../types.js";
  */
 export const XAI_MODELS: ModelInfo[] = [
   // ==========================================================================
-  // Grok 3 Series (Latest)
+  // Grok 4 Series (Latest)
+  // ==========================================================================
+  {
+    id: "grok-4",
+    name: "Grok 4",
+    provider: "xai",
+    contextWindow: 256_000,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 3.0,
+    outputPrice: 15.0,
+    deprecated: false,
+    description: "xAI's flagship Grok 4 model",
+  },
+  {
+    id: "grok-4-latest",
+    name: "Grok 4 Latest",
+    provider: "xai",
+    contextWindow: 256_000,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 3.0,
+    outputPrice: 15.0,
+    deprecated: false,
+    description: "xAI's Grok 4 model (latest alias)",
+  },
+  {
+    id: "grok-4.1-fast",
+    name: "Grok 4.1 Fast",
+    provider: "xai",
+    contextWindow: 2_000_000,
+    maxOutputTokens: 32_768,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 2.0,
+    outputPrice: 10.0,
+    deprecated: false,
+    description: "xAI's Grok 4.1 Fast model optimized for agentic tool calling with 2M context",
+  },
+  // ==========================================================================
+  // Grok 3 Series
   // ==========================================================================
   {
     id: "grok-3",

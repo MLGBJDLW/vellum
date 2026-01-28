@@ -84,10 +84,17 @@ const API_KEY_PATTERNS: Record<OnboardingProvider, RegExp | null> = {
   mistral: /^[a-zA-Z0-9]{32}$/,
   groq: /^gsk_[a-zA-Z0-9]{50,}$/,
   openrouter: /^sk-or-[a-zA-Z0-9-_]{40,}$/,
+  xai: /^xai-[a-zA-Z0-9-_]{40,}$/,
   deepseek: /^sk-[a-zA-Z0-9]{32,}$/,
   qwen: /^sk-[a-zA-Z0-9]{32,}$/,
   moonshot: /^sk-[a-zA-Z0-9]{32,}$/,
+  zhipu: /^[a-zA-Z0-9]{32,}$/,
+  yi: /^[a-zA-Z0-9]{32,}$/,
+  baichuan: /^[a-zA-Z0-9]{32,}$/,
+  doubao: /^[a-zA-Z0-9]{32,}$/,
+  minimax: /^[a-zA-Z0-9]{32,}$/,
   ollama: null, // No API key required
+  lmstudio: null, // No API key required
 };
 
 /**
@@ -100,10 +107,17 @@ const API_KEY_FORMAT_HINTS: Record<OnboardingProvider, string> = {
   mistral: "Should be 32 alphanumeric characters",
   groq: "Should start with 'gsk_' followed by ~50+ characters",
   openrouter: "Should start with 'sk-or-' followed by ~40+ characters",
+  xai: "Should start with 'xai-' followed by ~40+ characters",
   deepseek: "Should start with 'sk-' followed by ~32+ characters",
   qwen: "Should start with 'sk-' followed by ~32+ characters",
   moonshot: "Should start with 'sk-' followed by ~32+ characters",
+  zhipu: "Should be 32+ alphanumeric characters",
+  yi: "Should be 32+ alphanumeric characters",
+  baichuan: "Should be 32+ alphanumeric characters",
+  doubao: "Should be 32+ alphanumeric characters",
+  minimax: "Should be 32+ alphanumeric characters",
   ollama: "No API key required for local Ollama",
+  lmstudio: "No API key required for local LM Studio",
 };
 
 // =============================================================================
@@ -311,10 +325,17 @@ export function getApiKeyUrl(provider: OnboardingProvider): string {
     mistral: "https://console.mistral.ai/api-keys/",
     groq: "https://console.groq.com/keys",
     openrouter: "https://openrouter.ai/keys",
+    xai: "https://console.x.ai/",
     deepseek: "https://platform.deepseek.com/api_keys",
     qwen: "https://dashscope.console.aliyun.com/apiKey",
     moonshot: "https://platform.moonshot.cn/console/api-keys",
+    zhipu: "https://open.bigmodel.cn/",
+    yi: "https://platform.lingyiwanwu.com/",
+    baichuan: "https://platform.baichuan-ai.com/",
+    doubao: "https://www.volcengine.com/",
+    minimax: "https://api.minimax.chat/",
     ollama: "https://ollama.ai (no key needed)",
+    lmstudio: "https://lmstudio.ai (no key needed)",
   };
 
   return urls[provider];

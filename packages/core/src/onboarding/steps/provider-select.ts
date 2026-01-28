@@ -133,10 +133,17 @@ export function toProviderName(provider: OnboardingProvider): ProviderName {
     mistral: "mistral",
     groq: "groq",
     openrouter: "openrouter",
+    xai: "xai",
     deepseek: "deepseek",
     qwen: "qwen",
     moonshot: "moonshot",
+    zhipu: "zhipu",
+    yi: "yi",
+    baichuan: "baichuan",
+    doubao: "doubao",
+    minimax: "minimax",
     ollama: "ollama",
+    lmstudio: "lmstudio",
   };
 
   return mapping[provider];
@@ -172,10 +179,17 @@ export function getDefaultModelForProvider(provider: OnboardingProvider): string
     mistral: "mistral-large-latest",
     groq: "llama-3.3-70b-versatile",
     openrouter: "anthropic/claude-3.5-sonnet",
+    xai: "grok-2",
     deepseek: "deepseek-chat",
     qwen: "qwen-plus",
-    moonshot: "moonshot-v1-8k",
+    moonshot: "kimi-k2.5",
+    zhipu: "glm-4",
+    yi: "yi-large",
+    baichuan: "baichuan4",
+    doubao: "doubao-1-5-pro-256k-250115",
+    minimax: "MiniMax-M2",
     ollama: "llama3.2",
+    lmstudio: "local-model",
   };
 
   return models[provider];

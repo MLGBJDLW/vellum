@@ -582,6 +582,51 @@ const PROVIDER_KEY_HINTS: Record<
     formatHint: "(optional)",
     helpText: "Ollama typically runs locally without an API key",
   },
+  qwen: {
+    formatHint: "sk-xxx format, 30+ chars",
+    helpText: "Get API key at https://dashscope.console.aliyun.com/",
+    documentationUrl: "https://dashscope.console.aliyun.com/",
+  },
+  moonshot: {
+    formatHint: "sk-xxx format",
+    helpText: "Get API key at https://platform.moonshot.cn/",
+    documentationUrl: "https://platform.moonshot.cn/",
+  },
+  zhipu: {
+    formatHint: "xxx.xxx format (ID.Secret)",
+    helpText: "Get API key at https://open.bigmodel.cn/",
+    documentationUrl: "https://open.bigmodel.cn/",
+  },
+  yi: {
+    formatHint: "Standard API key format",
+    helpText: "Get API key at https://platform.lingyiwanwu.com/",
+    documentationUrl: "https://platform.lingyiwanwu.com/",
+  },
+  baichuan: {
+    formatHint: "Standard API key format",
+    helpText: "Get API key at https://platform.baichuan-ai.com/",
+    documentationUrl: "https://platform.baichuan-ai.com/",
+  },
+  doubao: {
+    formatHint: "Standard API key format",
+    helpText: "Get API key at https://www.volcengine.com/",
+    documentationUrl: "https://www.volcengine.com/",
+  },
+  minimax: {
+    formatHint: "Standard API key format",
+    helpText: "Get API key at https://api.minimax.chat/",
+    documentationUrl: "https://api.minimax.chat/",
+  },
+  xai: {
+    formatHint: "xai-xxx format",
+    helpText: "Get API key at https://console.x.ai/",
+    documentationUrl: "https://console.x.ai/",
+  },
+  lmstudio: {
+    formatHint: "Local server, no key needed",
+    helpText: "Download at https://lmstudio.ai/",
+    documentationUrl: "https://lmstudio.ai/",
+  },
 };
 
 /**
