@@ -31,6 +31,11 @@ export const bashParamsSchema = z.object({
     .optional()
     .default(DEFAULT_TIMEOUT)
     .describe("Timeout in milliseconds (default: 120000)"),
+  /** Run as background process (detached, non-blocking) */
+  isBackground: z
+    .boolean()
+    .optional()
+    .describe("Run as background process. Returns immediately with PID."),
 });
 
 /** Inferred type for bash parameters */
@@ -42,12 +47,16 @@ export interface BashOutput {
   stdout: string;
   /** Standard error from the command */
   stderr: string;
-  /** Exit code of the process (null if killed) */
+  /** Exit code of the process (null if killed or background) */
   exitCode: number | null;
   /** Whether the process was killed (timeout or abort) */
   killed: boolean;
   /** Execution duration in milliseconds */
   duration: number;
+  /** Process ID (only set for background processes) */
+  pid?: number;
+  /** Whether the process is running in background */
+  isBackground?: boolean;
 }
 
 /**
@@ -109,6 +118,7 @@ export const bashTool = defineTool({
         sandbox: sandboxOptions,
         onStdout: ctx.onStdout,
         onStderr: ctx.onStderr,
+        isBackground: input.isBackground,
       });
 
       return ok({
@@ -117,6 +127,8 @@ export const bashTool = defineTool({
         exitCode: result.exitCode,
         killed: result.killed,
         duration: result.duration,
+        pid: result.pid,
+        isBackground: result.isBackground,
       });
     } catch (error) {
       if (error instanceof Error) {

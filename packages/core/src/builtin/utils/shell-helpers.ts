@@ -7,8 +7,68 @@
  * @module builtin/utils/shell-helpers
  */
 
-import { type ChildProcess, spawn } from "node:child_process";
-import { platform } from "node:os";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import * as fs from "node:fs/promises";
+import { homedir, platform } from "node:os";
+import * as path from "node:path";
+
+import { sanitizeEnvironment } from "@vellum/sandbox";
+
+/** Timeout before sending SIGKILL after SIGTERM (ms) */
+const SIGKILL_TIMEOUT_MS = 5000;
+
+/**
+ * Kills a process tree (the process and all its descendants).
+ *
+ * - Windows: Uses `taskkill /pid <pid> /f /t` to kill tree
+ * - Unix: Uses `process.kill(-pid, signal)` to kill process group
+ *
+ * Implements graceful shutdown: SIGTERM → wait timeout → SIGKILL
+ *
+ * @param pid - Process ID to kill
+ * @param options - Kill options
+ * @param options.timeout - Time to wait before SIGKILL (default: 5000ms)
+ * @returns Promise that resolves when the process tree is killed
+ */
+export async function killProcessTree(
+  pid: number,
+  options: { timeout?: number } = {}
+): Promise<void> {
+  const { timeout = SIGKILL_TIMEOUT_MS } = options;
+  const isWindows = platform() === "win32";
+
+  if (isWindows) {
+    // Windows: taskkill /T kills the entire process tree
+    // /f = force, /t = tree (kill child processes)
+    spawnSync("taskkill", ["/pid", String(pid), "/f", "/t"], {
+      stdio: "ignore",
+    });
+    return;
+  }
+
+  // Unix: Kill the process group using negative PID
+  // First try SIGTERM for graceful shutdown
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    // Process may already be dead, ignore ESRCH errors
+    return;
+  }
+
+  // Wait for graceful shutdown, then force kill if still alive
+  await new Promise<void>((resolve) => {
+    setTimeout(() => {
+      try {
+        // Check if process group still exists and force kill
+        process.kill(-pid, "SIGKILL");
+      } catch {
+        // Process already dead, ignore
+      }
+      resolve();
+    }, timeout);
+  });
+}
+
 import {
   configFromTrustPreset,
   detectSandboxBackend,
@@ -53,6 +113,15 @@ export interface ShellOptions {
 
   /** Callback for streaming stderr chunks (optional) */
   onStderr?: (chunk: string) => void;
+
+  /** Run as background process (detached, non-blocking) */
+  isBackground?: boolean;
+
+  /**
+   * If true, timeout resets on each stdout/stderr output (inactivity-based timeout).
+   * If false (default), timeout is absolute from command start.
+   */
+  inactivityTimeout?: boolean;
 }
 
 /**
@@ -65,7 +134,7 @@ export interface ShellResult {
   /** Standard error from the command */
   stderr: string;
 
-  /** Exit code of the process (null if killed by signal) */
+  /** Exit code of the process (null if killed by signal or background) */
   exitCode: number | null;
 
   /** Whether the process was killed (by timeout or abort) */
@@ -76,10 +145,114 @@ export interface ShellResult {
 
   /** Execution duration in milliseconds */
   duration: number;
+
+  /** Whether stdout/stderr was truncated due to buffer limit */
+  truncated?: boolean;
+
+  /** Path to saved full output file when truncated */
+  savedOutputPath?: string;
+
+  /** Process ID (set for background processes) */
+  pid?: number;
+
+  /** Whether the process is running in background */
+  isBackground?: boolean;
 }
 
 /** Default maximum buffer size: 10MB */
 const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024;
+
+/**
+ * Manages truncated output persistence.
+ *
+ * When shell output is truncated due to buffer limits, saves the full output
+ * to a file for later inspection. Includes automatic cleanup of old files.
+ */
+export namespace TruncatedOutputManager {
+  /** Default output directory */
+  const DEFAULT_DIR = path.join(homedir(), ".vellum", "tool-output");
+
+  /** Retention period for saved outputs (7 days) */
+  const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+  /** Custom output directory (for testing/configuration) */
+  let customDir: string | undefined;
+
+  /**
+   * Sets a custom output directory.
+   * @param dir - Custom directory path, or undefined to use default
+   */
+  export function setOutputDir(dir: string | undefined): void {
+    customDir = dir;
+  }
+
+  /**
+   * Gets the current output directory.
+   * @returns The configured output directory path
+   */
+  export function getOutputDir(): string {
+    return customDir ?? DEFAULT_DIR;
+  }
+
+  /**
+   * Ensures the output directory exists.
+   * @returns Promise resolving to the directory path
+   */
+  async function ensureDir(): Promise<string> {
+    const dir = getOutputDir();
+    await fs.mkdir(dir, { recursive: true });
+    return dir;
+  }
+
+  /**
+   * Cleans up output files older than the retention period.
+   * Runs asynchronously, errors are silently ignored.
+   */
+  export async function cleanup(): Promise<void> {
+    try {
+      const dir = getOutputDir();
+      const files = await fs.readdir(dir).catch(() => []);
+      const now = Date.now();
+
+      for (const file of files) {
+        if (!file.startsWith("output-") || !file.endsWith(".txt")) {
+          continue;
+        }
+
+        const filepath = path.join(dir, file);
+        try {
+          const stat = await fs.stat(filepath);
+          if (now - stat.mtimeMs > RETENTION_MS) {
+            await fs.unlink(filepath);
+          }
+        } catch {
+          // Ignore errors for individual files
+        }
+      }
+    } catch {
+      // Silently ignore cleanup errors
+    }
+  }
+
+  /**
+   * Saves truncated output content to a file.
+   *
+   * @param content - The full output content to save
+   * @returns Promise resolving to the saved file path
+   */
+  export async function save(content: string): Promise<string> {
+    const dir = await ensureDir();
+    const filename = `output-${Date.now()}.txt`;
+    const filepath = path.join(dir, filename);
+
+    await fs.writeFile(filepath, content, "utf-8");
+
+    // Trigger cleanup in background (non-blocking)
+    cleanup().catch(() => {});
+
+    return filepath;
+  }
+}
 
 /**
  * Detects the appropriate shell for the current platform.
@@ -154,12 +327,40 @@ export async function executeShell(
     sandbox,
     onStdout,
     onStderr,
+    isBackground = false,
+    inactivityTimeout = false,
   } = options;
 
   const startTime = Date.now();
   const { shell, shellArgs } = customShell
     ? { shell: customShell, shellArgs: ["-c"] }
     : detectShell();
+
+  // Background process: spawn detached, unref, return immediately
+  if (isBackground) {
+    const childProcess = spawn(shell, [...shellArgs, command], {
+      cwd,
+      env: sanitizeEnvironment({ ...process.env, ...env }),
+      stdio: "ignore", // Detach all stdio
+      detached: true,
+    });
+
+    const pid = childProcess.pid;
+    childProcess.unref(); // Allow parent to exit independently
+
+    return {
+      stdout: pid
+        ? `Background process started with PID: ${pid}`
+        : "Failed to start background process",
+      stderr: "",
+      exitCode: null,
+      killed: false,
+      signal: null,
+      duration: Date.now() - startTime,
+      pid,
+      isBackground: true,
+    };
+  }
 
   if (sandbox?.enabled && sandbox.config) {
     const executor = new SandboxExecutor(
@@ -214,17 +415,24 @@ export async function executeShell(
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
+    let fullStdout = ""; // Track full output for saving when truncated
+    let fullStderr = "";
     let killed = false;
     let killSignal: NodeJS.Signals | null = null;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let childProcess: ChildProcess | undefined;
+    let stdoutDroppedBytes = 0;
+    let stderrDroppedBytes = 0;
 
     // Handle abort signal
     const abortHandler = () => {
-      if (childProcess && !childProcess.killed) {
+      if (childProcess?.pid && !childProcess.killed) {
         killed = true;
         killSignal = "SIGTERM";
-        childProcess.kill("SIGTERM");
+        // Kill the entire process tree, not just the parent
+        killProcessTree(childProcess.pid).catch(() => {
+          // Ignore errors - process may already be dead
+        });
       }
     };
 
@@ -245,54 +453,83 @@ export async function executeShell(
       abortSignal.addEventListener("abort", abortHandler, { once: true });
     }
 
-    // Spawn the process
+    // Spawn the process with detached: true to create a new process group
+    // This allows killing the entire process tree on timeout/abort
+    const isWindows = platform() === "win32";
     childProcess = spawn(shell, [...shellArgs, command], {
       cwd,
-      env: { ...process.env, ...env },
+      env: sanitizeEnvironment({ ...process.env, ...env }),
       stdio: ["pipe", "pipe", "pipe"],
+      detached: !isWindows, // Unix: create new process group; Windows: handled by taskkill /t
     });
+
+    // Helper to reset/set timeout (used for inactivity-based timeout)
+    const resetTimeout = () => {
+      if (timeout === undefined || timeout <= 0) return;
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        if (childProcess?.pid && !childProcess.killed) {
+          killed = true;
+          killSignal = "SIGTERM";
+          // Kill the entire process tree, not just the parent
+          killProcessTree(childProcess.pid).catch(() => {
+            // Ignore errors - process may already be dead
+          });
+        }
+      }, timeout);
+    };
 
     // Collect stdout and stream to callback
     childProcess.stdout?.on("data", (data: Buffer) => {
       const chunk = data.toString();
+      fullStdout += chunk; // Always track full output
       if (stdout.length + data.length <= maxBuffer) {
         stdout += chunk;
+      } else {
+        // Track dropped bytes when buffer is full
+        const availableSpace = Math.max(0, maxBuffer - stdout.length);
+        if (availableSpace > 0) {
+          stdout += chunk.slice(0, availableSpace);
+        }
+        stdoutDroppedBytes += data.length - availableSpace;
       }
       // Stream chunk to callback if provided
       if (onStdout) {
         onStdout(chunk);
+      }
+      // Reset timeout on output if inactivity mode is enabled
+      if (inactivityTimeout) {
+        resetTimeout();
       }
     });
 
     // Collect stderr and stream to callback
     childProcess.stderr?.on("data", (data: Buffer) => {
       const chunk = data.toString();
+      fullStderr += chunk; // Always track full output
       if (stderr.length + data.length <= maxBuffer) {
         stderr += chunk;
+      } else {
+        // Track dropped bytes when buffer is full
+        const availableSpace = Math.max(0, maxBuffer - stderr.length);
+        if (availableSpace > 0) {
+          stderr += chunk.slice(0, availableSpace);
+        }
+        stderrDroppedBytes += data.length - availableSpace;
       }
       // Stream chunk to callback if provided
       if (onStderr) {
         onStderr(chunk);
       }
+      // Reset timeout on output if inactivity mode is enabled
+      if (inactivityTimeout) {
+        resetTimeout();
+      }
     });
 
-    // Set up timeout
+    // Set up initial timeout
     if (timeout !== undefined && timeout > 0) {
-      timeoutId = setTimeout(() => {
-        if (childProcess && !childProcess.killed) {
-          killed = true;
-          killSignal = "SIGTERM";
-          childProcess.kill("SIGTERM");
-
-          // Force kill after 5 seconds if still running
-          setTimeout(() => {
-            if (childProcess && !childProcess.killed) {
-              killSignal = "SIGKILL";
-              childProcess.kill("SIGKILL");
-            }
-          }, 5000);
-        }
-      }, timeout);
+      resetTimeout();
     }
 
     // Handle process exit
@@ -305,14 +542,42 @@ export async function executeShell(
         abortSignal.removeEventListener("abort", abortHandler);
       }
 
-      resolve({
-        stdout,
-        stderr,
-        exitCode,
-        killed,
-        signal: signal ?? killSignal,
-        duration: Date.now() - startTime,
-      });
+      // Check if output was truncated and append warning
+      const totalDroppedBytes = stdoutDroppedBytes + stderrDroppedBytes;
+      const truncated = totalDroppedBytes > 0;
+
+      // Helper to finalize and resolve
+      const finalizeResult = (savedPath?: string) => {
+        if (truncated) {
+          const bufferMB = maxBuffer / (1024 * 1024);
+          const pathInfo = savedPath ? ` Full output saved to: ${savedPath}.` : "";
+          const warning = `\n[WARNING: Output truncated. Buffer limit is ${bufferMB}MB. ${totalDroppedBytes} bytes dropped.${pathInfo} Use 'cat' or 'grep' to view.]`;
+          stdout += warning;
+        }
+
+        resolve({
+          stdout,
+          stderr,
+          // When explicitly killed (timeout/abort), exit code should be null
+          // Windows taskkill reports exit code 1, normalize to null for cross-platform consistency
+          exitCode: killed ? null : exitCode,
+          killed,
+          signal: signal ?? killSignal,
+          duration: Date.now() - startTime,
+          truncated,
+          savedOutputPath: savedPath,
+        });
+      };
+
+      // If truncated, save full output to file (non-blocking)
+      if (truncated) {
+        const fullContent = `=== STDOUT ===\n${fullStdout}\n\n=== STDERR ===\n${fullStderr}`;
+        TruncatedOutputManager.save(fullContent)
+          .then((savedPath) => finalizeResult(savedPath))
+          .catch(() => finalizeResult(undefined));
+      } else {
+        finalizeResult();
+      }
     });
 
     // Handle spawn errors

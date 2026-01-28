@@ -773,7 +773,7 @@ describe("AuditLogger", () => {
       // biome-ignore lint/style/noNonNullAssertion: calls[0] verified by mockFetchWithPool being called
       const fetchCall = mockFetchWithPool.mock.calls[0]!;
       const headers = fetchCall[1]?.headers as Record<string, string> | undefined;
-      expect(headers?.["Authorization"]).toBe("Bearer token123");
+      expect(headers?.Authorization).toBe("Bearer token123");
     });
 
     it("should re-buffer events on http failure", async () => {
