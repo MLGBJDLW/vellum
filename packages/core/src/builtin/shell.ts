@@ -85,7 +85,7 @@ export interface ShellOutput {
 export const shellTool = defineTool({
   name: "shell",
   description:
-    "Execute a shell command. Cross-platform: uses PowerShell on Windows, bash on Unix. Supports timeout and working directory options.",
+    "Execute shell commands (cross-platform, recommended). Uses PowerShell on Windows and bash on Unix/macOS.",
   parameters: shellParamsSchema,
   kind: "shell",
   category: "execution",

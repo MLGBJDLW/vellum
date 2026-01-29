@@ -220,9 +220,21 @@ export function useMessageSeparation<T extends SeparableMessage>(
           const contentChanged = message.content.length !== existing.lastContentLength;
           const progress = estimateProgress(message.content, existing.lastContentLength);
 
+          // FIX: Immediately mark as stable when source isStreaming becomes false
+          // This prevents the duplication window where a message could render in both
+          // stable and streaming lists during the transition period.
+          let nextStatus = existing.status;
+          if (isStreaming) {
+            nextStatus = "streaming";
+          } else if (existing.status === "streaming") {
+            // Source stopped streaming - immediately transition to stable
+            // Skip the transitioning phase to prevent duplication
+            nextStatus = "stable";
+          }
+
           const nextMeta: MessageMetaState = {
             ...existing,
-            status: isStreaming ? "streaming" : existing.status,
+            status: nextStatus,
             lastUpdateTime: contentChanged ? now : existing.lastUpdateTime,
             estimatedProgress: progress,
             lastContentLength: message.content.length,
@@ -371,6 +383,10 @@ export function useMessageSeparation<T extends SeparableMessage>(
 
   /**
    * Compute separated messages.
+   *
+   * CRITICAL FIX: Always check source message's isStreaming property in addition
+   * to cached metadata status. This prevents duplication during the window between
+   * when the source message stops streaming and the useEffect updates the metaMap.
    */
   const separated = useMemo<SeparatedMessages<T>>(() => {
     const stable: T[] = [];
@@ -378,7 +394,13 @@ export function useMessageSeparation<T extends SeparableMessage>(
 
     for (const message of messages) {
       const meta = metaMap.get(message.id);
-      const status = meta?.status ?? "stable";
+      const metaStatus = meta?.status ?? "stable";
+
+      // CRITICAL: Source isStreaming is the ground truth.
+      // If source says not streaming, message goes to stable - no exceptions.
+      // This prevents duplication even if metaMap hasn't updated yet.
+      const sourceIsStreaming = message.isStreaming ?? false;
+      const status = sourceIsStreaming ? metaStatus : "stable";
 
       if (status === "streaming" || status === "transitioning") {
         // Enforce max streaming limit (FIFO - keep newest)

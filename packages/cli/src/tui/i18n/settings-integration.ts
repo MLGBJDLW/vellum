@@ -36,6 +36,9 @@ export interface ThinkingSettings {
   budgetTokens?: number;
   priority?: "global" | "mode" | "merge";
   displayMode?: ThinkingDisplayMode;
+  expandedByDefault?: boolean;
+  autoCollapse?: boolean;
+  autoCollapseDelayMs?: number;
 }
 
 /**
@@ -425,6 +428,209 @@ export function setThinkingDisplayMode(mode: ThinkingDisplayMode): void {
     },
   };
   writeSettings(newSettings);
+}
+
+/**
+ * Listeners for thinking expanded-by-default changes.
+ */
+type ThinkingExpandedByDefaultListener = (expanded: boolean) => void;
+const thinkingExpandedByDefaultListeners: Set<ThinkingExpandedByDefaultListener> = new Set();
+
+/**
+ * Listeners for thinking auto-collapse changes.
+ */
+type ThinkingAutoCollapseListener = (enabled: boolean) => void;
+const thinkingAutoCollapseListeners: Set<ThinkingAutoCollapseListener> = new Set();
+
+/**
+ * Listeners for thinking auto-collapse delay changes.
+ */
+type ThinkingAutoCollapseDelayListener = (delayMs: number) => void;
+const thinkingAutoCollapseDelayListeners: Set<ThinkingAutoCollapseDelayListener> = new Set();
+
+/**
+ * Subscribe to thinking expanded-by-default changes.
+ *
+ * @param listener - Callback function for expanded-by-default changes
+ * @returns Unsubscribe function
+ */
+export function subscribeToThinkingExpandedByDefault(
+  listener: ThinkingExpandedByDefaultListener
+): () => void {
+  thinkingExpandedByDefaultListeners.add(listener);
+  return () => {
+    thinkingExpandedByDefaultListeners.delete(listener);
+  };
+}
+
+/**
+ * Notify all expanded-by-default listeners.
+ */
+function notifyThinkingExpandedByDefault(expanded: boolean): void {
+  for (const listener of thinkingExpandedByDefaultListeners) {
+    listener(expanded);
+  }
+}
+
+/**
+ * Notify all auto-collapse listeners.
+ */
+function notifyThinkingAutoCollapse(enabled: boolean): void {
+  for (const listener of thinkingAutoCollapseListeners) {
+    listener(enabled);
+  }
+}
+
+/**
+ * Notify all auto-collapse delay listeners.
+ */
+function notifyThinkingAutoCollapseDelay(delayMs: number): void {
+  for (const listener of thinkingAutoCollapseDelayListeners) {
+    listener(delayMs);
+  }
+}
+
+/**
+ * Get the thinking expanded by default preference.
+ *
+ * @returns True if thinking blocks start expanded by default (default: true)
+ *
+ * @example
+ * ```typescript
+ * const expanded = getThinkingExpandedByDefault();
+ * // expanded is true | false
+ * ```
+ */
+export function getThinkingExpandedByDefault(): boolean {
+  const settings = readSettings();
+  const value = settings?.thinking?.expandedByDefault;
+  // Default to true (expanded) if not set
+  return value !== false;
+}
+
+/**
+ * Set the thinking expanded by default preference.
+ *
+ * @param expanded - Whether thinking blocks start expanded by default
+ *
+ * @example
+ * ```typescript
+ * setThinkingExpandedByDefault(false);
+ * // Now thinking blocks will be collapsed by default
+ * ```
+ */
+export function setThinkingExpandedByDefault(expanded: boolean): void {
+  const existingSettings = readSettings() ?? {};
+  const existingThinking = existingSettings.thinking ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    thinking: {
+      ...existingThinking,
+      expandedByDefault: expanded,
+    },
+  };
+  writeSettings(newSettings);
+  notifyThinkingExpandedByDefault(expanded);
+}
+
+/**
+ * Subscribe to thinking auto-collapse changes.
+ *
+ * @param listener - Callback function for auto-collapse changes
+ * @returns Unsubscribe function
+ */
+export function subscribeToThinkingAutoCollapse(
+  listener: ThinkingAutoCollapseListener
+): () => void {
+  thinkingAutoCollapseListeners.add(listener);
+  return () => {
+    thinkingAutoCollapseListeners.delete(listener);
+  };
+}
+
+/**
+ * Subscribe to thinking auto-collapse delay changes.
+ *
+ * @param listener - Callback function for delay changes
+ * @returns Unsubscribe function
+ */
+export function subscribeToThinkingAutoCollapseDelay(
+  listener: ThinkingAutoCollapseDelayListener
+): () => void {
+  thinkingAutoCollapseDelayListeners.add(listener);
+  return () => {
+    thinkingAutoCollapseDelayListeners.delete(listener);
+  };
+}
+
+/** Default delay for auto-collapse in milliseconds. */
+const DEFAULT_THINKING_AUTO_COLLAPSE_DELAY_MS = 300;
+
+/**
+ * Get the thinking auto-collapse preference.
+ *
+ * @returns True if thinking blocks auto-collapse after streaming ends (default: false)
+ */
+export function getThinkingAutoCollapse(): boolean {
+  const settings = readSettings();
+  const value = settings?.thinking?.autoCollapse;
+  return value === true;
+}
+
+/**
+ * Set the thinking auto-collapse preference.
+ *
+ * @param enabled - Whether to auto-collapse thinking blocks after streaming
+ */
+export function setThinkingAutoCollapse(enabled: boolean): void {
+  const existingSettings = readSettings() ?? {};
+  const existingThinking = existingSettings.thinking ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    thinking: {
+      ...existingThinking,
+      autoCollapse: enabled,
+    },
+  };
+  writeSettings(newSettings);
+  notifyThinkingAutoCollapse(enabled);
+}
+
+/**
+ * Get the thinking auto-collapse delay in milliseconds.
+ *
+ * @returns Delay in ms (default: 300)
+ */
+export function getThinkingAutoCollapseDelayMs(): number {
+  const settings = readSettings();
+  const value = settings?.thinking?.autoCollapseDelayMs;
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.floor(value);
+  }
+  return DEFAULT_THINKING_AUTO_COLLAPSE_DELAY_MS;
+}
+
+/**
+ * Set the thinking auto-collapse delay in milliseconds.
+ *
+ * @param delayMs - Delay in ms (>= 0)
+ */
+export function setThinkingAutoCollapseDelayMs(delayMs: number): void {
+  const safeDelay =
+    typeof delayMs === "number" && Number.isFinite(delayMs) && delayMs >= 0
+      ? Math.floor(delayMs)
+      : DEFAULT_THINKING_AUTO_COLLAPSE_DELAY_MS;
+  const existingSettings = readSettings() ?? {};
+  const existingThinking = existingSettings.thinking ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    thinking: {
+      ...existingThinking,
+      autoCollapseDelayMs: safeDelay,
+    },
+  };
+  writeSettings(newSettings);
+  notifyThinkingAutoCollapseDelay(safeDelay);
 }
 
 // =============================================================================

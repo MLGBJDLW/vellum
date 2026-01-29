@@ -86,6 +86,14 @@ function createTestMessage(overrides: Partial<Message> = {}): Message {
   };
 }
 
+async function renderWithAct(ui: React.ReactElement) {
+  let result: ReturnType<typeof render> | undefined;
+  await act(async () => {
+    result = render(ui);
+  });
+  return result as ReturnType<typeof render>;
+}
+
 // =============================================================================
 // Flow 1: Send Message → See in MessageList
 // =============================================================================
@@ -104,7 +112,7 @@ describe("Integration: Send Message → MessageList", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -133,7 +141,7 @@ describe("Integration: Send Message → MessageList", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -165,7 +173,7 @@ describe("Integration: Send Message → MessageList", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -182,7 +190,7 @@ describe("Integration: Send Message → MessageList", () => {
     expect(frame).toContain(icons.tool); // tool
   });
 
-  it("handles initial messages in provider", () => {
+  it("handles initial messages in provider", async () => {
     const initialMessages: Message[] = [
       createTestMessage({ id: "init-1", role: "system", content: "System prompt" }),
       createTestMessage({ id: "init-2", role: "user", content: "Initial user query" }),
@@ -193,7 +201,7 @@ describe("Integration: Send Message → MessageList", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper initialMessages={initialMessages}>
         <TestComponent />
       </IntegrationWrapper>
@@ -217,7 +225,7 @@ describe("Integration: Send Message → MessageList", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -267,7 +275,7 @@ describe("Integration: Receive Response → Streaming Updates", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -310,7 +318,7 @@ describe("Integration: Receive Response → Streaming Updates", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -337,7 +345,7 @@ describe("Integration: Receive Response → Streaming Updates", () => {
 
   it("renders StreamingText component with cursor during streaming", async () => {
     // Disable typewriter for immediate content display test
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <StreamingText content="Typing in progress" isStreaming={true} typewriterEffect={false} />
       </IntegrationWrapper>
@@ -348,8 +356,8 @@ describe("Integration: Receive Response → Streaming Updates", () => {
     expect(frame).toContain("▊"); // Default cursor
   });
 
-  it("hides cursor when streaming completes", () => {
-    const { lastFrame } = render(
+  it("hides cursor when streaming completes", async () => {
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <StreamingText content="Complete message" isStreaming={false} />
       </IntegrationWrapper>
@@ -375,7 +383,7 @@ describe("Integration: Receive Response → Streaming Updates", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -421,7 +429,7 @@ describe("Integration: Tool Request → Approval Dialog", () => {
       );
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -438,7 +446,7 @@ describe("Integration: Tool Request → Approval Dialog", () => {
     expect(frame).toContain("●"); // Low risk icon
   });
 
-  it("displays different risk levels for tools", () => {
+  it("displays different risk levels for tools", async () => {
     const riskLevels = [
       { level: "low" as const, label: "Low Risk", icon: "●" },
       { level: "medium" as const, label: "Medium Risk", icon: "▲" },
@@ -454,7 +462,7 @@ describe("Integration: Tool Request → Approval Dialog", () => {
         status: "pending" as const,
       };
 
-      const { lastFrame } = render(
+      const { lastFrame } = await renderWithAct(
         <RootProvider>
           <PermissionDialog
             execution={execution}
@@ -471,7 +479,7 @@ describe("Integration: Tool Request → Approval Dialog", () => {
     }
   });
 
-  it("shows tool parameters in dialog", () => {
+  it("shows tool parameters in dialog", async () => {
     const execution = {
       id: "test-1",
       toolName: "write_file",
@@ -482,7 +490,7 @@ describe("Integration: Tool Request → Approval Dialog", () => {
       status: "pending" as const,
     };
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <PermissionDialog
           execution={execution}
@@ -519,7 +527,7 @@ describe("Integration: Tool Request → Approval Dialog", () => {
       );
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -568,7 +576,7 @@ describe("Integration: Tool Approval Controller → Resume", () => {
       return <Text>{executions[0]?.status ?? "none"}</Text>;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -610,7 +618,7 @@ describe("Integration: Tool Approval Controller → Resume", () => {
       return <Text>{executions[0]?.status ?? "none"}</Text>;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -647,7 +655,7 @@ describe("Integration: ToolsPanel", () => {
       return <ToolsPanel maxItems={10} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -694,7 +702,7 @@ describe("Integration: Tool Result → Status Update", () => {
       );
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -737,7 +745,7 @@ describe("Integration: Tool Result → Status Update", () => {
       );
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -779,7 +787,7 @@ describe("Integration: Tool Result → Status Update", () => {
       );
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -815,7 +823,7 @@ describe("Integration: Tool Result → Status Update", () => {
       );
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -874,7 +882,7 @@ describe("Integration: Tool Result → Status Update", () => {
       return <Text>{exec?.status ?? "none"}</Text>;
     }
 
-    render(
+    await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -936,7 +944,7 @@ describe("Integration: Tool Result → Status Update", () => {
       );
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -967,7 +975,7 @@ describe("Integration: Tool Result → Status Update", () => {
       return <Text>Count: {executions.length}</Text>;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -1016,7 +1024,7 @@ describe("Integration: Combined Message and Tool Flows", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -1064,22 +1072,36 @@ describe("Integration: Combined Message and Tool Flows", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
-      <IntegrationWrapper>
-        <TestComponent />
-      </IntegrationWrapper>
-    );
+    const originalRows = process.stdout.rows;
+    const originalColumns = process.stdout.columns;
 
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    });
+    Object.defineProperty(process.stdout, "rows", { value: 80, configurable: true });
+    Object.defineProperty(process.stdout, "columns", { value: 120, configurable: true });
 
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("Read the config file");
-    expect(frame).toContain("Reading config.json...");
-    expect(frame).toContain("read_file");
-    expect(frame).toContain("debug");
-    expect(frame).toContain("debug mode enabled");
+    try {
+      const { lastFrame } = await renderWithAct(
+        <IntegrationWrapper>
+          <TestComponent />
+        </IntegrationWrapper>
+      );
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain("Read the config file");
+      expect(frame).toContain("Reading config.json...");
+      expect(frame).toContain("read_file");
+      expect(frame).toContain("debug");
+      expect(frame).toContain("debug mode enabled");
+    } finally {
+      Object.defineProperty(process.stdout, "rows", { value: originalRows, configurable: true });
+      Object.defineProperty(process.stdout, "columns", {
+        value: originalColumns,
+        configurable: true,
+      });
+    }
   });
 
   it("updates tool_group message after tool completion", async () => {
@@ -1131,7 +1153,7 @@ describe("Integration: Combined Message and Tool Flows", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -1143,7 +1165,7 @@ describe("Integration: Combined Message and Tool Flows", () => {
     });
 
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("analyze");
+    expect(frame).toContain("score");
     expect(frame).toContain("Analysis complete");
   });
 });
@@ -1153,13 +1175,13 @@ describe("Integration: Combined Message and Tool Flows", () => {
 // =============================================================================
 
 describe("Integration: Edge Cases", () => {
-  it("handles empty message list gracefully", () => {
+  it("handles empty message list gracefully", async () => {
     function TestComponent() {
       const { messages } = useMessages();
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -1179,7 +1201,7 @@ describe("Integration: Edge Cases", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -1193,13 +1215,13 @@ describe("Integration: Edge Cases", () => {
     expect(frame).toContain("(empty)");
   });
 
-  it("handles tool execution with no pending approvals", () => {
+  it("handles tool execution with no pending approvals", async () => {
     function TestComponent() {
       const { pendingApproval } = useTools();
       return <Text>Pending: {pendingApproval.length}</Text>;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <RootProvider>
         <TestComponent />
       </RootProvider>
@@ -1222,7 +1244,7 @@ describe("Integration: Edge Cases", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>
@@ -1252,7 +1274,7 @@ describe("Integration: Edge Cases", () => {
       return <MessageList messages={messages} />;
     }
 
-    const { lastFrame } = render(
+    const { lastFrame } = await renderWithAct(
       <IntegrationWrapper>
         <TestComponent />
       </IntegrationWrapper>

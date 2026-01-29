@@ -26,6 +26,7 @@
     "dev": "tsx src/index.tsx --banner",
     "dev:blessed": "tsx src/tui-blessed/test.ts",
     "start": "node dist/index.mjs",
+    "test": "vitest",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
   },

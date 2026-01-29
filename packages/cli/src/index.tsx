@@ -35,6 +35,7 @@ import {
 } from "./commands/credentials.js";
 import { executeInit } from "./commands/init.js";
 import { createLspCommand } from "./commands/lsp.js";
+import { handleRun } from "./commands/run.js";
 import {
   handleSkillCreate,
   handleSkillList,
@@ -73,10 +74,12 @@ function getResultMessage(result: CommandResult): string {
       return result.prompt.message;
     case "pending":
       return result.operation.message;
+    default:
+      return "";
   }
 }
-// ============================================
-// T-VIRTUAL-SCROLL: Working Stdio Proxy for Ink
+// ===========================================
+
 // ============================================
 
 /**
@@ -475,10 +478,10 @@ program
 program
   .command("run <prompt>")
   .description("Run a single prompt")
-  .option("-m, --model <model>", "Model to use", "claude-sonnet-4-20250514")
+  .option("-m, --model <model>", "Model to use", "claude-3-opus-20240229")
+  .option("-p, --provider <provider>", "Provider to use", "anthropic")
   .action(async (prompt, options) => {
-    console.log(`Running: ${prompt} with model ${options.model}`);
-    // TODO: Implement single run
+    await handleRun(prompt, options);
   });
 
 program

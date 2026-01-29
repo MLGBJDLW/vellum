@@ -12,9 +12,23 @@ import { createToolRegistry, type ToolExecutor, type ToolRegistry } from "@vellu
 import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { act } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let lastMcpHubOptions: Record<string, unknown> | null = null;
+let previousDisableMcp: string | undefined;
+
+beforeEach(() => {
+  previousDisableMcp = process.env.VELLUM_TEST_DISABLE_MCP;
+  process.env.VELLUM_TEST_DISABLE_MCP = "0";
+});
+
+afterEach(() => {
+  if (previousDisableMcp === undefined) {
+    delete process.env.VELLUM_TEST_DISABLE_MCP;
+  } else {
+    process.env.VELLUM_TEST_DISABLE_MCP = previousDisableMcp;
+  }
+});
 
 vi.mock("@vellum/mcp", () => {
   class MockMcpHub {
@@ -50,11 +64,13 @@ describe("MCP wiring", () => {
 
     lastMcpHubOptions = null;
 
-    render(
-      <RootProvider theme="dark" toolRegistry={registry} toolExecutor={executor}>
-        <Text>ok</Text>
-      </RootProvider>
-    );
+    await act(async () => {
+      render(
+        <RootProvider theme="dark" toolRegistry={registry} toolExecutor={executor}>
+          <Text>ok</Text>
+        </RootProvider>
+      );
+    });
 
     // Allow effects to run.
     await act(async () => {

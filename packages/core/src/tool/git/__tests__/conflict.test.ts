@@ -418,12 +418,19 @@ describe("git_resolve_conflict", () => {
 
       execMock.mockResolvedValueOnce(successResult("")).mockResolvedValueOnce(successResult(""));
 
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
       const tool = createGitResolveConflictTool(createMockGitOps(execMock), {
         writeFile: writeFileMock,
       });
-      const result = await tool.execute({ path: "file.ts", strategy: "ours" }, ctxWithSnapshot);
+      try {
+        const result = await tool.execute({ path: "file.ts", strategy: "ours" }, ctxWithSnapshot);
 
-      expect(result.success).toBe(true);
+        expect(result.success).toBe(true);
+        expect(warnSpy).toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 

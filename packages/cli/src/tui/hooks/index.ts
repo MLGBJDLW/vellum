@@ -144,15 +144,6 @@ export {
   type UseMentionAutocompleteResult,
   useMentionAutocomplete,
 } from "./useMentionAutocomplete.js";
-// Mode controller hook for adaptive rendering (T003)
-export {
-  type ModeControllerConfig,
-  type ModeControllerState,
-  type ModeReason,
-  type RenderMode,
-  type UseModeControllerInput,
-  useModeController,
-} from "./useModeController.js";
 // Mode shortcuts hook (T046)
 export {
   type UseModeShortcutsOptions,

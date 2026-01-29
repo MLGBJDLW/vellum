@@ -1,9 +1,62 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearProviderCache, createProvider, createProviderSync, getProvider } from "../factory.js";
+import {
+  type CredentialManagerLike,
+  clearProviderCache,
+  createProvider,
+  createProviderSync,
+  getProvider,
+  type ProviderConfig,
+} from "../factory.js";
+
+const DEPRECATED_WARNINGS = [
+  "[DEPRECATED] createProvider",
+  "[DEPRECATED] createProviderSync",
+  "[DEPRECATED] getProvider",
+] as const;
+
+const withSuppressedDeprecationWarnings = <T>(fn: () => T): T => {
+  const originalWarn = console.warn;
+  const warnSpy = vi.spyOn(console, "warn").mockImplementation((...args) => {
+    const [message] = args;
+    if (
+      typeof message === "string" &&
+      DEPRECATED_WARNINGS.some((prefix) => message.startsWith(prefix))
+    ) {
+      return;
+    }
+    originalWarn(...args);
+  });
+
+  try {
+    return fn();
+  } finally {
+    warnSpy.mockRestore();
+  }
+};
+
+const withSuppressedDeprecationWarningsAsync = async <T>(fn: () => Promise<T>): Promise<T> => {
+  const originalWarn = console.warn;
+  const warnSpy = vi.spyOn(console, "warn").mockImplementation((...args) => {
+    const [message] = args;
+    if (
+      typeof message === "string" &&
+      DEPRECATED_WARNINGS.some((prefix) => message.startsWith(prefix))
+    ) {
+      return;
+    }
+    originalWarn(...args);
+  });
+
+  try {
+    return await fn();
+  } finally {
+    warnSpy.mockRestore();
+  }
+};
 
 // Mock CredentialManager
 const mockResolve = vi.fn();
-const mockCredentialManager = {
+const mockCredentialManager: CredentialManagerLike = {
   resolve: mockResolve,
 };
 
@@ -48,30 +101,41 @@ describe("factory", () => {
 
   describe("createProvider (async)", () => {
     it("should create provider with string type", async () => {
-      const provider = await createProvider("anthropic");
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider("anthropic")
+      );
       expect(provider.name).toBe("anthropic");
     });
 
     it("should create provider with config object", async () => {
-      const provider = await createProvider({ type: "openai" });
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider({ type: "openai" })
+      );
       expect(provider.name).toBe("openai");
     });
 
     it("should create google provider", async () => {
-      const provider = await createProvider({ type: "google" });
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider({ type: "google" })
+      );
       expect(provider.name).toBe("google");
     });
 
     it("should throw for unknown provider type", async () => {
-      // biome-ignore lint/suspicious/noExplicitAny: Testing invalid input
-      await expect(createProvider("unknown" as any)).rejects.toThrow("Unknown provider: unknown");
+      await expect(
+        withSuppressedDeprecationWarningsAsync(() =>
+          createProvider("unknown" as unknown as ProviderConfig["type"])
+        )
+      ).rejects.toThrow("Unknown provider: unknown");
     });
 
     it("should configure provider with direct credential", async () => {
-      const provider = await createProvider({
-        type: "anthropic",
-        credential: { type: "api_key", value: "sk-ant-api03-test" },
-      });
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider({
+          type: "anthropic",
+          credential: { type: "api_key", value: "sk-ant-api03-test" },
+        })
+      );
       expect(provider.name).toBe("anthropic");
       expect(provider.isConfigured?.()).toBe(true);
     });
@@ -89,10 +153,8 @@ describe("factory", () => {
         },
       });
 
-      const provider = await createProvider(
-        { type: "openai" },
-        // biome-ignore lint/suspicious/noExplicitAny: Mock type coercion for test
-        { credentialManager: mockCredentialManager as any }
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider({ type: "openai" }, { credentialManager: mockCredentialManager })
       );
 
       expect(mockResolve).toHaveBeenCalledWith("openai");
@@ -112,13 +174,14 @@ describe("factory", () => {
         },
       });
 
-      const provider = await createProvider(
-        {
-          type: "anthropic",
-          credential: { type: "api_key", value: "sk-ant-api03-direct" },
-        },
-        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
-        { credentialManager: mockCredentialManager as any }
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider(
+          {
+            type: "anthropic",
+            credential: { type: "api_key", value: "sk-ant-api03-direct" },
+          },
+          { credentialManager: mockCredentialManager }
+        )
       );
 
       // Direct credential used, manager not called
@@ -132,10 +195,8 @@ describe("factory", () => {
         value: null,
       });
 
-      const provider = await createProvider(
-        { type: "anthropic" },
-        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
-        { credentialManager: mockCredentialManager as any }
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider({ type: "anthropic" }, { credentialManager: mockCredentialManager })
       );
 
       expect(mockResolve).toHaveBeenCalledWith("anthropic");
@@ -149,10 +210,8 @@ describe("factory", () => {
         error: { code: "STORE_UNAVAILABLE", message: "Store not available" },
       });
 
-      const provider = await createProvider(
-        { type: "google" },
-        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
-        { credentialManager: mockCredentialManager as any }
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider({ type: "google" }, { credentialManager: mockCredentialManager })
       );
 
       // Provider still created despite error
@@ -172,13 +231,14 @@ describe("factory", () => {
         },
       });
 
-      const provider = await createProvider(
-        { type: "anthropic" },
-        {
-          // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
-          credentialManager: mockCredentialManager as any,
-          autoConfigureCredential: false,
-        }
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider(
+          { type: "anthropic" },
+          {
+            credentialManager: mockCredentialManager,
+            autoConfigureCredential: false,
+          }
+        )
       );
 
       expect(mockResolve).not.toHaveBeenCalled();
@@ -188,36 +248,45 @@ describe("factory", () => {
 
   describe("createProviderSync", () => {
     it("should create anthropic provider", () => {
-      const provider = createProviderSync("anthropic");
+      const provider = withSuppressedDeprecationWarnings(() => createProviderSync("anthropic"));
       expect(provider.name).toBe("anthropic");
     });
 
     it("should create openai provider", () => {
-      const provider = createProviderSync("openai");
+      const provider = withSuppressedDeprecationWarnings(() => createProviderSync("openai"));
       expect(provider.name).toBe("openai");
     });
 
     it("should create google provider", () => {
-      const provider = createProviderSync("google");
+      const provider = withSuppressedDeprecationWarnings(() => createProviderSync("google"));
       expect(provider.name).toBe("google");
     });
 
     it("should throw for unknown provider", () => {
-      // biome-ignore lint/suspicious/noExplicitAny: Testing invalid input
-      expect(() => createProviderSync("unknown" as any)).toThrow("Unknown provider: unknown");
+      expect(() =>
+        withSuppressedDeprecationWarnings(() =>
+          createProviderSync("unknown" as unknown as ProviderConfig["type"])
+        )
+      ).toThrow("Unknown provider: unknown");
     });
   });
 
   describe("getProvider", () => {
     it("should return cached provider on second call", () => {
-      const provider1 = getProvider("anthropic");
-      const provider2 = getProvider("anthropic");
+      const [provider1, provider2] = withSuppressedDeprecationWarnings(() => {
+        const provider1 = getProvider("anthropic");
+        const provider2 = getProvider("anthropic");
+        return [provider1, provider2] as const;
+      });
       expect(provider1).toBe(provider2);
     });
 
     it("should return different instances for different types", () => {
-      const anthropic = getProvider("anthropic");
-      const openai = getProvider("openai");
+      const [anthropic, openai] = withSuppressedDeprecationWarnings(() => {
+        const anthropic = getProvider("anthropic");
+        const openai = getProvider("openai");
+        return [anthropic, openai] as const;
+      });
       expect(anthropic).not.toBe(openai);
       expect(anthropic.name).toBe("anthropic");
       expect(openai.name).toBe("openai");
@@ -226,9 +295,12 @@ describe("factory", () => {
 
   describe("clearProviderCache", () => {
     it("should clear cached providers", () => {
-      const provider1 = getProvider("anthropic");
-      clearProviderCache();
-      const provider2 = getProvider("anthropic");
+      const [provider1, provider2] = withSuppressedDeprecationWarnings(() => {
+        const provider1 = getProvider("anthropic");
+        clearProviderCache();
+        const provider2 = getProvider("anthropic");
+        return [provider1, provider2] as const;
+      });
       expect(provider1).not.toBe(provider2);
     });
   });
@@ -243,10 +315,8 @@ describe("factory", () => {
         },
       });
 
-      const provider = await createProvider(
-        { type: "anthropic" },
-        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
-        { credentialManager: mockCredentialManager as any }
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider({ type: "anthropic" }, { credentialManager: mockCredentialManager })
       );
 
       expect(provider.isConfigured?.()).toBe(true);
@@ -261,10 +331,8 @@ describe("factory", () => {
         },
       });
 
-      const provider = await createProvider(
-        { type: "openai" },
-        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
-        { credentialManager: mockCredentialManager as any }
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider({ type: "openai" }, { credentialManager: mockCredentialManager })
       );
 
       expect(provider.isConfigured?.()).toBe(true);
@@ -279,10 +347,8 @@ describe("factory", () => {
         },
       });
 
-      const provider = await createProvider(
-        { type: "google" },
-        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
-        { credentialManager: mockCredentialManager as any }
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider({ type: "google" }, { credentialManager: mockCredentialManager })
       );
 
       expect(provider.isConfigured?.()).toBe(true);
@@ -290,7 +356,9 @@ describe("factory", () => {
 
     it("should work without credential manager (backward compatibility)", async () => {
       // Provider should be created even without credential manager
-      const provider = await createProvider("anthropic");
+      const provider = await withSuppressedDeprecationWarningsAsync(() =>
+        createProvider("anthropic")
+      );
       expect(provider.name).toBe("anthropic");
       // May or may not be configured depending on env vars
       expect(typeof provider.isConfigured?.()).toBe("boolean");
@@ -301,8 +369,9 @@ describe("factory", () => {
 
       // Should not throw, provider should still be created
       await expect(
-        // biome-ignore lint/suspicious/noExplicitAny: Mock credential manager
-        createProvider({ type: "openai" }, { credentialManager: mockCredentialManager as any })
+        withSuppressedDeprecationWarningsAsync(() =>
+          createProvider({ type: "openai" }, { credentialManager: mockCredentialManager })
+        )
       ).rejects.toThrow("Network error");
     });
   });

@@ -7,6 +7,15 @@
 import { beforeAll, beforeEach } from "vitest";
 import { resetIconDetection, setIconSet } from "./packages/shared/src/theme/icons.js";
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+process.env.VELLUM_TEST_DISABLE_LSP = "1";
+process.env.VELLUM_TEST_DISABLE_MCP = "1";
+process.env.VELLUM_TEST_DISABLE_ANIMATION = "1";
+
+process.stdout.setMaxListeners(0);
+process.setMaxListeners(0);
+
 // Force Unicode icons for all tests to ensure consistent assertions
 // This runs before each test file is loaded
 beforeAll(() => {

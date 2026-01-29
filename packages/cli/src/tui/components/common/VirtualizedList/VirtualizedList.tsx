@@ -5,6 +5,7 @@
  * Only renders items that are currently visible in the viewport,
  * with support for variable height items and auto-scroll to bottom.
  *
+ * Uses native scroll support in @jrichman/ink (overflowY="scroll" + scrollTop).
  * Ported from Gemini CLI with Vellum adaptations.
  *
  * @module tui/components/common/VirtualizedList
@@ -97,56 +98,91 @@ function VirtualizedListInner<T>(
     // Reserve some space for UI elements (header, input, status)
     // Values configurable via VELLUM_RESERVED_LINES and VELLUM_DEFAULT_ROWS
     const { reservedLines, defaultRows } = tuiConfig.virtualization;
-    return Math.max(8, (terminalRows || defaultRows) - reservedLines);
+    // CRITICAL: Ensure fallback is robust to avoid premature scrollbar
+    return Math.max(8, (terminalRows || defaultRows || 24) - reservedLines);
   });
 
-  // Initial virtualization pass with estimated heights
-  const initialVirtualization = useVirtualization({
-    dataLength: data.length,
+  // Ref to track authoritative scroll position (updated synchronously after useScrollAnchor)
+  // This breaks the render-cycle delay that caused scrollbar/content desync on PageUp/Down.
+  const scrollTopRef = useRef(0);
+
+  // Virtualization with actual scroll position
+  const {
+    heights: _heights,
+    offsets,
+    totalHeight,
+    startIndex: _startIndex,
+    endIndex: _endIndex,
+    setItemRef,
+    containerRef,
+    measuredContainerHeight,
+    triggerMeasure,
+    blockSumsState,
+  } = useVirtualization({
+    data,
+    keyExtractor,
     estimatedItemHeight,
-    scrollTop: 0,
+    scrollTop: scrollTopRef.current,
     containerHeight,
     isStreaming,
   });
 
-  // Scroll anchor management
+  const effectiveContainerHeight =
+    measuredContainerHeight > 0 ? measuredContainerHeight : containerHeight;
+
+  // Scroll anchor management (uses real offsets/heights + block sums compensation)
   const {
     scrollAnchor,
     setScrollAnchor,
     isStickingToBottom,
     setIsStickingToBottom,
-    scrollTop,
+    scrollTop: anchorScrollTop,
     getAnchorForScrollTop,
   } = useScrollAnchor({
     dataLength: data.length,
-    offsets: initialVirtualization.offsets,
-    heights: initialVirtualization.heights,
-    totalHeight: initialVirtualization.totalHeight,
-    containerHeight,
+    offsets,
+    heights: _heights,
+    totalHeight,
+    containerHeight: effectiveContainerHeight,
     initialScrollIndex,
     initialScrollOffsetInIndex,
+    blockSumsState,
   });
 
-  // Full virtualization with actual scroll position
-  const {
-    heights: _heights,
-    offsets,
-    totalHeight,
-    startIndex,
-    endIndex,
-    // Note: spacer heights not used in Ink (no real scroll support)
-    // topSpacerHeight and bottomSpacerHeight are kept in hook for API compat
-    setItemRef,
-    containerRef,
-    measuredContainerHeight,
-    triggerMeasure,
-  } = useVirtualization({
-    dataLength: data.length,
-    estimatedItemHeight,
-    scrollTop,
-    containerHeight,
-    isStreaming,
-  });
+  // Update scroll ref synchronously (not in effect) to ensure next render uses correct value
+  scrollTopRef.current = anchorScrollTop;
+
+  const needsScroll = totalHeight > effectiveContainerHeight;
+  const renderScrollTop = needsScroll ? anchorScrollTop : 0;
+
+  // Compute corrected visible range using anchorScrollTop (not the stale _startIndex/_endIndex)
+  // This fixes the 1-render delay that caused scrollbar to move but content to stay put.
+  const { startIndex, endIndex } = useMemo(() => {
+    if (data.length === 0) {
+      return { startIndex: 0, endIndex: -1 };
+    }
+
+    // Find start: last item whose offset <= scrollTop
+    let start = 0;
+    for (let i = offsets.length - 1; i >= 0; i--) {
+      if ((offsets[i] ?? 0) <= renderScrollTop) {
+        start = i;
+        break;
+      }
+    }
+
+    // Find end: last item whose offset <= scrollTop + containerHeight
+    const endLimit = renderScrollTop + effectiveContainerHeight;
+    let end = data.length - 1;
+    for (let i = offsets.length - 1; i >= 0; i--) {
+      if ((offsets[i] ?? 0) <= endLimit) {
+        end = Math.min(i, data.length - 1);
+        break;
+      }
+    }
+
+    return { startIndex: Math.max(0, start), endIndex: Math.max(0, end) };
+  }, [renderScrollTop, effectiveContainerHeight, offsets, data.length]);
 
   // FIX: Debounce container height updates to prevent rapid state changes
   // that can cause rendering race conditions and jittery UI
@@ -168,11 +204,21 @@ function VirtualizedListInner<T>(
           clearTimeout(containerHeightUpdateTimeoutRef.current);
         }
 
-        // Debounce the update to batch rapid changes
-        containerHeightUpdateTimeoutRef.current = setTimeout(() => {
+        // CRITICAL FIX: If the change is specific to initialization (e.g. 8 -> real height),
+        // update IMMEDIATELY to prevent "premature scrollbar" and layout jumps.
+        // We detect this by checking if the old height was the fallback small value.
+        const isInitialAdjustment = lastValidHeightRef.current <= 15 && safeHeight > 15;
+
+        if (isInitialAdjustment) {
           lastValidHeightRef.current = safeHeight;
           setContainerHeight(safeHeight);
-        }, 16); // One frame at 60fps
+        } else {
+          // Debounce the update to batch rapid changes during resize/animation
+          containerHeightUpdateTimeoutRef.current = setTimeout(() => {
+            lastValidHeightRef.current = safeHeight;
+            setContainerHeight(safeHeight);
+          }, 16); // One frame at 60fps
+        }
       }
     }
 
@@ -185,7 +231,7 @@ function VirtualizedListInner<T>(
   }, [measuredContainerHeight]);
 
   // Batched scroll for smooth updates
-  const { getScrollTop, setPendingScrollTop } = useBatchedScroll(scrollTop);
+  const { getScrollTop, setPendingScrollTop } = useBatchedScroll(anchorScrollTop);
 
   // =========================================================================
   // New Hooks Integration (v2.0)
@@ -193,9 +239,9 @@ function VirtualizedListInner<T>(
 
   // Sticky bottom with 3-state Follow Mode FSM
   const stickyBottom = useStickyBottom({
-    scrollTop,
-    maxScroll: totalHeight - measuredContainerHeight,
-    containerHeight: measuredContainerHeight,
+    scrollTop: anchorScrollTop,
+    maxScroll: totalHeight - effectiveContainerHeight,
+    containerHeight: effectiveContainerHeight,
     totalContentHeight: totalHeight,
     dataLength: data.length,
     isStreaming,
@@ -203,8 +249,8 @@ function VirtualizedListInner<T>(
 
   // Smooth scroll animation
   const smoothScroll = useSmoothScroll({
-    targetScrollTop: scrollTop,
-    maxScroll: totalHeight - measuredContainerHeight,
+    targetScrollTop: anchorScrollTop,
+    maxScroll: totalHeight - effectiveContainerHeight,
     enabled: enableSmoothScroll,
     onScrollUpdate: (newScrollTop) => {
       setPendingScrollTop(newScrollTop);
@@ -237,18 +283,62 @@ function VirtualizedListInner<T>(
     }
   }, [stickyBottom.shouldAutoScroll, isStickingToBottom, setIsStickingToBottom]);
 
-  // Auto-scroll when in auto/locked mode and new content arrives
+  // FIX: Detect layout mode transition and sync scrollTop
+  // When content grows from flex-end (no scroll needed) to flex-start (scroll needed),
+  // we must set scrollTop to maxScroll to keep content aligned to bottom.
+  const prevShouldAlignToBottomRef = useRef(
+    alignToBottom && totalHeight < effectiveContainerHeight
+  );
+  const currentShouldAlignToBottom = alignToBottom && totalHeight < effectiveContainerHeight;
+
   useEffect(() => {
-    if (stickyBottom.shouldAutoScroll && data.length > 0) {
-      if (enableSmoothScroll) {
-        // Use smooth scroll for animated transition
-        smoothScroll.jumpTo(totalHeight - measuredContainerHeight);
-      } else {
-        // Direct scroll
+    const wasFittingInViewport = prevShouldAlignToBottomRef.current;
+    const nowNeedsScroll = !currentShouldAlignToBottom && alignToBottom;
+
+    // Layout mode switched from flex-end (fit in viewport) to flex-start (needs scroll)
+    if (wasFittingInViewport && nowNeedsScroll && stickyBottom.shouldAutoScroll) {
+      const maxScroll = totalHeight - effectiveContainerHeight;
+      if (maxScroll > 0) {
+        // CRITICAL FIX: When transitioning from fitting to scrolling, we MUST SNAP to bottom immediately.
+        // Using smooth scroll here causes a visual "jump" (0 -> max) behavior if the animation starts from 0.
+        // We force the scroll anchor to the end instantly to maintain "stickiness".
         setScrollAnchor({
           index: data.length - 1,
           offset: SCROLL_TO_ITEM_END,
         });
+        // Important: Force pending scroll top to prevent smooth scroll fighting back
+        setPendingScrollTop(maxScroll);
+      }
+    }
+
+    prevShouldAlignToBottomRef.current = currentShouldAlignToBottom;
+  }, [
+    currentShouldAlignToBottom,
+    alignToBottom,
+    stickyBottom.shouldAutoScroll,
+    totalHeight,
+    effectiveContainerHeight,
+    setScrollAnchor,
+    data.length,
+    setPendingScrollTop,
+  ]);
+
+  // Auto-scroll when in auto/locked mode and new content arrives
+  useEffect(() => {
+    if (stickyBottom.shouldAutoScroll && data.length > 0) {
+      // Only scroll if we actually need scrolling (content exceeds viewport)
+      const maxScroll = totalHeight - effectiveContainerHeight;
+      if (maxScroll > 0) {
+        if (enableSmoothScroll) {
+          // Use smooth scroll for animated transition
+          smoothScroll.jumpTo(maxScroll);
+        } else {
+          // Direct scroll
+          setScrollAnchor({
+            index: data.length - 1,
+            offset: SCROLL_TO_ITEM_END,
+          });
+        }
       }
     }
   }, [
@@ -257,7 +347,7 @@ function VirtualizedListInner<T>(
     enableSmoothScroll,
     smoothScroll,
     totalHeight,
-    measuredContainerHeight,
+    effectiveContainerHeight,
     setScrollAnchor,
   ]);
 
@@ -271,9 +361,9 @@ function VirtualizedListInner<T>(
   // Notify parent of scroll changes and dimension updates
   useEffect(() => {
     if (onScrollTopChange) {
-      onScrollTopChange(scrollTop);
+      onScrollTopChange(anchorScrollTop);
     }
-  }, [scrollTop, onScrollTopChange]);
+  }, [anchorScrollTop, onScrollTopChange]);
 
   // Notify parent of sticking state changes
   useEffect(() => {
@@ -291,7 +381,7 @@ function VirtualizedListInner<T>(
         stickyBottom.handleScroll(delta, "programmatic");
 
         const currentScrollTop = getScrollTop();
-        const maxScroll = totalHeight - measuredContainerHeight;
+        const maxScroll = totalHeight - effectiveContainerHeight;
         const newScrollTop = Math.max(0, Math.min(maxScroll, currentScrollTop + delta));
 
         // Handle overscroll when at bottom
@@ -309,8 +399,8 @@ function VirtualizedListInner<T>(
       },
 
       scrollTo: (offset: number) => {
-        stickyBottom.handleScroll(offset - scrollTop, "programmatic");
-        const newScrollTop = Math.max(0, Math.min(totalHeight - measuredContainerHeight, offset));
+        stickyBottom.handleScroll(offset - anchorScrollTop, "programmatic");
+        const newScrollTop = Math.max(0, Math.min(totalHeight - effectiveContainerHeight, offset));
 
         if (enableSmoothScroll) {
           smoothScroll.jumpTo(newScrollTop);
@@ -327,7 +417,7 @@ function VirtualizedListInner<T>(
 
         if (data.length > 0) {
           if (enableSmoothScroll) {
-            smoothScroll.jumpTo(totalHeight - measuredContainerHeight);
+            smoothScroll.jumpTo(totalHeight - effectiveContainerHeight);
           } else {
             setScrollAnchor({
               index: data.length - 1,
@@ -343,11 +433,11 @@ function VirtualizedListInner<T>(
           const newScrollTop = Math.max(
             0,
             Math.min(
-              totalHeight - measuredContainerHeight,
-              offset - viewPosition * measuredContainerHeight + viewOffset
+              totalHeight - effectiveContainerHeight,
+              offset - viewPosition * effectiveContainerHeight + viewOffset
             )
           );
-          stickyBottom.handleScroll(newScrollTop - scrollTop, "programmatic");
+          stickyBottom.handleScroll(newScrollTop - anchorScrollTop, "programmatic");
 
           if (enableSmoothScroll) {
             smoothScroll.jumpTo(newScrollTop);
@@ -366,11 +456,11 @@ function VirtualizedListInner<T>(
             const newScrollTop = Math.max(
               0,
               Math.min(
-                totalHeight - measuredContainerHeight,
-                offset - viewPosition * measuredContainerHeight + viewOffset
+                totalHeight - effectiveContainerHeight,
+                offset - viewPosition * effectiveContainerHeight + viewOffset
               )
             );
-            stickyBottom.handleScroll(newScrollTop - scrollTop, "programmatic");
+            stickyBottom.handleScroll(newScrollTop - anchorScrollTop, "programmatic");
 
             if (enableSmoothScroll) {
               smoothScroll.jumpTo(newScrollTop);
@@ -387,7 +477,7 @@ function VirtualizedListInner<T>(
       getScrollState: () => ({
         scrollTop: getScrollTop(),
         scrollHeight: totalHeight,
-        innerHeight: measuredContainerHeight,
+        innerHeight: effectiveContainerHeight,
       }),
 
       isAtBottom: () => stickyBottom.isAtBottom,
@@ -437,11 +527,11 @@ function VirtualizedListInner<T>(
     [
       offsets,
       scrollAnchor,
-      scrollTop,
+      anchorScrollTop,
       totalHeight,
       getAnchorForScrollTop,
       data,
-      measuredContainerHeight,
+      effectiveContainerHeight,
       getScrollTop,
       setPendingScrollTop,
       setScrollAnchor,
@@ -459,7 +549,7 @@ function VirtualizedListInner<T>(
   // ScrollContext Integration
   // ==========================================================================
   const scrollContext = useScrollOptional();
-  const lastReportedScrollTop = useRef<number>(scrollTop);
+  const lastReportedScrollTop = useRef<number>(anchorScrollTop);
   const lastReportedDimensions = useRef({
     totalHeight: -1,
     containerHeight: -1,
@@ -472,28 +562,28 @@ function VirtualizedListInner<T>(
     }
     if (
       lastReportedDimensions.current.totalHeight === totalHeight &&
-      lastReportedDimensions.current.containerHeight === measuredContainerHeight
+      lastReportedDimensions.current.containerHeight === effectiveContainerHeight
     ) {
       return;
     }
     lastReportedDimensions.current = {
       totalHeight,
-      containerHeight: measuredContainerHeight,
+      containerHeight: effectiveContainerHeight,
     };
-    scrollContext.updateDimensions(totalHeight, measuredContainerHeight);
-  }, [scrollContext, totalHeight, measuredContainerHeight]);
+    scrollContext.updateDimensions(totalHeight, effectiveContainerHeight);
+  }, [scrollContext, totalHeight, effectiveContainerHeight]);
 
   // Sync internal scrollTop changes to ScrollContext (debounced to avoid loops)
   useEffect(() => {
-    if (scrollContext && scrollTop !== lastReportedScrollTop.current) {
-      lastReportedScrollTop.current = scrollTop;
+    if (scrollContext && anchorScrollTop !== lastReportedScrollTop.current) {
+      lastReportedScrollTop.current = anchorScrollTop;
       // Only sync if the context's scrollTop differs significantly
       const contextScrollTop = scrollContext.state.scrollTop;
-      if (Math.abs(scrollTop - contextScrollTop) > 1) {
-        scrollContext.scrollTo(scrollTop);
+      if (Math.abs(anchorScrollTop - contextScrollTop) > 1) {
+        scrollContext.scrollTo(anchorScrollTop);
       }
     }
-  }, [scrollContext, scrollTop]);
+  }, [scrollContext, anchorScrollTop]);
 
   // Listen for external scroll commands from ScrollContext
   useEffect(() => {
@@ -501,27 +591,27 @@ function VirtualizedListInner<T>(
 
     const unsubscribe = scrollContext.onScrollChange((externalScrollTop) => {
       // Avoid reacting to our own updates
-      if (Math.abs(externalScrollTop - scrollTop) <= 1) return;
+      if (Math.abs(externalScrollTop - anchorScrollTop) <= 1) return;
 
       // Apply external scroll command
       const newScrollTop = Math.max(
         0,
-        Math.min(totalHeight - measuredContainerHeight, externalScrollTop)
+        Math.min(totalHeight - effectiveContainerHeight, externalScrollTop)
       );
       setPendingScrollTop(newScrollTop);
       setScrollAnchor(getAnchorForScrollTop(newScrollTop));
 
       // Update sticking state based on position
-      const atBottom = newScrollTop >= totalHeight - measuredContainerHeight - 1;
+      const atBottom = newScrollTop >= totalHeight - effectiveContainerHeight - 1;
       setIsStickingToBottom(atBottom);
     });
 
     return unsubscribe;
   }, [
     scrollContext,
-    scrollTop,
+    anchorScrollTop,
     totalHeight,
-    measuredContainerHeight,
+    effectiveContainerHeight,
     setPendingScrollTop,
     setScrollAnchor,
     getAnchorForScrollTop,
@@ -550,7 +640,7 @@ function VirtualizedListInner<T>(
   // Create ref callback wrapper (now id-based for stable refs across insertions/deletions)
   const createItemRef = useCallback((id: string) => setItemRef(id), [setItemRef]);
 
-  // Render visible items
+  // Render visible items (virtualization: only items in startIndex..endIndex)
   const renderedItems = useMemo(() => {
     const items: React.ReactElement[] = [];
     for (let i = startIndex; i <= endIndex; i++) {
@@ -567,37 +657,43 @@ function VirtualizedListInner<T>(
     return items;
   }, [startIndex, endIndex, data, keyExtractor, renderItem, createItemRef]);
 
-  // Note: scrollbarThumbColor and scrollTop are reserved for future native scroll support
-  // Standard Ink doesn't support overflowY="scroll", only "hidden" or "visible"
-  // Gemini CLI uses a forked Ink (@jrichman/ink) with scroll support
-  void scrollbarThumbColor;
+  // Spacer heights for proper scroll position (from useVirtualization)
+  const { topSpacerHeight, bottomSpacerHeight } = useMemo(() => {
+    const top = offsets[startIndex] ?? 0;
+    const bottom = totalHeight - (offsets[endIndex + 1] ?? totalHeight);
+    return { topSpacerHeight: top, bottomSpacerHeight: bottom };
+  }, [offsets, startIndex, endIndex, totalHeight]);
 
-  // CRITICAL: Ink doesn't support real CSS scrolling.
-  // overflow="hidden" just clips content, it doesn't scroll.
-  // We must NOT use spacers - instead, render visible items directly at the top.
-  // The "scrolling" effect is achieved by changing which items are rendered (startIndex/endIndex).
-  //
-  // For alignToBottom: use justifyContent="flex-end" to push content to bottom
-  // when total content height is less than container height.
-  const shouldAlignToBottom = alignToBottom && totalHeight < measuredContainerHeight;
+  // Use native scroll when content exceeds viewport
+  const effectiveScrollTop = renderScrollTop;
+  const alignToBottomSpacerHeight =
+    alignToBottom && !needsScroll
+      ? Math.max(0, Math.round(effectiveContainerHeight - totalHeight))
+      : 0;
 
   return (
     <Box
       ref={containerRef as React.RefObject<DOMElement>}
-      overflowY="hidden"
+      overflowY="scroll"
       overflowX="hidden"
+      scrollTop={effectiveScrollTop}
+      scrollbarThumbColor={scrollbarThumbColor ?? "gray"}
       width="100%"
       height="100%"
       flexDirection="column"
       flexGrow={1}
       minHeight={0}
       paddingRight={1}
-      justifyContent={shouldAlignToBottom ? "flex-end" : "flex-start"}
     >
       <Box flexShrink={0} width="100%" flexDirection="column">
-        {/* Render visible items directly - no spacers needed in Ink */}
-        {/* In Ink, "scrolling" = changing which items we render */}
+        {/* Align short content to bottom when requested */}
+        {alignToBottomSpacerHeight > 0 && <Box height={alignToBottomSpacerHeight} flexShrink={0} />}
+        {/* Top spacer for items above visible range */}
+        <Box height={topSpacerHeight} flexShrink={0} />
+        {/* Visible items only */}
         {renderedItems}
+        {/* Bottom spacer for items below visible range */}
+        <Box height={bottomSpacerHeight} flexShrink={0} />
       </Box>
     </Box>
   );

@@ -277,6 +277,8 @@ function approvalPolicyToTrustMode(policy: ApprovalPolicy): TrustMode {
       return "auto";
     case "full-auto":
       return "full";
+    default:
+      throw new Error(`Unknown approval policy: ${policy}`);
   }
 }
 
@@ -3475,6 +3477,23 @@ function AppContent({
         return undefined;
       }
 
+      // /think command: level 3 shows expand options
+      if (commandName === "think" && arg1 === "expand") {
+        const options = [
+          { name: "on", description: "Expanded by default / 默认展开" },
+          { name: "off", description: "Collapsed by default / 默认折叠" },
+          { name: "auto", description: "Auto-collapse after streaming / 自动收起" },
+        ];
+        const lowerPartial = partial.toLowerCase();
+        const filtered = lowerPartial
+          ? options.filter((opt) => opt.name.startsWith(lowerPartial))
+          : options;
+        return filtered.map((opt) => ({
+          name: opt.name,
+          description: opt.description,
+        }));
+      }
+
       return undefined;
     },
     []
@@ -4873,7 +4892,6 @@ function AppContentView({
           messages={messages}
           pendingMessage={pendingMessage}
           isLoading={isLoading}
-          adaptive={true}
           estimatedItemHeight={4}
           scrollKeyMode={commandInputFocused ? "page" : "all"}
           forceFollowOnInput={true}

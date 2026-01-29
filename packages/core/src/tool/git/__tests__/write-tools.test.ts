@@ -161,14 +161,21 @@ describe("git_commit", () => {
       const trackMock = vi.fn().mockRejectedValue(new Error("Snapshot failed"));
       const ctxWithSnapshot = createMockContextWithSnapshot(trackMock);
 
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
       execMock
         .mockResolvedValueOnce(failResult("", 1)) // diff --cached --quiet (has changes)
         .mockResolvedValueOnce(successResult("[main abc1234] Test"));
 
       const tool = createGitCommitTool(createMockGitOps(execMock));
-      const result = await tool.execute({ message: "Test" }, ctxWithSnapshot);
+      try {
+        const result = await tool.execute({ message: "Test" }, ctxWithSnapshot);
 
-      expect(result.success).toBe(true);
+        expect(result.success).toBe(true);
+        expect(warnSpy).toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 });

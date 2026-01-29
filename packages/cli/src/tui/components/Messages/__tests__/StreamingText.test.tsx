@@ -8,7 +8,7 @@
  */
 
 import { render } from "ink-testing-library";
-import { act } from "react";
+import { act, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnimationProvider } from "../../../context/AnimationContext.js";
 import { StreamingText } from "../StreamingText.js";
@@ -17,11 +17,20 @@ import { StreamingText } from "../StreamingText.js";
 // Test Setup
 // =============================================================================
 
+let previousDisableAnimation: string | undefined;
+
 beforeEach(() => {
+  previousDisableAnimation = process.env.VELLUM_TEST_DISABLE_ANIMATION;
+  process.env.VELLUM_TEST_DISABLE_ANIMATION = "0";
   vi.useFakeTimers();
 });
 
 afterEach(() => {
+  if (previousDisableAnimation === undefined) {
+    delete process.env.VELLUM_TEST_DISABLE_ANIMATION;
+  } else {
+    process.env.VELLUM_TEST_DISABLE_ANIMATION = previousDisableAnimation;
+  }
   vi.useRealTimers();
 });
 
@@ -30,15 +39,30 @@ afterEach(() => {
 // =============================================================================
 
 describe("StreamingText", () => {
+  async function renderStreamingText(ui: ReactElement): Promise<ReturnType<typeof render>> {
+    let result: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      result = render(ui);
+    });
+    if (!result) {
+      throw new Error("Render failed");
+    }
+    return result;
+  }
+
   describe("rendering", () => {
-    it("renders text content", () => {
-      const { lastFrame } = render(<StreamingText content="Hello world" isStreaming={false} />);
+    it("renders text content", async () => {
+      const { lastFrame } = await renderStreamingText(
+        <StreamingText content="Hello world" isStreaming={false} />
+      );
 
       expect(lastFrame()).toContain("Hello world");
     });
 
-    it("renders empty content", () => {
-      const { lastFrame } = render(<StreamingText content="" isStreaming={false} />);
+    it("renders empty content", async () => {
+      const { lastFrame } = await renderStreamingText(
+        <StreamingText content="" isStreaming={false} />
+      );
 
       // Should render without cursor when not streaming
       expect(lastFrame()).toBe("");
@@ -46,9 +70,9 @@ describe("StreamingText", () => {
   });
 
   describe("cursor behavior", () => {
-    it("shows cursor when streaming", () => {
+    it("shows cursor when streaming", async () => {
       // Disable typewriter effect for immediate content display test
-      const { lastFrame } = render(
+      const { lastFrame } = await renderStreamingText(
         <StreamingText content="Typing..." isStreaming={true} typewriterEffect={false} />
       );
 
@@ -56,16 +80,18 @@ describe("StreamingText", () => {
       expect(lastFrame()).toContain("▊"); // Default cursor
     });
 
-    it("hides cursor when not streaming", () => {
-      const { lastFrame } = render(<StreamingText content="Complete" isStreaming={false} />);
+    it("hides cursor when not streaming", async () => {
+      const { lastFrame } = await renderStreamingText(
+        <StreamingText content="Complete" isStreaming={false} />
+      );
 
       expect(lastFrame()).toContain("Complete");
       expect(lastFrame()).not.toContain("▊");
     });
 
-    it("uses custom cursor character", () => {
+    it("uses custom cursor character", async () => {
       // Disable typewriter effect for immediate content display test
-      const { lastFrame } = render(
+      const { lastFrame } = await renderStreamingText(
         <StreamingText
           content="Custom"
           isStreaming={true}
@@ -80,7 +106,7 @@ describe("StreamingText", () => {
     });
 
     it("blinks cursor when animation frames advance", async () => {
-      const { lastFrame } = render(
+      const { lastFrame } = await renderStreamingText(
         <AnimationProvider tickInterval={100}>
           <StreamingText
             content="Blinking"
@@ -107,8 +133,8 @@ describe("StreamingText", () => {
       expect(lastFrame()).toContain("▊");
     });
 
-    it("does not blink cursor when cursorBlink is false", () => {
-      const { lastFrame } = render(
+    it("does not blink cursor when cursorBlink is false", async () => {
+      const { lastFrame } = await renderStreamingText(
         <AnimationProvider tickInterval={100}>
           <StreamingText
             content="No blink"
@@ -137,10 +163,10 @@ describe("StreamingText", () => {
   });
 
   describe("onComplete callback", () => {
-    it("calls onComplete when streaming changes from true to false", () => {
+    it("calls onComplete when streaming changes from true to false", async () => {
       const onComplete = vi.fn();
 
-      const { rerender } = render(
+      const { rerender } = await renderStreamingText(
         <StreamingText content="Streaming..." isStreaming={true} onComplete={onComplete} />
       );
 
@@ -156,19 +182,21 @@ describe("StreamingText", () => {
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
 
-    it("does not call onComplete when initially not streaming", () => {
+    it("does not call onComplete when initially not streaming", async () => {
       const onComplete = vi.fn();
 
-      render(<StreamingText content="Not streaming" isStreaming={false} onComplete={onComplete} />);
+      await renderStreamingText(
+        <StreamingText content="Not streaming" isStreaming={false} onComplete={onComplete} />
+      );
 
       // Should not be called on initial render when not streaming
       expect(onComplete).not.toHaveBeenCalled();
     });
 
-    it("does not call onComplete when streaming remains true", () => {
+    it("does not call onComplete when streaming remains true", async () => {
       const onComplete = vi.fn();
 
-      const { rerender } = render(
+      const { rerender } = await renderStreamingText(
         <StreamingText content="Still streaming..." isStreaming={true} onComplete={onComplete} />
       );
 
@@ -182,8 +210,10 @@ describe("StreamingText", () => {
       expect(onComplete).not.toHaveBeenCalled();
     });
 
-    it("works without onComplete callback", () => {
-      const { rerender } = render(<StreamingText content="Streaming..." isStreaming={true} />);
+    it("works without onComplete callback", async () => {
+      const { rerender } = await renderStreamingText(
+        <StreamingText content="Streaming..." isStreaming={true} />
+      );
 
       // Should not throw when onComplete is undefined
       expect(() => {
@@ -195,10 +225,10 @@ describe("StreamingText", () => {
   });
 
   describe("animation cleanup", () => {
-    it("cleans up animation interval on unmount", () => {
+    it("cleans up animation interval on unmount", async () => {
       const clearIntervalSpy = vi.spyOn(global, "clearInterval");
 
-      const { unmount } = render(
+      const { unmount } = await renderStreamingText(
         <AnimationProvider tickInterval={100}>
           <StreamingText content="Test" isStreaming={true} cursorBlink={true} />
         </AnimationProvider>

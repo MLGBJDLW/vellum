@@ -23,6 +23,16 @@ import {
 } from "@vellum/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+  consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  consoleWarnSpy.mockRestore();
+});
+
 // =============================================================================
 // Test Utilities
 // =============================================================================
@@ -217,16 +227,6 @@ describe("E2E: Mode Handlers → Message Processing", () => {
 // =============================================================================
 
 describe("E2E: Legacy Mode → Deprecation Warnings", () => {
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    consoleSpy.mockRestore();
-  });
-
   it("detects legacy mode from CLI input", () => {
     expect(isLegacyMode("code")).toBe(true);
     expect(isLegacyMode("draft")).toBe(true);
@@ -245,8 +245,8 @@ describe("E2E: Legacy Mode → Deprecation Warnings", () => {
   it("emits deprecation warning when legacy mode used", () => {
     emitDeprecationWarning("code", "vibe");
 
-    expect(consoleSpy).toHaveBeenCalled();
-    const warnCall = consoleSpy.mock.calls[0]?.[0] ?? "";
+    expect(consoleWarnSpy).toHaveBeenCalled();
+    const warnCall = consoleWarnSpy.mock.calls[0]?.[0] ?? "";
     expect(warnCall).toContain("code");
     expect(warnCall).toContain("vibe");
   });
@@ -261,7 +261,7 @@ describe("E2E: Legacy Mode → Deprecation Warnings", () => {
 
   it("does not set wasLegacy for new mode names", () => {
     // Clear any existing deprecation warnings
-    consoleSpy.mockClear();
+    consoleWarnSpy.mockClear();
 
     const result = normalizeMode("vibe");
 

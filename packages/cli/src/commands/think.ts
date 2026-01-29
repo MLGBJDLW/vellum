@@ -10,10 +10,19 @@
 
 import { loadConfig } from "@vellum/core";
 import {
+  getThinkingAutoCollapse,
+  getThinkingAutoCollapseDelayMs,
   getThinkingDisplayMode,
+  getThinkingExpandedByDefault,
   getThinkingSettings,
+  setThinkingAutoCollapse,
+  setThinkingAutoCollapseDelayMs,
   setThinkingDisplayMode,
+  setThinkingExpandedByDefault,
   setThinkingSettings,
+  subscribeToThinkingAutoCollapse,
+  subscribeToThinkingAutoCollapseDelay,
+  subscribeToThinkingExpandedByDefault,
   type ThinkingDisplayMode,
   type ThinkingSettings,
 } from "../tui/i18n/index.js";
@@ -229,6 +238,41 @@ const displayModeListeners: Set<DisplayModeListener> = new Set();
 export { getThinkingDisplayMode };
 
 /**
+ * Get whether thinking blocks start expanded by default.
+ *
+ * @returns True if expanded by default, false if collapsed
+ */
+export { getThinkingExpandedByDefault };
+
+/**
+ * Get whether thinking blocks auto-collapse after streaming.
+ */
+export { getThinkingAutoCollapse };
+
+/**
+ * Get the auto-collapse delay in milliseconds.
+ */
+export { getThinkingAutoCollapseDelayMs };
+
+/**
+ * Subscribe to thinking expanded-by-default changes.
+ *
+ * @param listener - Callback function for expanded-by-default changes
+ * @returns Unsubscribe function
+ */
+export { subscribeToThinkingExpandedByDefault };
+
+/**
+ * Subscribe to thinking auto-collapse changes.
+ */
+export { subscribeToThinkingAutoCollapse };
+
+/**
+ * Subscribe to thinking auto-collapse delay changes.
+ */
+export { subscribeToThinkingAutoCollapseDelay };
+
+/**
  * Set the thinking display mode.
  *
  * @param mode - Display mode ("full" or "compact")
@@ -353,6 +397,21 @@ function parseBudget(value: string): number | null {
 }
 
 /**
+ * Parse delay value from string.
+ *
+ * @param value - String value to parse (e.g., "500", "1000")
+ * @returns Parsed number or null if invalid
+ */
+function parseDelayMs(value: string): number | null {
+  const normalized = value.trim();
+  const num = Number.parseFloat(normalized);
+  if (Number.isNaN(num) || !Number.isFinite(num) || num < 0) {
+    return null;
+  }
+  return Math.round(num);
+}
+
+/**
  * Format budget for display.
  *
  * @param tokens - Number of tokens
@@ -389,12 +448,13 @@ export const thinkCommand: SlashCommand = {
     { name: "on", description: "Enable extended thinking" },
     { name: "off", description: "Disable extended thinking" },
     { name: "mode", description: "Set display mode (full/compact)" },
+    { name: "expand", description: "Set expanded by default (on/off/auto)" },
   ],
   positionalArgs: [
     {
       name: "state",
       type: "string",
-      description: "Enable or disable thinking (on/off) or set display mode",
+      description: "Enable/disable thinking or configure display/expand modes",
       required: false,
     },
   ],
@@ -416,6 +476,10 @@ export const thinkCommand: SlashCommand = {
     "/think -b 50k       - Set budget to 50K tokens",
     "/think mode full    - Show full thinking content",
     "/think mode compact - Show compact thinking header only",
+    "/think expand on    - Thinking blocks start expanded",
+    "/think expand off   - Thinking blocks start collapsed",
+    "/think expand auto  - Start expanded, auto-collapse after streaming",
+    "/think expand auto 1000 - Auto-collapse after 1000ms",
   ],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
@@ -459,8 +523,12 @@ export const thinkCommand: SlashCommand = {
       // Show current status
       const state = getThinkingState();
       const displayMode = getThinkingDisplayMode();
+      const expandedByDefault = getThinkingExpandedByDefault();
+      const autoCollapse = getThinkingAutoCollapse();
+      const autoCollapseDelayMs = getThinkingAutoCollapseDelayMs();
       const statusIcon = state.enabled ? "◆" : "◇";
       const statusText = state.enabled ? "On" : "Off";
+      const autoCollapseText = autoCollapse ? `on (${autoCollapseDelayMs}ms)` : "off";
 
       const lines = [
         "🧠 Extended Thinking Mode",
@@ -468,12 +536,15 @@ export const thinkCommand: SlashCommand = {
         `   Status: ${statusIcon} ${statusText}`,
         `   Budget: ${formatBudget(state.budgetTokens)} tokens`,
         `   Display: ${displayMode}`,
+        `   Expanded: ${expandedByDefault ? "on" : "off"}`,
+        `   Auto-collapse: ${autoCollapseText}`,
         "",
         "Commands:",
         "   /think on       - Enable thinking",
         "   /think off      - Disable thinking",
         "   /think -b 20k   - Set budget to 20K tokens",
         "   /think mode full|compact - Set display mode",
+        "   /think expand on|off|auto [delayMs] - Set expanded behavior",
         "",
         "Shortcuts:",
         "   Ctrl+T          - Toggle thinking on/off",
@@ -512,6 +583,72 @@ export const thinkCommand: SlashCommand = {
       ]);
     }
 
+    // Handle "expand" subcommand
+    if (normalizedState === "expand") {
+      const expandArg = ctx.parsedArgs.positional[1] as string | undefined;
+      const currentExpanded = getThinkingExpandedByDefault();
+      const currentAutoCollapse = getThinkingAutoCollapse();
+      const currentAutoCollapseDelayMs = getThinkingAutoCollapseDelayMs();
+
+      if (!expandArg) {
+        // Show current expand default setting
+        const statusText = currentExpanded ? "on (expanded)" : "off (collapsed)";
+        const autoText = currentAutoCollapse ? `auto (${currentAutoCollapseDelayMs}ms)` : "off";
+        return success(
+          `🧠 Thinking expanded by default: ${statusText}\n` +
+            `   Auto-collapse: ${autoText}\n` +
+            "   /think expand on    - Start expanded\n" +
+            "   /think expand off   - Start collapsed\n" +
+            "   /think expand auto [delayMs] - Start expanded, auto-collapse"
+        );
+      }
+
+      const normalizedExpand = expandArg.toLowerCase().trim();
+      if (normalizedExpand === "on" || normalizedExpand === "1" || normalizedExpand === "true") {
+        setThinkingExpandedByDefault(true);
+        setThinkingAutoCollapse(false);
+        return success("🧠 Thinking blocks will start expanded by default.");
+      }
+
+      if (normalizedExpand === "off" || normalizedExpand === "0" || normalizedExpand === "false") {
+        setThinkingExpandedByDefault(false);
+        setThinkingAutoCollapse(true);
+        setThinkingAutoCollapseDelayMs(0);
+        return success("🧠 Thinking blocks will stay collapsed after streaming.");
+      }
+
+      if (normalizedExpand === "auto") {
+        const delayArg = ctx.parsedArgs.positional[2] as string | number | undefined;
+        let delayMs: number | undefined;
+        if (delayArg !== undefined) {
+          const parsedDelay = parseDelayMs(String(delayArg));
+          if (parsedDelay === null) {
+            return error("INVALID_ARGUMENT", `Invalid delay value: ${delayArg}`, [
+              "Delay must be a non-negative number in milliseconds.",
+              "Example: /think expand auto 1000",
+            ]);
+          }
+          delayMs = parsedDelay;
+        }
+
+        setThinkingExpandedByDefault(true);
+        setThinkingAutoCollapse(true);
+        if (delayMs !== undefined) {
+          setThinkingAutoCollapseDelayMs(delayMs);
+        }
+
+        const resolvedDelay = delayMs ?? getThinkingAutoCollapseDelayMs();
+        return success(
+          `🧠 Thinking blocks will auto-collapse after streaming (${resolvedDelay}ms).`
+        );
+      }
+
+      return error("INVALID_ARGUMENT", `Invalid expand setting: ${expandArg}`, [
+        "Valid settings: on, off, auto",
+        "Example: /think expand auto 1000",
+      ]);
+    }
+
     if (normalizedState === "on" || normalizedState === "1" || normalizedState === "true") {
       setThinkingEnabled(true);
       if (newBudget !== undefined) {
@@ -533,9 +670,10 @@ export const thinkCommand: SlashCommand = {
 
     // Invalid state argument
     return error("INVALID_ARGUMENT", `Invalid state: ${stateArg}`, [
-      "Valid states: on, off, mode",
+      "Valid states: on, off, mode, expand",
       "Example: /think on --budget 20000",
       "Example: /think mode compact",
+      "Example: /think expand auto 1000",
     ]);
   },
 };

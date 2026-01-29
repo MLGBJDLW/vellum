@@ -9,9 +9,23 @@
 import { createToolRegistry, type ToolExecutor } from "@vellum/core";
 import { render } from "ink-testing-library";
 import { act } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let mockConnections: Array<{ server: { name: string; statusInfo: unknown } }> = [];
+let previousDisableMcp: string | undefined;
+
+beforeEach(() => {
+  previousDisableMcp = process.env.VELLUM_TEST_DISABLE_MCP;
+  process.env.VELLUM_TEST_DISABLE_MCP = "0";
+});
+
+afterEach(() => {
+  if (previousDisableMcp === undefined) {
+    delete process.env.VELLUM_TEST_DISABLE_MCP;
+  } else {
+    process.env.VELLUM_TEST_DISABLE_MCP = previousDisableMcp;
+  }
+});
 
 vi.mock("@vellum/mcp", () => {
   class MockMcpHub {
@@ -56,18 +70,25 @@ describe("McpPanel", () => {
       { server: { name: "Server B", statusInfo: { status: "failed", error: "boom" } } },
     ];
 
-    const { lastFrame } = render(
-      <RootProvider theme="dark" toolRegistry={registry} toolExecutor={executor}>
-        <McpPanel isFocused={true} toolRegistry={registry} />
-      </RootProvider>
-    );
+    let renderResult: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      renderResult = render(
+        <RootProvider theme="dark" toolRegistry={registry} toolExecutor={executor}>
+          <McpPanel isFocused={true} toolRegistry={registry} />
+        </RootProvider>
+      );
+    });
+
+    if (!renderResult) {
+      throw new Error("Render failed");
+    }
 
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    const frame = lastFrame() ?? "";
+    const frame = renderResult.lastFrame() ?? "";
 
     expect(frame).toContain("MCP");
     expect(frame).toContain("Servers: 2");
