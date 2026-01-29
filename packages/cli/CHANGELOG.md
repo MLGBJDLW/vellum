@@ -1,5 +1,26 @@
 # @butlerw/vellum
 
+## 0.2.11
+
+### Patch Changes
+
+- [#77](https://github.com/MLGBJDLW/vellum/pull/77) [`f2c2f65`](https://github.com/MLGBJDLW/vellum/commit/f2c2f65d327bbdab2822c37202f941f9727bd074) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - ### refactor(tui)
+
+  - MessageList V2: Simplified API with always-virtualized rendering
+  - Deprecated legacy props (historyMessages, pendingMessage, isLoading, etc.)
+  - New streamlined props interface (messages, isStreaming, isFocused)
+
+  ### fix(tui)
+
+  - Fixed message duplication bug during streaming→stable transition
+  - Fixed alignToBottom behavior for short content in VirtualizedList
+  - Added exhaustive switch default cases for type safety
+
+  ### chore(tui)
+
+  - Removed unused useModeController hook
+  - Removed unused slidingWindow module
+
 ## 0.2.10
 
 ### Patch Changes
