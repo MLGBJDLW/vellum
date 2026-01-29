@@ -153,7 +153,11 @@ export class IntentAwareProviderStrategy {
     const strategy = this.strategies.get(intent);
     if (!strategy) {
       // Fallback to unknown if intent not found (defensive)
-      return this.strategies.get("unknown")!;
+      const unknownStrategy = this.strategies.get("unknown");
+      if (!unknownStrategy) {
+        throw new Error("Unknown intent strategy not found in registry");
+      }
+      return unknownStrategy;
     }
     return strategy;
   }

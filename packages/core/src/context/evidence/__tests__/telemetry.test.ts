@@ -179,9 +179,9 @@ describe("EvidenceTelemetryService", () => {
 
       const stats = service.getStats();
 
-      expect(stats.avgProviderLatency["diff"]).toBe(150); // (100 + 200) / 2
-      expect(stats.avgProviderLatency["search"]).toBe(100); // (50 + 150) / 2
-      expect(stats.avgProviderLatency["lsp"]).toBe(100); // (80 + 120) / 2
+      expect(stats.avgProviderLatency.diff).toBe(150); // (100 + 200) / 2
+      expect(stats.avgProviderLatency.search).toBe(100); // (50 + 150) / 2
+      expect(stats.avgProviderLatency.lsp).toBe(100); // (80 + 120) / 2
     });
 
     it("should calculate provider hit rates", () => {
@@ -202,9 +202,9 @@ describe("EvidenceTelemetryService", () => {
 
       const stats = service.getStats();
 
-      expect(stats.providerHitRates["diff"]).toBe(1); // 2/2
-      expect(stats.providerHitRates["search"]).toBe(1); // 2/2
-      expect(stats.providerHitRates["lsp"]).toBe(1); // 2/2
+      expect(stats.providerHitRates.diff).toBe(1); // 2/2
+      expect(stats.providerHitRates.search).toBe(1); // 2/2
+      expect(stats.providerHitRates.lsp).toBe(1); // 2/2
     });
 
     it("should return 0 success rate when no outcomes marked", () => {

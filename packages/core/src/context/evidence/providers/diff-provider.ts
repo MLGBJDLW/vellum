@@ -258,7 +258,7 @@ export class DiffProvider implements EvidenceProvider {
     }
 
     // File ends with signal (e.g., signal "foo.ts" matches "src/bar/foo.ts")
-    if (normalizedFile.endsWith("/" + normalizedSignal)) {
+    if (normalizedFile.endsWith(`/${normalizedSignal}`)) {
       return true;
     }
 
@@ -291,7 +291,7 @@ export class DiffProvider implements EvidenceProvider {
 
       // Simple glob-like matching
       if (normalizedPattern.includes("*")) {
-        const regex = new RegExp("^" + normalizedPattern.replace(/\*/g, ".*") + "$");
+        const regex = new RegExp(`^${normalizedPattern.replace(/\*/g, ".*")}$`);
         if (regex.test(normalized)) {
           return true;
         }

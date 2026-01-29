@@ -154,7 +154,7 @@ export interface AgentLoopConfig {
   interactive?: boolean;
   /** Evidence Pack System for intelligent context gathering */
   evidencePackSystem?: EvidencePackSystem;
-  /** Enable evidence pack system auto-initialization */
+  /** Enable evidence pack system (default: true, set to false to disable) */
   enableEvidencePack?: boolean;
   /** Working set paths for evidence gathering */
   evidenceWorkingSet?: string[];
@@ -640,8 +640,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       });
     }
 
-    // Initialize Evidence Pack System if enabled
-    if (config.enableEvidencePack || config.evidencePackSystem) {
+    // Initialize Evidence Pack System (enabled by default)
+    if (config.enableEvidencePack !== false) {
       this.evidencePackSystem =
         config.evidencePackSystem ??
         new EvidencePackSystem({

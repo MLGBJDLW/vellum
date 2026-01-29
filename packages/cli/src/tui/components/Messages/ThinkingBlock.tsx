@@ -480,7 +480,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
         content && (
           <Box marginLeft={2} marginTop={0}>
             <Text color={mutedColor} dimColor wrap="truncate">
-              {preview}
+              {formatInlineThinking(preview)}
             </Text>
           </Box>
         )

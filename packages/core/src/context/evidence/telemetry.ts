@@ -184,7 +184,6 @@ export class EvidenceTelemetryService {
     let totalBuildTime = 0;
     let totalTokens = 0;
     const providerLatencies: Record<string, number[]> = {};
-    let totalEvidence = 0;
     let successCount = 0;
     let outcomeCount = 0;
 
@@ -205,10 +204,6 @@ export class EvidenceTelemetryService {
           providerLatencies[provider].push(latency);
         }
       }
-
-      // Track evidence counts per provider (simplified heuristic)
-      // In a real implementation, we'd track this in EvidenceTelemetry
-      totalEvidence += data.evidenceCountAfterBudget;
 
       // Track outcomes
       if (outcome) {

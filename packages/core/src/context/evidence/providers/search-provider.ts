@@ -326,15 +326,22 @@ export class SearchProvider implements EvidenceProvider {
     // Sort by line number
     const sorted = [...matches].sort((a, b) => a.line - b.line);
 
+    // Early return if no matches (shouldn't happen due to caller check, but be defensive)
+    const firstMatch = sorted[0];
+    if (!firstMatch) {
+      return [];
+    }
+
     const ranges: Array<{ startLine: number; endLine: number; matches: SearchMatch[] }> = [];
     let currentRange = {
-      startLine: Math.max(1, sorted[0]!.line - contextLines),
-      endLine: sorted[0]!.line + contextLines,
-      matches: [sorted[0]!],
+      startLine: Math.max(1, firstMatch.line - contextLines),
+      endLine: firstMatch.line + contextLines,
+      matches: [firstMatch],
     };
 
     for (let i = 1; i < sorted.length; i++) {
-      const match = sorted[i]!;
+      const match = sorted[i];
+      if (!match) continue;
       const matchStart = Math.max(1, match.line - contextLines);
       const matchEnd = match.line + contextLines;
 
