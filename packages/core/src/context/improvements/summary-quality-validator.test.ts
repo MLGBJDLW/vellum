@@ -22,6 +22,15 @@ import {
 } from "./summary-quality-validator.js";
 import type { SummaryQualityConfig } from "./types.js";
 
+vi.mock("../../logger/index.js", () => ({
+  createLogger: () => ({
+    warn: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
+
 // ============================================================================
 // Test Fixtures
 // ============================================================================

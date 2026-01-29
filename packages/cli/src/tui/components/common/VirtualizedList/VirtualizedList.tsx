@@ -152,6 +152,9 @@ function VirtualizedListInner<T>(
   // Update scroll ref synchronously (not in effect) to ensure next render uses correct value
   scrollTopRef.current = anchorScrollTop;
 
+  const needsScroll = totalHeight > effectiveContainerHeight;
+  const renderScrollTop = needsScroll ? anchorScrollTop : 0;
+
   // Compute corrected visible range using anchorScrollTop (not the stale _startIndex/_endIndex)
   // This fixes the 1-render delay that caused scrollbar to move but content to stay put.
   const { startIndex, endIndex } = useMemo(() => {
@@ -162,14 +165,14 @@ function VirtualizedListInner<T>(
     // Find start: last item whose offset <= scrollTop
     let start = 0;
     for (let i = offsets.length - 1; i >= 0; i--) {
-      if ((offsets[i] ?? 0) <= anchorScrollTop) {
+      if ((offsets[i] ?? 0) <= renderScrollTop) {
         start = i;
         break;
       }
     }
 
     // Find end: last item whose offset <= scrollTop + containerHeight
-    const endLimit = anchorScrollTop + effectiveContainerHeight;
+    const endLimit = renderScrollTop + effectiveContainerHeight;
     let end = data.length - 1;
     for (let i = offsets.length - 1; i >= 0; i--) {
       if ((offsets[i] ?? 0) <= endLimit) {
@@ -179,7 +182,7 @@ function VirtualizedListInner<T>(
     }
 
     return { startIndex: Math.max(0, start), endIndex: Math.max(0, end) };
-  }, [anchorScrollTop, effectiveContainerHeight, offsets, data.length]);
+  }, [renderScrollTop, effectiveContainerHeight, offsets, data.length]);
 
   // FIX: Debounce container height updates to prevent rapid state changes
   // that can cause rendering race conditions and jittery UI
@@ -662,8 +665,7 @@ function VirtualizedListInner<T>(
   }, [offsets, startIndex, endIndex, totalHeight]);
 
   // Use native scroll when content exceeds viewport
-  const needsScroll = totalHeight > effectiveContainerHeight;
-  const effectiveScrollTop = needsScroll ? anchorScrollTop : 0;
+  const effectiveScrollTop = renderScrollTop;
   const alignToBottomSpacerHeight =
     alignToBottom && !needsScroll
       ? Math.max(0, Math.round(effectiveContainerHeight - totalHeight))

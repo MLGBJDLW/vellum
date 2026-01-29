@@ -23,9 +23,14 @@ import { getIcons } from "@vellum/shared";
 import { Box, type DOMElement, type Key, measureElement, Text, useInput } from "ink";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  getThinkingAutoCollapse,
+  getThinkingAutoCollapseDelayMs,
   getThinkingDisplayMode,
   getThinkingExpandedByDefault,
   subscribeToDisplayMode,
+  subscribeToThinkingAutoCollapse,
+  subscribeToThinkingAutoCollapseDelay,
+  subscribeToThinkingExpandedByDefault,
 } from "../../../commands/think.js";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
@@ -492,6 +497,10 @@ interface MessageItemProps {
   readonly onThinkingHeightChange?: () => void;
   /** Whether thinking blocks start expanded by default */
   readonly thinkingExpandedByDefault?: boolean;
+  /** Whether thinking blocks auto-collapse after streaming ends */
+  readonly thinkingAutoCollapse?: boolean;
+  /** Delay before auto-collapsing in milliseconds */
+  readonly thinkingAutoCollapseDelayMs?: number;
 }
 
 /**
@@ -513,6 +522,8 @@ const MessageItem = memo(function MessageItem({
   thinkingToggleHint,
   onThinkingHeightChange,
   thinkingExpandedByDefault = true,
+  thinkingAutoCollapse = false,
+  thinkingAutoCollapseDelayMs = 300,
 }: MessageItemProps) {
   const { t } = useTUITranslation();
   const icon = getRoleIcon(message.role);
@@ -549,7 +560,11 @@ const MessageItem = memo(function MessageItem({
           content={message.thinking ?? ""}
           durationMs={message.thinkingDuration}
           isStreaming={message.isStreaming && !message.isThinkingComplete}
-          initialCollapsed={!message.isStreaming && !thinkingExpandedByDefault}
+          isThinkingComplete={message.isThinkingComplete}
+          initialCollapsed={!thinkingExpandedByDefault}
+          expandedByDefault={thinkingExpandedByDefault}
+          autoCollapse={thinkingAutoCollapse}
+          autoCollapseDelayMs={thinkingAutoCollapseDelayMs}
           persistenceId={`thinking-${message.id}`}
           showCharCount
           displayMode={thinkingDisplayMode}
@@ -671,8 +686,31 @@ const MessageList = memo(function MessageList({
     return unsubscribe;
   }, []);
 
-  // Get thinking expanded by default setting (read once, doesn't need subscription)
-  const thinkingExpandedByDefault = useMemo(() => getThinkingExpandedByDefault(), []);
+  // Subscribe to thinking expanded-by-default changes
+  const [thinkingExpandedByDefault, setThinkingExpandedByDefaultState] = useState<boolean>(
+    getThinkingExpandedByDefault
+  );
+  useEffect(() => {
+    const unsubscribe = subscribeToThinkingExpandedByDefault(setThinkingExpandedByDefaultState);
+    return unsubscribe;
+  }, []);
+
+  // Subscribe to thinking auto-collapse changes
+  const [thinkingAutoCollapse, setThinkingAutoCollapseState] =
+    useState<boolean>(getThinkingAutoCollapse);
+  useEffect(() => {
+    const unsubscribe = subscribeToThinkingAutoCollapse(setThinkingAutoCollapseState);
+    return unsubscribe;
+  }, []);
+
+  // Subscribe to thinking auto-collapse delay changes
+  const [thinkingAutoCollapseDelayMs, setThinkingAutoCollapseDelayMsState] = useState<number>(
+    getThinkingAutoCollapseDelayMs
+  );
+  useEffect(() => {
+    const unsubscribe = subscribeToThinkingAutoCollapseDelay(setThinkingAutoCollapseDelayMsState);
+    return unsubscribe;
+  }, []);
 
   // Determine if we should show the thinking indicator:
   // - Agent is streaming (processing/waiting)
@@ -1327,6 +1365,8 @@ const MessageList = memo(function MessageList({
           thinkingToggleHint={thinkingToggle.hint}
           onThinkingHeightChange={handleThinkingHeightChange}
           thinkingExpandedByDefault={thinkingExpandedByDefault}
+          thinkingAutoCollapse={thinkingAutoCollapse}
+          thinkingAutoCollapseDelayMs={thinkingAutoCollapseDelayMs}
         />
       );
     },
@@ -1342,6 +1382,8 @@ const MessageList = memo(function MessageList({
       getThinkingToggleInfo,
       handleThinkingHeightChange,
       thinkingExpandedByDefault,
+      thinkingAutoCollapse,
+      thinkingAutoCollapseDelayMs,
     ]
   );
 

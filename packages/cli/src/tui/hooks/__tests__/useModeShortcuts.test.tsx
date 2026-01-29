@@ -4,10 +4,9 @@
  * Focus: ensure mode switching goes through ModeManager (including spec confirmation).
  */
 
-import type { CodingMode, ModeManager } from "@vellum/core";
-import { createModeManager } from "@vellum/core";
+import { type CodingMode, createModeManager, type ModeManager } from "@vellum/core";
 import { render } from "ink-testing-library";
-import type React from "react";
+import { act, type ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { type UseModeShortcutsReturn, useModeShortcuts } from "../useModeShortcuts.js";
 
@@ -29,26 +28,41 @@ function TestHarness({
   onHookReturn,
   onModeSwitch,
   onError,
-}: TestHarnessProps): React.ReactElement {
+}: TestHarnessProps): ReactElement {
   const hookReturn = useModeShortcuts({ modeManager, enabled, onModeSwitch, onError });
   onHookReturn(hookReturn);
-  return null as unknown as React.ReactElement;
+  return null as unknown as ReactElement;
 }
 
-function renderUseModeShortcutsHook(options: Omit<TestHarnessProps, "onHookReturn">) {
-  let hookReturn: UseModeShortcutsReturn | null = null;
+async function renderUseModeShortcutsHook(
+  options: Omit<TestHarnessProps, "onHookReturn">
+): Promise<{
+  readonly current: UseModeShortcutsReturn;
+  readonly rerender: (next: Omit<TestHarnessProps, "onHookReturn">) => void;
+  readonly unmount: () => void;
+}> {
+  let hookReturn: UseModeShortcutsReturn | undefined;
 
-  const { rerender, unmount } = render(
-    <TestHarness
-      modeManager={options.modeManager}
-      enabled={options.enabled}
-      onModeSwitch={options.onModeSwitch}
-      onError={options.onError}
-      onHookReturn={(r) => {
-        hookReturn = r;
-      }}
-    />
-  );
+  let renderResult: ReturnType<typeof render> | undefined;
+  await act(async () => {
+    renderResult = render(
+      <TestHarness
+        modeManager={options.modeManager}
+        enabled={options.enabled}
+        onModeSwitch={options.onModeSwitch}
+        onError={options.onError}
+        onHookReturn={(r) => {
+          hookReturn = r;
+        }}
+      />
+    );
+  });
+
+  if (!renderResult) {
+    throw new Error("Render failed");
+  }
+
+  const { rerender, unmount } = renderResult;
 
   return {
     get current() {
@@ -58,17 +72,19 @@ function renderUseModeShortcutsHook(options: Omit<TestHarnessProps, "onHookRetur
       return hookReturn;
     },
     rerender: (next: Omit<TestHarnessProps, "onHookReturn">) => {
-      rerender(
-        <TestHarness
-          modeManager={next.modeManager}
-          enabled={next.enabled}
-          onModeSwitch={next.onModeSwitch}
-          onError={next.onError}
-          onHookReturn={(r) => {
-            hookReturn = r;
-          }}
-        />
-      );
+      act(() => {
+        rerender(
+          <TestHarness
+            modeManager={next.modeManager}
+            enabled={next.enabled}
+            onModeSwitch={next.onModeSwitch}
+            onError={next.onError}
+            onHookReturn={(r) => {
+              hookReturn = r;
+            }}
+          />
+        );
+      });
     },
     unmount,
   };
@@ -84,14 +100,17 @@ describe("useModeShortcuts", () => {
     const onModeSwitch = vi.fn();
     const onError = vi.fn();
 
-    const result = renderUseModeShortcutsHook({
+    const result = await renderUseModeShortcutsHook({
       modeManager: manager,
       enabled: true,
       onModeSwitch,
       onError,
     });
 
-    const success = await result.current.switchMode("plan");
+    let success = false;
+    await act(async () => {
+      success = await result.current.switchMode("plan");
+    });
 
     expect(success).toBe(true);
     expect(manager.getCurrentMode()).toBe("plan");
@@ -104,14 +123,17 @@ describe("useModeShortcuts", () => {
     const onModeSwitch = vi.fn();
     const onError = vi.fn();
 
-    const result = renderUseModeShortcutsHook({
+    const result = await renderUseModeShortcutsHook({
       modeManager: manager,
       enabled: true,
       onModeSwitch,
       onError,
     });
 
-    const success = await result.current.switchMode("spec");
+    let success = false;
+    await act(async () => {
+      success = await result.current.switchMode("spec");
+    });
 
     // When spec confirmation is required, ModeManager should not immediately switch.
     expect(success).toBe(false);
@@ -125,7 +147,7 @@ describe("useModeShortcuts", () => {
     const onModeSwitch = vi.fn();
     const onError = vi.fn();
 
-    const result = renderUseModeShortcutsHook({
+    const result = await renderUseModeShortcutsHook({
       modeManager: null,
       enabled: true,
       onModeSwitch,
@@ -134,7 +156,10 @@ describe("useModeShortcuts", () => {
 
     expect(result.current.isActive).toBe(false);
 
-    const success = await result.current.switchMode("plan");
+    let success = false;
+    await act(async () => {
+      success = await result.current.switchMode("plan");
+    });
     expect(success).toBe(false);
     expect(onModeSwitch).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalled();

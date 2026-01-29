@@ -136,6 +136,7 @@ export function McpProvider({
   toolRegistry,
   toolExecutor,
 }: McpProviderProps): React.JSX.Element {
+  const disableMcp = process.env.VELLUM_TEST_DISABLE_MCP === "1";
   const [hub, setHub] = useState<McpHub | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -236,10 +237,13 @@ export function McpProvider({
 
   // Auto-initialize on mount
   useEffect(() => {
+    if (disableMcp) {
+      return;
+    }
     if (autoInitialize && !hub && !isInitializing) {
       initialize();
     }
-  }, [autoInitialize, hub, isInitializing, initialize]);
+  }, [autoInitialize, hub, isInitializing, initialize, disableMcp]);
 
   // Cleanup on unmount
   useEffect(() => {

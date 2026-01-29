@@ -358,6 +358,7 @@ export function useVirtualization<T = unknown>(
     // In development, warn about non-append mutations that require cache rebuild
     if (
       process.env.NODE_ENV !== "production" &&
+      process.env.NODE_ENV !== "test" &&
       mutationType !== "none" &&
       mutationType !== "append"
     ) {

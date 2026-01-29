@@ -104,8 +104,16 @@ export interface ThinkingBlockProps {
   readonly durationMs?: number;
   /** Whether thinking is still in progress (shows spinner) */
   readonly isStreaming?: boolean;
+  /** Whether thinking has completed (stable message) */
+  readonly isThinkingComplete?: boolean;
   /** Whether initially collapsed (default: true) */
   readonly initialCollapsed?: boolean;
+  /** Whether thinking blocks should be expanded by default */
+  readonly expandedByDefault?: boolean;
+  /** Whether thinking blocks auto-collapse after streaming ends */
+  readonly autoCollapse?: boolean;
+  /** Delay before auto-collapsing in milliseconds */
+  readonly autoCollapseDelayMs?: number;
   /** Unique ID for state persistence (optional) */
   readonly persistenceId?: string;
   /** Enable keyboard toggle with 't' key (default: false to avoid conflicts) */
@@ -223,7 +231,11 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   content,
   durationMs,
   isStreaming = false,
+  isThinkingComplete,
   initialCollapsed = true,
+  expandedByDefault = true,
+  autoCollapse = false,
+  autoCollapseDelayMs = 300,
   persistenceId,
   enableKeyboardToggle = false,
   collapsedPreviewLines = 1,
@@ -245,8 +257,13 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   const isCompactMode = displayMode === "compact";
   const effectiveInitialCollapsed = isCompactMode ? true : initialCollapsed;
   const effectiveKeyboardToggle = isCompactMode ? false : enableKeyboardToggle;
+  const effectiveAutoCollapseDelayMs = Math.max(0, Math.floor(autoCollapseDelayMs));
 
-  const { isCollapsed, toggle: _toggle } = useCollapsible({
+  const {
+    isCollapsed,
+    toggle: _toggle,
+    setCollapsed,
+  } = useCollapsible({
     initialCollapsed: effectiveInitialCollapsed,
     toggleKey: effectiveKeyboardToggle ? "t" : undefined,
     keyboardEnabled: effectiveKeyboardToggle,
@@ -257,6 +274,8 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   // In compact mode, always show as collapsed (never expandable)
   const effectiveIsCollapsed = isCompactMode ? true : isCollapsed;
   const lastToggleSignalRef = useRef<number | null>(null);
+  const prevStreamingRef = useRef(isStreaming);
+  const autoCollapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isCompactMode || toggleSignal === undefined) {
@@ -268,6 +287,55 @@ export const ThinkingBlock = memo(function ThinkingBlock({
     lastToggleSignalRef.current = toggleSignal;
     _toggle();
   }, [isCompactMode, toggleSignal, _toggle]);
+
+  // Auto-collapse when streaming ends based on expanded/auto-collapse settings.
+  useEffect(() => {
+    if (autoCollapseTimeoutRef.current) {
+      clearTimeout(autoCollapseTimeoutRef.current);
+      autoCollapseTimeoutRef.current = null;
+    }
+
+    const wasStreaming = prevStreamingRef.current;
+    prevStreamingRef.current = isStreaming;
+    const thinkingCompleted = isThinkingComplete || (!isStreaming && wasStreaming);
+
+    const clearAutoCollapseTimeout = () => {
+      if (autoCollapseTimeoutRef.current) {
+        clearTimeout(autoCollapseTimeoutRef.current);
+        autoCollapseTimeoutRef.current = null;
+      }
+    };
+
+    if (isCompactMode) {
+      return clearAutoCollapseTimeout;
+    }
+
+    if (!autoCollapse) {
+      return clearAutoCollapseTimeout;
+    }
+
+    if (!isStreaming && !expandedByDefault && !effectiveIsCollapsed) {
+      setCollapsed(true);
+      return clearAutoCollapseTimeout;
+    }
+
+    if (!isStreaming && expandedByDefault && thinkingCompleted) {
+      autoCollapseTimeoutRef.current = setTimeout(() => {
+        setCollapsed(true);
+      }, effectiveAutoCollapseDelayMs);
+    }
+
+    return clearAutoCollapseTimeout;
+  }, [
+    autoCollapse,
+    effectiveAutoCollapseDelayMs,
+    effectiveIsCollapsed,
+    expandedByDefault,
+    isCompactMode,
+    isStreaming,
+    isThinkingComplete,
+    setCollapsed,
+  ]);
 
   // Notify parent when collapsed state changes (triggers height re-measurement)
   const prevCollapsedRef = useRef(effectiveIsCollapsed);

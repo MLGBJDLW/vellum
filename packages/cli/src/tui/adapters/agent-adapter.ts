@@ -394,6 +394,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       // Commit the pending message to history (moves to <Static>)
       // This is more efficient than just marking isStreaming: false
       // because the message will never re-render once in <Static>
+      updateMessageRef.current(streaming.id, { isThinkingComplete: true });
       commitPendingMessageRef.current();
       streamingMessageRef.current = null;
     }
@@ -431,7 +432,11 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
           ? streaming.content
           : `${ICONS.warning} ${error.message}`;
       // Mark the message as no longer streaming and surface the error
-      updateMessageRef.current(streaming.id, { isStreaming: false, content });
+      updateMessageRef.current(streaming.id, {
+        isStreaming: false,
+        content,
+        isThinkingComplete: true,
+      });
       commitPendingMessageRef.current();
       streamingMessageRef.current = null;
       pendingToolCallsRef.current.clear();
@@ -463,6 +468,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     const hasContent = streaming.content.trim().length > 0;
     const hasThinking = streaming.thinking.trim().length > 0;
     if (hasContent || hasThinking) {
+      updateMessageRef.current(streaming.id, { isThinkingComplete: true });
       commitPendingMessageRef.current();
     }
     streamingMessageRef.current = null;

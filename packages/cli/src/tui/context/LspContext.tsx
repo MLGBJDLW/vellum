@@ -107,6 +107,7 @@ export function LspProvider({
   children,
   refreshInterval = 2000,
 }: LspProviderProps): React.JSX.Element {
+  const disableLspPolling = process.env.VELLUM_TEST_DISABLE_LSP === "1";
   const [isInitialized, setIsInitialized] = useState(false);
   const [runningServers, setRunningServers] = useState(0);
   const [totalServers, setTotalServers] = useState(0);
@@ -148,6 +149,9 @@ export function LspProvider({
 
   // Initial refresh and interval (polling as fallback)
   useEffect(() => {
+    if (disableLspPolling) {
+      return;
+    }
     // Immediate refresh
     refresh();
 
@@ -157,10 +161,13 @@ export function LspProvider({
     return () => {
       clearInterval(intervalId);
     };
-  }, [refresh, refreshInterval]);
+  }, [refresh, refreshInterval, disableLspPolling]);
 
   // Event-driven updates (primary method - immediate response to LSP events)
   useEffect(() => {
+    if (disableLspPolling) {
+      return;
+    }
     let manager: ReturnType<typeof getLspManager> | null = null;
 
     try {
@@ -181,7 +188,7 @@ export function LspProvider({
       // Unsubscribe on cleanup
       manager?.offStateChanged(handleStateChange);
     };
-  }, [refresh]);
+  }, [refresh, disableLspPolling]);
 
   /**
    * Set confirmation handler for semi-auto mode.

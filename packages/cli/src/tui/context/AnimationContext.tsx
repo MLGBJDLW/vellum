@@ -148,6 +148,7 @@ export function AnimationProvider({
   children,
   tickInterval: tickOverride,
 }: AnimationProviderProps): React.JSX.Element {
+  const animationsDisabled = process.env.VELLUM_TEST_DISABLE_ANIMATION === "1";
   const tickInterval = tickOverride ?? getAnimationTick();
   const isVSCode = isVSCodeTerminal();
 
@@ -173,7 +174,7 @@ export function AnimationProvider({
 
   useEffect(() => {
     // Don't start timer when paused - completely stops animation overhead
-    if (isPaused) return;
+    if (animationsDisabled || isPaused) return;
 
     let mounted = true;
 
@@ -201,7 +202,7 @@ export function AnimationProvider({
       mounted = false;
       clearInterval(timer);
     };
-  }, [tickInterval, isPaused]);
+  }, [tickInterval, isPaused, animationsDisabled]);
 
   const contextValue: AnimationContextValue = {
     ...state,
