@@ -11,8 +11,10 @@
 import { loadConfig } from "@vellum/core";
 import {
   getThinkingDisplayMode,
+  getThinkingExpandedByDefault,
   getThinkingSettings,
   setThinkingDisplayMode,
+  setThinkingExpandedByDefault,
   setThinkingSettings,
   type ThinkingDisplayMode,
   type ThinkingSettings,
@@ -229,6 +231,13 @@ const displayModeListeners: Set<DisplayModeListener> = new Set();
 export { getThinkingDisplayMode };
 
 /**
+ * Get whether thinking blocks start expanded by default.
+ *
+ * @returns True if expanded by default, false if collapsed
+ */
+export { getThinkingExpandedByDefault };
+
+/**
  * Set the thinking display mode.
  *
  * @param mode - Display mode ("full" or "compact")
@@ -389,6 +398,7 @@ export const thinkCommand: SlashCommand = {
     { name: "on", description: "Enable extended thinking" },
     { name: "off", description: "Disable extended thinking" },
     { name: "mode", description: "Set display mode (full/compact)" },
+    { name: "expand", description: "Set expanded by default (on/off)" },
   ],
   positionalArgs: [
     {
@@ -416,6 +426,8 @@ export const thinkCommand: SlashCommand = {
     "/think -b 50k       - Set budget to 50K tokens",
     "/think mode full    - Show full thinking content",
     "/think mode compact - Show compact thinking header only",
+    "/think expand on    - Thinking blocks start expanded",
+    "/think expand off   - Thinking blocks start collapsed",
   ],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
@@ -459,6 +471,7 @@ export const thinkCommand: SlashCommand = {
       // Show current status
       const state = getThinkingState();
       const displayMode = getThinkingDisplayMode();
+      const expandedByDefault = getThinkingExpandedByDefault();
       const statusIcon = state.enabled ? "◆" : "◇";
       const statusText = state.enabled ? "On" : "Off";
 
@@ -468,12 +481,14 @@ export const thinkCommand: SlashCommand = {
         `   Status: ${statusIcon} ${statusText}`,
         `   Budget: ${formatBudget(state.budgetTokens)} tokens`,
         `   Display: ${displayMode}`,
+        `   Expanded: ${expandedByDefault ? "on" : "off"}`,
         "",
         "Commands:",
         "   /think on       - Enable thinking",
         "   /think off      - Disable thinking",
         "   /think -b 20k   - Set budget to 20K tokens",
         "   /think mode full|compact - Set display mode",
+        "   /think expand on|off - Set expanded by default",
         "",
         "Shortcuts:",
         "   Ctrl+T          - Toggle thinking on/off",
@@ -509,6 +524,38 @@ export const thinkCommand: SlashCommand = {
       return error("INVALID_ARGUMENT", `Invalid display mode: ${modeArg}`, [
         "Valid modes: full, compact",
         "Example: /think mode compact",
+      ]);
+    }
+
+    // Handle "expand" subcommand
+    if (normalizedState === "expand") {
+      const expandArg = ctx.parsedArgs.positional[1] as string | undefined;
+      const currentExpanded = getThinkingExpandedByDefault();
+
+      if (!expandArg) {
+        // Show current expand default setting
+        const statusText = currentExpanded ? "on (expanded)" : "off (collapsed)";
+        return success(
+          `🧠 Thinking expanded by default: ${statusText}\n` +
+            "   /think expand on    - Start expanded\n" +
+            "   /think expand off   - Start collapsed"
+        );
+      }
+
+      const normalizedExpand = expandArg.toLowerCase().trim();
+      if (normalizedExpand === "on" || normalizedExpand === "1" || normalizedExpand === "true") {
+        setThinkingExpandedByDefault(true);
+        return success("🧠 Thinking blocks will start expanded by default.");
+      }
+
+      if (normalizedExpand === "off" || normalizedExpand === "0" || normalizedExpand === "false") {
+        setThinkingExpandedByDefault(false);
+        return success("🧠 Thinking blocks will start collapsed by default.");
+      }
+
+      return error("INVALID_ARGUMENT", `Invalid expand setting: ${expandArg}`, [
+        "Valid settings: on, off",
+        "Example: /think expand off",
       ]);
     }
 

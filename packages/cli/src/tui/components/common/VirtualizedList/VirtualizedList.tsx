@@ -18,7 +18,6 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -103,16 +102,17 @@ function VirtualizedListInner<T>(
     return Math.max(8, (terminalRows || defaultRows || 24) - reservedLines);
   });
 
-  // ScrollTop used by the virtualization window (kept in sync with anchor scrollTop).
-  const [virtualScrollTop, setVirtualScrollTop] = useState(0);
+  // Ref to track authoritative scroll position (updated synchronously after useScrollAnchor)
+  // This breaks the render-cycle delay that caused scrollbar/content desync on PageUp/Down.
+  const scrollTopRef = useRef(0);
 
   // Virtualization with actual scroll position
   const {
     heights: _heights,
     offsets,
     totalHeight,
-    startIndex,
-    endIndex,
+    startIndex: _startIndex,
+    endIndex: _endIndex,
     setItemRef,
     containerRef,
     measuredContainerHeight,
@@ -122,7 +122,7 @@ function VirtualizedListInner<T>(
     data,
     keyExtractor,
     estimatedItemHeight,
-    scrollTop: virtualScrollTop,
+    scrollTop: scrollTopRef.current,
     containerHeight,
     isStreaming,
   });
@@ -149,12 +149,37 @@ function VirtualizedListInner<T>(
     blockSumsState,
   });
 
-  // Keep virtualization scrollTop in sync with the anchor-derived scrollTop.
-  useLayoutEffect(() => {
-    if (Math.abs(anchorScrollTop - virtualScrollTop) > 0.5) {
-      setVirtualScrollTop(anchorScrollTop);
+  // Update scroll ref synchronously (not in effect) to ensure next render uses correct value
+  scrollTopRef.current = anchorScrollTop;
+
+  // Compute corrected visible range using anchorScrollTop (not the stale _startIndex/_endIndex)
+  // This fixes the 1-render delay that caused scrollbar to move but content to stay put.
+  const { startIndex, endIndex } = useMemo(() => {
+    if (data.length === 0) {
+      return { startIndex: 0, endIndex: -1 };
     }
-  }, [anchorScrollTop, virtualScrollTop]);
+
+    // Find start: last item whose offset <= scrollTop
+    let start = 0;
+    for (let i = offsets.length - 1; i >= 0; i--) {
+      if ((offsets[i] ?? 0) <= anchorScrollTop) {
+        start = i;
+        break;
+      }
+    }
+
+    // Find end: last item whose offset <= scrollTop + containerHeight
+    const endLimit = anchorScrollTop + effectiveContainerHeight;
+    let end = data.length - 1;
+    for (let i = offsets.length - 1; i >= 0; i--) {
+      if ((offsets[i] ?? 0) <= endLimit) {
+        end = Math.min(i, data.length - 1);
+        break;
+      }
+    }
+
+    return { startIndex: Math.max(0, start), endIndex: Math.max(0, end) };
+  }, [anchorScrollTop, effectiveContainerHeight, offsets, data.length]);
 
   // FIX: Debounce container height updates to prevent rapid state changes
   // that can cause rendering race conditions and jittery UI

@@ -36,6 +36,7 @@ export interface ThinkingSettings {
   budgetTokens?: number;
   priority?: "global" | "mode" | "merge";
   displayMode?: ThinkingDisplayMode;
+  expandedByDefault?: boolean;
 }
 
 /**
@@ -422,6 +423,48 @@ export function setThinkingDisplayMode(mode: ThinkingDisplayMode): void {
     thinking: {
       ...existingThinking,
       displayMode: mode,
+    },
+  };
+  writeSettings(newSettings);
+}
+
+/**
+ * Get the thinking expanded by default preference.
+ *
+ * @returns True if thinking blocks start expanded by default (default: true)
+ *
+ * @example
+ * ```typescript
+ * const expanded = getThinkingExpandedByDefault();
+ * // expanded is true | false
+ * ```
+ */
+export function getThinkingExpandedByDefault(): boolean {
+  const settings = readSettings();
+  const value = settings?.thinking?.expandedByDefault;
+  // Default to true (expanded) if not set
+  return value !== false;
+}
+
+/**
+ * Set the thinking expanded by default preference.
+ *
+ * @param expanded - Whether thinking blocks start expanded by default
+ *
+ * @example
+ * ```typescript
+ * setThinkingExpandedByDefault(false);
+ * // Now thinking blocks will be collapsed by default
+ * ```
+ */
+export function setThinkingExpandedByDefault(expanded: boolean): void {
+  const existingSettings = readSettings() ?? {};
+  const existingThinking = existingSettings.thinking ?? {};
+  const newSettings: VellumSettings = {
+    ...existingSettings,
+    thinking: {
+      ...existingThinking,
+      expandedByDefault: expanded,
     },
   };
   writeSettings(newSettings);

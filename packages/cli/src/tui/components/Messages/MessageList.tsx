@@ -22,7 +22,11 @@
 import { getIcons } from "@vellum/shared";
 import { Box, type DOMElement, type Key, measureElement, Text, useInput } from "ink";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getThinkingDisplayMode, subscribeToDisplayMode } from "../../../commands/think.js";
+import {
+  getThinkingDisplayMode,
+  getThinkingExpandedByDefault,
+  subscribeToDisplayMode,
+} from "../../../commands/think.js";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
 import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
@@ -486,6 +490,8 @@ interface MessageItemProps {
   readonly thinkingToggleHint?: string;
   /** Callback when thinking block height changes (for virtualized list re-measurement) */
   readonly onThinkingHeightChange?: () => void;
+  /** Whether thinking blocks start expanded by default */
+  readonly thinkingExpandedByDefault?: boolean;
 }
 
 /**
@@ -506,6 +512,7 @@ const MessageItem = memo(function MessageItem({
   thinkingToggleSignal,
   thinkingToggleHint,
   onThinkingHeightChange,
+  thinkingExpandedByDefault = true,
 }: MessageItemProps) {
   const { t } = useTUITranslation();
   const icon = getRoleIcon(message.role);
@@ -542,7 +549,7 @@ const MessageItem = memo(function MessageItem({
           content={message.thinking ?? ""}
           durationMs={message.thinkingDuration}
           isStreaming={message.isStreaming && !message.isThinkingComplete}
-          initialCollapsed={!message.isStreaming}
+          initialCollapsed={!message.isStreaming && !thinkingExpandedByDefault}
           persistenceId={`thinking-${message.id}`}
           showCharCount
           displayMode={thinkingDisplayMode}
@@ -663,6 +670,9 @@ const MessageList = memo(function MessageList({
     const unsubscribe = subscribeToDisplayMode(setThinkingDisplayMode);
     return unsubscribe;
   }, []);
+
+  // Get thinking expanded by default setting (read once, doesn't need subscription)
+  const thinkingExpandedByDefault = useMemo(() => getThinkingExpandedByDefault(), []);
 
   // Determine if we should show the thinking indicator:
   // - Agent is streaming (processing/waiting)
@@ -1316,6 +1326,7 @@ const MessageList = memo(function MessageList({
           thinkingToggleSignal={thinkingToggle.signal}
           thinkingToggleHint={thinkingToggle.hint}
           onThinkingHeightChange={handleThinkingHeightChange}
+          thinkingExpandedByDefault={thinkingExpandedByDefault}
         />
       );
     },
@@ -1330,6 +1341,7 @@ const MessageList = memo(function MessageList({
       thinkingDisplayMode,
       getThinkingToggleInfo,
       handleThinkingHeightChange,
+      thinkingExpandedByDefault,
     ]
   );
 
