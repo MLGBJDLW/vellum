@@ -36,6 +36,12 @@ export interface StreamingTextProps {
   readonly typewriterEffect?: boolean;
   /** Delay between characters in ms when typewriter is enabled (default: 8) */
   readonly typewriterSpeed?: number;
+  /**
+   * Optional formatting function to apply inline styles to text.
+   * Receives the sanitized text and returns styled React nodes.
+   * Called on each render with the current display text.
+   */
+  readonly formatFn?: (text: string) => React.ReactNode;
 }
 
 // =============================================================================
@@ -106,6 +112,7 @@ export function StreamingText({
   onComplete,
   typewriterEffect = true,
   typewriterSpeed = DEFAULT_TYPEWRITER_SPEED_MS,
+  formatFn,
 }: StreamingTextProps): React.JSX.Element {
   // Track cursor visibility for blinking effect
   const [cursorVisible, setCursorVisible] = useState(true);
@@ -207,9 +214,15 @@ export function StreamingText({
   const showCursor = isStreaming || (typewriterEffect && displayedLength < sanitizedContent.length);
   const cursor = showCursor && cursorVisible ? cursorChar : "";
 
+  // Apply formatting function if provided, otherwise render plain text
+  const formattedContent = useMemo(
+    () => (formatFn ? formatFn(displayText) : displayText),
+    [formatFn, displayText]
+  );
+
   return (
     <Text wrap="wrap">
-      {displayText}
+      {formattedContent}
       {cursor}
     </Text>
   );

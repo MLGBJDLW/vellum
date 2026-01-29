@@ -458,60 +458,67 @@ export function useVirtualization<T = unknown>(
   // Otherwise use the found index directly (no -1 subtraction)
   const rawStartIndex = Math.max(0, foundStartIndex === -1 ? 0 : foundStartIndex);
 
-  const endIndexOffset = offsets.findIndex((offset) => offset > scrollTop + safeContainerHeight);
-  // FIX: Handle edge case where no offset exceeds viewport - show all remaining items
-  const rawEndIndex =
-    endIndexOffset === -1
-      ? dataLength - 1
-      : Math.min(dataLength - 1, Math.max(0, endIndexOffset - 1));
+  const endOffsetLimit = scrollTop + safeContainerHeight;
+  const foundEndIndex = findLastIndex(offsets, (offset) => offset <= endOffsetLimit);
+  // FIX: Use last offset within viewport (<=) to avoid skipping the last visible item
+  // when scrollTop = 0 and the scrollbar first appears.
+  const rawEndIndex = Math.min(dataLength - 1, Math.max(0, foundEndIndex));
+
+  // Debug logging removed (was noisy in production).
 
   // FRAME HEIGHT GUARD: Calculate safe render range to prevent overflow
-  // Simplified version: no isOversize (ClippedMessage doesn't exist yet)
-  // Always show at least MIN_ITEMS_TO_SHOW to prevent content disappearing
+  // CRITICAL FIX: Disabled aggressive trimming that was causing "floating in middle" bug.
+  // The previous logic would limit rendered items even when scrollTop=0, causing:
+  // 1. shouldAlignToBottom=false (because totalHeight >= containerHeight from estimates)
+  // 2. But only 2 items rendered (due to FRAME HEIGHT GUARD trimming)
+  // 3. Result: 2 items at top (flex-start), large blank space below
+  //
+  // Now we always render the full raw range. VirtualizedList's overflow:hidden
+  // and Ink's built-in clipping handle any overflow safely.
   const { startIndex, endIndex } = useMemo(() => {
     // CRITICAL FIX: Always render at least one item if data exists
-    // Previous logic returned empty range causing blank screen
     if (dataLength === 0) {
       return { startIndex: 0, endIndex: -1 };
+    }
+
+    // For small lists, render ALL items to quickly measure real heights
+    // and avoid early scrollbar appearance from estimates.
+    // Threshold is dynamic based on viewport height and estimated item size.
+    const sampleCount = Math.min(10, dataLength);
+    const avgEstimatedHeight = (() => {
+      if (sampleCount === 0) return getEstimatedHeight(estimatedItemHeight, 0);
+      let sum = 0;
+      for (let i = 0; i < sampleCount; i++) {
+        sum += getEstimatedHeight(estimatedItemHeight, i);
+      }
+      return Math.max(MIN_ITEM_HEIGHT, Math.round(sum / sampleCount));
+    })();
+    const approxItemsPerViewport = Math.max(
+      1,
+      Math.ceil(safeContainerHeight / Math.max(1, avgEstimatedHeight))
+    );
+    const measureAllThreshold = Math.max(approxItemsPerViewport * 3, approxItemsPerViewport + 8);
+
+    if (dataLength <= measureAllThreshold) {
+      return { startIndex: 0, endIndex: dataLength - 1 };
     }
 
     // Ensure we have valid indices even if raw calculation failed
     const safeRawEndIndex = rawEndIndex < 0 ? dataLength - 1 : rawEndIndex;
     const safeRawStartIndex = Math.min(rawStartIndex, safeRawEndIndex);
 
-    // Safety: ensure we have valid container height
-    const effectiveContainerHeight = Math.max(MIN_VIEWPORT_HEIGHT, safeContainerHeight);
+    // Debug logging removed (was noisy in production).
 
-    // If raw range is small enough, just use it directly (don't over-optimize)
-    const rawCount = safeRawEndIndex - safeRawStartIndex + 1;
-    if (rawCount <= 3) {
-      return { startIndex: safeRawStartIndex, endIndex: safeRawEndIndex };
-    }
-
-    // For larger ranges, do soft trimming but always keep at least 2 items
-    let totalRenderedHeight = 0;
-    let safeStartIndex = safeRawEndIndex;
-    const MIN_ITEMS_TO_SHOW = 2;
-
-    for (let i = safeRawEndIndex; i >= safeRawStartIndex; i--) {
-      const itemHeight = heights[i] ?? getEstimatedHeight(estimatedItemHeight, i);
-      // Use actual height, not capped - let Ink handle overflow
-
-      const itemCount = safeRawEndIndex - safeStartIndex + 1;
-      if (
-        totalRenderedHeight + itemHeight > effectiveContainerHeight &&
-        itemCount >= MIN_ITEMS_TO_SHOW
-      ) {
-        // Would overflow AND we have minimum items - stop
-        break;
-      }
-
-      totalRenderedHeight += itemHeight;
-      safeStartIndex = i;
-    }
-
-    return { startIndex: safeStartIndex, endIndex: safeRawEndIndex };
-  }, [rawStartIndex, rawEndIndex, heights, safeContainerHeight, estimatedItemHeight, dataLength]);
+    // Return raw range directly - let Ink handle overflow
+    return { startIndex: safeRawStartIndex, endIndex: safeRawEndIndex };
+  }, [
+    rawStartIndex,
+    rawEndIndex,
+    safeContainerHeight,
+    dataLength,
+    scrollTop,
+    estimatedItemHeight,
+  ]);
 
   // isOversize is kept for API compatibility but always false
   // (ClippedMessage doesn't exist yet, so we can't handle oversize items)

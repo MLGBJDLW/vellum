@@ -475,10 +475,10 @@ program
 program
   .command("run <prompt>")
   .description("Run a single prompt")
-  .option("-m, --model <model>", "Model to use", "claude-sonnet-4-20250514")
+  .option("-m, --model <model>", "Model to use", "claude-3-opus-20240229")
+  .option("-p, --provider <provider>", "Provider to use", "anthropic")
   .action(async (prompt, options) => {
-    console.log(`Running: ${prompt} with model ${options.model}`);
-    // TODO: Implement single run
+    await handleRun(prompt, options);
   });
 
 program

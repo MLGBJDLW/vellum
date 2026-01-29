@@ -42,8 +42,6 @@ import {
   // New Messages Banner - unread notification
   NewMessagesBanner,
   SCROLL_TO_ITEM_END,
-  type SeparableMessage,
-  StreamingMessageItem,
   // Message Separation - streaming/stable split
   useMessageSeparation,
   useNewMessagesBanner,
@@ -627,7 +625,8 @@ const MessageList = memo(function MessageList({
   const hasPendingContent = pendingMessage?.content && pendingMessage.content.length > 0;
   const showThinkingIndicator = isLoading && !hasPendingContent;
   const hasActiveStreaming = Boolean(pendingMessage?.isStreaming);
-  const forceFollowWhileStreaming = autoScroll && (hasActiveStreaming || showThinkingIndicator);
+  const forceFollowWhileStreaming =
+    autoScroll && (hasActiveStreaming || showThinkingIndicator || pendingMessage != null);
   const activeThinkingMessageId = useMemo(() => {
     if (pendingMessage?.thinking && pendingMessage.thinking.length > 0) {
       return pendingMessage.id;
@@ -1524,18 +1523,8 @@ const MessageList = memo(function MessageList({
   // ============================================================================
   // Message Separation (streaming vs stable)
   // ============================================================================
-  // Convert messages to SeparableMessage format for the separation hook
-  const separableMessages = useMemo<SeparableMessage[]>(
-    () =>
-      allMessages.map((msg) => ({
-        id: msg.id,
-        content: msg.content || "",
-        isStreaming: msg.isStreaming,
-      })),
-    [allMessages]
-  );
-
-  const messageSeparation = useMessageSeparation(separableMessages, {
+  // Separate streaming vs stable messages (used for virtualized rendering)
+  const messageSeparation = useMessageSeparation<Message>(allMessages, {
     maxStreamingMessages: 3,
     stableThresholdMs: 500,
   });
@@ -1551,13 +1540,18 @@ const MessageList = memo(function MessageList({
     scrollActions.scrollToBottom
   );
 
+  const virtualizedMessages = useMemo(
+    () => (useVirtualizedListInternal ? messageSeparation.stableMessages : allMessages),
+    [useVirtualizedListInternal, messageSeparation.stableMessages, allMessages]
+  );
+
   const estimatedItemHeightForVirtualization = useMemo(() => {
     if (typeof estimatedItemHeight === "function") {
       return estimatedItemHeight;
     }
     const baseEstimate = estimatedItemHeight;
     return (index: number) => {
-      const message = allMessages[index];
+      const message = virtualizedMessages[index];
       if (!message) {
         return baseEstimate;
       }
@@ -1567,7 +1561,12 @@ const MessageList = memo(function MessageList({
         estimateMessageHeightLegacy(message, estimatedContentWidth, includeToolCalls)
       );
     };
-  }, [estimatedItemHeight, allMessages, estimatedContentWidth, shouldRenderInlineToolCalls]);
+  }, [
+    estimatedItemHeight,
+    virtualizedMessages,
+    estimatedContentWidth,
+    shouldRenderInlineToolCalls,
+  ]);
 
   // Auto-scroll to end when new messages arrive or pending content updates (virtualized mode only)
   const allMessagesLengthRef = useRef(allMessages.length);
@@ -1649,10 +1648,13 @@ const MessageList = memo(function MessageList({
   // This is ideal for very long conversations.
 
   if (useVirtualizedListInternal) {
+    // FIX: Ensure listHeight always has a numeric value
+    // height="100%" in Ink/Yoga requires parent to have explicit height
+    // When computedMaxHeight is undefined, fallback to availableHeight or default 20
     const listHeight =
       computedMaxHeight !== undefined
         ? Math.max(1, computedMaxHeight - thinkingIndicatorHeight)
-        : undefined;
+        : Math.max(8, (availableHeight ?? 20) - thinkingIndicatorHeight);
 
     return (
       <Box flexDirection="column" flexGrow={1} minHeight={0} height={computedMaxHeight}>
@@ -1660,7 +1662,7 @@ const MessageList = memo(function MessageList({
           <Box flexDirection="column" flexGrow={1} height={listHeight}>
             <VirtualizedList
               ref={virtualizedListRef}
-              data={allMessages}
+              data={virtualizedMessages}
               renderItem={renderMessageItem}
               keyExtractor={keyExtractor}
               estimatedItemHeight={estimatedItemHeightForVirtualization}
@@ -1691,14 +1693,10 @@ const MessageList = memo(function MessageList({
         {/* Streaming messages rendered separately (outside VirtualizedList) */}
         {messageSeparation.streamingMessages.length > 0 && (
           <Box flexDirection="column" paddingX={1}>
-            {messageSeparation.streamingMessages.map((msg) => (
-              <StreamingMessageItem
-                key={msg.id}
-                id={msg.id}
-                content={msg.content}
-                meta={msg.meta}
-                onComplete={messageSeparation.markComplete}
-              />
+            {messageSeparation.streamingMessages.map((msg, index) => (
+              <Box key={msg.id}>
+                {renderMessageItem({ item: msg, index })}
+              </Box>
             ))}
           </Box>
         )}
@@ -1804,21 +1802,6 @@ const MessageList = memo(function MessageList({
         {/* Thinking indicator - shows while agent is processing before first token */}
         {showThinkingIndicator && <ThinkingIndicator />}
 
-        {/* Streaming messages rendered separately (outside Static list) */}
-        {messageSeparation.streamingMessages.length > 0 && (
-          <Box flexDirection="column" paddingX={1}>
-            {messageSeparation.streamingMessages.map((msg) => (
-              <StreamingMessageItem
-                key={msg.id}
-                id={msg.id}
-                content={msg.content}
-                meta={msg.meta}
-                onComplete={messageSeparation.markComplete}
-              />
-            ))}
-          </Box>
-        )}
-
         {/* NewMessagesBanner - enhanced unread notification */}
         {bannerState.isVisible && (
           <NewMessagesBanner
@@ -1914,21 +1897,6 @@ const MessageList = memo(function MessageList({
 
       {/* Thinking indicator - shows while agent is processing before first token */}
       {showThinkingIndicator && <ThinkingIndicator />}
-
-      {/* Streaming messages rendered separately (outside normal list) */}
-      {messageSeparation.streamingMessages.length > 0 && (
-        <Box flexDirection="column" paddingX={1}>
-          {messageSeparation.streamingMessages.map((msg) => (
-            <StreamingMessageItem
-              key={msg.id}
-              id={msg.id}
-              content={msg.content}
-              meta={msg.meta}
-              onComplete={messageSeparation.markComplete}
-            />
-          ))}
-        </Box>
-      )}
 
       {/* NewMessagesBanner - enhanced unread notification */}
       {bannerState.isVisible && (

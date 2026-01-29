@@ -18,7 +18,7 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { ToolCallInfo } from "../../context/MessagesContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
@@ -30,6 +30,65 @@ import { StreamingText } from "./StreamingText.js";
 
 // Spinner frames for tool call status
 const TOOL_SPINNER_FRAMES = ["-", "\\", "|", "/"];
+
+// =============================================================================
+// Inline Formatting for Thinking Content
+// =============================================================================
+
+/**
+ * Lightweight inline format element
+ */
+interface InlineFormatElement {
+  readonly type: "text" | "code" | "bold";
+  readonly content: string;
+}
+
+/**
+ * Regex for parsing inline `code` and **bold** patterns.
+ * Groups: 1=full backtick match, 2=code content, 3=full bold match, 4=bold content
+ */
+const INLINE_FORMAT_REGEX = /(`([^`]+)`)|(\*\*(.+?)\*\*)/g;
+
+/**
+ * Parse text into inline format elements.
+ * Only supports `code` and **bold** - intentionally minimal.
+ */
+function parseInlineFormat(text: string): InlineFormatElement[] {
+  const elements: InlineFormatElement[] = [];
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(INLINE_FORMAT_REGEX)) {
+    const matchIndex = match.index ?? 0;
+
+    // Add preceding plain text
+    if (matchIndex > lastIndex) {
+      elements.push({ type: "text", content: text.slice(lastIndex, matchIndex) });
+    }
+
+    // Determine match type
+    if (match[1] !== undefined) {
+      // Backtick code: `code`
+      elements.push({ type: "code", content: match[2] ?? "" });
+    } else if (match[3] !== undefined) {
+      // Bold: **bold**
+      elements.push({ type: "bold", content: match[4] ?? "" });
+    }
+
+    lastIndex = matchIndex + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    elements.push({ type: "text", content: text.slice(lastIndex) });
+  }
+
+  // Handle empty input
+  if (elements.length === 0 && text.length > 0) {
+    elements.push({ type: "text", content: text });
+  }
+
+  return elements;
+}
 
 // =============================================================================
 // Types
@@ -227,6 +286,39 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   const successColor = theme.colors.success ?? "green";
   const errorColor = theme.colors.error ?? "red";
 
+  // Inline formatter for thinking content - memoized to avoid re-creation
+  const formatInlineThinking = useCallback(
+    (text: string): React.ReactNode => {
+      const elements = parseInlineFormat(text);
+
+      // Fast path: no formatting needed
+      if (elements.length === 1 && elements[0]?.type === "text") {
+        return text;
+      }
+
+      return elements.map((el, idx) => {
+        const key = `${el.type}-${idx}`;
+        switch (el.type) {
+          case "code":
+            return (
+              <Text key={key} inverse>
+                {` ${el.content} `}
+              </Text>
+            );
+          case "bold":
+            return (
+              <Text key={key} bold>
+                {el.content}
+              </Text>
+            );
+          default:
+            return <Text key={key}>{el.content}</Text>;
+        }
+      });
+    },
+    [] // No dependencies - parseInlineFormat is stable
+  );
+
   // Memoized values
   const charCount = useMemo(() => content.length, [content]);
   const preview = useMemo(
@@ -325,7 +417,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
           </Box>
         )
       ) : (
-        // Expanded: show full content with typewriter effect
+        // Expanded: show full content with typewriter effect and inline formatting
         <Box marginLeft={2} marginTop={0} flexDirection="column">
           <Text color={thinkingColor} dimColor>
             <StreamingText
@@ -333,6 +425,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
               isStreaming={isStreaming}
               typewriterEffect={true}
               cursorBlink={true}
+              formatFn={formatInlineThinking}
             />
           </Text>
         </Box>
