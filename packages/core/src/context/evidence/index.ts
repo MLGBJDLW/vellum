@@ -44,6 +44,12 @@ export {
   type BudgetAllocatorConfig,
 } from "./budget-allocator.js";
 export {
+  type CacheEntry as EvidenceCacheEntry,
+  type CacheStats as EvidenceCacheStats,
+  EvidenceCache,
+  type EvidenceCacheConfig,
+} from "./cache.js";
+export {
   PackBuilder,
   type PackBuilderConfig,
   type PackBuilderInput,
@@ -61,6 +67,12 @@ export {
   type SignalExtractorConfig,
   type SignalInput,
 } from "./signal-extractor.js";
+export {
+  EvidenceTelemetryService,
+  type TelemetryRecord,
+  type TelemetryServiceConfig,
+  type TelemetryStats,
+} from "./telemetry.js";
 
 // =============================================================================
 // System Facade Re-export
@@ -70,3 +82,26 @@ export {
   EvidencePackSystem,
   type EvidencePackSystemConfig,
 } from "./system.js";
+
+// =============================================================================
+// Provider Re-exports
+// =============================================================================
+
+export { DiffProvider, type DiffProviderConfig } from "./providers/diff-provider.js";
+export { LspProvider, type LspProviderConfig } from "./providers/lsp-provider.js";
+export { SearchProvider, type SearchProviderConfig } from "./providers/search-provider.js";
+
+// =============================================================================
+// Adaptive Components Re-exports
+// =============================================================================
+
+export {
+  type BudgetRatios,
+  IntentAwareProviderStrategy,
+  type IntentStrategy,
+  type IntentStrategyProviderConfig,
+  type OptimizationResult,
+  type OptimizerStats,
+  WeightOptimizer,
+  type WeightOptimizerConfig,
+} from "./adaptive/index.js";
