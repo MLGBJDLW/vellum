@@ -297,12 +297,8 @@ Plans should be **specific** and **actionable**:
 
 | Tool | Purpose |
 |------|---------|
-| `bash` | Execute bash/shell commands |
-| `shell` | Execute shell commands (Windows compatible) |
-
-#### Task Management
-
-| Tool | Purpose |
+| `shell` | Execute shell commands (cross-platform, preferred) |
+| `bash` | Execute bash commands (Unix/macOS only - NOT available on Windows) |
 |------|---------|
 | `todo_manage` | Create/update/complete TODO items |
 

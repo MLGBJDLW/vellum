@@ -98,7 +98,9 @@ export const bashTool = defineTool({
     const currentPlatform = platform();
     if (currentPlatform === "win32") {
       return fail(
-        "bash tool is only available on Unix systems. Use 'shell' for cross-platform commands."
+        "bash tool is only available on Unix systems (Linux/macOS). " +
+          "On Windows, you MUST use the 'shell' tool instead. " +
+          "The 'shell' tool uses PowerShell on Windows and bash on Unix."
       );
     }
 
