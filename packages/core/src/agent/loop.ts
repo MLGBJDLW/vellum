@@ -11,6 +11,7 @@ import type { UserPromptSignal } from "../builtin/ask-followup.js";
 import type { AttemptCompletionOutput } from "../builtin/attempt-completion.js";
 import type { DelegateAgentSignal } from "../builtin/delegate-agent.js";
 import { SessionAgentsIntegration } from "../context/agents/session-integration.js";
+import { type EvidencePack, EvidencePackSystem } from "../context/evidence/index.js";
 import type { CostService } from "../cost/service.js";
 import type { CostLimitsConfig } from "../cost/types-limits.js";
 import { ErrorCode, VellumError } from "../errors/index.js";
@@ -151,6 +152,12 @@ export interface AgentLoopConfig {
   agentLevel?: AgentLevel;
   /** Whether the session is interactive (enables interactive-only tools like ask_followup_question) */
   interactive?: boolean;
+  /** Evidence Pack System for intelligent context gathering */
+  evidencePackSystem?: EvidencePackSystem;
+  /** Enable evidence pack system auto-initialization */
+  enableEvidencePack?: boolean;
+  /** Working set paths for evidence gathering */
+  evidenceWorkingSet?: string[];
   /** Enable AGENTS.md protocol integration (optional, defaults to false) */
   enableAgentsIntegration?: boolean;
   /** Enable Skills System integration (T053) */
@@ -480,6 +487,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** Cost manager for guardrails (Phase 35+) */
   private readonly costManager: AgentCostManager;
 
+  /** Evidence Pack System for intelligent context gathering */
+  private evidencePackSystem?: EvidencePackSystem;
+
   constructor(config: AgentLoopConfig) {
     super();
     this.config = config;
@@ -628,6 +638,17 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       this.skillsIntegration.initialize().catch((error) => {
         this.logger?.warn("Failed to initialize Skills System", { error });
       });
+    }
+
+    // Initialize Evidence Pack System if enabled
+    if (config.enableEvidencePack || config.evidencePackSystem) {
+      this.evidencePackSystem =
+        config.evidencePackSystem ??
+        new EvidencePackSystem({
+          workspaceRoot: config.cwd || process.cwd(),
+          contextWindow: 128000, // Default context window size
+          tokenBudget: 4000, // Reserve budget for evidence
+        });
     }
 
     // Initialize ModeManager integration if provided (T057)
@@ -1258,7 +1279,69 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       this.logger?.warn("Failed to match skills", { error });
     }
 
+    // Build and inject evidence pack if available
+    if (this.evidencePackSystem) {
+      try {
+        const lastUserMessage = this.getLastUserMessageContent();
+        if (lastUserMessage) {
+          const pack = await this.evidencePackSystem.build({
+            userMessage: lastUserMessage,
+            workingSet: this.config.evidenceWorkingSet,
+          });
+          if (pack.evidence.length > 0) {
+            systemPrompt += this.formatEvidenceSection(pack);
+          }
+        }
+      } catch (error) {
+        this.logger?.warn?.("Failed to build evidence pack", { error });
+      }
+    }
+
     return systemPrompt;
+  }
+
+  /**
+   * Get the text content of the last user message
+   */
+  private getLastUserMessageContent(): string | undefined {
+    const userMessages = this.messages.filter((m) => m.role === "user");
+    const lastUserMsg = userMessages[userMessages.length - 1];
+    if (!lastUserMsg) return undefined;
+
+    // Extract text content from message parts
+    const { parts } = lastUserMsg;
+    if (Array.isArray(parts)) {
+      const textPart = parts.find((p) => p.type === "text");
+      if (textPart && textPart.type === "text") {
+        return textPart.text;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Format evidence pack as a system prompt section
+   */
+  private formatEvidenceSection(pack: EvidencePack): string {
+    const sections: string[] = ["\n\n<relevant_context>"];
+
+    // Add project summary if available
+    if (pack.summary?.goal) {
+      sections.push(`## Goal\n${pack.summary.goal}`);
+    }
+
+    // Add evidence items (limit to top 10 for context window)
+    if (pack.evidence.length > 0) {
+      sections.push("## Related Code");
+      const topEvidence = pack.evidence.slice(0, 10);
+      for (const e of topEvidence) {
+        const header = e.range ? `${e.path}:${e.range[0]}-${e.range[1]}` : e.path;
+        sections.push(`### ${header} (${e.provider})\n\`\`\`\n${e.content}\n\`\`\``);
+      }
+    }
+
+    sections.push("</relevant_context>");
+    return sections.join("\n\n");
   }
 
   /**
