@@ -5,6 +5,7 @@
  * Only renders items that are currently visible in the viewport,
  * with support for variable height items and auto-scroll to bottom.
  *
+ * Uses native scroll support in @jrichman/ink (overflowY="scroll" + scrollTop).
  * Ported from Gemini CLI with Vellum adaptations.
  *
  * @module tui/components/common/VirtualizedList
@@ -112,8 +113,6 @@ function VirtualizedListInner<T>(
     totalHeight,
     startIndex,
     endIndex,
-    // Note: spacer heights not used in Ink (no real scroll support)
-    // topSpacerHeight and bottomSpacerHeight are kept in hook for API compat
     setItemRef,
     containerRef,
     measuredContainerHeight,
@@ -177,20 +176,20 @@ function VirtualizedListInner<T>(
           clearTimeout(containerHeightUpdateTimeoutRef.current);
         }
 
-        // CRITICAL FIX: If the change is specific to initialization (e.g. 8 -> real height), 
+        // CRITICAL FIX: If the change is specific to initialization (e.g. 8 -> real height),
         // update IMMEDIATELY to prevent "premature scrollbar" and layout jumps.
         // We detect this by checking if the old height was the fallback small value.
         const isInitialAdjustment = lastValidHeightRef.current <= 15 && safeHeight > 15;
 
         if (isInitialAdjustment) {
-           lastValidHeightRef.current = safeHeight;
-           setContainerHeight(safeHeight);
+          lastValidHeightRef.current = safeHeight;
+          setContainerHeight(safeHeight);
         } else {
-            // Debounce the update to batch rapid changes during resize/animation
-            containerHeightUpdateTimeoutRef.current = setTimeout(() => {
+          // Debounce the update to batch rapid changes during resize/animation
+          containerHeightUpdateTimeoutRef.current = setTimeout(() => {
             lastValidHeightRef.current = safeHeight;
             setContainerHeight(safeHeight);
-            }, 16); // One frame at 60fps
+          }, 16); // One frame at 60fps
         }
       }
     }
@@ -291,10 +290,9 @@ function VirtualizedListInner<T>(
     stickyBottom.shouldAutoScroll,
     totalHeight,
     effectiveContainerHeight,
-    enableSmoothScroll,
-    smoothScroll,
     setScrollAnchor,
     data.length,
+    setPendingScrollTop,
   ]);
 
   // Auto-scroll when in auto/locked mode and new content arrives
@@ -374,10 +372,7 @@ function VirtualizedListInner<T>(
 
       scrollTo: (offset: number) => {
         stickyBottom.handleScroll(offset - anchorScrollTop, "programmatic");
-        const newScrollTop = Math.max(
-          0,
-          Math.min(totalHeight - effectiveContainerHeight, offset)
-        );
+        const newScrollTop = Math.max(0, Math.min(totalHeight - effectiveContainerHeight, offset));
 
         if (enableSmoothScroll) {
           smoothScroll.jumpTo(newScrollTop);
@@ -617,23 +612,10 @@ function VirtualizedListInner<T>(
   // Create ref callback wrapper (now id-based for stable refs across insertions/deletions)
   const createItemRef = useCallback((id: string) => setItemRef(id), [setItemRef]);
 
-  // FIX: When in follow mode with few messages, force rendering ALL messages (0 to last).
-  // This prevents TWO bugs:
-  // 1. startIndex skipping early messages due to over-estimated scrollTop
-  // 2. endIndex not including the LAST message when scrollTop=0 but totalHeight > containerHeight
-  //    (because endIndex is calculated as "first offset > scrollTop + containerHeight - 1")
-  //
-  // The second bug is why scrollbar appearing causes content to jump up - the newest
-  // message isn't rendered because its offset exceeds the calculated viewport!
-  const FORCE_RENDER_ALL_THRESHOLD = 20; // Render all if fewer than this many messages
-  const forceRenderAll = stickyBottom.shouldAutoScroll && data.length <= FORCE_RENDER_ALL_THRESHOLD;
-  const effectiveStartIndex = forceRenderAll ? 0 : startIndex;
-  const effectiveEndIndex = forceRenderAll ? data.length - 1 : endIndex;
-
-  // Render visible items
+  // Render visible items (virtualization: only items in startIndex..endIndex)
   const renderedItems = useMemo(() => {
     const items: React.ReactElement[] = [];
-    for (let i = effectiveStartIndex; i <= effectiveEndIndex; i++) {
+    for (let i = startIndex; i <= endIndex; i++) {
       const item = data[i];
       if (item) {
         const id = keyExtractor(item, i);
@@ -645,63 +627,40 @@ function VirtualizedListInner<T>(
       }
     }
     return items;
-  }, [effectiveStartIndex, effectiveEndIndex, data, keyExtractor, renderItem, createItemRef]);
+  }, [startIndex, endIndex, data, keyExtractor, renderItem, createItemRef]);
 
-  // Note: scrollbarThumbColor and scrollTop are reserved for future native scroll support
-  // Standard Ink doesn't support overflowY="scroll", only "hidden" or "visible"
-  // Gemini CLI uses a forked Ink (@jrichman/ink) with scroll support
-  void scrollbarThumbColor;
+  // Spacer heights for proper scroll position (from useVirtualization)
+  const { topSpacerHeight, bottomSpacerHeight } = useMemo(() => {
+    const top = offsets[startIndex] ?? 0;
+    const bottom = totalHeight - (offsets[endIndex + 1] ?? totalHeight);
+    return { topSpacerHeight: top, bottomSpacerHeight: bottom };
+  }, [offsets, startIndex, endIndex, totalHeight]);
 
-  // CRITICAL: Ink doesn't support real CSS scrolling.
-  // overflow="hidden" just clips content, it doesn't scroll.
-  // We must NOT use spacers - instead, render visible items directly at the top.
-  // The "scrolling" effect is achieved by changing which items are rendered (startIndex/endIndex).
-  //
-  // For alignToBottom: use justifyContent="flex-end" to push content to bottom
-  // when total content height is less than container height.
-  //
-  // FIX: Expert analysis identified that estimated totalHeight can be unstable during streaming,
-  // causing incorrect shouldAlignToBottom decisions. The height estimates can be wildly off
-  // due to ANSI codes, wrap width miscalculation, or streaming content changes.
-  //
-  // CRITICAL INSIGHT: The root cause of "floating in middle" is:
-  // 1. When totalHeight is OVER-estimated, scrollTop = totalHeight - containerHeight is large
-  // 2. This causes startIndex to skip early messages (they're "above" the viewport)
-  // 3. But actual rendered content is less than containerHeight
-  // 4. With flex-start, content sits at top with blank space below
-  //
-  // Solution: When in follow mode (shouldAutoScroll), ALWAYS use flex-end.
-  // This ensures content sticks to bottom even when estimates are wrong.
-  // Only use flex-start when user has manually scrolled up (not following).
-  const renderingFromStart = startIndex === 0;
-  const estimatedContentFits = totalHeight < effectiveContainerHeight;
-  const inFollowMode = stickyBottom.shouldAutoScroll;
-
-  // Use flex-end when:
-  // - alignToBottom is requested AND
-  // - EITHER content fits OR we're in follow mode (following new content)
-  // Only use flex-start when user has scrolled up and is NOT following
-  const shouldAlignToBottom = alignToBottom && (estimatedContentFits || inFollowMode);
-
-  // Debug logging removed (was noisy in production).
+  // Use native scroll when content exceeds viewport
+  const needsScroll = totalHeight > effectiveContainerHeight;
+  const effectiveScrollTop = needsScroll ? anchorScrollTop : 0;
 
   return (
     <Box
       ref={containerRef as React.RefObject<DOMElement>}
-      overflowY="hidden"
+      overflowY="scroll"
       overflowX="hidden"
+      scrollTop={effectiveScrollTop}
+      scrollbarThumbColor={scrollbarThumbColor ?? "gray"}
       width="100%"
       height="100%"
       flexDirection="column"
       flexGrow={1}
       minHeight={0}
       paddingRight={1}
-      justifyContent={shouldAlignToBottom ? "flex-end" : "flex-start"}
     >
       <Box flexShrink={0} width="100%" flexDirection="column">
-        {/* Render visible items directly - no spacers needed in Ink */}
-        {/* In Ink, "scrolling" = changing which items we render */}
+        {/* Top spacer for items above visible range */}
+        <Box height={topSpacerHeight} flexShrink={0} />
+        {/* Visible items only */}
         {renderedItems}
+        {/* Bottom spacer for items below visible range */}
+        <Box height={bottomSpacerHeight} flexShrink={0} />
       </Box>
     </Box>
   );

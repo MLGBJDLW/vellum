@@ -35,6 +35,7 @@ import {
 } from "./commands/credentials.js";
 import { executeInit } from "./commands/init.js";
 import { createLspCommand } from "./commands/lsp.js";
+import { handleRun } from "./commands/run.js";
 import {
   handleSkillCreate,
   handleSkillList,

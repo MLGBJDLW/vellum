@@ -29,13 +29,13 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
     const providerRegistry = new ProviderRegistry({ credentialManager });
     LLM.initialize(providerRegistry);
 
-    const modeConfig = BUILTIN_CODING_MODES["vibe"]; 
+    const modeConfig = BUILTIN_CODING_MODES.vibe;
     const orchestrator = getOrCreateOrchestrator();
 
     const factoryResult = await createAgentFactory({
       cwd: process.cwd(),
       projectRoot: process.cwd(),
-      role: "coder", 
+      role: "coder",
       mode: "vibe",
     });
     const { promptBuilder, cleanup } = factoryResult;
@@ -54,7 +54,7 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
       model: options.model,
       cwd: process.cwd(),
       projectRoot: process.cwd(),
-      interactive: false, 
+      interactive: false,
       orchestrator,
       promptBuilder,
       getThinkingConfig: getEffectiveThinkingConfig,
@@ -64,21 +64,26 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
       enableSkillsIntegration: true,
     });
 
-    const result = await agentLoop.runSingleTurn(prompt);
+    // Listen for assistant text output
+    agentLoop.on("text", (text: string) => {
+      process.stdout.write(text);
+    });
 
-    // The result will contain the agent's response.
-    // We can handle different types of results here.
-    console.log("Agent finished a turn.");
-    // For now, just log the raw result for debugging.
-    // A more sophisticated approach would be to render the output nicely.
-    for (const event of result) {
-      if (event.type === 'ui' && event.ui.message) {
-        console.log(event.ui.message);
-      } else if (event.type === 'thought') {
-        console.log(`[Thought] ${event.thought}`);
-      }
-    }
-    
+    // Listen for completion
+    agentLoop.on("complete", () => {
+      console.log("\n[Agent completed]");
+    });
+
+    // Add user message and run
+    agentLoop.addMessage({
+      id: createId(),
+      role: "user",
+      parts: [{ type: "text", text: prompt }],
+      metadata: { createdAt: Date.now() },
+    });
+
+    await agentLoop.run();
+
     await cleanup();
   } catch (error) {
     initError = error instanceof Error ? error : new Error(String(error));
