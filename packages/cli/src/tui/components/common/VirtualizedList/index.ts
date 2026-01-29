@@ -118,19 +118,6 @@ export {
   useAnchorManager,
   useAnchorWithEffect,
 } from "./scrollAnchorAPI.js";
-// Sliding Window Buffer (optimized item tracking)
-export {
-  createInitialState as createSlidingWindowInitialState,
-  DEFAULT_SLIDING_WINDOW_CONFIG,
-  getTotalLineCount,
-  getVisibleLines,
-  type SlidingWindowAction,
-  type SlidingWindowConfig,
-  type SlidingWindowState,
-  shouldFlush,
-  slidingWindowReducer,
-  useSlidingWindow,
-} from "./slidingWindow.js";
 export {
   type HeightCache,
   SCROLL_TO_ITEM_END,

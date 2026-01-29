@@ -639,6 +639,10 @@ function VirtualizedListInner<T>(
   // Use native scroll when content exceeds viewport
   const needsScroll = totalHeight > effectiveContainerHeight;
   const effectiveScrollTop = needsScroll ? anchorScrollTop : 0;
+  const alignToBottomSpacerHeight =
+    alignToBottom && !needsScroll
+      ? Math.max(0, Math.round(effectiveContainerHeight - totalHeight))
+      : 0;
 
   return (
     <Box
@@ -655,6 +659,8 @@ function VirtualizedListInner<T>(
       paddingRight={1}
     >
       <Box flexShrink={0} width="100%" flexDirection="column">
+        {/* Align short content to bottom when requested */}
+        {alignToBottomSpacerHeight > 0 && <Box height={alignToBottomSpacerHeight} flexShrink={0} />}
         {/* Top spacer for items above visible range */}
         <Box height={topSpacerHeight} flexShrink={0} />
         {/* Visible items only */}

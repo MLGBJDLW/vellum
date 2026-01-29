@@ -277,6 +277,8 @@ function approvalPolicyToTrustMode(policy: ApprovalPolicy): TrustMode {
       return "auto";
     case "full-auto":
       return "full";
+    default:
+      throw new Error(`Unknown approval policy: ${policy}`);
   }
 }
 
@@ -4873,7 +4875,6 @@ function AppContentView({
           messages={messages}
           pendingMessage={pendingMessage}
           isLoading={isLoading}
-          adaptive={true}
           estimatedItemHeight={4}
           scrollKeyMode={commandInputFocused ? "page" : "all"}
           forceFollowOnInput={true}

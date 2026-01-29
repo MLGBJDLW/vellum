@@ -511,14 +511,7 @@ export function useVirtualization<T = unknown>(
 
     // Return raw range directly - let Ink handle overflow
     return { startIndex: safeRawStartIndex, endIndex: safeRawEndIndex };
-  }, [
-    rawStartIndex,
-    rawEndIndex,
-    safeContainerHeight,
-    dataLength,
-    scrollTop,
-    estimatedItemHeight,
-  ]);
+  }, [rawStartIndex, rawEndIndex, safeContainerHeight, dataLength, estimatedItemHeight]);
 
   // isOversize is kept for API compatibility but always false
   // (ClippedMessage doesn't exist yet, so we can't handle oversize items)

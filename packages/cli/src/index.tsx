@@ -74,10 +74,12 @@ function getResultMessage(result: CommandResult): string {
       return result.prompt.message;
     case "pending":
       return result.operation.message;
+    default:
+      return "";
   }
 }
-// ============================================
-// T-VIRTUAL-SCROLL: Working Stdio Proxy for Ink
+// ===========================================
+
 // ============================================
 
 /**

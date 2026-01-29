@@ -2,24 +2,26 @@
  * MessageList Component (T017)
  *
  * Displays a list of messages with auto-scroll support and optimized rendering.
- * Supports optional Ink <Static> rendering for completed messages in static output mode,
- * otherwise renders within layout and only re-renders the pending streaming message.
+ * Uses virtualized rendering for optimal performance with large message lists.
  *
- * Key optimization: Static rendering pattern from Gemini CLI (opt-in)
- * - historyMessages: Rendered in <Static> only when static output mode is enabled
- * - pendingMessage: Only this causes re-renders during streaming
+ * V2 Simplified Props (Phase 3):
+ * - Core: messages, isStreaming, isFocused
+ * - Callbacks: onScrollChange
+ * - Configuration: estimatedItemHeight, scrollKeyMode
  *
- * Virtualized mode (useVirtualizedList=true):
- * - Only renders visible items for optimal performance
- * - Best for very long conversations (100+ messages)
- * - Uses VirtualizedList component ported from Gemini CLI
+ * Features:
+ * - Virtualized rendering (always enabled for performance)
+ * - Auto-scroll to bottom with manual override
+ * - Keyboard navigation (PageUp/Down, Home/End)
+ * - Thinking indicator during streaming
+ * - New messages banner for unread notifications
  *
  * @module tui/components/Messages/MessageList
  */
 
 import { getIcons } from "@vellum/shared";
-import { Box, type Key, Static, Text, useInput } from "ink";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Box, type DOMElement, type Key, measureElement, Text, useInput } from "ink";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getThinkingDisplayMode, subscribeToDisplayMode } from "../../../commands/think.js";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
@@ -27,7 +29,6 @@ import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
 import { useAnimatedScrollbar } from "../../hooks/useAnimatedScrollbar.js";
 import { useDiffMode } from "../../hooks/useDiffMode.js";
 import { useKeyboardScroll } from "../../hooks/useKeyboardScroll.js";
-import { type ModeControllerConfig, useModeController } from "../../hooks/useModeController.js";
 import { useScrollController } from "../../hooks/useScrollController.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTUITranslation } from "../../i18n/index.js";
@@ -70,74 +71,112 @@ const DEBUG_TUI = process.env.NODE_ENV === "development" && process.env.DEBUG_TU
 
 /**
  * Props for the MessageList component.
+ *
+ * V2 Simplified Interface (Phase 3):
+ * - Core: messages, isStreaming, isFocused
+ * - Callbacks: onScrollChange
+ * - Configuration: estimatedItemHeight, scrollKeyMode
+ *
+ * Deprecated props are kept for backward compatibility but will be removed in v3.
  */
 export interface MessageListProps {
-  /** Array of messages to display (for backward compatibility) */
+  // ===========================================================================
+  // Core Props (Required/Recommended)
+  // ===========================================================================
+
+  /** Array of messages to display */
   readonly messages: readonly Message[];
-  /** Completed messages for optional <Static> rendering in static output mode */
-  readonly historyMessages?: readonly Message[];
-  /** Currently streaming message (only this causes re-renders) */
-  readonly pendingMessage?: Message | null;
-  /** Whether the agent is currently processing (shows thinking indicator) */
-  readonly isLoading?: boolean;
-  /** Whether to automatically scroll to bottom on new messages (default: true) */
-  readonly autoScroll?: boolean;
-  /** Callback when scroll position changes relative to bottom */
-  readonly onScrollChange?: (isAtBottom: boolean) => void;
-  /** Maximum height in lines (optional, for windowed display) */
-  readonly maxHeight?: number;
+
   /**
-   * Enable virtualized rendering for optimal performance with large lists.
-   * When true, only visible messages are rendered.
-   * Best for conversations with 100+ messages.
+   * Whether the agent is currently streaming a response.
+   * Shows thinking indicator when true and no content has arrived.
    * @default false
    */
-  readonly useVirtualizedList?: boolean;
+  readonly isStreaming?: boolean;
+
+  /**
+   * Whether this component has keyboard focus.
+   * Controls whether PageUp/PageDown/arrow keys work.
+   * @default true
+   */
+  readonly isFocused?: boolean;
+
+  // ===========================================================================
+  // Callbacks
+  // ===========================================================================
+
+  /** Callback when scroll position changes relative to bottom */
+  readonly onScrollChange?: (isAtBottom: boolean) => void;
+
+  // ===========================================================================
+  // Configuration
+  // ===========================================================================
+
   /**
    * Estimated height per message in lines (for virtualization).
    * Can be a fixed number or function for variable heights.
    * @default 4
    */
   readonly estimatedItemHeight?: number | ((index: number) => number);
-  /**
-   * Whether this component has focus for keyboard input.
-   * Controls whether PageUp/PageDown/arrow keys work.
-   * @default true (active when not specified for backward compatibility)
-   */
-  readonly isFocused?: boolean;
+
   /**
    * Which keys are allowed for scroll control.
    * - "all": arrows, PageUp/PageDown, Home/End (default)
    * - "page": only PageUp/PageDown to avoid stealing input navigation
    */
   readonly scrollKeyMode?: "all" | "page";
+
+  // ===========================================================================
+  // Deprecated Props (kept for backward compatibility)
+  // ===========================================================================
+
   /**
-   * When true, any non-scroll key while manually scrolled jumps back to latest.
-   * This keeps auto-follow "sticky" unless the user is actively scrolling.
-   * @default true
+   * @deprecated No longer used. Use `messages` array directly.
+   * Static rendering is handled internally.
+   */
+  readonly historyMessages?: readonly Message[];
+
+  /**
+   * @deprecated No longer needed. Streaming messages should have `isStreaming: true`
+   * in the messages array. This prop is merged into `messages` internally.
+   */
+  readonly pendingMessage?: Message | null;
+
+  /**
+   * @deprecated Use `isStreaming` instead. This prop is kept for backward compatibility.
+   * Shows thinking indicator when true and no content has arrived.
+   */
+  readonly isLoading?: boolean;
+
+  /**
+   * @deprecated Always enabled. Auto-scroll is the default behavior.
+   * Users can manually scroll up to pause, scroll to bottom to resume.
+   */
+  readonly autoScroll?: boolean;
+
+  /**
+   * @deprecated Container height is used automatically.
+   * Maximum height in lines (optional, for windowed display).
+   */
+  readonly maxHeight?: number;
+
+  /**
+   * @deprecated Always true. Virtualized rendering is always enabled for performance.
+   */
+  readonly useVirtualizedList?: boolean;
+
+  /**
+   * @deprecated Always true. Auto-follow resumes on any non-scroll key press.
    */
   readonly forceFollowOnInput?: boolean;
+
   /**
-   * Render mode configuration override.
-   * Controls thresholds for switching between static/windowed/virtualized modes.
-   */
-  readonly modeConfig?: ModeControllerConfig;
-  /**
-   * Whether to enable adaptive mode switching based on content height.
-   * When false, falls back to legacy behavior.
-   * @default true
-   */
-  readonly adaptive?: boolean;
-  /**
-   * Whether to use the alternate terminal buffer.
-   * Required for adaptive mode viewport calculation.
-   * @default false
+   * @deprecated Handled at App level. Alternate buffer mode for viewport calculation.
    */
   readonly useAltBuffer?: boolean;
+
   /**
-   * Enable new scroll controller with follow/manual modes.
-   * When enabled, adds ScrollIndicator and NewMessagesBadge.
-   * @default false
+   * @deprecated Always true in V2. New scroll controller is always enabled.
    */
   readonly enableScroll?: boolean;
 }
@@ -591,23 +630,30 @@ const MessageItem = memo(function MessageItem({
  * ```
  */
 const MessageList = memo(function MessageList({
+  // Core props
   messages,
-  historyMessages,
-  pendingMessage,
-  isLoading = false,
-  autoScroll = true,
-  onScrollChange,
-  maxHeight,
-  useVirtualizedList = false,
-  estimatedItemHeight = 4,
+  isStreaming,
   isFocused,
+  // Callbacks
+  onScrollChange,
+  // Configuration
+  estimatedItemHeight = 4,
   scrollKeyMode = "all",
+  // Deprecated props (kept for backward compatibility)
+  historyMessages: _historyMessages,
+  pendingMessage,
+  isLoading,
+  autoScroll = true,
+  maxHeight,
+  useVirtualizedList: _useVirtualizedList,
   forceFollowOnInput = true,
-  modeConfig,
-  adaptive = true,
   useAltBuffer = false,
   enableScroll = false,
 }: MessageListProps) {
+  // Merge isStreaming and isLoading for backward compatibility
+  // isStreaming takes precedence over deprecated isLoading
+  const isLoadingInternal = isStreaming ?? isLoading ?? false;
+
   const { theme } = useTheme();
 
   // Subscribe to thinking display mode changes
@@ -619,11 +665,11 @@ const MessageList = memo(function MessageList({
   }, []);
 
   // Determine if we should show the thinking indicator:
-  // - Agent is loading (processing/waiting)
+  // - Agent is streaming (processing/waiting)
   // - AND no pending content has arrived yet
   // NOTE: Hoisted here to avoid TDZ error with scrollViewportHeight calculation
   const hasPendingContent = pendingMessage?.content && pendingMessage.content.length > 0;
-  const showThinkingIndicator = isLoading && !hasPendingContent;
+  const showThinkingIndicator = isLoadingInternal && !hasPendingContent;
   const hasActiveStreaming = Boolean(pendingMessage?.isStreaming);
   const forceFollowWhileStreaming =
     autoScroll && (hasActiveStreaming || showThinkingIndicator || pendingMessage != null);
@@ -655,29 +701,13 @@ const MessageList = memo(function MessageList({
 
   const estimatedContentWidth = Math.max(20, width - 24);
 
-  // Calculate total estimated content height for mode decisions
+  // Calculate total estimated content height for scroll controller
   const totalContentHeight = useMemo(() => {
     return messages.reduce(
       (sum, msg) => sum + estimateMessageHeight(msg, { width: estimatedContentWidth }),
       0
     );
   }, [messages, estimatedContentWidth]);
-
-  // Mode controller for adaptive rendering decisions
-  // Now considers both content height AND message count for virtualization decisions
-  const {
-    mode,
-    windowSize,
-    modeReason,
-    staticThreshold,
-    virtualThreshold,
-    virtualizedByMessageCount,
-  } = useModeController({
-    availableHeight,
-    totalContentHeight,
-    config: modeConfig,
-    messageCount: messages.length,
-  });
 
   const toolGroupCallIds = useMemo(() => {
     const ids = new Set<string>();
@@ -712,9 +742,6 @@ const MessageList = memo(function MessageList({
   const isStaticOutputMode = process.env.VELLUM_STATIC_OUTPUT === "1";
   const shouldConstrainHeight =
     !isStaticOutputMode && (useAltBuffer || (process.stdout.isTTY ?? false));
-  // Ink <Static> renders outside the flex layout; keep it disabled to avoid
-  // messages leaking into scrollback during interactive rendering.
-  const allowStaticRendering = false;
 
   // Ref for VirtualizedList imperative control
   const virtualizedListRef = useRef<VirtualizedListRef<Message>>(null);
@@ -731,43 +758,22 @@ const MessageList = memo(function MessageList({
   // Normalize maxHeight - treat 0, undefined, null as "no max height"
   const effectiveMaxHeight = maxHeight && maxHeight > 0 ? maxHeight : undefined;
 
-  // Determine if virtualized rendering should be used
-  // Either explicitly requested OR adaptive mode recommends it
-  const useVirtualizedListInternal = useVirtualizedList || (adaptive && mode === "virtualized");
+  // Always use virtualized rendering (Phase 2a: removed mode switching)
+  const useVirtualizedListInternal = true;
 
-  // Compute max height based on adaptive mode or explicit prop
-  // When adaptive=true, use windowSize from mode controller for windowed mode only.
-  // When virtualized, let the layout determine the height to avoid premature truncation.
+  // Compute max height for virtualized list
   const computedMaxHeight = useMemo(() => {
     if (effectiveMaxHeight !== undefined) {
       // Explicit maxHeight prop takes precedence
       return effectiveMaxHeight;
     }
-    if (useVirtualizedListInternal) {
-      // When the layout isn't height-constrained, give VirtualizedList a fixed height
-      // so it doesn't expand with content and push the input/footer out of view.
-      if (!shouldConstrainHeight) {
-        return availableHeight;
-      }
-      return undefined;
-    }
-    if (!adaptive) {
-      return undefined;
-    }
-    if (mode !== "static") {
-      // Adaptive mode: use computed windowSize
-      return windowSize;
+    // When the layout isn't height-constrained, give VirtualizedList a fixed height
+    // so it doesn't expand with content and push the input/footer out of view.
+    if (!shouldConstrainHeight) {
+      return availableHeight;
     }
     return undefined;
-  }, [
-    effectiveMaxHeight,
-    useVirtualizedListInternal,
-    shouldConstrainHeight,
-    availableHeight,
-    adaptive,
-    mode,
-    windowSize,
-  ]);
+  }, [effectiveMaxHeight, shouldConstrainHeight, availableHeight]);
 
   // FIX: Improved thinking indicator height estimation
   // ThinkingIndicator includes: StreamingIndicator (1 line) + marginBottom (1) + paddingX
@@ -790,31 +796,6 @@ const MessageList = memo(function MessageList({
   // T-VIRTUAL-SCROLL: Removed hasToolGroups check - tool groups work fine with Static rendering
   // as they are processed separately during message rendering.
   //
-  // FIX: Improved thinking block handling - only disable Static mode for ACTIVELY STREAMING
-  // thinking blocks, not all completed thinking blocks. Completed thinking blocks have stable
-  // heights (collapsed by default) and work fine with Static.
-  // This significantly improves performance for conversations with thinking content.
-  const hasActiveStreamingThinking = useMemo(() => {
-    // Only disable Static if there's currently streaming thinking content
-    // that could change height during rendering
-    if (
-      pendingMessage?.thinking &&
-      pendingMessage.isStreaming &&
-      !pendingMessage.isThinkingComplete
-    ) {
-      return true;
-    }
-    // History messages with thinking are safe (collapsed by default, stable height)
-    return false;
-  }, [pendingMessage?.thinking, pendingMessage?.isStreaming, pendingMessage?.isThinkingComplete]);
-
-  const useStaticRendering =
-    allowStaticRendering &&
-    historyMessages !== undefined &&
-    !computedMaxHeight &&
-    !hasActiveStreamingThinking &&
-    (mode === "static" || !adaptive);
-
   // ==========================================================================
   // New Scroll Controller (enableScroll=true)
   // ==========================================================================
@@ -883,36 +864,14 @@ const MessageList = memo(function MessageList({
   useEffect(() => {
     if (DEBUG_TUI) {
       console.error("[MessageList]", {
-        mode,
-        modeReason,
         totalContentHeight,
         availableHeight,
-        windowSize,
-        staticThreshold,
-        virtualThreshold,
         computedMaxHeight,
-        useStaticRendering,
         useVirtualizedListInternal,
         messageCount: messages.length,
-        virtualizedByMessageCount,
-        adaptive,
       });
     }
-  }, [
-    mode,
-    modeReason,
-    totalContentHeight,
-    availableHeight,
-    windowSize,
-    staticThreshold,
-    virtualThreshold,
-    computedMaxHeight,
-    useStaticRendering,
-    useVirtualizedListInternal,
-    messages.length,
-    virtualizedByMessageCount,
-    adaptive,
-  ]);
+  }, [totalContentHeight, availableHeight, computedMaxHeight, messages.length]);
 
   // Current scroll position (index of the first visible message in windowed mode)
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -931,15 +890,6 @@ const MessageList = memo(function MessageList({
     }
     return scrollOffset >= messages.length - computedMaxHeight;
   }, [scrollOffset, messages.length, computedMaxHeight]);
-
-  // Calculate visible messages for windowed display (legacy mode and auto-windowed mode)
-  const visibleMessages = useMemo(() => {
-    if (!computedMaxHeight || messages.length <= computedMaxHeight) {
-      return messages;
-    }
-    const start = Math.max(0, Math.min(scrollOffset, messages.length - computedMaxHeight));
-    return messages.slice(start, start + computedMaxHeight);
-  }, [messages, computedMaxHeight, scrollOffset]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -973,7 +923,7 @@ const MessageList = memo(function MessageList({
       setScrollOffset(messages.length - computedMaxHeight);
     }
     setUserScrolledUp(false);
-  }, [enableScroll, scrollActions, useVirtualizedListInternal, messages.length, computedMaxHeight]);
+  }, [enableScroll, scrollActions, messages.length, computedMaxHeight]);
 
   // Scroll up helper
   const scrollUp = useCallback((amount = 1) => {
@@ -1273,7 +1223,6 @@ const MessageList = memo(function MessageList({
       },
       [
         enableScroll,
-        useVirtualizedListInternal,
         handleScrollControllerInput,
         isScrollNavigationKey,
         forceFollowOnInput,
@@ -1306,7 +1255,6 @@ const MessageList = memo(function MessageList({
   );
   const mutedColor = theme.semantic.text.muted;
   const accentColor = theme.colors.accent;
-  const borderColor = theme.semantic.border.default;
   const successColor = theme.colors.success;
   const errorColor = theme.colors.error;
   // Use muted color for thinking/reasoning content (dimmed appearance)
@@ -1334,6 +1282,7 @@ const MessageList = memo(function MessageList({
   // Callback to trigger re-measurement when ThinkingBlock height changes
   const handleThinkingHeightChange = useCallback(() => {
     virtualizedListRef.current?.forceRemeasure();
+    setStreamingMeasureNonce((prev) => prev + 1);
   }, []);
 
   // Virtualized list callbacks must be defined unconditionally to keep hook order stable.
@@ -1385,7 +1334,6 @@ const MessageList = memo(function MessageList({
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
-  const pendingThinkingToggle = pendingMessage ? getThinkingToggleInfo(pendingMessage) : null;
 
   const handleStickingChange = useCallback(
     (isSticking: boolean) => {
@@ -1450,7 +1398,7 @@ const MessageList = memo(function MessageList({
       scrollActions.setViewportHeight(innerHeight);
       scrollActions.jumpTo(offsetFromBottom);
     },
-    [enableScroll, useVirtualizedListInternal, scrollActions]
+    [enableScroll, scrollActions]
   );
 
   // Apply scroll controller state to VirtualizedList (keyboard/manual scroll)
@@ -1499,7 +1447,7 @@ const MessageList = memo(function MessageList({
       expectedScrollTopRef.current = targetScrollTop;
       list.scrollTo(targetScrollTop);
     }
-  }, [enableScroll, useVirtualizedListInternal, scrollState.offsetFromBottom]);
+  }, [enableScroll, scrollState.offsetFromBottom]);
 
   // IMPORTANT: pendingMessage is merged into allMessages to avoid Ink <Static>
   // layout issues. Ink's <Static> doesn't participate in Flexbox layout and
@@ -1542,8 +1490,66 @@ const MessageList = memo(function MessageList({
 
   const virtualizedMessages = useMemo(
     () => (useVirtualizedListInternal ? messageSeparation.stableMessages : allMessages),
-    [useVirtualizedListInternal, messageSeparation.stableMessages, allMessages]
+    [messageSeparation.stableMessages, allMessages]
   );
+
+  // ============================================================================
+  // Streaming Area Height Estimation
+  // ============================================================================
+  // NOTE: This hook MUST be before the early return to satisfy React hooks rules.
+  // Calculate streaming area height dynamically based on actual content.
+  // Thinking blocks can expand to 20+ lines, so we need accurate measurement.
+  const estimatedStreamingAreaHeight = useMemo(() => {
+    if (messageSeparation.streamingMessages.length === 0) return 0;
+
+    // Base height per message (header + minimal content + margin)
+    const baseHeight = typeof estimatedItemHeight === "number" ? estimatedItemHeight : 12;
+
+    // Calculate height for each streaming message
+    return messageSeparation.streamingMessages.reduce((total, msg) => {
+      let msgHeight = baseHeight;
+
+      // Add extra height for thinking blocks (expanded state can be 20+ lines)
+      // Use a conservative upper bound to prevent TUI overlap
+      if (msg.thinking && msg.thinking.length > 0) {
+        // Estimate thinking block lines: 4 for header/chrome + content lines
+        // Content lines = rough estimate of wrapped lines (conservative: 1 line per 60 chars)
+        const thinkingContentLines = Math.ceil(msg.thinking.length / 60);
+        // Cap at reasonable maximum to prevent extreme values
+        const thinkingHeight = Math.min(30, 4 + thinkingContentLines);
+        msgHeight += thinkingHeight;
+      }
+
+      return total + msgHeight;
+    }, 0);
+  }, [messageSeparation.streamingMessages, estimatedItemHeight]);
+
+  // Measure actual streaming area height to avoid overlap with virtualized list.
+  const streamingAreaRef = useRef<DOMElement | null>(null);
+  const [measuredStreamingHeight, setMeasuredStreamingHeight] = useState(0);
+  const [, setStreamingMeasureNonce] = useState(0);
+
+  useLayoutEffect(() => {
+    if (messageSeparation.streamingMessages.length === 0) {
+      if (measuredStreamingHeight !== 0) {
+        setMeasuredStreamingHeight(0);
+      }
+      return;
+    }
+
+    const node = streamingAreaRef.current;
+    if (!node) return;
+
+    const height = Math.max(0, Math.round(measureElement(node).height));
+    if (height !== measuredStreamingHeight) {
+      setMeasuredStreamingHeight(height);
+    }
+  }, [measuredStreamingHeight, messageSeparation.streamingMessages.length]);
+
+  const resolvedStreamingAreaHeight =
+    messageSeparation.streamingMessages.length > 0
+      ? Math.max(estimatedStreamingAreaHeight, measuredStreamingHeight)
+      : 0;
 
   const estimatedItemHeightForVirtualization = useMemo(() => {
     if (typeof estimatedItemHeight === "function") {
@@ -1612,7 +1618,6 @@ const MessageList = memo(function MessageList({
     }
     scrollToBottom();
   }, [
-    useVirtualizedListInternal,
     autoScroll,
     userScrolledUp,
     allMessages,
@@ -1636,252 +1641,36 @@ const MessageList = memo(function MessageList({
     );
   }
 
-  // Calculate scroll indicator
-  const showScrollUp = computedMaxHeight && scrollOffset > 0;
-  const showScrollDown = computedMaxHeight && messages.length > computedMaxHeight && !isAtBottom;
-
   // ==========================================================================
-  // Virtualized Rendering (for optimal performance with large lists)
+  // Virtualized Rendering (only rendering mode - Phase 2a)
   // ==========================================================================
-  // When useVirtualizedListInternal is enabled (explicitly or via adaptive mode),
-  // we use VirtualizedList which only renders visible items.
-  // This is ideal for very long conversations.
+  // FIX: When computedMaxHeight is undefined, rely on flex sizing so the list can
+  // shrink to make room for streaming messages rendered below VirtualizedList.
+  // Streaming area height is computed above (estimate + measurement) for the
+  // constrained-height path.
+  const listHeight =
+    computedMaxHeight !== undefined
+      ? Math.max(1, computedMaxHeight - thinkingIndicatorHeight - resolvedStreamingAreaHeight)
+      : undefined;
 
-  if (useVirtualizedListInternal) {
-    // FIX: Ensure listHeight always has a numeric value
-    // height="100%" in Ink/Yoga requires parent to have explicit height
-    // When computedMaxHeight is undefined, fallback to availableHeight or default 20
-    const listHeight =
-      computedMaxHeight !== undefined
-        ? Math.max(1, computedMaxHeight - thinkingIndicatorHeight)
-        : Math.max(8, (availableHeight ?? 20) - thinkingIndicatorHeight);
-
-    return (
-      <Box flexDirection="column" flexGrow={1} minHeight={0} height={computedMaxHeight}>
-        <Box flexDirection="row" flexGrow={1} height={listHeight}>
-          <Box flexDirection="column" flexGrow={1} height={listHeight}>
-            <VirtualizedList
-              ref={virtualizedListRef}
-              data={virtualizedMessages}
-              renderItem={renderMessageItem}
-              keyExtractor={keyExtractor}
-              estimatedItemHeight={estimatedItemHeightForVirtualization}
-              initialScrollIndex={SCROLL_TO_ITEM_END}
-              initialScrollOffsetInIndex={SCROLL_TO_ITEM_END}
-              onScrollTopChange={handleVirtualizedScrollTopChange}
-              onStickingToBottomChange={handleStickingChange}
-              scrollbarThumbColor={animatedThumbColor}
-              alignToBottom
-              isStreaming={hasActiveStreaming}
-            />
-          </Box>
-          {/* ScrollIndicator (right side) - only when enableScroll is true */}
-          {enableScroll && (
-            <ScrollIndicator
-              totalHeight={scrollState.totalHeight}
-              offsetFromBottom={scrollState.offsetFromBottom}
-              viewportHeight={scrollState.viewportHeight}
-              thumbColor={animatedThumbColor}
-              trackColor={animatedTrackColor}
-            />
-          )}
-        </Box>
-
-        {/* Thinking indicator - shows while agent is processing before first token */}
-        {showThinkingIndicator && <ThinkingIndicator />}
-
-        {/* Streaming messages rendered separately (outside VirtualizedList) */}
-        {messageSeparation.streamingMessages.length > 0 && (
-          <Box flexDirection="column" paddingX={1}>
-            {messageSeparation.streamingMessages.map((msg, index) => (
-              <Box key={msg.id}>
-                {renderMessageItem({ item: msg, index })}
-              </Box>
-            ))}
-          </Box>
-        )}
-
-        {/* NewMessagesBanner - enhanced unread notification */}
-        {bannerState.isVisible && (
-          <NewMessagesBanner
-            unreadCount={scrollState.newMessageCount}
-            isAtBottom={isAtBottomForBanner}
-            onJumpToBottom={scrollActions.scrollToBottom}
-          />
-        )}
-
-        {/* Auto-scroll status indicator (legacy) */}
-        {!enableScroll && userScrolledUp && autoScroll && (
-          <Box justifyContent="center">
-            <Text color={mutedColor} italic>
-              Auto-scroll paused (scroll to bottom to resume)
-            </Text>
-          </Box>
-        )}
-      </Box>
-    );
-  }
-
-  // ==========================================================================
-  // Optimized Rendering with Static (for completed messages)
-  // ==========================================================================
-  // When historyMessages is provided, we use Ink's <Static> for completed
-  // messages. Static content is rendered once and never re-renders, which
-  // dramatically improves performance during streaming.
-  if (useStaticRendering && historyMessages) {
-    return (
-      <Box flexDirection="column" flexGrow={1}>
-        {/* T-VIRTUAL-SCROLL: Removed spacer - Ink's Static component doesn't participate
-            in Flexbox layout, and the spacer can cause position issues. Messages flow
-            naturally from top to bottom with Static. */}
-
-        {/* Scroll up indicator (legacy) */}
-        {!enableScroll && showScrollUp && (
-          <Box justifyContent="center" borderBottom borderColor={borderColor}>
-            <Text color={mutedColor}>↑ {scrollOffset} more above ↑</Text>
-          </Box>
-        )}
-
-        <Box flexDirection="row">
-          <Box flexDirection="column" flexGrow={1}>
-            {/* History messages - rendered in <Static>, NEVER re-render */}
-            <Static items={historyMessages as Message[]}>
-              {(message: Message) => {
-                const thinkingToggle = getThinkingToggleInfo(message);
-                return (
-                  <Box key={message.id} paddingX={1}>
-                    <MessageItem
-                      message={message}
-                      roleColor={roleColors[message.role]}
-                      mutedColor={mutedColor}
-                      accentColor={accentColor}
-                      thinkingColor={thinkingColor}
-                      successColor={successColor}
-                      errorColor={errorColor}
-                      showToolCalls={shouldRenderInlineToolCalls(message)}
-                      thinkingDisplayMode={thinkingDisplayMode}
-                      thinkingToggleSignal={thinkingToggle.signal}
-                      thinkingToggleHint={thinkingToggle.hint}
-                    />
-                  </Box>
-                );
-              }}
-            </Static>
-
-            {/* Pending message - this is the ONLY thing that re-renders during streaming */}
-            {pendingMessage && (
-              <Box paddingX={1}>
-                <MessageItem
-                  message={pendingMessage}
-                  roleColor={roleColors[pendingMessage.role]}
-                  mutedColor={mutedColor}
-                  accentColor={accentColor}
-                  thinkingColor={thinkingColor}
-                  successColor={successColor}
-                  errorColor={errorColor}
-                  showToolCalls={shouldRenderInlineToolCalls(pendingMessage)}
-                  thinkingDisplayMode={thinkingDisplayMode}
-                  thinkingToggleSignal={pendingThinkingToggle?.signal}
-                  thinkingToggleHint={pendingThinkingToggle?.hint}
-                />
-              </Box>
-            )}
-          </Box>
-          {/* ScrollIndicator (right side) - only when enableScroll is true */}
-          {enableScroll && (
-            <ScrollIndicator
-              totalHeight={scrollState.totalHeight}
-              offsetFromBottom={scrollState.offsetFromBottom}
-              viewportHeight={scrollState.viewportHeight}
-              thumbColor={animatedThumbColor}
-              trackColor={animatedTrackColor}
-            />
-          )}
-        </Box>
-
-        {/* Thinking indicator - shows while agent is processing before first token */}
-        {showThinkingIndicator && <ThinkingIndicator />}
-
-        {/* NewMessagesBanner - enhanced unread notification */}
-        {bannerState.isVisible && (
-          <NewMessagesBanner
-            unreadCount={scrollState.newMessageCount}
-            isAtBottom={isAtBottomForBanner}
-            onJumpToBottom={scrollActions.scrollToBottom}
-          />
-        )}
-
-        {/* Scroll down indicator (legacy) */}
-        {!enableScroll && showScrollDown && (
-          <Box justifyContent="center" borderTop borderColor={borderColor}>
-            <Text color={mutedColor}>
-              ↓ {messages.length - scrollOffset - (computedMaxHeight ?? 0)} more below ↓
-            </Text>
-          </Box>
-        )}
-
-        {/* Auto-scroll status indicator when disabled by user scroll (legacy) */}
-        {!enableScroll && userScrolledUp && autoScroll && (
-          <Box justifyContent="center">
-            <Text color={mutedColor} italic>
-              Auto-scroll paused (scroll to bottom to resume)
-            </Text>
-          </Box>
-        )}
-      </Box>
-    );
-  }
-
-  // ==========================================================================
-  // Legacy Rendering (when historyMessages not provided)
-  // ==========================================================================
-  // FIX: Removed the empty <Box flexGrow={1} /> spacer that was pushing messages up
-  // and leaving large blank spaces at the bottom. Messages now flow naturally
-  // from top to bottom, consistent with Static mode behavior.
-  // The spacer was causing the "large blank spaces" bug reported by users.
   return (
-    <Box flexDirection="column" flexGrow={1} justifyContent="flex-end">
-      {/* Scroll up indicator (legacy) */}
-      {!enableScroll && showScrollUp && (
-        <Box justifyContent="center" borderBottom borderColor={borderColor}>
-          <Text color={mutedColor}>↑ {scrollOffset} more above ↑</Text>
-        </Box>
-      )}
-
-      <Box flexDirection="row">
-        {/* Messages */}
-        <Box flexDirection="column" paddingX={1} flexGrow={1}>
-          {visibleMessages.map((message) => {
-            if (message.role === "tool_group") {
-              return (
-                <ToolGroupItem
-                  key={message.id}
-                  message={message as Message & { role: "tool_group" }}
-                  accentColor={accentColor}
-                  mutedColor={mutedColor}
-                  successColor={successColor}
-                  errorColor={errorColor}
-                />
-              );
-            }
-            const thinkingToggle = getThinkingToggleInfo(message);
-            return (
-              <MessageItem
-                key={message.id}
-                message={message}
-                roleColor={roleColors[message.role]}
-                mutedColor={mutedColor}
-                accentColor={accentColor}
-                thinkingColor={thinkingColor}
-                successColor={successColor}
-                errorColor={errorColor}
-                showToolCalls={shouldRenderInlineToolCalls(message)}
-                thinkingDisplayMode={thinkingDisplayMode}
-                thinkingToggleSignal={thinkingToggle.signal}
-                thinkingToggleHint={thinkingToggle.hint}
-              />
-            );
-          })}
+    <Box flexDirection="column" flexGrow={1} minHeight={0} height={computedMaxHeight}>
+      <Box flexDirection="row" flexGrow={1} minHeight={0} height={listHeight}>
+        <Box flexDirection="column" flexGrow={1} minHeight={0} height={listHeight}>
+          <VirtualizedList
+            ref={virtualizedListRef}
+            data={virtualizedMessages}
+            renderItem={renderMessageItem}
+            keyExtractor={keyExtractor}
+            estimatedItemHeight={estimatedItemHeightForVirtualization}
+            initialScrollIndex={SCROLL_TO_ITEM_END}
+            initialScrollOffsetInIndex={SCROLL_TO_ITEM_END}
+            onScrollTopChange={handleVirtualizedScrollTopChange}
+            onStickingToBottomChange={handleStickingChange}
+            scrollbarThumbColor={animatedThumbColor}
+            alignToBottom
+            isStreaming={hasActiveStreaming}
+          />
         </Box>
         {/* ScrollIndicator (right side) - only when enableScroll is true */}
         {enableScroll && (
@@ -1898,6 +1687,15 @@ const MessageList = memo(function MessageList({
       {/* Thinking indicator - shows while agent is processing before first token */}
       {showThinkingIndicator && <ThinkingIndicator />}
 
+      {/* Streaming messages rendered separately (outside VirtualizedList) */}
+      {messageSeparation.streamingMessages.length > 0 && (
+        <Box ref={streamingAreaRef} flexDirection="column" paddingX={1} flexShrink={0}>
+          {messageSeparation.streamingMessages.map((msg, index) => (
+            <Box key={msg.id}>{renderMessageItem({ item: msg, index })}</Box>
+          ))}
+        </Box>
+      )}
+
       {/* NewMessagesBanner - enhanced unread notification */}
       {bannerState.isVisible && (
         <NewMessagesBanner
@@ -1907,16 +1705,7 @@ const MessageList = memo(function MessageList({
         />
       )}
 
-      {/* Scroll down indicator (legacy) */}
-      {!enableScroll && showScrollDown && (
-        <Box justifyContent="center" borderTop borderColor={borderColor}>
-          <Text color={mutedColor}>
-            ↓ {messages.length - scrollOffset - (computedMaxHeight ?? 0)} more below ↓
-          </Text>
-        </Box>
-      )}
-
-      {/* Auto-scroll status indicator when disabled by user scroll (legacy) */}
+      {/* Auto-scroll status indicator */}
       {!enableScroll && userScrolledUp && autoScroll && (
         <Box justifyContent="center">
           <Text color={mutedColor} italic>
