@@ -167,7 +167,7 @@ export class OpenAIProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "gpt-4o";
+    return "gpt-5.4";
   }
 
   /**

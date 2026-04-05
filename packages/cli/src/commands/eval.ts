@@ -128,7 +128,7 @@ async function runEval(taskId: string | undefined, options: EvalOptions): Promis
     runs: options.runs ?? 3,
     useMock: options.mock ?? false,
     providerType: options.provider ?? "anthropic",
-    model: options.model ?? "claude-sonnet-4-20250514",
+    model: options.model ?? "claude-sonnet-4-6",
     baseline: options.baseline,
     failOnRegression: options.failOnRegression ?? false,
     regressionThreshold: options.regressionThreshold ?? 0.1,
@@ -201,7 +201,7 @@ export function createEvalCommand(): Command {
     .option("--difficulty <level>", "Filter by difficulty (easy, medium, hard)")
     .option("--tag <tag>", "Filter by tag (repeatable)", collect, [])
     .option("--provider <name>", "LLM provider to use", "anthropic")
-    .option("--model <name>", "Model to use", "claude-sonnet-4-20250514")
+    .option("--model <name>", "Model to use", "claude-sonnet-4-6")
     .option("--mock", "Use mock provider (for testing)")
     .option("--runs <n>", "Number of runs per task", parseIntOption, 3)
     .option("--baseline <path>", "Baseline JSON for regression comparison")

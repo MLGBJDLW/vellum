@@ -2,7 +2,49 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { join } from "node:path";
 
+const repoRoot = process.cwd();
 const useShell = process.platform === "win32";
+const devPackages = [
+  { name: "@vellum/core", dir: join(repoRoot, "packages", "core"), bins: ["tsup"] },
+  { name: "@vellum/lsp", dir: join(repoRoot, "packages", "lsp"), bins: ["tsup"] },
+  { name: "@butlerw/vellum", dir: join(repoRoot, "packages", "cli"), bins: ["tsx"] },
+];
+
+function hasPackageBin(packageDir, binName) {
+  const binDir = join(packageDir, "node_modules", ".bin");
+  return fs.existsSync(join(binDir, binName)) || fs.existsSync(join(binDir, `${binName}.cmd`));
+}
+
+function ensureWorkspaceInstall() {
+  const missingPackages = devPackages
+    .map((pkg) => ({
+      ...pkg,
+      missingBins: pkg.bins.filter((binName) => !hasPackageBin(pkg.dir, binName)),
+    }))
+    .filter((pkg) => pkg.missingBins.length > 0);
+
+  if (missingPackages.length === 0) {
+    return;
+  }
+
+  console.error("[dev] Workspace dependencies are not installed correctly.");
+  for (const pkg of missingPackages) {
+    console.error(`[dev] Missing ${pkg.missingBins.join(", ")} for ${pkg.name}.`);
+  }
+  console.error("[dev] Run `pnpm install` from the same shell you use to run Vellum.");
+  if (useShell) {
+    console.error(
+      "[dev] If you previously installed from WSL or another environment, delete `node_modules` and reinstall from Windows to recreate the local .bin shims."
+    );
+  } else {
+    console.error(
+      "[dev] If you previously installed from another environment, delete `node_modules` and reinstall to recreate the workspace links."
+    );
+  }
+  process.exit(1);
+}
+
+ensureWorkspaceInstall();
 
 // Build core and lsp first to avoid race condition
 console.log("[dev] Building @vellum/core...");
@@ -28,7 +70,7 @@ if (lspBuildResult.status !== 0) {
 console.log("[dev] Core + LSP built, starting watchers...\n");
 
 const coreLogsToFile = process.env.VELLUM_DEV_CORE_LOGS !== "1";
-const coreLogDir = join(process.cwd(), ".vellum");
+const coreLogDir = join(repoRoot, ".vellum");
 const coreLogPath = join(coreLogDir, "dev-core.log");
 const lspLogPath = join(coreLogDir, "dev-lsp.log");
 

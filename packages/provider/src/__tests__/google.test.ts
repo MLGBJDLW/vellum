@@ -53,7 +53,7 @@ describe("GoogleProvider", () => {
   describe("getDefaultModel", () => {
     it("should return default model", () => {
       const provider = new GoogleProvider();
-      expect(provider.getDefaultModel()).toBe("gemini-2.5-flash");
+      expect(provider.getDefaultModel()).toBe("gemini-3.1-flash-preview");
     });
   });
 

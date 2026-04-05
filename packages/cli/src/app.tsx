@@ -117,6 +117,7 @@ import {
   workflowCommands,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
+import { mouseSlashCommands } from "./commands/mouse.js";
 import { roleSlashCommands } from "./commands/role.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
 import { checkUpdateOnStartup } from "./commands/update.js";
@@ -252,12 +253,12 @@ import { version } from "./version.js";
  */
 function getDefaultModelForProvider(provider: string): string {
   const defaults: Record<string, string> = {
-    anthropic: "claude-sonnet-4-20250514",
-    openai: "gpt-4o",
-    google: "gemini-2.0-flash",
-    "azure-openai": "gpt-4o",
-    gemini: "gemini-2.0-flash",
-    "vertex-ai": "gemini-2.0-flash",
+    anthropic: "claude-sonnet-4-6",
+    openai: "gpt-5.4",
+    google: "gemini-3.1-flash-preview",
+    "azure-openai": "gpt-5.4",
+    gemini: "gemini-3.1-flash-preview",
+    "vertex-ai": "gemini-3.1-flash-preview",
     cohere: "command-r-plus",
     mistral: "mistral-large-latest",
     groq: "llama-3.3-70b-versatile",
@@ -271,7 +272,7 @@ function getDefaultModelForProvider(provider: string): string {
     qwen: "qwen-max",
     moonshot: "moonshot-v1-8k",
   };
-  return defaults[provider] ?? "claude-sonnet-4-20250514";
+  return defaults[provider] ?? "claude-sonnet-4-6";
 }
 
 function approvalPolicyToTrustMode(policy: ApprovalPolicy): TrustMode {
@@ -524,6 +525,11 @@ function createCommandRegistry(): CommandRegistry {
   }
 
   for (const cmd of configSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // Register mouse slash commands
+  for (const cmd of mouseSlashCommands) {
     registry.register(cmd);
   }
 

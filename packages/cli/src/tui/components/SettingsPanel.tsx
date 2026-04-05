@@ -180,7 +180,7 @@ function useSettingsItems(category: SettingCategory): SettingItem[] {
           {
             key: "model",
             label: "Model",
-            value: modelSettings?.modelId ?? config?.llm?.model ?? "claude-sonnet-4-20250514",
+            value: modelSettings?.modelId ?? config?.llm?.model ?? "claude-sonnet-4-6",
             type: "string",
             editable: false,
           },

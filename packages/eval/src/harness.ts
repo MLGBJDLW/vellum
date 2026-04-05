@@ -88,7 +88,7 @@ export class EvalHarness {
       sessionId: `eval-${task.id}-${Date.now()}`,
       mode,
       providerType: this.options.providerType ?? "anthropic",
-      model: this.options.model ?? "claude-sonnet-4-20250514",
+      model: this.options.model ?? "claude-sonnet-4-6",
       cwd: env.workingDir,
       projectRoot: env.workingDir,
       maxIterations: 20,

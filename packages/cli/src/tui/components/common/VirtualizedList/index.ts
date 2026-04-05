@@ -34,6 +34,13 @@ export {
   useSmoothScroll,
   useVirtualization,
 } from "./hooks/index.js";
+// Item position context for click-region coordinate tracking
+export {
+  type ItemPosition,
+  useVirtualizedItemPosition,
+  VirtualizedItemPositionProvider,
+  type VirtualizedItemPositionProviderProps,
+} from "./ItemPositionContext.js";
 // Incremental Markdown Parsing
 export {
   DEFAULT_INCREMENTAL_MARKDOWN_CONFIG,
@@ -51,7 +58,6 @@ export {
   type UseIncrementalMarkdownReturn,
   useIncrementalMarkdown,
 } from "./incrementalMarkdown.js";
-
 export {
   createMessageRenderer,
   DEFAULT_MESSAGE_SEPARATION_CONFIG,
@@ -104,7 +110,6 @@ export {
   type UseScrollFocusReturn,
   useScrollFocus,
 } from "./ScrollFocusRegion.js";
-
 // Scroll Anchor API (W2: Textual-style anchor() method)
 export {
   type AnchorHandle,

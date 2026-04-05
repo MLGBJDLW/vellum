@@ -47,6 +47,16 @@ export {
   usePasteHandler,
 } from "./BracketedPasteContext.js";
 
+// Layout position context (content area coordinates)
+export {
+  type ContentBounds,
+  LayoutPositionContext,
+  type LayoutPositionContextValue,
+  LayoutPositionProvider,
+  type LayoutPositionProviderProps,
+  useLayoutPositionContext,
+} from "./LayoutPositionContext.js";
+
 // LSP Context
 export {
   type LspContextState,

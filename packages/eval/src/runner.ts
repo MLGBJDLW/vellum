@@ -163,7 +163,7 @@ export class EvalRunner extends EventEmitter {
   private async executeTask(task: EvalTask, options: RunOptions): Promise<EvalResult> {
     const runs: RunResult[] = [];
     const numRuns = options.runs ?? 3;
-    const model = options.model ?? "claude-sonnet-4-20250514";
+    const model = options.model ?? "claude-sonnet-4-6";
     const providerType = options.providerType ?? "anthropic";
 
     for (let i = 0; i < numRuns; i++) {

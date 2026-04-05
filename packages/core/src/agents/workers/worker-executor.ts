@@ -170,7 +170,7 @@ const DEFAULT_CONFIG: Required<WorkerExecutionConfig> = {
   maxIterations: 15,
   timeout: CONFIG_DEFAULTS.timeouts.shell, // 2 minutes
   providerType: "anthropic",
-  model: "claude-sonnet-4-20250514",
+  model: "claude-sonnet-4-6",
 };
 
 // ============================================

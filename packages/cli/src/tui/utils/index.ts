@@ -25,6 +25,12 @@ export {
   MESSAGE_BUFFER_DEFAULTS,
   useCircularBuffer,
 } from "./circularBuffer.js";
+// Click region registry for mouse click hit-testing
+export {
+  type ClickRegion,
+  ClickRegionRegistry,
+  globalClickRegistry,
+} from "./click-region.js";
 export { CursorManager, type CursorManagerImpl } from "./cursor-manager.js";
 export {
   clearTerminalCapabilitiesCache,
@@ -35,10 +41,13 @@ export {
   getSymbol,
   getTerminalCapabilities,
   getTerminalName,
+  supportsSynchronizedOutput,
   type TerminalCapabilities,
   type TerminalType,
 } from "./detectTerminal.js";
 export { findLastSafeSplitPoint } from "./findLastSafeSplitPoint.js";
+// Frame performance monitor
+export { FrameMonitor, type FrameStats, globalFrameMonitor } from "./frame-monitor.js";
 // Height estimation utilities (T002)
 export {
   // Constants for upper-bound estimation
@@ -69,6 +78,13 @@ export {
   parseEnhancedKey,
   reEnableKittyProtocol,
 } from "./kitty-keyboard-protocol.js";
+// No-flicker configuration
+export {
+  getNoFlickerConfig,
+  isNoFlickerEnabled,
+  type MouseMode,
+  type NoFlickerConfig,
+} from "./no-flicker.js";
 // Stdout guard for debugging (T002 Hardening)
 export {
   disableStdoutGuard,

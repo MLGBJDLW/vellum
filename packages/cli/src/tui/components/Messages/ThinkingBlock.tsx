@@ -18,13 +18,15 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef } from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { ToolCallInfo } from "../../context/MessagesContext.js";
+import { useMouseContextOptional } from "../../context/MouseContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { BannerShimmerText } from "../Banner/ShimmerText.js";
+import { Clickable } from "../common/Clickable.js";
 import { SPINNER_STYLES, Spinner } from "../common/Spinner.js";
 import { StreamingText } from "./StreamingText.js";
 
@@ -249,6 +251,9 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   displayMode = "full",
 }: ThinkingBlockProps): React.JSX.Element | null {
   const { theme } = useTheme();
+  const clickId = useId();
+  const mouseCtx = useMouseContextOptional();
+  const isMouseActive = mouseCtx?.isMouseActive ?? false;
 
   // Animation frame for tool call spinners
   const frameIndex = useAnimationFrame(TOOL_SPINNER_FRAMES);
@@ -435,44 +440,61 @@ export const ThinkingBlock = memo(function ThinkingBlock({
       borderTop={false}
       borderBottom={false}
     >
-      {/* Header row with toggle */}
-      <Box flexDirection="row" alignItems="center">
-        {/* Streaming spinner */}
-        {isStreaming && (
-          <>
-            <Spinner color={thinkingColor} frames={SPINNER_STYLES.dots} />
-            <Text> </Text>
-          </>
-        )}
+      {/* Header row with toggle — clickable to expand/collapse */}
+      <Clickable
+        id={`thinking-toggle-${clickId}`}
+        onClick={_toggle}
+        height={1}
+        enabled={!isCompactMode && !isStreaming}
+      >
+        <Box flexDirection="row" alignItems="center">
+          {/* Streaming spinner */}
+          {isStreaming && (
+            <>
+              <Spinner color={thinkingColor} frames={SPINNER_STYLES.dots} />
+              <Text> </Text>
+            </>
+          )}
 
-        {/* Icon */}
-        <Text color={thinkingColor}>[...] </Text>
+          {/* Icon */}
+          <Text color={thinkingColor}>[...] </Text>
 
-        {/* Header text - clickable area concept (visual only in TUI) */}
-        {isStreaming ? (
-          <BannerShimmerText baseColor={thinkingColor} highlightColor="#FFD700" enabled={true}>
-            {headerParts.join(" ")}
-          </BannerShimmerText>
-        ) : (
-          <Text color={thinkingColor} dimColor italic>
-            {headerParts.join(" ")}
-          </Text>
-        )}
+          {/* Header text - clickable area concept (visual only in TUI) */}
+          {isStreaming ? (
+            <BannerShimmerText baseColor={thinkingColor} highlightColor="#FFD700" enabled={true}>
+              {headerParts.join(" ")}
+            </BannerShimmerText>
+          ) : (
+            <Text color={thinkingColor} dimColor italic>
+              {headerParts.join(" ")}
+            </Text>
+          )}
 
-        {/* Keyboard hint */}
-        {effectiveKeyboardToggle && !isStreaming && (
-          <Text color={mutedColor} dimColor>
-            {" "}
-            (press 't')
-          </Text>
-        )}
-        {toggleHint && !isStreaming && !isCompactMode && (
-          <Text color={mutedColor} dimColor>
-            {" "}
-            ({toggleHint})
-          </Text>
-        )}
-      </Box>
+          {/* Keyboard hint */}
+          {effectiveKeyboardToggle && !isStreaming && (
+            <Text color={mutedColor} dimColor>
+              {" "}
+              (press 't')
+            </Text>
+          )}
+          {toggleHint && !isStreaming && !isCompactMode && (
+            <Text color={mutedColor} dimColor>
+              {" "}
+              ({toggleHint})
+            </Text>
+          )}
+          {isMouseActive &&
+            !isStreaming &&
+            !isCompactMode &&
+            !toggleHint &&
+            !effectiveKeyboardToggle && (
+              <Text color={mutedColor} dimColor>
+                {" "}
+                [click to toggle]
+              </Text>
+            )}
+        </Box>
+      </Clickable>
 
       {/* Content area - In compact mode, don't show any content (no preview) */}
       {isCompactMode ? null : effectiveIsCollapsed ? (

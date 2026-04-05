@@ -54,7 +54,7 @@ describe("OpenAIProvider", () => {
   describe("getDefaultModel", () => {
     it("should return default model", () => {
       const provider = new OpenAIProvider();
-      expect(provider.getDefaultModel()).toBe("gpt-4o");
+      expect(provider.getDefaultModel()).toBe("gpt-5.4");
     });
   });
 

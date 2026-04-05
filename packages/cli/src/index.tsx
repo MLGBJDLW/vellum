@@ -221,7 +221,7 @@ program.name("vellum").description("Next-generation AI coding agent").version(ve
 program
   .command("chat", { isDefault: true })
   .description("Start interactive chat session")
-  .option("-m, --model <model>", "Model to use", "claude-sonnet-4-20250514")
+  .option("-m, --model <model>", "Model to use", "claude-sonnet-4-6")
   .option("-p, --provider <provider>", "Provider to use", "anthropic")
   .option("-l, --language <locale>", "Language/locale to use (e.g., en, zh)")
   // T037: --mode flag

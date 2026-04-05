@@ -13,12 +13,14 @@ import type React from "react";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "../theme/provider.js";
+import { getNoFlickerConfig } from "../utils/no-flicker.js";
 import { AnimationProvider } from "./AnimationContext.js";
 import { AppProvider, type AppState } from "./AppContext.js";
 import { BracketedPasteProvider } from "./BracketedPasteContext.js";
 import { LspProvider } from "./LspContext.js";
 import { McpProvider } from "./McpContext.js";
 import { type Message, MessagesProvider } from "./MessagesContext.js";
+import { MouseProvider } from "./MouseContext.js";
 import { OverflowProvider } from "./OverflowContext.js";
 import { ResilienceProvider } from "./ResilienceContext.js";
 import { ScrollProvider } from "./ScrollContext.js";
@@ -111,25 +113,31 @@ export function RootProvider({
   toolRegistry,
   toolExecutor,
 }: RootProviderProps): React.JSX.Element {
+  // Resolve mouse mode from config (env vars > settings file > defaults)
+  const { mouseMode } = getNoFlickerConfig();
+  const resolvedMouseMode = mouseMode === "disabled" ? undefined : mouseMode;
+
   return (
     <ThemeProvider theme={theme}>
       <AnimationProvider>
         <BracketedPasteProvider>
           <OverflowProvider>
             <ScrollProvider autoScrollToBottom>
-              <AppProvider initialState={initialAppState}>
-                <ResilienceProvider>
-                  <ToolTimeoutProvider>
-                    <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
-                      <LspProvider>
-                        <MessagesProvider initialMessages={initialMessages}>
-                          <ToolsProvider>{children}</ToolsProvider>
-                        </MessagesProvider>
-                      </LspProvider>
-                    </McpProvider>
-                  </ToolTimeoutProvider>
-                </ResilienceProvider>
-              </AppProvider>
+              <MouseProvider mode={resolvedMouseMode} enabled={mouseMode !== "disabled"}>
+                <AppProvider initialState={initialAppState}>
+                  <ResilienceProvider>
+                    <ToolTimeoutProvider>
+                      <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
+                        <LspProvider>
+                          <MessagesProvider initialMessages={initialMessages}>
+                            <ToolsProvider>{children}</ToolsProvider>
+                          </MessagesProvider>
+                        </LspProvider>
+                      </McpProvider>
+                    </ToolTimeoutProvider>
+                  </ResilienceProvider>
+                </AppProvider>
+              </MouseProvider>
             </ScrollProvider>
           </OverflowProvider>
         </BracketedPasteProvider>
