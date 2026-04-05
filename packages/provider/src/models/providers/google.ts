@@ -12,7 +12,98 @@ import type { ModelInfo } from "../types.js";
  */
 export const GOOGLE_MODELS: ModelInfo[] = [
   // ==========================================================================
-  // Gemini 3 Series (Latest - Stable)
+  // Gemini 3.1 Series (Latest)
+  // ==========================================================================
+  {
+    id: "gemini-3.1-pro-preview",
+    name: "Gemini 3.1 Pro Preview",
+    provider: "google",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    inputPrice: 2.0,
+    outputPrice: 12.0,
+    cacheReadsPrice: 0.5,
+    cacheWritesPrice: 3.0,
+    reasoningEfforts: ["low", "high"],
+    defaultReasoningEffort: "low",
+    tiers: [
+      {
+        name: "up to 200K",
+        contextWindow: 200_000,
+        inputPrice: 2.0,
+        outputPrice: 12.0,
+      },
+      {
+        name: "above 200K",
+        contextWindow: 1_048_576,
+        inputPrice: 4.0,
+        outputPrice: 18.0,
+      },
+    ],
+    deprecated: false,
+    description: "Gemini 3.1 Pro — 2x reasoning boost over 3.0, #1 on 12/18 benchmarks, 65K output",
+  },
+  {
+    id: "gemini-3.1-flash-preview",
+    name: "Gemini 3.1 Flash Preview",
+    provider: "google",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    inputPrice: 0.5,
+    outputPrice: 3.0,
+    cacheReadsPrice: 0.05,
+    cacheWritesPrice: 1.0,
+    reasoningEfforts: ["minimal", "low", "medium", "high"],
+    defaultReasoningEffort: "minimal",
+    deprecated: false,
+    description: "Gemini 3.1 Flash — next-gen workhorse with native tool use and 1M context",
+  },
+  {
+    id: "gemini-3.1-flash-lite-preview",
+    name: "Gemini 3.1 Flash Lite Preview",
+    provider: "google",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: false,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.25,
+    outputPrice: 1.5,
+    deprecated: false,
+    description:
+      "Most cost-efficient Gemini model for high-volume, latency-sensitive tasks (free tier available)",
+  },
+  {
+    id: "gemini-3.1-flash-live-preview",
+    name: "Gemini 3.1 Flash Live Preview",
+    provider: "google",
+    contextWindow: 1_048_576,
+    maxOutputTokens: 8_192,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: false,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.75,
+    outputPrice: 4.5,
+    deprecated: false,
+    description: "Real-time audio-to-audio model for low-latency conversational applications",
+  },
+
+  // ==========================================================================
+  // Gemini 3 Series (Stable)
   // ==========================================================================
   {
     id: "gemini-3-pro",
@@ -103,8 +194,8 @@ export const GOOGLE_MODELS: ModelInfo[] = [
         outputPrice: 18.0,
       },
     ],
-    deprecated: false,
-    description: "Google's most capable multimodal model with advanced reasoning",
+    deprecated: true,
+    description: "Deprecated March 26 2026 — use gemini-3.1-pro-preview",
   },
   {
     id: "gemini-3-flash-preview",
@@ -307,13 +398,13 @@ export const GOOGLE_MODELS: ModelInfo[] = [
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: true,
-    inputPrice: 0.3,
-    outputPrice: 2.5,
-    cacheReadsPrice: 0.075,
+    inputPrice: 0.5,
+    outputPrice: 3.0,
+    cacheReadsPrice: 0.05,
     cacheWritesPrice: 1.0,
     deprecated: false,
-    aliases: ["gemini-2.5-flash"],
-    description: "Alias pointing to the latest Flash model",
+    aliases: ["gemini-3.1-flash-preview"],
+    description: "Alias pointing to the latest Flash model (gemini-3.1-flash-preview)",
   },
   {
     id: "gemini-flash-lite-latest",
@@ -323,20 +414,18 @@ export const GOOGLE_MODELS: ModelInfo[] = [
     maxOutputTokens: 65_536,
     supportsTools: true,
     supportsVision: true,
-    supportsReasoning: true,
+    supportsReasoning: false,
     supportsStreaming: true,
-    supportsPromptCache: true,
-    inputPrice: 0.1,
-    outputPrice: 0.4,
-    cacheReadsPrice: 0.025,
-    cacheWritesPrice: 1.0,
+    supportsPromptCache: false,
+    inputPrice: 0.25,
+    outputPrice: 1.5,
     deprecated: false,
-    aliases: ["gemini-2.5-flash-lite"],
-    description: "Alias pointing to the latest Flash Lite model",
+    aliases: ["gemini-3.1-flash-lite-preview"],
+    description: "Alias pointing to the latest Flash Lite model (gemini-3.1-flash-lite-preview)",
   },
 ];
 
 /**
  * Default Google model ID
  */
-export const GOOGLE_DEFAULT_MODEL_ID = "gemini-2.5-flash";
+export const GOOGLE_DEFAULT_MODEL_ID = "gemini-3.1-flash-preview";
