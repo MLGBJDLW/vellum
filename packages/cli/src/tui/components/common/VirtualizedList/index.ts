@@ -118,6 +118,13 @@ export {
   useAnchorManager,
   useAnchorWithEffect,
 } from "./scrollAnchorAPI.js";
+// Item position context for click-region coordinate tracking
+export {
+  type ItemPosition,
+  VirtualizedItemPositionProvider,
+  type VirtualizedItemPositionProviderProps,
+  useVirtualizedItemPosition,
+} from "./ItemPositionContext.js";
 export {
   type HeightCache,
   SCROLL_TO_ITEM_END,

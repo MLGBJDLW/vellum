@@ -15,6 +15,12 @@ export {
   PASTE_END,
   PASTE_START,
 } from "./bracketedPaste.js";
+// Click region registry for mouse click hit-testing
+export {
+  type ClickRegion,
+  ClickRegionRegistry,
+  globalClickRegistry,
+} from "./click-region.js";
 // Circular Buffer (efficient fixed-size buffer)
 export {
   type CircularBuffer,
@@ -35,6 +41,7 @@ export {
   getSymbol,
   getTerminalCapabilities,
   getTerminalName,
+  supportsSynchronizedOutput,
   type TerminalCapabilities,
   type TerminalType,
 } from "./detectTerminal.js";
@@ -54,6 +61,15 @@ export {
 } from "./heightEstimator.js";
 // Narrow width detection
 export { getNarrowBreakpoint, isNarrowWidth } from "./isNarrowWidth.js";
+// No-flicker configuration
+export {
+  getNoFlickerConfig,
+  isNoFlickerEnabled,
+  type MouseMode,
+  type NoFlickerConfig,
+} from "./no-flicker.js";
+// Frame performance monitor
+export { type FrameStats, FrameMonitor, globalFrameMonitor } from "./frame-monitor.js";
 // Kitty keyboard protocol (enhanced key reporting)
 export {
   detectAndEnableKittyProtocol,

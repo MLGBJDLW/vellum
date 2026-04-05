@@ -117,6 +117,7 @@ import {
   workflowCommands,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
+import { mouseSlashCommands } from "./commands/mouse.js";
 import { roleSlashCommands } from "./commands/role.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
 import { checkUpdateOnStartup } from "./commands/update.js";
@@ -524,6 +525,11 @@ function createCommandRegistry(): CommandRegistry {
   }
 
   for (const cmd of configSlashCommands) {
+    registry.register(cmd);
+  }
+
+  // Register mouse slash commands
+  for (const cmd of mouseSlashCommands) {
     registry.register(cmd);
   }
 

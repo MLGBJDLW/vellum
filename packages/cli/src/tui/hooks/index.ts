@@ -44,6 +44,12 @@ export {
   type UseCollapsibleReturn,
   useCollapsible,
 } from "./useCollapsible.js";
+// Click region hook for positional click handling
+export {
+  type ClickRegionBounds,
+  type UseClickRegionOptions,
+  useClickRegion,
+} from "./useClickRegion.js";
 export {
   type CopyModeState,
   type UseCopyModeReturn,
@@ -95,6 +101,12 @@ export {
   type UseHotkeysReturn,
   useHotkeys,
 } from "./useHotkeys.js";
+// Layout position hook for absolute terminal coordinate calculations
+export {
+  type AbsoluteBounds,
+  type UseLayoutPositionOptions,
+  useLayoutPosition,
+} from "./useLayoutPosition.js";
 // Input highlighting hook for syntax highlighting in input fields
 export {
   type UseInputHighlightOptions,
@@ -150,6 +162,11 @@ export {
   type UseModeShortcutsReturn,
   useModeShortcuts,
 } from "./useModeShortcuts.js";
+// Mouse scroll hook (wheel → scroll delta)
+export {
+  type UseMouseScrollOptions,
+  useMouseScroll,
+} from "./useMouseScroll.js";
 // Pause shortcut hook for pause/resume toggle
 export {
   PAUSE_SHORTCUT_DISPLAY,

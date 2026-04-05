@@ -12,6 +12,8 @@ export {
   AutoApprovalStatus,
   type AutoApprovalStatusProps,
 } from "./AutoApprovalStatus.js";
+// Clickable wrapper (mouse click region registration)
+export { Clickable, type ClickableProps } from "./Clickable.js";
 // CostWarning (Phase 35+ - Cost Limits)
 export {
   CompactCostDisplay,

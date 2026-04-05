@@ -9,10 +9,12 @@
 
 import type { CodingMode, SandboxPolicy } from "@vellum/core";
 import { Box, Text } from "ink";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { version } from "../../../version.js";
 import { useResilienceOptional } from "../../context/ResilienceContext.js";
 import { useToolTimeoutOptional } from "../../context/ToolTimeoutContext.js";
+import { useClickRegion } from "../../hooks/useClickRegion.js";
+import { useTerminalDimensions } from "../../hooks/useTerminalSize.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { GradientText } from "../common/GradientText.js";
@@ -70,6 +72,8 @@ export interface StatusBarProps {
   readonly showBorder?: boolean;
   /** Whether to show all modes or only active (default: false) */
   readonly showAllModes?: boolean;
+  /** Callback when mode section is clicked (for mode cycling) */
+  readonly onModeClick?: (currentMode: CodingMode) => void;
   /** Persistence status for session save indicator */
   readonly persistence?: Pick<
     PersistenceStatusIndicatorProps,
@@ -229,15 +233,43 @@ export function StatusBar({
   cost,
   showBorder = false,
   showAllModes = false,
+  onModeClick,
   // NOTE: persistence prop kept for API compatibility but no longer rendered in footer
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   persistence: _persistence,
 }: StatusBarProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
+  const { height: terminalHeight } = useTerminalDimensions();
 
   // Use primary/accent color for status bar border
   const borderColor = theme.colors.primary;
+
+  // ── Click region for mode selector ─────────────────────────────────────
+  // StatusBar renders at the bottom row of the terminal.
+  // Mode section is at the far left. Approximate width from visible modes.
+  const modeClickHandler = useCallback(
+    () => {
+      onModeClick?.(mode);
+    },
+    [onModeClick, mode],
+  );
+
+  // Each mode label is "◐ vibe" (6 chars) + 1 space separator
+  const visibleModeCount = showAllModes ? MODES_CONFIG.length : 1;
+  const modeSectionWidth = visibleModeCount * 6 + Math.max(0, visibleModeCount - 1);
+
+  useClickRegion(
+    {
+      id: "statusbar-mode",
+      onClick: modeClickHandler,
+      priority: 10,
+      enabled: !!onModeClick,
+    },
+    onModeClick
+      ? { top: terminalHeight, left: 1, width: modeSectionWidth, height: 1 }
+      : null,
+  );
 
   // Get agent abbreviation for display (fallback: first 5 chars)
   const agentAbbrev = agentName

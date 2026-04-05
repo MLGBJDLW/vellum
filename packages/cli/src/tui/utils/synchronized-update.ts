@@ -8,11 +8,30 @@
  */
 
 import { getActiveStdout } from "../buffered-stdout.js";
+import { supportsSynchronizedOutput } from "./detectTerminal.js";
 
 const BEGIN_SYNC = "\x1b[?2026h";
 const END_SYNC = "\x1b[?2026l";
 
 let syncDepth = 0;
+
+// =============================================================================
+// Frame Statistics
+// =============================================================================
+
+interface FrameStatsSnapshot {
+  readonly fps: number;
+  readonly avgFrameTime: number;
+  readonly totalSyncCalls: number;
+}
+
+let totalSyncCalls = 0;
+let frameTimestamps: number[] = [];
+let frameDurations: number[] = [];
+let currentFrameStart = 0;
+
+/** Sliding window size for FPS calculation */
+const FPS_WINDOW_MS = 1000;
 
 /**
  * Execute a function with synchronized terminal updates.
@@ -33,6 +52,7 @@ let syncDepth = 0;
 export function syncUpdate<T>(fn: () => T): T {
   if (syncDepth === 0) {
     getActiveStdout().write(BEGIN_SYNC);
+    currentFrameStart = performance.now();
   }
   syncDepth++;
   try {
@@ -41,6 +61,23 @@ export function syncUpdate<T>(fn: () => T): T {
     syncDepth--;
     if (syncDepth === 0) {
       getActiveStdout().write(END_SYNC);
+      const now = performance.now();
+      totalSyncCalls++;
+      frameTimestamps.push(now);
+      if (currentFrameStart > 0) {
+        frameDurations.push(now - currentFrameStart);
+      }
+      // Trim old entries outside the sliding window
+      const cutoff = now - FPS_WINDOW_MS;
+      while (frameTimestamps.length > 0) {
+        const ft = frameTimestamps[0];
+        if (ft === undefined || ft >= cutoff) break;
+        frameTimestamps.shift();
+      }
+      // Keep durations array bounded
+      if (frameDurations.length > 120) {
+        frameDurations = frameDurations.slice(-60);
+      }
     }
   }
 }
@@ -51,20 +88,28 @@ export function syncUpdate<T>(fn: () => T): T {
  * @returns true if DEC 2026 protocol is supported
  */
 export function isSyncUpdateSupported(): boolean {
-  // VS Code 1.85+, iTerm2, Kitty support DEC 2026
-  const term = process.env.TERM_PROGRAM?.toLowerCase() ?? "";
-  const termVersion = process.env.TERM_PROGRAM_VERSION ?? "";
+  return supportsSynchronizedOutput();
+}
 
-  if (term === "vscode") {
-    // VS Code 1.85.0 added sync update support
-    const [major = 0] = termVersion.split(".").map(Number);
-    return major >= 1; // Most recent VS Code versions support it
-  }
+/**
+ * Get frame statistics for debugging.
+ * Lightweight — only computes when called.
+ */
+export function getFrameStats(): FrameStatsSnapshot {
+  const fps = frameTimestamps.length; // timestamps within last 1s window
+  const avgFrameTime =
+    frameDurations.length > 0
+      ? frameDurations.reduce((a, b) => a + b, 0) / frameDurations.length
+      : 0;
+  return { fps, avgFrameTime, totalSyncCalls };
+}
 
-  if (term === "iterm.app" || term === "kitty") {
-    return true;
-  }
-
-  // Check for explicit support via COLORTERM
-  return process.env.COLORTERM === "truecolor";
+/**
+ * Reset frame statistics counters.
+ */
+export function resetFrameStats(): void {
+  totalSyncCalls = 0;
+  frameTimestamps = [];
+  frameDurations = [];
+  currentFrameStart = 0;
 }

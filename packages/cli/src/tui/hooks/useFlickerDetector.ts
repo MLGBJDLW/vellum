@@ -43,6 +43,13 @@ export interface UseFlickerDetectorOptions {
    * @default 50
    */
   readonly debounceDelay?: number;
+  /**
+   * Number of lines of height change that triggers full-damage repaint.
+   * When content height changes by more than this amount between renders,
+   * fullDamage is flagged to force a full repaint instead of incremental diff.
+   * @default 5
+   */
+  readonly fullDamageThreshold?: number;
 }
 
 /**
@@ -57,6 +64,8 @@ export interface FlickerDetectorResult {
   readonly fillPercentage: number;
   /** Whether overflow state recently changed (indicates potential flicker) */
   readonly isTransitioning: boolean;
+  /** Whether a full repaint should be forced due to large height change */
+  readonly fullDamage: boolean;
 }
 
 // =============================================================================
@@ -68,6 +77,9 @@ const DEFAULT_DEBOUNCE_DELAY = 50;
 
 /** Transition window for detecting rapid state changes (ms) */
 const TRANSITION_WINDOW = 100;
+
+/** Default full-damage threshold in lines */
+const DEFAULT_FULL_DAMAGE_THRESHOLD = 5;
 
 // =============================================================================
 // Hook Implementation
@@ -114,6 +126,7 @@ export function useFlickerDetector(options: UseFlickerDetectorOptions): FlickerD
     threshold = 0,
     debounce = true,
     debounceDelay = DEFAULT_DEBOUNCE_DELAY,
+    fullDamageThreshold = DEFAULT_FULL_DAMAGE_THRESHOLD,
   } = options;
 
   // Track the raw overflow state
@@ -125,6 +138,28 @@ export function useFlickerDetector(options: UseFlickerDetectorOptions): FlickerD
   const [isTransitioning, setIsTransitioning] = useState(false);
   const lastChangeTime = useRef<number>(0);
   const transitionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Full-damage detection: track previous content height
+  const prevContentHeightRef = useRef(contentHeight);
+  const [fullDamage, setFullDamage] = useState(false);
+  const fullDamageTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Detect large height shifts for full-damage flag
+  useEffect(() => {
+    const delta = Math.abs(contentHeight - prevContentHeightRef.current);
+    prevContentHeightRef.current = contentHeight;
+
+    if (delta > fullDamageThreshold) {
+      setFullDamage(true);
+      // Clear full-damage after one render cycle
+      if (fullDamageTimeout.current) {
+        clearTimeout(fullDamageTimeout.current);
+      }
+      fullDamageTimeout.current = setTimeout(() => {
+        setFullDamage(false);
+      }, TRANSITION_WINDOW);
+    }
+  }, [contentHeight, fullDamageThreshold]);
 
   /**
    * Calculate raw overflow state (not debounced)
@@ -201,6 +236,9 @@ export function useFlickerDetector(options: UseFlickerDetectorOptions): FlickerD
       if (transitionTimeout.current) {
         clearTimeout(transitionTimeout.current);
       }
+      if (fullDamageTimeout.current) {
+        clearTimeout(fullDamageTimeout.current);
+      }
     };
   }, []);
 
@@ -213,8 +251,17 @@ export function useFlickerDetector(options: UseFlickerDetectorOptions): FlickerD
       overflow: rawOverflow,
       fillPercentage,
       isTransitioning,
+      fullDamage,
     }),
-    [debounce, debouncedOverflow, rawIsOverflowing, rawOverflow, fillPercentage, isTransitioning]
+    [
+      debounce,
+      debouncedOverflow,
+      rawIsOverflowing,
+      rawOverflow,
+      fillPercentage,
+      isTransitioning,
+      fullDamage,
+    ]
   );
 }
 

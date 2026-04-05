@@ -33,6 +33,7 @@ import {
   useStickyBottom,
   useVirtualization,
 } from "./hooks/index.js";
+import { VirtualizedItemPositionProvider } from "./ItemPositionContext.js";
 import { useAnchorManager } from "./scrollAnchorAPI.js";
 import { SCROLL_TO_ITEM_END, type VirtualizedListProps, type VirtualizedListRef } from "./types.js";
 
@@ -647,15 +648,22 @@ function VirtualizedListInner<T>(
       const item = data[i];
       if (item) {
         const id = keyExtractor(item, i);
+        const itemOffset = offsets[i] ?? 0;
+        const itemHeight = (offsets[i + 1] ?? totalHeight) - itemOffset;
+        const relativeTop = itemOffset - renderScrollTop;
         items.push(
           <Box key={id} width="100%" ref={createItemRef(id)}>
-            {renderItem({ item, index: i })}
+            <VirtualizedItemPositionProvider
+              position={{ index: i, relativeTop, height: itemHeight }}
+            >
+              {renderItem({ item, index: i })}
+            </VirtualizedItemPositionProvider>
           </Box>
         );
       }
     }
     return items;
-  }, [startIndex, endIndex, data, keyExtractor, renderItem, createItemRef]);
+  }, [startIndex, endIndex, data, keyExtractor, renderItem, createItemRef, offsets, renderScrollTop, totalHeight]);
 
   // Spacer heights for proper scroll position (from useVirtualization)
   const { topSpacerHeight, bottomSpacerHeight } = useMemo(() => {

@@ -389,6 +389,18 @@ export {
 } from "./mode.js";
 
 // =============================================================================
+// Mouse Commands
+// =============================================================================
+
+export {
+  getEffectiveMouseMode,
+  getRuntimeMouseMode,
+  mouseCommand,
+  mouseSlashCommands,
+  setMouseModeChangeCallback,
+} from "./mouse.js";
+
+// =============================================================================
 // Role Commands (Specialist Roles)
 // =============================================================================
 

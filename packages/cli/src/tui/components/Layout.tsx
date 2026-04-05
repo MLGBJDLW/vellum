@@ -15,6 +15,10 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
+import {
+  type ContentBounds,
+  LayoutPositionProvider,
+} from "../context/LayoutPositionContext.js";
 import { useTerminalDimensions } from "../hooks/useTerminalSize.js";
 import { getAlternateBufferEnabled } from "../i18n/settings-integration.js";
 import { useTheme } from "../theme/index.js";
@@ -429,6 +433,25 @@ export function Layout({
   const footerBorderColor = theme.semantic.border.focus;
   const sidebarBorderColor = theme.semantic.border.default;
 
+  // Compute content area bounds for LayoutPositionContext.
+  // Header: content row (paddingX adds no vertical space) + separator = 2 rows when present.
+  // Footer: separator + content row = 2 rows when present.
+  const headerRows = header ? 2 : 0;
+  const footerRows = footer ? 2 : 0;
+  const contentWidth = sidebarVisible ? columns - sidebarWidth : columns;
+  // Left column accounts for ContentRegion paddingX={1}
+  const contentLeft = 1;
+
+  const contentBounds = useMemo<ContentBounds>(
+    () => ({
+      top: headerRows,
+      left: contentLeft,
+      width: Math.max(1, contentWidth - 2), // subtract paddingX on both sides
+      height: Math.max(1, rows - headerRows - footerRows),
+    }),
+    [headerRows, footerRows, contentWidth, rows],
+  );
+
   // Constrain height for interactive TUI rendering to prevent scrollback duplication.
   // Allow static output mode to grow naturally (e.g. debug snapshots/logs).
   const isAlternateBuffer = getAlternateBufferEnabled();
@@ -460,7 +483,11 @@ export function Layout({
       {/* Middle Section: Content + Sidebar (sidebar on right) */}
       <Box flexDirection="row" flexGrow={1} flexShrink={1} minHeight={0}>
         {/* Content Region */}
-        <ContentRegion>{children}</ContentRegion>
+        <ContentRegion>
+          <LayoutPositionProvider contentBounds={contentBounds}>
+            {children}
+          </LayoutPositionProvider>
+        </ContentRegion>
 
         {/* Sidebar Region (optional, on right) */}
         {sidebarVisible && sidebar && (

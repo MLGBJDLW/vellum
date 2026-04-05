@@ -61,6 +61,8 @@ export interface TerminalCapabilities {
   readonly hyperlinks: boolean;
   /** Supports styled underlines */
   readonly styledUnderlines: boolean;
+  /** Supports DEC 2026 synchronized output */
+  readonly synchronizedOutput: boolean;
   /** Terminal width in columns */
   readonly columns: number;
   /** Terminal height in rows */
@@ -101,6 +103,7 @@ const DEFAULT_CAPABILITIES: TerminalCapabilities = {
   bracketedPaste: false,
   hyperlinks: false,
   styledUnderlines: false,
+  synchronizedOutput: false,
   columns: 80,
   rows: 24,
   isCI: false,
@@ -388,6 +391,36 @@ function detectStyledUnderlines(terminalType: TerminalType): boolean {
 }
 
 /**
+ * Detect DEC 2026 synchronized output support.
+ * Terminals known to support this protocol can batch renders atomically.
+ */
+function detectSynchronizedOutput(
+  terminalType: TerminalType,
+  env: Record<string, string | undefined>
+): boolean {
+  const syncTerminals: TerminalType[] = [
+    "vscode",
+    "iterm2",
+    "kitty",
+    "wezterm",
+    "alacritty",
+    "windows-terminal",
+  ];
+
+  if (syncTerminals.includes(terminalType)) return true;
+
+  // Ghostty sets TERM_PROGRAM=ghostty — not in our enum, detect via env
+  const termProgram = env.TERM_PROGRAM?.toLowerCase() ?? "";
+  if (termProgram === "ghostty") return true;
+
+  // Fallback: terminals with truecolor support are likely modern enough
+  const colorTerm = env.COLORTERM?.toLowerCase() ?? "";
+  if (colorTerm === "truecolor" || colorTerm === "24bit") return true;
+
+  return false;
+}
+
+/**
  * Detect if running in CI environment.
  */
 function detectCI(env: Record<string, string | undefined>): boolean {
@@ -476,6 +509,7 @@ export function detectTerminal(options: DetectTerminalOptions = {}): TerminalCap
   const iterm2Images = detectITerm2ImagesSupport(terminalType);
   const hyperlinks = detectHyperlinkSupport(terminalType);
   const styledUnderlines = detectStyledUnderlines(terminalType);
+  const synchronizedOutput = detectSynchronizedOutput(terminalType, env);
 
   return {
     terminalType,
@@ -490,6 +524,7 @@ export function detectTerminal(options: DetectTerminalOptions = {}): TerminalCap
     bracketedPaste: isTTY,
     hyperlinks,
     styledUnderlines,
+    synchronizedOutput,
     columns,
     rows,
     isCI,
@@ -593,4 +628,12 @@ export function getTerminalCapabilities(): TerminalCapabilities {
  */
 export function clearTerminalCapabilitiesCache(): void {
   cachedCapabilities = null;
+}
+
+/**
+ * Check if the current terminal supports DEC 2026 synchronized output.
+ * Uses cached terminal capabilities for performance.
+ */
+export function supportsSynchronizedOutput(): boolean {
+  return getTerminalCapabilities().synchronizedOutput;
 }

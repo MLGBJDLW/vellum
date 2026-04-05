@@ -10,11 +10,13 @@
 
 import { Box, Text, useInput } from "ink";
 import type React from "react";
-import { useRef } from "react";
+import { useId, useRef } from "react";
+import { useMouseContextOptional } from "../../context/MouseContext.js";
 import type { ToolExecution } from "../../context/ToolsContext.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { BannerShimmerText } from "../Banner/ShimmerText.js";
+import { Clickable } from "../common/Clickable.js";
 import { ToolParams } from "./ToolParams.js";
 
 // =============================================================================
@@ -108,32 +110,47 @@ function RiskBadge({ level }: { readonly level: RiskLevel }): React.JSX.Element 
  */
 function KeybindingHints({
   showAlwaysAllow,
+  isMouseActive,
+  onApprove,
+  onReject,
+  onApproveAlways,
   t,
 }: {
   readonly showAlwaysAllow: boolean;
+  readonly isMouseActive: boolean;
+  readonly onApprove: () => void;
+  readonly onReject: () => void;
+  readonly onApproveAlways?: () => void;
   readonly t: (key: string) => string;
 }): React.JSX.Element {
+  const hintId = useId();
   return (
     <Box flexDirection="row" gap={2}>
+      <Clickable id={`perm-approve-${hintId}`} onClick={onApprove} height={1}>
       <Text>
-        <Text color="green" bold>
+        <Text color="green" bold underline={isMouseActive}>
           [y/Enter]
         </Text>{" "}
         <Text dimColor>{t("permission.approve")}</Text>
       </Text>
+      </Clickable>
+      <Clickable id={`perm-reject-${hintId}`} onClick={onReject} height={1}>
       <Text>
-        <Text color="red" bold>
+        <Text color="red" bold underline={isMouseActive}>
           [n/Esc]
         </Text>{" "}
         <Text dimColor>{t("permission.reject")}</Text>
       </Text>
-      {showAlwaysAllow && (
+      </Clickable>
+      {showAlwaysAllow && onApproveAlways && (
+        <Clickable id={`perm-always-${hintId}`} onClick={onApproveAlways} height={1}>
         <Text>
-          <Text color="cyan" bold>
+          <Text color="cyan" bold underline={isMouseActive}>
             [a]
           </Text>{" "}
           <Text dimColor>{t("permission.alwaysAllow")}</Text>
         </Text>
+        </Clickable>
       )}
     </Box>
   );
@@ -187,6 +204,8 @@ export function PermissionDialog({
 }: PermissionDialogProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
+  const mouseCtx = useMouseContextOptional();
+  const isMouseActive = mouseCtx?.isMouseActive ?? false;
 
   // Track the current execution ID to detect changes and reset handled state
   const currentExecutionId = useRef(execution.id);
@@ -290,7 +309,14 @@ export function PermissionDialog({
 
       {/* Keybindings */}
       <Box marginTop={1}>
-        <KeybindingHints showAlwaysAllow={onApproveAlways !== undefined} t={t} />
+        <KeybindingHints
+          showAlwaysAllow={onApproveAlways !== undefined}
+          isMouseActive={isMouseActive}
+          onApprove={onApprove}
+          onReject={onReject}
+          onApproveAlways={onApproveAlways}
+          t={t}
+        />
       </Box>
     </Box>
   );

@@ -55,6 +55,22 @@ export interface ModelSettings {
 export type DiffViewMode = "unified" | "side-by-side";
 
 /**
+ * No-flicker and mouse configuration.
+ */
+export interface NoFlickerSettings {
+  /** Force no-flicker mode on/off (default: auto-detect) */
+  enabled?: boolean;
+  /** Enable mouse capture (default: true) */
+  mouseEnabled?: boolean;
+  /** Enable mouse click events (default: true) */
+  mouseClicksEnabled?: boolean;
+  /** Scroll speed multiplier (default: 3) */
+  scrollSpeed?: number;
+  /** Target frame rate (default: 60) */
+  frameRate?: number;
+}
+
+/**
  * Settings file structure.
  */
 export interface VellumSettings {
@@ -66,6 +82,7 @@ export interface VellumSettings {
   model?: ModelSettings;
   mode?: string; // "vibe" | "plan" | "spec"
   diffViewMode?: DiffViewMode;
+  noFlicker?: NoFlickerSettings;
   [key: string]: unknown;
 }
 

@@ -38,6 +38,7 @@ import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
 import { useAnimatedScrollbar } from "../../hooks/useAnimatedScrollbar.js";
 import { useDiffMode } from "../../hooks/useDiffMode.js";
 import { useKeyboardScroll } from "../../hooks/useKeyboardScroll.js";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useScrollController } from "../../hooks/useScrollController.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTUITranslation } from "../../i18n/index.js";
@@ -894,6 +895,36 @@ const MessageList = memo(function MessageList({
     actions: scrollActions,
     enabled: enableScroll && isFocused !== false,
     vimKeys: true,
+  });
+
+  // Mouse wheel scroll — integrates with the same scroll controller
+  useMouseScroll({
+    enabled: enableScroll,
+    onScroll: useCallback(
+      (delta: number) => {
+        const list = virtualizedListRef.current;
+        if (!list) return;
+        const { scrollHeight, innerHeight, scrollTop } = list.getScrollState();
+        if (scrollHeight <= innerHeight) return;
+
+        if (delta < 0) {
+          // Scrolling up → manual mode
+          list.scrollBy(delta);
+          setUserScrolledUp(true);
+        } else {
+          // Scrolling down — check if we'll reach bottom
+          const maxScroll = scrollHeight - innerHeight;
+          const reachesBottom = scrollTop + delta >= maxScroll - 1;
+          if (reachesBottom) {
+            list.scrollToEnd();
+            setUserScrolledUp(false);
+          } else {
+            list.scrollBy(delta);
+          }
+        }
+      },
+      [],
+    ),
   });
 
   // Animated scrollbar colors for visual feedback during scroll activity

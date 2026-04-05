@@ -18,13 +18,15 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef } from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
+import { useMouseContextOptional } from "../../context/MouseContext.js";
 import type { ToolCallInfo } from "../../context/MessagesContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { BannerShimmerText } from "../Banner/ShimmerText.js";
+import { Clickable } from "../common/Clickable.js";
 import { SPINNER_STYLES, Spinner } from "../common/Spinner.js";
 import { StreamingText } from "./StreamingText.js";
 
@@ -249,6 +251,9 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   displayMode = "full",
 }: ThinkingBlockProps): React.JSX.Element | null {
   const { theme } = useTheme();
+  const clickId = useId();
+  const mouseCtx = useMouseContextOptional();
+  const isMouseActive = mouseCtx?.isMouseActive ?? false;
 
   // Animation frame for tool call spinners
   const frameIndex = useAnimationFrame(TOOL_SPINNER_FRAMES);
@@ -435,7 +440,8 @@ export const ThinkingBlock = memo(function ThinkingBlock({
       borderTop={false}
       borderBottom={false}
     >
-      {/* Header row with toggle */}
+      {/* Header row with toggle — clickable to expand/collapse */}
+      <Clickable id={`thinking-toggle-${clickId}`} onClick={_toggle} height={1} enabled={!isCompactMode && !isStreaming}>
       <Box flexDirection="row" alignItems="center">
         {/* Streaming spinner */}
         {isStreaming && (
@@ -472,7 +478,13 @@ export const ThinkingBlock = memo(function ThinkingBlock({
             ({toggleHint})
           </Text>
         )}
+        {isMouseActive && !isStreaming && !isCompactMode && !toggleHint && !effectiveKeyboardToggle && (
+          <Text color={mutedColor} dimColor>
+            {" "}[click to toggle]
+          </Text>
+        )}
       </Box>
+      </Clickable>
 
       {/* Content area - In compact mode, don't show any content (no preview) */}
       {isCompactMode ? null : effectiveIsCollapsed ? (

@@ -9,11 +9,13 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { memo, useMemo } from "react";
+import { memo, useId, useMemo } from "react";
 import { useAnimation } from "../../context/AnimationContext.js";
 import { useDiffMode } from "../../hooks/useDiffMode.js";
 import { useTheme } from "../../theme/index.js";
+import { openUrl } from "../../utils/open-url.js";
 import { sanitize } from "../../utils/textSanitizer.js";
+import { Clickable } from "../common/Clickable.js";
 import { DiffView } from "./DiffView.js";
 
 // =============================================================================
@@ -375,6 +377,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   const { theme } = useTheme();
   const { mode: diffMode } = useDiffMode();
   const { frame, isPaused } = useAnimation();
+  const componentId = useId();
 
   // Theme colors
   const textColor = textColorOverride ?? theme.semantic.text.primary;
@@ -451,9 +454,9 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
             const indent = "  ".repeat(node.level ?? 0);
             const bullet = node.ordered ? `${node.index ?? 1}.` : "•";
             const inlineElements = parseInline(node.content);
+            const firstListLink = inlineElements.find((el) => el.type === "link" && el.url);
 
-            return (
-              <Box key={key} marginLeft={1}>
+            const listContent = (
                 <Text>
                   <Text color={mutedColor}>
                     {indent}
@@ -468,15 +471,24 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
                   />
                   {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
                 </Text>
+            );
+
+            return (
+              <Box key={key} marginLeft={1}>
+                {firstListLink?.url ? (
+                  <Clickable id={`${componentId}-link-${index}`} onClick={() => { const u = firstListLink.url; if (u) openUrl(u); }} height={1}>
+                    {listContent}
+                  </Clickable>
+                ) : listContent}
               </Box>
             );
           }
 
           default: {
             const inlineElements = parseInline(node.content);
+            const firstLink = inlineElements.find((el) => el.type === "link" && el.url);
 
-            return (
-              <Box key={key} marginBottom={compact ? 0 : 0}>
+            const textContent = (
                 <Text wrap="wrap">
                   <InlineRenderer
                     elements={inlineElements}
@@ -487,6 +499,15 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
                   />
                   {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
                 </Text>
+            );
+
+            return (
+              <Box key={key} marginBottom={compact ? 0 : 0}>
+                {firstLink?.url ? (
+                  <Clickable id={`${componentId}-link-${index}`} onClick={() => { const u = firstLink.url; if (u) openUrl(u); }} height={1}>
+                    {textContent}
+                  </Clickable>
+                ) : textContent}
               </Box>
             );
           }

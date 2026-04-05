@@ -9,8 +9,9 @@
 
 import { Box, Text, useInput } from "ink";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import { useTheme } from "../../theme/index.js";
+import { Clickable } from "../common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -73,6 +74,7 @@ export function OptionSelector({
 }: OptionSelectorProps): React.ReactElement {
   const { theme } = useTheme();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const selectorId = useId();
 
   // Handle keyboard input
   useInput(
@@ -135,13 +137,19 @@ export function OptionSelector({
           const shortcut = index < 9 ? `${index + 1}` : " ";
 
           return (
-            <Text
+            <Clickable
               key={`opt-${option}`}
+              id={`option-${selectorId}-${index}`}
+              onClick={() => onSelect(option, index)}
+              height={1}
+            >
+            <Text
               color={isSelected ? theme.colors.primary : undefined}
               bold={isSelected}
             >
               {prefix} [{shortcut}] {option}
             </Text>
+            </Clickable>
           );
         })}
       </Box>
