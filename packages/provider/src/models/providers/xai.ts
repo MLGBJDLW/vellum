@@ -12,7 +12,27 @@ import type { ModelInfo } from "../types.js";
  */
 export const XAI_MODELS: ModelInfo[] = [
   // ==========================================================================
-  // Grok 4 Series (Latest)
+  // Grok 4.20 (Latest - March 2026)
+  // ==========================================================================
+  {
+    id: "grok-4.20",
+    name: "Grok 4.20",
+    provider: "xai",
+    contextWindow: 256_000,
+    maxOutputTokens: 32_768,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 2.0,
+    outputPrice: 6.0,
+    deprecated: false,
+    description: "xAI Grok 4.20 — flagship with industry-leading speed and agentic tool calling",
+  },
+
+  // ==========================================================================
+  // Grok 4 Series
   // ==========================================================================
   {
     id: "grok-4",
@@ -57,10 +77,11 @@ export const XAI_MODELS: ModelInfo[] = [
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 2.0,
-    outputPrice: 10.0,
+    inputPrice: 0.2,
+    outputPrice: 0.5,
     deprecated: false,
-    description: "xAI's Grok 4.1 Fast model optimized for agentic tool calling with 2M context",
+    description:
+      "xAI's Grok 4.1 Fast — 2M context, cost-efficient agentic tool calling ($0.20/$0.50 per 1M)",
   },
   // ==========================================================================
   // Grok 3 Series
