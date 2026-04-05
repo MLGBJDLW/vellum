@@ -60,6 +60,7 @@ import {
   createCredentialManager,
   createResumeCommand,
   createSearchCommand,
+  createSessionCommand,
   customAgentsCommand,
   diffModeSlashCommands,
   enhancedAuthCommands,
@@ -87,6 +88,7 @@ import {
   type ResumeSessionEventData,
   registerUserCommands,
   sandboxCommand,
+  sessionCommand,
   setAgentCommandsManager,
   setCondenseCommandLoop,
   setCopyCommandLoop,
@@ -222,7 +224,11 @@ import {
   type LspIntegrationResult,
 } from "./tui/lsp-integration.js";
 // Metrics integration
-import { getMetricsManager, type TuiMetricsManager } from "./tui/metrics-integration.js";
+import {
+  attachToolLifecycleMetrics,
+  getMetricsManager,
+  type TuiMetricsManager,
+} from "./tui/metrics-integration.js";
 import {
   disposePlugins,
   getPluginCommands,
@@ -452,6 +458,9 @@ function createCommandRegistry(): CommandRegistry {
 
   // Register memory dispatcher (subcommands handled via /memory)
   registry.register(memoryCommand);
+
+  // Register session dispatcher (storage-backed implementation is injected later)
+  registry.register(sessionCommand);
 
   // Register tutorial command (Phase 38)
   registry.register(tutorialCommand);
@@ -938,6 +947,14 @@ function AppContent({
       metricsManager.recordMessage();
     }
   }, [messages.length, metricsManager]);
+
+  useEffect(() => {
+    if (!agentLoopProp) {
+      return;
+    }
+
+    return attachToolLifecycleMetrics(agentLoopProp, metricsManager);
+  }, [agentLoopProp, metricsManager]);
 
   //: Enterprise integration
   const [enterpriseHooks, setEnterpriseHooks] = useState<EnterpriseHooks | null>(null);
@@ -2748,6 +2765,31 @@ function AppContent({
     }
   }, [storageReady, commandRegistry, bumpCommandRegistryVersion]);
 
+  useEffect(() => {
+    if (!storageReady) {
+      return;
+    }
+
+    const storage = storageManagerRef.current;
+    const listService = sessionListServiceRef.current;
+
+    if (!storage || !listService) {
+      return;
+    }
+
+    try {
+      const sessionWithStorage = createSessionCommand(storage, listService);
+      commandRegistry.unregister(sessionWithStorage.name);
+      commandRegistry.register(sessionWithStorage);
+      bumpCommandRegistryVersion();
+    } catch (error) {
+      console.warn(
+        "[commands] Failed to register session command:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }, [storageReady, commandRegistry, bumpCommandRegistryVersion]);
+
   // Register search command when storage is ready
   useEffect(() => {
     if (!storageReady) {
@@ -3309,6 +3351,7 @@ function AppContent({
     async (command: SlashCommand) => {
       // Add to history
       addToHistory(command.raw);
+      metricsManager.recordCommand(command.name);
 
       // Execute via the command executor
       const wasCommand = await handleSlashCommand(command.raw);
@@ -3316,7 +3359,7 @@ function AppContent({
         addMessage({ role: "assistant", content: `Unknown command: /${command.name}` });
       }
     },
-    [addToHistory, addMessage, handleSlashCommand]
+    [addToHistory, addMessage, handleSlashCommand, metricsManager]
   );
 
   // Category order and labels for grouped slash command menu
