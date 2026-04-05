@@ -72,7 +72,7 @@ function isTTY(): boolean {
  */
 function resolveMode(
   requestedMode: "full" | "wheel-only",
-  clicksDisabled: boolean,
+  clicksDisabled: boolean
 ): "full" | "wheel-only" {
   if (clicksDisabled) return "wheel-only";
   return requestedMode;

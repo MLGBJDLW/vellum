@@ -36,6 +36,12 @@ export {
   type UseBracketedPasteOptions,
   useBracketedPaste,
 } from "./useBracketedPaste.js";
+// Click region hook for positional click handling
+export {
+  type ClickRegionBounds,
+  type UseClickRegionOptions,
+  useClickRegion,
+} from "./useClickRegion.js";
 // Collapsible state management hook
 export {
   clearAllCollapsibleStates,
@@ -44,12 +50,6 @@ export {
   type UseCollapsibleReturn,
   useCollapsible,
 } from "./useCollapsible.js";
-// Click region hook for positional click handling
-export {
-  type ClickRegionBounds,
-  type UseClickRegionOptions,
-  useClickRegion,
-} from "./useClickRegion.js";
 export {
   type CopyModeState,
   type UseCopyModeReturn,
@@ -101,12 +101,6 @@ export {
   type UseHotkeysReturn,
   useHotkeys,
 } from "./useHotkeys.js";
-// Layout position hook for absolute terminal coordinate calculations
-export {
-  type AbsoluteBounds,
-  type UseLayoutPositionOptions,
-  useLayoutPosition,
-} from "./useLayoutPosition.js";
 // Input highlighting hook for syntax highlighting in input fields
 export {
   type UseInputHighlightOptions,
@@ -134,6 +128,12 @@ export {
   type UseKittyKeyboardReturn,
   useKittyKeyboard,
 } from "./useKittyKeyboard.js";
+// Layout position hook for absolute terminal coordinate calculations
+export {
+  type AbsoluteBounds,
+  type UseLayoutPositionOptions,
+  useLayoutPosition,
+} from "./useLayoutPosition.js";
 // Line buffer hook for pre-wrapped message lines (scroll optimization)
 export {
   type LineBufferEntry,

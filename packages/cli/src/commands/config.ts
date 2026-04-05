@@ -118,7 +118,7 @@ function createDefaultConfig(configPath: string): void {
     $schema: "https://vellum.dev/schemas/config.json",
     llm: {
       provider: "anthropic",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       maxTokens: 4096,
       temperature: 0.7,
     },

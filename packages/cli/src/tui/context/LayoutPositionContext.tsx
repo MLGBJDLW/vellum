@@ -58,7 +58,7 @@ export interface LayoutPositionContextValue {
   /** Register a component's position within the content area */
   readonly registerPosition: (
     id: string,
-    bounds: { relativeTop: number; height: number; left: number; width: number },
+    bounds: { relativeTop: number; height: number; left: number; width: number }
   ) => void;
   /** Unregister a component's position */
   readonly unregisterPosition: (id: string) => void;
@@ -100,22 +100,19 @@ export function LayoutPositionProvider({
 
   const toAbsoluteRow = useCallback(
     (relativeRow: number): number => contentBounds.top + relativeRow,
-    [contentBounds.top],
+    [contentBounds.top]
   );
 
   const toAbsoluteCol = useCallback(
     (relativeCol: number): number => contentBounds.left + relativeCol,
-    [contentBounds.left],
+    [contentBounds.left]
   );
 
   const registerPosition = useCallback(
-    (
-      id: string,
-      bounds: { relativeTop: number; height: number; left: number; width: number },
-    ) => {
+    (id: string, bounds: { relativeTop: number; height: number; left: number; width: number }) => {
       positionsRef.current.set(id, bounds);
     },
-    [],
+    []
   );
 
   const unregisterPosition = useCallback((id: string) => {
@@ -130,12 +127,10 @@ export function LayoutPositionProvider({
       registerPosition,
       unregisterPosition,
     }),
-    [contentBounds, toAbsoluteRow, toAbsoluteCol, registerPosition, unregisterPosition],
+    [contentBounds, toAbsoluteRow, toAbsoluteCol, registerPosition, unregisterPosition]
   );
 
-  return (
-    <LayoutPositionContext.Provider value={value}>{children}</LayoutPositionContext.Provider>
-  );
+  return <LayoutPositionContext.Provider value={value}>{children}</LayoutPositionContext.Provider>;
 }
 
 // =============================================================================

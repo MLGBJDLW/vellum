@@ -8,9 +8,8 @@
  */
 
 import { useEffect, useRef } from "react";
-
-import type { MouseEvent } from "../utils/mouse-parser.js";
 import { globalClickRegistry } from "../utils/click-region.js";
+import type { MouseEvent } from "../utils/mouse-parser.js";
 
 // =============================================================================
 // Types
@@ -64,7 +63,7 @@ export interface UseClickRegionOptions {
  */
 export function useClickRegion(
   options: UseClickRegionOptions,
-  bounds: ClickRegionBounds | null,
+  bounds: ClickRegionBounds | null
 ): void {
   const unregisterRef = useRef<(() => void) | null>(null);
   const optionsRef = useRef(options);

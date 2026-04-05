@@ -89,7 +89,7 @@ export const MOUSE_ENABLE =
   "\x1b[?1000h" + // enable basic mouse reporting
   "\x1b[?1002h" + // enable button-event (drag) tracking
   "\x1b[?1003h" + // enable any-event (motion) tracking
-  "\x1b[?1006h";  // enable SGR extended mode
+  "\x1b[?1006h"; // enable SGR extended mode
 
 /**
  * Disable all mouse tracking.
@@ -101,7 +101,7 @@ export const MOUSE_DISABLE =
   "\x1b[?1006l" + // disable SGR extended mode
   "\x1b[?1003l" + // disable any-event tracking
   "\x1b[?1002l" + // disable button-event tracking
-  "\x1b[?1000l";  // disable basic mouse reporting
+  "\x1b[?1000l"; // disable basic mouse reporting
 
 /**
  * Enable wheel-only mouse tracking (no motion/drag reporting).
@@ -114,22 +114,11 @@ export const MOUSE_DISABLE =
  */
 export const MOUSE_ENABLE_WHEEL_ONLY =
   "\x1b[?1000h" + // enable basic mouse reporting (includes wheel)
-  "\x1b[?1006h";  // enable SGR extended mode
+  "\x1b[?1006h"; // enable SGR extended mode
 
 // =============================================================================
 // Regex Patterns
 // =============================================================================
-
-/**
- * SGR mouse sequence: ESC [ < Pb ; Px ; Py M/m
- *
- * Capture groups:
- *   1 — Pb (button/modifier bits, decimal)
- *   2 — Px (column, 1-based, decimal)
- *   3 — Py (row, 1-based, decimal)
- *   4 — M (press) or m (release)
- */
-const SGR_MOUSE_RE = new RegExp("^\\x1b\\[<(\\d+);(\\d+);(\\d+)([Mm])$");
 
 /**
  * X10 legacy mouse sequence: ESC [ M followed by 3 raw bytes.
@@ -188,7 +177,7 @@ function decodeButton(btnBits: number): MouseButton {
  */
 function decodeAction(
   btn: number,
-  isRelease: boolean,
+  isRelease: boolean
 ): { button: MouseButton; action: MouseAction } {
   // Wheel events: bit 6 (0x40) is set
   if (btn & WHEEL_BIT) {
@@ -198,7 +187,7 @@ function decodeAction(
   }
 
   // Motion events: bit 5 (0x20) is set, and this is not a press/release
-  if ((btn & MOTION_BIT) && !isRelease) {
+  if (btn & MOTION_BIT && !isRelease) {
     return { button: decodeButton(btn), action: "move" };
   }
 
@@ -237,14 +226,21 @@ function decodeModifiers(btn: number): {
  * @returns Parsed MouseEvent or null if not an SGR sequence
  */
 function parseSgr(data: string): MouseEvent | null {
-  const match = SGR_MOUSE_RE.exec(data);
-  if (!match) return null;
+  if (!data.startsWith("\x1b[<")) return null;
 
-  const m1 = match[1]; const m2 = match[2]; const m3 = match[3]; const m4 = match[4];
-  const btn = Number.parseInt(m1 ?? "0", 10);
-  const col = Number.parseInt(m2 ?? "0", 10);
-  const row = Number.parseInt(m3 ?? "0", 10);
-  const isRelease = m4 === "m";
+  const terminator = data.at(-1);
+  if (terminator !== "M" && terminator !== "m") return null;
+
+  const [btnText, colText, rowText] = data.slice(3, -1).split(";");
+  if (!btnText || !colText || !rowText) return null;
+  if (!/^\d+$/.test(btnText) || !/^\d+$/.test(colText) || !/^\d+$/.test(rowText)) {
+    return null;
+  }
+
+  const btn = Number.parseInt(btnText, 10);
+  const col = Number.parseInt(colText, 10);
+  const row = Number.parseInt(rowText, 10);
+  const isRelease = terminator === "m";
 
   const { button, action } = decodeAction(btn, isRelease);
   const modifiers = decodeModifiers(btn);
@@ -334,10 +330,7 @@ export function parseMouseEvent(data: string): MouseEvent | null {
  * @param stream - The output stream (typically process.stdout)
  * @param mode - 'full' for all events, 'wheel-only' for scroll only
  */
-export function enableMouseTracking(
-  stream: NodeJS.WriteStream,
-  mode: "full" | "wheel-only",
-): void {
+export function enableMouseTracking(stream: NodeJS.WriteStream, mode: "full" | "wheel-only"): void {
   const seq = mode === "full" ? MOUSE_ENABLE : MOUSE_ENABLE_WHEEL_ONLY;
   stream.write(seq);
 }

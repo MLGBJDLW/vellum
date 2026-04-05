@@ -54,10 +54,7 @@ export function VirtualizedItemPositionProvider({
   position,
   children,
 }: VirtualizedItemPositionProviderProps): React.JSX.Element {
-  const value = useMemo(
-    () => position,
-    [position],
-  );
+  const value = useMemo(() => position, [position]);
 
   return (
     <VirtualizedItemPositionContext.Provider value={value}>

@@ -173,7 +173,7 @@ export class AnthropicProvider implements Provider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "claude-sonnet-4-20250514";
+    return "claude-sonnet-4-6";
   }
 
   /**
@@ -306,7 +306,7 @@ export class AnthropicProvider implements Provider {
     this.ensureInitialized();
 
     try {
-      const modelId = model ?? "claude-sonnet-4-20250514";
+      const modelId = model ?? "claude-sonnet-4-6";
 
       // Convert input to messages format
       const messages: CompletionMessage[] =

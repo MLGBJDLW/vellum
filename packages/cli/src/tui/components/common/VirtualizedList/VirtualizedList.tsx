@@ -663,7 +663,17 @@ function VirtualizedListInner<T>(
       }
     }
     return items;
-  }, [startIndex, endIndex, data, keyExtractor, renderItem, createItemRef, offsets, renderScrollTop, totalHeight]);
+  }, [
+    startIndex,
+    endIndex,
+    data,
+    keyExtractor,
+    renderItem,
+    createItemRef,
+    offsets,
+    renderScrollTop,
+    totalHeight,
+  ]);
 
   // Spacer heights for proper scroll position (from useVirtualization)
   const { topSpacerHeight, bottomSpacerHeight } = useMemo(() => {

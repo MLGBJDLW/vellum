@@ -18,6 +18,25 @@ export interface ModelPricing {
  * Prices as of January 2026
  */
 export const MODEL_PRICING: Record<string, ModelPricing> = {
+  // Anthropic Claude 4.6 models (latest)
+  "claude-opus-4-6": {
+    inputPrice: 5.0,
+    outputPrice: 25.0,
+    cacheReadPrice: 0.5,
+    cacheWritePrice: 6.25,
+  },
+  "claude-sonnet-4-6": {
+    inputPrice: 3.0,
+    outputPrice: 15.0,
+    cacheReadPrice: 0.3,
+    cacheWritePrice: 3.75,
+  },
+  "claude-haiku-4-5-20251001": {
+    inputPrice: 1.0,
+    outputPrice: 5.0,
+    cacheReadPrice: 0.1,
+    cacheWritePrice: 1.25,
+  },
   // Anthropic Claude 4 models
   "claude-sonnet-4-20250514": {
     inputPrice: 3.0,
@@ -31,7 +50,37 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     cacheReadPrice: 1.5,
     cacheWritePrice: 18.75,
   },
-  // OpenAI GPT-4o models
+  // OpenAI GPT-5.4 models (latest, April 2026)
+  "gpt-5.4": {
+    inputPrice: 2.5,
+    outputPrice: 10.0,
+  },
+  "gpt-5.4-mini": {
+    inputPrice: 0.15,
+    outputPrice: 0.6,
+  },
+  "gpt-5.3-codex": {
+    inputPrice: 1.75,
+    outputPrice: 14.0,
+  },
+  "gpt-5.2-codex": {
+    inputPrice: 1.75,
+    outputPrice: 14.0,
+  },
+  // Google Gemini 3.1 models (latest, 2026)
+  "gemini-3.1-pro-preview": {
+    inputPrice: 1.25,
+    outputPrice: 10.0,
+  },
+  "gemini-3.1-flash-preview": {
+    inputPrice: 0.5,
+    outputPrice: 3.0,
+  },
+  "gemini-3.1-flash-lite-preview": {
+    inputPrice: 0.25,
+    outputPrice: 1.5,
+  },
+  // OpenAI GPT-4o models (legacy)
   "gpt-4o": {
     inputPrice: 2.5,
     outputPrice: 10.0,

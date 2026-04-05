@@ -141,7 +141,7 @@ function getProviderInfo(provider: string): { name: string; icon: string } {
  * ```tsx
  * function MyComponent() {
  *   const [provider, setProvider] = useState('anthropic');
- *   const [model, setModel] = useState('claude-sonnet-4-20250514');
+ *   const [model, setModel] = useState('claude-sonnet-4-6');
  *
  *   return (
  *     <ModelSelector

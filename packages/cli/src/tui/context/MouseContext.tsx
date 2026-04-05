@@ -8,17 +8,10 @@
  * @module tui/context/MouseContext
  */
 
-import React, {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useRef,
-} from "react";
-
-import type { MouseEvent } from "../utils/mouse-parser.js";
-import { globalClickRegistry } from "../utils/click-region.js";
+import React, { createContext, type ReactNode, useCallback, useContext, useRef } from "react";
 import { type UseMouseOptions, useMouse } from "../hooks/useMouse.js";
+import { globalClickRegistry } from "../utils/click-region.js";
+import type { MouseEvent } from "../utils/mouse-parser.js";
 
 // =============================================================================
 // Types
@@ -81,35 +74,25 @@ MouseContext.displayName = "MouseContext";
  * useEffect(() => onWheel((e) => scrollBy(e.action === 'wheeldown' ? 3 : -3)), [onWheel]);
  * ```
  */
-export function MouseProvider({
-  children,
-  mode,
-  enabled,
-}: MouseProviderProps): React.JSX.Element {
+export function MouseProvider({ children, mode, enabled }: MouseProviderProps): React.JSX.Element {
   // ── Subscriber registries ──────────────────────────────────────────────
   const wheelHandlers = useRef<Set<(event: MouseEvent) => void>>(new Set());
   const clickHandlers = useRef<Set<(event: MouseEvent) => void>>(new Set());
 
   // ── Subscribe helpers (stable references) ──────────────────────────────
-  const subscribeWheel = useCallback(
-    (handler: (event: MouseEvent) => void): (() => void) => {
-      wheelHandlers.current.add(handler);
-      return () => {
-        wheelHandlers.current.delete(handler);
-      };
-    },
-    [],
-  );
+  const subscribeWheel = useCallback((handler: (event: MouseEvent) => void): (() => void) => {
+    wheelHandlers.current.add(handler);
+    return () => {
+      wheelHandlers.current.delete(handler);
+    };
+  }, []);
 
-  const subscribeClick = useCallback(
-    (handler: (event: MouseEvent) => void): (() => void) => {
-      clickHandlers.current.add(handler);
-      return () => {
-        clickHandlers.current.delete(handler);
-      };
-    },
-    [],
-  );
+  const subscribeClick = useCallback((handler: (event: MouseEvent) => void): (() => void) => {
+    clickHandlers.current.add(handler);
+    return () => {
+      clickHandlers.current.delete(handler);
+    };
+  }, []);
 
   // ── Dispatch callbacks for useMouse ────────────────────────────────────
   const handleWheel = useCallback((event: MouseEvent) => {
@@ -146,11 +129,7 @@ export function MouseProvider({
     onClick: subscribeClick,
   };
 
-  return (
-    <MouseContext.Provider value={value}>
-      {children}
-    </MouseContext.Provider>
-  );
+  return <MouseContext.Provider value={value}>{children}</MouseContext.Provider>;
 }
 
 // =============================================================================

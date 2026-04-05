@@ -248,12 +248,9 @@ export function StatusBar({
   // ── Click region for mode selector ─────────────────────────────────────
   // StatusBar renders at the bottom row of the terminal.
   // Mode section is at the far left. Approximate width from visible modes.
-  const modeClickHandler = useCallback(
-    () => {
-      onModeClick?.(mode);
-    },
-    [onModeClick, mode],
-  );
+  const modeClickHandler = useCallback(() => {
+    onModeClick?.(mode);
+  }, [onModeClick, mode]);
 
   // Each mode label is "◐ vibe" (6 chars) + 1 space separator
   const visibleModeCount = showAllModes ? MODES_CONFIG.length : 1;
@@ -266,9 +263,7 @@ export function StatusBar({
       priority: 10,
       enabled: !!onModeClick,
     },
-    onModeClick
-      ? { top: terminalHeight, left: 1, width: modeSectionWidth, height: 1 }
-      : null,
+    onModeClick ? { top: terminalHeight, left: 1, width: modeSectionWidth, height: 1 } : null
   );
 
   // Get agent abbreviation for display (fallback: first 5 chars)

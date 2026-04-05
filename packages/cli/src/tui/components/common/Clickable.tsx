@@ -14,10 +14,10 @@ import { Box } from "ink";
 import type React from "react";
 import { useMemo } from "react";
 
-import { useClickRegion, type ClickRegionBounds } from "../../hooks/useClickRegion.js";
+import { type ClickRegionBounds, useClickRegion } from "../../hooks/useClickRegion.js";
 import { useLayoutPosition } from "../../hooks/useLayoutPosition.js";
-import { useVirtualizedItemPosition } from "./VirtualizedList/ItemPositionContext.js";
 import type { MouseEvent } from "../../utils/mouse-parser.js";
+import { useVirtualizedItemPosition } from "./VirtualizedList/ItemPositionContext.js";
 
 // =============================================================================
 // Types

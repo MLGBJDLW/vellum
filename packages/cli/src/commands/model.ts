@@ -125,8 +125,8 @@ export const modelCommand: SlashCommand = {
   ],
   examples: [
     "/model                         - Show current model and options",
-    "/model anthropic/claude-sonnet-4-20250514  - Switch to Claude Sonnet 4",
-    "/model openai/gpt-4o           - Switch to GPT-4o",
+    "/model anthropic/claude-sonnet-4-6  - Switch to Claude Sonnet 4.6",
+    "/model openai/gpt-5.4           - Switch to GPT-5.4",
   ],
   // Dynamic subcommands: list all providers for autocomplete
   subcommands: getSupportedProviders().map((provider) => ({
@@ -247,7 +247,7 @@ function switchToModel(modelSpec: string): CommandResult {
   if (parts.length < 2) {
     return error("INVALID_ARGUMENT", `Invalid model format: ${modelSpec}`, [
       "Expected format: provider/model-id",
-      "Example: anthropic/claude-sonnet-4-20250514",
+      "Example: anthropic/claude-sonnet-4-6",
     ]);
   }
 

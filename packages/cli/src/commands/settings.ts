@@ -111,7 +111,7 @@ function getAllSettings(): Record<SettingsCategory, Record<string, unknown>> {
     },
     model: {
       provider: modelSettings?.provider ?? config?.llm?.provider ?? "anthropic",
-      model: modelSettings?.modelId ?? config?.llm?.model ?? "claude-sonnet-4-20250514",
+      model: modelSettings?.modelId ?? config?.llm?.model ?? "claude-sonnet-4-6",
       maxTokens: config?.llm?.maxTokens ?? 4096,
       temperature: config?.llm?.temperature ?? 0.7,
     },

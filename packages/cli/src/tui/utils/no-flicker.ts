@@ -148,9 +148,7 @@ export function getNoFlickerConfig(): NoFlickerConfig {
   const mouseClicksDisabled =
     mouseDisabled ||
     (envClicksDisabled ??
-      (settings.mouseClicksEnabled !== undefined
-        ? !settings.mouseClicksEnabled
-        : !noFlicker)); // Default: clicks disabled unless NO_FLICKER is on
+      (settings.mouseClicksEnabled !== undefined ? !settings.mouseClicksEnabled : !noFlicker)); // Default: clicks disabled unless NO_FLICKER is on
 
   // Resolve mouseMode
   let mouseMode: MouseMode;

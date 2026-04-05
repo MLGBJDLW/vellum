@@ -51,11 +51,7 @@ const DEFAULT_SCROLL_SPEED = 3;
  * If no `MouseProvider` is in the tree, the hook is a no-op.
  */
 export function useMouseScroll(options: UseMouseScrollOptions = {}): void {
-  const {
-    scrollSpeed = DEFAULT_SCROLL_SPEED,
-    enabled = true,
-    onScroll,
-  } = options;
+  const { scrollSpeed = DEFAULT_SCROLL_SPEED, enabled = true, onScroll } = options;
 
   const mouseCtx = useMouseContextOptional();
 
@@ -63,12 +59,11 @@ export function useMouseScroll(options: UseMouseScrollOptions = {}): void {
     (event: MouseEvent) => {
       if (!enabled || !onScroll) return;
 
-      const delta =
-        event.action === "wheelup" ? -scrollSpeed : scrollSpeed;
+      const delta = event.action === "wheelup" ? -scrollSpeed : scrollSpeed;
 
       onScroll(delta);
     },
-    [enabled, onScroll, scrollSpeed],
+    [enabled, onScroll, scrollSpeed]
   );
 
   useEffect(() => {

@@ -457,29 +457,38 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
             const firstListLink = inlineElements.find((el) => el.type === "link" && el.url);
 
             const listContent = (
-                <Text>
-                  <Text color={mutedColor}>
-                    {indent}
-                    {bullet}{" "}
-                  </Text>
-                  <InlineRenderer
-                    elements={inlineElements}
-                    textColor={textColor}
-                    codeColor={codeColor}
-                    codeBgColor={codeBgColor}
-                    linkColor={linkColor}
-                  />
-                  {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
+              <Text>
+                <Text color={mutedColor}>
+                  {indent}
+                  {bullet}{" "}
                 </Text>
+                <InlineRenderer
+                  elements={inlineElements}
+                  textColor={textColor}
+                  codeColor={codeColor}
+                  codeBgColor={codeBgColor}
+                  linkColor={linkColor}
+                />
+                {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
+              </Text>
             );
 
             return (
               <Box key={key} marginLeft={1}>
                 {firstListLink?.url ? (
-                  <Clickable id={`${componentId}-link-${index}`} onClick={() => { const u = firstListLink.url; if (u) openUrl(u); }} height={1}>
+                  <Clickable
+                    id={`${componentId}-link-${index}`}
+                    onClick={() => {
+                      const u = firstListLink.url;
+                      if (u) openUrl(u);
+                    }}
+                    height={1}
+                  >
                     {listContent}
                   </Clickable>
-                ) : listContent}
+                ) : (
+                  listContent
+                )}
               </Box>
             );
           }
@@ -489,25 +498,34 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
             const firstLink = inlineElements.find((el) => el.type === "link" && el.url);
 
             const textContent = (
-                <Text wrap="wrap">
-                  <InlineRenderer
-                    elements={inlineElements}
-                    textColor={textColor}
-                    codeColor={codeColor}
-                    codeBgColor={codeBgColor}
-                    linkColor={linkColor}
-                  />
-                  {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
-                </Text>
+              <Text wrap="wrap">
+                <InlineRenderer
+                  elements={inlineElements}
+                  textColor={textColor}
+                  codeColor={codeColor}
+                  codeBgColor={codeBgColor}
+                  linkColor={linkColor}
+                />
+                {isLastNode && cursor && <Text color={textColor}>{cursor}</Text>}
+              </Text>
             );
 
             return (
               <Box key={key} marginBottom={compact ? 0 : 0}>
                 {firstLink?.url ? (
-                  <Clickable id={`${componentId}-link-${index}`} onClick={() => { const u = firstLink.url; if (u) openUrl(u); }} height={1}>
+                  <Clickable
+                    id={`${componentId}-link-${index}`}
+                    onClick={() => {
+                      const u = firstLink.url;
+                      if (u) openUrl(u);
+                    }}
+                    height={1}
+                  >
                     {textContent}
                   </Clickable>
-                ) : textContent}
+                ) : (
+                  textContent
+                )}
               </Box>
             );
           }

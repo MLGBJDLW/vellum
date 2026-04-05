@@ -20,8 +20,8 @@ import { Box, Text } from "ink";
 import type React from "react";
 import { memo, useCallback, useEffect, useId, useMemo, useRef } from "react";
 import { useAnimationFrame } from "../../context/AnimationContext.js";
-import { useMouseContextOptional } from "../../context/MouseContext.js";
 import type { ToolCallInfo } from "../../context/MessagesContext.js";
+import { useMouseContextOptional } from "../../context/MouseContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
@@ -441,49 +441,59 @@ export const ThinkingBlock = memo(function ThinkingBlock({
       borderBottom={false}
     >
       {/* Header row with toggle — clickable to expand/collapse */}
-      <Clickable id={`thinking-toggle-${clickId}`} onClick={_toggle} height={1} enabled={!isCompactMode && !isStreaming}>
-      <Box flexDirection="row" alignItems="center">
-        {/* Streaming spinner */}
-        {isStreaming && (
-          <>
-            <Spinner color={thinkingColor} frames={SPINNER_STYLES.dots} />
-            <Text> </Text>
-          </>
-        )}
+      <Clickable
+        id={`thinking-toggle-${clickId}`}
+        onClick={_toggle}
+        height={1}
+        enabled={!isCompactMode && !isStreaming}
+      >
+        <Box flexDirection="row" alignItems="center">
+          {/* Streaming spinner */}
+          {isStreaming && (
+            <>
+              <Spinner color={thinkingColor} frames={SPINNER_STYLES.dots} />
+              <Text> </Text>
+            </>
+          )}
 
-        {/* Icon */}
-        <Text color={thinkingColor}>[...] </Text>
+          {/* Icon */}
+          <Text color={thinkingColor}>[...] </Text>
 
-        {/* Header text - clickable area concept (visual only in TUI) */}
-        {isStreaming ? (
-          <BannerShimmerText baseColor={thinkingColor} highlightColor="#FFD700" enabled={true}>
-            {headerParts.join(" ")}
-          </BannerShimmerText>
-        ) : (
-          <Text color={thinkingColor} dimColor italic>
-            {headerParts.join(" ")}
-          </Text>
-        )}
+          {/* Header text - clickable area concept (visual only in TUI) */}
+          {isStreaming ? (
+            <BannerShimmerText baseColor={thinkingColor} highlightColor="#FFD700" enabled={true}>
+              {headerParts.join(" ")}
+            </BannerShimmerText>
+          ) : (
+            <Text color={thinkingColor} dimColor italic>
+              {headerParts.join(" ")}
+            </Text>
+          )}
 
-        {/* Keyboard hint */}
-        {effectiveKeyboardToggle && !isStreaming && (
-          <Text color={mutedColor} dimColor>
-            {" "}
-            (press 't')
-          </Text>
-        )}
-        {toggleHint && !isStreaming && !isCompactMode && (
-          <Text color={mutedColor} dimColor>
-            {" "}
-            ({toggleHint})
-          </Text>
-        )}
-        {isMouseActive && !isStreaming && !isCompactMode && !toggleHint && !effectiveKeyboardToggle && (
-          <Text color={mutedColor} dimColor>
-            {" "}[click to toggle]
-          </Text>
-        )}
-      </Box>
+          {/* Keyboard hint */}
+          {effectiveKeyboardToggle && !isStreaming && (
+            <Text color={mutedColor} dimColor>
+              {" "}
+              (press 't')
+            </Text>
+          )}
+          {toggleHint && !isStreaming && !isCompactMode && (
+            <Text color={mutedColor} dimColor>
+              {" "}
+              ({toggleHint})
+            </Text>
+          )}
+          {isMouseActive &&
+            !isStreaming &&
+            !isCompactMode &&
+            !toggleHint &&
+            !effectiveKeyboardToggle && (
+              <Text color={mutedColor} dimColor>
+                {" "}
+                [click to toggle]
+              </Text>
+            )}
+        </Box>
       </Clickable>
 
       {/* Content area - In compact mode, don't show any content (no preview) */}

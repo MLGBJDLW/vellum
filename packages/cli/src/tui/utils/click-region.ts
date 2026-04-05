@@ -74,12 +74,7 @@ export class ClickRegionRegistry {
     const hits: ClickRegion[] = [];
 
     for (const region of this.#regions.values()) {
-      if (
-        col >= region.left &&
-        col <= region.right &&
-        row >= region.top &&
-        row <= region.bottom
-      ) {
+      if (col >= region.left && col <= region.right && row >= region.top && row <= region.bottom) {
         hits.push(region);
       }
     }

@@ -15,12 +15,6 @@ export {
   PASTE_END,
   PASTE_START,
 } from "./bracketedPaste.js";
-// Click region registry for mouse click hit-testing
-export {
-  type ClickRegion,
-  ClickRegionRegistry,
-  globalClickRegistry,
-} from "./click-region.js";
 // Circular Buffer (efficient fixed-size buffer)
 export {
   type CircularBuffer,
@@ -31,6 +25,12 @@ export {
   MESSAGE_BUFFER_DEFAULTS,
   useCircularBuffer,
 } from "./circularBuffer.js";
+// Click region registry for mouse click hit-testing
+export {
+  type ClickRegion,
+  ClickRegionRegistry,
+  globalClickRegistry,
+} from "./click-region.js";
 export { CursorManager, type CursorManagerImpl } from "./cursor-manager.js";
 export {
   clearTerminalCapabilitiesCache,
@@ -46,6 +46,8 @@ export {
   type TerminalType,
 } from "./detectTerminal.js";
 export { findLastSafeSplitPoint } from "./findLastSafeSplitPoint.js";
+// Frame performance monitor
+export { FrameMonitor, type FrameStats, globalFrameMonitor } from "./frame-monitor.js";
 // Height estimation utilities (T002)
 export {
   // Constants for upper-bound estimation
@@ -61,15 +63,6 @@ export {
 } from "./heightEstimator.js";
 // Narrow width detection
 export { getNarrowBreakpoint, isNarrowWidth } from "./isNarrowWidth.js";
-// No-flicker configuration
-export {
-  getNoFlickerConfig,
-  isNoFlickerEnabled,
-  type MouseMode,
-  type NoFlickerConfig,
-} from "./no-flicker.js";
-// Frame performance monitor
-export { type FrameStats, FrameMonitor, globalFrameMonitor } from "./frame-monitor.js";
 // Kitty keyboard protocol (enhanced key reporting)
 export {
   detectAndEnableKittyProtocol,
@@ -85,6 +78,13 @@ export {
   parseEnhancedKey,
   reEnableKittyProtocol,
 } from "./kitty-keyboard-protocol.js";
+// No-flicker configuration
+export {
+  getNoFlickerConfig,
+  isNoFlickerEnabled,
+  type MouseMode,
+  type NoFlickerConfig,
+} from "./no-flicker.js";
 // Stdout guard for debugging (T002 Hardening)
 export {
   disableStdoutGuard,

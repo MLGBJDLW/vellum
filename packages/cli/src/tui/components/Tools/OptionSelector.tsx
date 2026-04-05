@@ -143,12 +143,9 @@ export function OptionSelector({
               onClick={() => onSelect(option, index)}
               height={1}
             >
-            <Text
-              color={isSelected ? theme.colors.primary : undefined}
-              bold={isSelected}
-            >
-              {prefix} [{shortcut}] {option}
-            </Text>
+              <Text color={isSelected ? theme.colors.primary : undefined} bold={isSelected}>
+                {prefix} [{shortcut}] {option}
+              </Text>
             </Clickable>
           );
         })}

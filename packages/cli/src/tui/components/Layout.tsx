@@ -15,10 +15,7 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { useMemo } from "react";
-import {
-  type ContentBounds,
-  LayoutPositionProvider,
-} from "../context/LayoutPositionContext.js";
+import { type ContentBounds, LayoutPositionProvider } from "../context/LayoutPositionContext.js";
 import { useTerminalDimensions } from "../hooks/useTerminalSize.js";
 import { getAlternateBufferEnabled } from "../i18n/settings-integration.js";
 import { useTheme } from "../theme/index.js";
@@ -449,7 +446,7 @@ export function Layout({
       width: Math.max(1, contentWidth - 2), // subtract paddingX on both sides
       height: Math.max(1, rows - headerRows - footerRows),
     }),
-    [headerRows, footerRows, contentWidth, rows],
+    [headerRows, footerRows, contentWidth, rows]
   );
 
   // Constrain height for interactive TUI rendering to prevent scrollback duplication.
@@ -484,9 +481,7 @@ export function Layout({
       <Box flexDirection="row" flexGrow={1} flexShrink={1} minHeight={0}>
         {/* Content Region */}
         <ContentRegion>
-          <LayoutPositionProvider contentBounds={contentBounds}>
-            {children}
-          </LayoutPositionProvider>
+          <LayoutPositionProvider contentBounds={contentBounds}>{children}</LayoutPositionProvider>
         </ContentRegion>
 
         {/* Sidebar Region (optional, on right) */}

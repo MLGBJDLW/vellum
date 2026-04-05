@@ -53,7 +53,7 @@ describe("AnthropicProvider", () => {
   describe("getDefaultModel", () => {
     it("should return default model", () => {
       const provider = new AnthropicProvider();
-      expect(provider.getDefaultModel()).toBe("claude-sonnet-4-20250514");
+      expect(provider.getDefaultModel()).toBe("claude-sonnet-4-6");
     });
   });
 

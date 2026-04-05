@@ -127,29 +127,29 @@ function KeybindingHints({
   return (
     <Box flexDirection="row" gap={2}>
       <Clickable id={`perm-approve-${hintId}`} onClick={onApprove} height={1}>
-      <Text>
-        <Text color="green" bold underline={isMouseActive}>
-          [y/Enter]
-        </Text>{" "}
-        <Text dimColor>{t("permission.approve")}</Text>
-      </Text>
+        <Text>
+          <Text color="green" bold underline={isMouseActive}>
+            [y/Enter]
+          </Text>{" "}
+          <Text dimColor>{t("permission.approve")}</Text>
+        </Text>
       </Clickable>
       <Clickable id={`perm-reject-${hintId}`} onClick={onReject} height={1}>
-      <Text>
-        <Text color="red" bold underline={isMouseActive}>
-          [n/Esc]
-        </Text>{" "}
-        <Text dimColor>{t("permission.reject")}</Text>
-      </Text>
+        <Text>
+          <Text color="red" bold underline={isMouseActive}>
+            [n/Esc]
+          </Text>{" "}
+          <Text dimColor>{t("permission.reject")}</Text>
+        </Text>
       </Clickable>
       {showAlwaysAllow && onApproveAlways && (
         <Clickable id={`perm-always-${hintId}`} onClick={onApproveAlways} height={1}>
-        <Text>
-          <Text color="cyan" bold underline={isMouseActive}>
-            [a]
-          </Text>{" "}
-          <Text dimColor>{t("permission.alwaysAllow")}</Text>
-        </Text>
+          <Text>
+            <Text color="cyan" bold underline={isMouseActive}>
+              [a]
+            </Text>{" "}
+            <Text dimColor>{t("permission.alwaysAllow")}</Text>
+          </Text>
         </Clickable>
       )}
     </Box>

@@ -172,7 +172,7 @@ export class GoogleProvider implements Provider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "gemini-2.5-flash";
+    return "gemini-3.1-flash-preview";
   }
 
   /**
@@ -331,7 +331,7 @@ export class GoogleProvider implements Provider {
     this.ensureInitialized();
 
     try {
-      const modelId = model ?? "gemini-2.5-flash";
+      const modelId = model ?? "gemini-3.1-flash-preview";
 
       // Convert input to contents format
       const contents: Content[] =

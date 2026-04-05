@@ -900,31 +900,28 @@ const MessageList = memo(function MessageList({
   // Mouse wheel scroll — integrates with the same scroll controller
   useMouseScroll({
     enabled: enableScroll,
-    onScroll: useCallback(
-      (delta: number) => {
-        const list = virtualizedListRef.current;
-        if (!list) return;
-        const { scrollHeight, innerHeight, scrollTop } = list.getScrollState();
-        if (scrollHeight <= innerHeight) return;
+    onScroll: useCallback((delta: number) => {
+      const list = virtualizedListRef.current;
+      if (!list) return;
+      const { scrollHeight, innerHeight, scrollTop } = list.getScrollState();
+      if (scrollHeight <= innerHeight) return;
 
-        if (delta < 0) {
-          // Scrolling up → manual mode
-          list.scrollBy(delta);
-          setUserScrolledUp(true);
+      if (delta < 0) {
+        // Scrolling up → manual mode
+        list.scrollBy(delta);
+        setUserScrolledUp(true);
+      } else {
+        // Scrolling down — check if we'll reach bottom
+        const maxScroll = scrollHeight - innerHeight;
+        const reachesBottom = scrollTop + delta >= maxScroll - 1;
+        if (reachesBottom) {
+          list.scrollToEnd();
+          setUserScrolledUp(false);
         } else {
-          // Scrolling down — check if we'll reach bottom
-          const maxScroll = scrollHeight - innerHeight;
-          const reachesBottom = scrollTop + delta >= maxScroll - 1;
-          if (reachesBottom) {
-            list.scrollToEnd();
-            setUserScrolledUp(false);
-          } else {
-            list.scrollBy(delta);
-          }
+          list.scrollBy(delta);
         }
-      },
-      [],
-    ),
+      }
+    }, []),
   });
 
   // Animated scrollbar colors for visual feedback during scroll activity

@@ -18,11 +18,36 @@ import type { ModelPricing } from "./types.js";
  * Model pricing table.
  * All prices are in USD per million tokens.
  *
- * @updated 2026-01-04 - Current pricing data
+ * @updated 2026-04-04 - Added Claude 4.6, GPT-5.4, Gemini 3.1 models
  */
 export const MODEL_PRICING: Record<string, ModelPricing> = {
   // ==========================================================================
-  // Anthropic Claude Models
+  // Anthropic Claude 4.6 Models (latest)
+  // ==========================================================================
+  "claude-opus-4-6": {
+    inputPricePerMillion: 5.0,
+    outputPricePerMillion: 25.0,
+    cacheReadPricePerMillion: 0.5,
+    cacheWritePricePerMillion: 6.25,
+    effectiveDate: "2026-04-01",
+  },
+  "claude-sonnet-4-6": {
+    inputPricePerMillion: 3.0,
+    outputPricePerMillion: 15.0,
+    cacheReadPricePerMillion: 0.3,
+    cacheWritePricePerMillion: 3.75,
+    effectiveDate: "2026-04-01",
+  },
+  "claude-haiku-4-5-20251001": {
+    inputPricePerMillion: 1.0,
+    outputPricePerMillion: 5.0,
+    cacheReadPricePerMillion: 0.1,
+    cacheWritePricePerMillion: 1.25,
+    effectiveDate: "2025-10-01",
+  },
+
+  // ==========================================================================
+  // Anthropic Claude 4 Models
   // ==========================================================================
   "claude-sonnet-4-20250514": {
     inputPricePerMillion: 3.0,
@@ -59,7 +84,56 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   },
 
   // ==========================================================================
-  // OpenAI GPT Models
+  // OpenAI GPT-5.4 Models (latest, April 2026)
+  // ==========================================================================
+  "gpt-5.4": {
+    inputPricePerMillion: 2.5,
+    outputPricePerMillion: 10.0,
+    cacheReadPricePerMillion: 1.25,
+    effectiveDate: "2026-04-01",
+  },
+  "gpt-5.4-mini": {
+    inputPricePerMillion: 0.15,
+    outputPricePerMillion: 0.6,
+    effectiveDate: "2026-04-01",
+  },
+  "gpt-5.4-nano": {
+    inputPricePerMillion: 0.05,
+    outputPricePerMillion: 0.2,
+    effectiveDate: "2026-04-01",
+  },
+  "gpt-5.3-codex": {
+    inputPricePerMillion: 1.75,
+    outputPricePerMillion: 14.0,
+    effectiveDate: "2026-02-24",
+  },
+  "gpt-5.2-codex": {
+    inputPricePerMillion: 1.75,
+    outputPricePerMillion: 14.0,
+    effectiveDate: "2026-01-01",
+  },
+
+  // ==========================================================================
+  // Google Gemini 3.1 Models (latest, 2026)
+  // ==========================================================================
+  "gemini-3.1-pro-preview": {
+    inputPricePerMillion: 1.25,
+    outputPricePerMillion: 10.0,
+    effectiveDate: "2026-03-01",
+  },
+  "gemini-3.1-flash-preview": {
+    inputPricePerMillion: 0.5,
+    outputPricePerMillion: 3.0,
+    effectiveDate: "2026-03-01",
+  },
+  "gemini-3.1-flash-lite-preview": {
+    inputPricePerMillion: 0.25,
+    outputPricePerMillion: 1.5,
+    effectiveDate: "2026-03-01",
+  },
+
+  // ==========================================================================
+  // OpenAI GPT Models (legacy)
   // ==========================================================================
   "gpt-4o": {
     inputPricePerMillion: 2.5,
