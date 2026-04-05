@@ -181,6 +181,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && needs.should-skip.outputs.is-version-pr != 'true'
     continue-on-error: true
+    permissions:
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
