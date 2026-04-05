@@ -12,6 +12,63 @@ import type { ModelInfo } from "../types.js";
  */
 export const QWEN_MODELS: ModelInfo[] = [
   // ==========================================================================
+  // Qwen3.6 Series (Latest - March 2026)
+  // ==========================================================================
+  {
+    id: "qwen3.6-plus",
+    name: "Qwen3.6 Plus",
+    provider: "qwen",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.0,
+    outputPrice: 0.0,
+    deprecated: false,
+    description:
+      "Qwen3.6 Plus — stronger reasoning and more reliable agentic behavior, free tier (Mar 2026)",
+  },
+
+  // ==========================================================================
+  // Qwen3.5 Series (Feb 2026)
+  // ==========================================================================
+  {
+    id: "qwen3.5-plus-02-15",
+    name: "Qwen3.5 Plus",
+    provider: "qwen",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 16_384,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.26,
+    outputPrice: 1.56,
+    deprecated: false,
+    description: "Qwen3.5 Plus — hybrid linear attention + sparse MoE, 1M context (Feb 2026)",
+  },
+  {
+    id: "qwen3.5-flash",
+    name: "Qwen3.5 Flash",
+    provider: "qwen",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 8_192,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.065,
+    outputPrice: 0.26,
+    deprecated: false,
+    description: "Qwen3.5 Flash — fast, cost-efficient 1M context model (Feb 2026)",
+  },
+
+  // ==========================================================================
   // Qwen3 Max Series (Flagship - Jan 2026)
   // ==========================================================================
   {

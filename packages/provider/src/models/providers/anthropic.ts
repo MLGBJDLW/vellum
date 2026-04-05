@@ -12,8 +12,72 @@ import type { ModelInfo } from "../types.js";
  */
 export const ANTHROPIC_MODELS: ModelInfo[] = [
   // ==========================================================================
-  // Claude 4.5 Series (Latest)
+  // Claude 4.6 Series (Latest)
   // ==========================================================================
+  {
+    id: "claude-opus-4-6",
+    name: "Claude Opus 4.6",
+    provider: "anthropic",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    inputPrice: 5.0,
+    outputPrice: 25.0,
+    cacheWritesPrice: 6.25,
+    cacheReadsPrice: 0.5,
+    reasoningEfforts: ["low", "medium", "high"],
+    defaultReasoningEffort: "medium",
+    deprecated: false,
+    description:
+      "Most capable Claude model — 1M context, 128K output, extended thinking, computer use",
+  },
+  {
+    id: "claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    provider: "anthropic",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 64_000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    inputPrice: 3.0,
+    outputPrice: 15.0,
+    cacheWritesPrice: 3.75,
+    cacheReadsPrice: 0.3,
+    reasoningEfforts: ["low", "medium", "high"],
+    defaultReasoningEffort: "medium",
+    deprecated: false,
+    description:
+      "Frontier intelligence for coding, agents, and enterprise workflows — 1M context, no long-context surcharge",
+  },
+
+  // ==========================================================================
+  // Claude 4.5 Series
+  // ==========================================================================
+  {
+    id: "claude-haiku-4-5-20251001",
+    name: "Claude Haiku 4.5",
+    provider: "anthropic",
+    contextWindow: 200_000,
+    maxOutputTokens: 32_000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: false,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    inputPrice: 1.0,
+    outputPrice: 5.0,
+    cacheWritesPrice: 1.25,
+    cacheReadsPrice: 0.1,
+    deprecated: false,
+    description: "Fastest Claude model with near-frontier intelligence",
+  },
   {
     id: "claude-sonnet-4-5",
     name: "Claude Sonnet 4.5",

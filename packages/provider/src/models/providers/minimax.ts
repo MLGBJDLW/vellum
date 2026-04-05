@@ -12,6 +12,46 @@ import type { ModelInfo } from "../types.js";
  */
 export const MINIMAX_MODELS: ModelInfo[] = [
   // ==========================================================================
+  // MiniMax M2.7 (Latest - 2026)
+  // ==========================================================================
+  {
+    id: "MiniMax-M2.7",
+    name: "MiniMax M2.7",
+    provider: "minimax",
+    contextWindow: 204_800,
+    maxOutputTokens: 65_536,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.3,
+    outputPrice: 1.2,
+    deprecated: false,
+    description: "MiniMax M2.7 — next-gen autonomous real-world productivity model",
+  },
+
+  // ==========================================================================
+  // MiniMax M2.5 (Feb 2026)
+  // ==========================================================================
+  {
+    id: "MiniMax-M2.5",
+    name: "MiniMax M2.5",
+    provider: "minimax",
+    contextWindow: 196_608,
+    maxOutputTokens: 65_536,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.3,
+    outputPrice: 1.2,
+    deprecated: false,
+    description: "MiniMax M2.5 — SOTA coding & agentic tasks, 80.2% SWE-Bench (Feb 12 2026)",
+  },
+
+  // ==========================================================================
   // MiniMax M2 Series
   // ==========================================================================
   {

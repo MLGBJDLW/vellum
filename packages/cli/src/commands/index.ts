@@ -86,10 +86,20 @@ export { languageCommand } from "./language.js";
 // =============================================================================
 
 export {
+  archiveCommand,
+  createArchiveCommand,
+  createDeleteCommand,
+  createExportCommand,
+  createListCommand,
   createResumeCommand,
   createSearchCommand,
+  createSessionCommand,
+  createShowCommand,
+  deleteCommand,
+  exportCommand,
   findSessionById,
   getMostRecentSession,
+  listCommand,
   type ResumeSessionEventData,
   resumeCommand,
   type SearchSessionEventData,
@@ -97,6 +107,8 @@ export {
   type SessionLookupResult,
   SHORT_ID_LENGTH,
   searchCommand,
+  sessionCommand,
+  showCommand,
 } from "./session/index.js";
 
 // =============================================================================

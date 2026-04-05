@@ -12,6 +12,27 @@ import type { ModelInfo } from "../types.js";
  */
 export const ZHIPU_MODELS: ModelInfo[] = [
   // ===========================================================================
+  // GLM-5 Series (Latest - Feb 2026)
+  // ===========================================================================
+  {
+    id: "glm-5",
+    name: "GLM-5",
+    provider: "zhipu",
+    contextWindow: 128_000,
+    maxOutputTokens: 32_768,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 1.0,
+    outputPrice: 3.2,
+    deprecated: false,
+    description:
+      "GLM-5 — 744B MoE frontier model for coding and agent scenarios, Claude Opus-level coding",
+  },
+
+  // ===========================================================================
   // GLM-4 Series (Legacy IDs used by tests)
   // ===========================================================================
   {
@@ -95,7 +116,7 @@ export const ZHIPU_MODELS: ModelInfo[] = [
     description: "Improved vision model GLM-4V Plus",
   },
   // ==========================================================================
-  // GLM-4.7 Series (Latest)
+  // GLM-4.7 Series
   // ==========================================================================
   {
     id: "glm-4.7",
@@ -111,7 +132,23 @@ export const ZHIPU_MODELS: ModelInfo[] = [
     inputPrice: 0.6,
     outputPrice: 2.2,
     deprecated: false,
-    description: "Zhipu's latest flagship GLM-4.7 model",
+    description: "Zhipu's GLM-4.7 model with enhanced programming and multi-step reasoning",
+  },
+  {
+    id: "glm-4.7-flash",
+    name: "GLM-4.7 Flash",
+    provider: "zhipu",
+    contextWindow: 200_000,
+    maxOutputTokens: 32_768,
+    supportsTools: true,
+    supportsVision: false,
+    supportsReasoning: false,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    inputPrice: 0.0,
+    outputPrice: 0.0,
+    deprecated: false,
+    description: "Zhipu's free fast GLM-4.7 Flash model",
   },
   // ==========================================================================
   // GLM-4.6 Series

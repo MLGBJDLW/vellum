@@ -12,7 +12,29 @@ import type { ModelInfo } from "../types.js";
  */
 export const DEEPSEEK_MODELS: ModelInfo[] = [
   // ==========================================================================
-  // DeepSeek V3.x Series (Latest)
+  // DeepSeek V4 (Latest - March 2026)
+  // ==========================================================================
+  {
+    id: "deepseek-v4",
+    name: "DeepSeek V4",
+    provider: "deepseek",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 32_768,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    inputPrice: 0.3,
+    outputPrice: 0.5,
+    cacheReadsPrice: 0.03,
+    deprecated: false,
+    description:
+      "DeepSeek V4 — ~1T MoE, 1M context, native multimodal (text/image/video), 81% SWE-bench",
+  },
+
+  // ==========================================================================
+  // DeepSeek V3.x Series
   // ==========================================================================
   {
     id: "deepseek-v3.2",
@@ -170,8 +192,8 @@ export const DEEPSEEK_MODELS: ModelInfo[] = [
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: true,
-    inputPrice: 0.55,
-    outputPrice: 2.19,
+    inputPrice: 0.7,
+    outputPrice: 2.5,
     cacheReadsPrice: 0.14,
     deprecated: false,
     description: "DeepSeek R1 - advanced reasoning model with chain-of-thought",
