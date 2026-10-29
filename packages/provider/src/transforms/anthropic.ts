@@ -81,6 +81,7 @@ interface AnthropicToolResultBlock {
 interface AnthropicThinkingBlock {
   type: "thinking";
   thinking: string;
+  signature?: string;
 }
 
 /**
@@ -91,6 +92,7 @@ type AnthropicContentBlock =
   | AnthropicImageBlock
   | AnthropicToolUseBlock
   | AnthropicToolResultBlock
+  | { type: "redacted_thinking"; data: string }
   | AnthropicThinkingBlock;
 
 /**
@@ -202,7 +204,31 @@ export class AnthropicTransform extends AbstractProviderTransform<
     // Transform to Anthropic format
     const transformed = normalized
       .filter((m) => m.role !== "system") // System handled separately
-      .map((m) => this.transformMessage(m, warnings));
+      .map((m) => {
+        const result = this.transformMessage(m, warnings);
+        const metadata = m.providerMetadata;
+        if (
+          m.role === "assistant" &&
+          metadata?.provider === "anthropic" &&
+          metadata.model === config.modelId
+        ) {
+          const replay = (metadata.replay ?? []).filter(
+            (block) =>
+              (block.type === "thinking" &&
+                typeof block.thinking === "string" &&
+                typeof block.signature === "string") ||
+              (block.type === "redacted_thinking" && typeof block.data === "string")
+          ) as unknown as AnthropicContentBlock[];
+          if (replay.length > 0)
+            result.content = [
+              ...replay,
+              ...(typeof result.content === "string"
+                ? [{ type: "text" as const, text: result.content }]
+                : result.content),
+            ];
+        }
+        return result;
+      });
 
     return this.createResult(transformed, warnings);
   }

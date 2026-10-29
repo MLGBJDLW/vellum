@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * DeepSeek Provider
  *
@@ -12,7 +13,7 @@
 
 import { DEEPSEEK_MODELS } from "./models/providers/deepseek.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
-import type { ModelInfo } from "./types.js";
+import type { CompletionParams, ModelInfo } from "./types.js";
 
 // =============================================================================
 // DeepSeek Provider Implementation
@@ -66,7 +67,7 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "deepseek-chat";
+    return DEFAULT_MODEL_IDS.deepseek;
   }
 
   /**
@@ -79,5 +80,12 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
    */
   protected override supportsReasoningContent(): boolean {
     return true;
+  }
+
+  protected override buildExtraBody(params: CompletionParams): Record<string, unknown> {
+    return {
+      ...params.extraBody,
+      thinking: { type: params.thinking?.enabled ? "enabled" : "disabled" },
+    };
   }
 }

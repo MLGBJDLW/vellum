@@ -15,7 +15,7 @@
  * @module @vellum/core/agent/stream-handler
  */
 
-import type { StreamEvent } from "@vellum/provider";
+import type { ProviderResponseMetadata, StreamEvent } from "@vellum/provider";
 import type { TokenUsage } from "@vellum/shared";
 import type { Logger } from "../logger/logger.js";
 import type { LLMStreamEvent } from "../session/index.js";
@@ -40,6 +40,7 @@ export interface StreamState {
   accumulatedText: string;
   /** Accumulated reasoning content */
   accumulatedReasoning: string;
+  providerMetadata?: ProviderResponseMetadata;
 }
 
 /**
@@ -233,6 +234,9 @@ export class AgentStreamHandler {
     }
 
     switch (event.type) {
+      case "provider_metadata":
+        this.state.providerMetadata = event.metadata;
+        break;
       case "text": {
         const textContent = event.content ?? (event as { text?: string }).text ?? "";
         if (textContent.trim().length > 0) {
@@ -284,8 +288,7 @@ export class AgentStreamHandler {
       }
 
       case "error":
-        this.deps.emitError(new Error(`[${event.code}] ${event.message}`));
-        break;
+        throw new Error(`[${event.code}] ${event.message}`);
 
       case "done":
         // Stream complete - handled by caller after loop exits
@@ -428,6 +431,11 @@ export class AgentStreamHandler {
 
     const result = await processor.processStream(wrappedStream);
 
+    if (!result.ok) {
+      processor.reset();
+      throw result.error;
+    }
+
     if (result.ok) {
       // Extract state from processed result
       const hasTextPart = result.value.parts.some(
@@ -503,6 +511,10 @@ export class AgentStreamHandler {
   ): AsyncIterable<Result<StreamEvent, Error>> {
     try {
       for await (const event of stream) {
+        if (event.type === "provider_metadata") {
+          this.state.providerMetadata = event.metadata;
+          continue;
+        }
         // Check for cancellation
         if (this.deps.isCancelled()) {
           return;

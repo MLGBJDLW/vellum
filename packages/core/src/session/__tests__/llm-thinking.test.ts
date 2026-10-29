@@ -124,8 +124,8 @@ describe("LLM.stream thinking gating", () => {
     LLM.initialize(registry);
 
     const stream = LLM.stream({
-      providerType: "openai",
-      model: "o1",
+      providerType: "qwen",
+      model: "qwen3.8-max",
       messages: [{ role: "user", content: "Hi" }],
       thinking: { enabled: true, reasoningEffort: "high" },
     });
@@ -139,5 +139,42 @@ describe("LLM.stream thinking gating", () => {
     )?.thinking;
     expect(thinking?.enabled).toBe(true);
     expect(thinking?.reasoningEffort).toBeUndefined();
+  });
+
+  it("forwards cancellation and an explicit output budget up to the model limit", async () => {
+    let captured: CompletionParams | undefined;
+    const provider = createMockProvider((params) => {
+      captured = params;
+    });
+    LLM.initialize({ get: async () => provider } as unknown as ProviderRegistry);
+    const controller = new AbortController();
+    for await (const _ of LLM.stream({
+      providerType: "openai",
+      model: "gpt-6.1-sol",
+      messages: [{ role: "user", content: "Continue" }],
+      maxTokens: 100_000,
+      abortSignal: controller.signal,
+    })) {
+      /* consume */
+    }
+    expect(captured?.maxTokens).toBe(100_000);
+    expect(captured?.abortSignal).toBe(controller.signal);
+  });
+
+  it("does not advertise external tools to a model without tool-calling support", async () => {
+    let captured: CompletionParams | undefined;
+    const provider = createMockProvider((params) => {
+      captured = params;
+    });
+    LLM.initialize({ get: async () => provider } as unknown as ProviderRegistry);
+    for await (const _ of LLM.stream({
+      providerType: "groq",
+      model: "groq/compound",
+      messages: [{ role: "user", content: "Hello" }],
+      tools: [{ name: "read_file", description: "Read", inputSchema: {} }],
+    })) {
+      /* consume */
+    }
+    expect(captured?.tools).toBeUndefined();
   });
 });

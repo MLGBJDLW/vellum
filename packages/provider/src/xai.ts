@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * xAI Provider (Grok)
  *
@@ -60,6 +61,6 @@ export class XAIProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "grok-2";
+    return DEFAULT_MODEL_IDS.xai;
   }
 }

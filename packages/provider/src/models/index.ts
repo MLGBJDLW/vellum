@@ -10,10 +10,14 @@ import type { ModelInfo } from "./types.js";
 // Catalog
 export {
   ALL_MODELS,
+  DEFAULT_MODEL_IDS,
+  getDefaultModelId,
+  getModelReplacement,
   getProviderModels,
   hasModels,
   MODEL_CATALOG,
 } from "./catalog.js";
+export { normalizeDiscoveredModels, updateDiscoveredModels } from "./discovery.js";
 // Provider model exports (for backward compatibility)
 export {
   ANTHROPIC_MODELS,
@@ -80,8 +84,6 @@ const DEFAULT_MODEL_INFO: ModelInfo = {
   supportsReasoning: false,
   supportsStreaming: true,
   supportsPromptCache: false,
-  inputPrice: 1.0,
-  outputPrice: 3.0,
   deprecated: false,
 };
 
@@ -104,14 +106,16 @@ export function getModelInfo(provider: string, modelId: string): ModelInfo {
   }
 
   // Try exact match
-  const exactMatch = providerModels.find((m) => m.id === modelId);
+  const exactMatch = providerModels.find((m) => m.id === modelId || m.aliases?.includes(modelId));
   if (exactMatch) {
     return exactMatch;
   }
 
-  // Try partial match
+  // Allow dated snapshots of a known model, never arbitrary prefix matches
+  // (e.g. "gpt-6" must not borrow the capabilities of "gpt-6.1-sol").
   const partialMatch = providerModels.find(
-    (m) => modelId.startsWith(m.id) || m.id.startsWith(modelId)
+    (m) =>
+      modelId.startsWith(`${m.id}-`) && /^\d{4}-?\d{2}-?\d{2}$/.test(modelId.slice(m.id.length + 1))
   );
   if (partialMatch) {
     return { ...partialMatch, id: modelId };
@@ -135,8 +139,9 @@ export function calculateCost(
   modelId: string,
   inputTokens: number,
   outputTokens: number
-): number {
+): number | undefined {
   const info = getModelInfo(provider, modelId);
+  if (info.inputPrice === undefined || info.outputPrice === undefined) return undefined;
   const inputCost = (inputTokens / 1_000_000) * info.inputPrice;
   const outputCost = (outputTokens / 1_000_000) * info.outputPrice;
   return inputCost + outputCost;

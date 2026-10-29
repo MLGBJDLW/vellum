@@ -1,3 +1,5 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+import { normalizeDiscoveredModels } from "./models/discovery.js";
 /**
  * Anthropic Provider Implementation
  *
@@ -173,7 +175,15 @@ export class AnthropicProvider implements Provider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "claude-sonnet-4-6";
+    return DEFAULT_MODEL_IDS.anthropic;
+  }
+
+  async refreshModels(): Promise<import("./models/types.js").ModelInfo[]> {
+    this.ensureInitialized();
+    const models: unknown[] = [];
+    if (!this.client) throw new Error("Anthropic provider is not initialized");
+    for await (const model of this.client.models.list()) models.push(model);
+    return normalizeDiscoveredModels("anthropic", models);
   }
 
   /**
@@ -265,9 +275,19 @@ export class AnthropicProvider implements Provider {
 
     try {
       const request = this.buildRequest(params);
-      const response = await this.client?.messages.create(request);
+      const response = await this.client?.messages.create(request, { signal: params.abortSignal });
 
-      return this.normalizeResponse(response as Message);
+      const result = this.normalizeResponse(response as Message);
+      return {
+        ...result,
+        providerMetadata: {
+          provider: this.name,
+          model: params.model,
+          replay: (response as Message).content
+            .filter((block) => block.type === "thinking" || block.type === "redacted_thinking")
+            .map((block) => ({ ...block })),
+        },
+      };
     } catch (error) {
       throw this.handleError(error, "Completion request failed");
     }
@@ -285,10 +305,10 @@ export class AnthropicProvider implements Provider {
 
     try {
       const request = this.buildRequest(params);
-      const stream = this.client?.messages.stream(request);
+      const stream = this.client?.messages.stream(request, { signal: params.abortSignal });
 
       if (stream) {
-        yield* this.processStream(stream);
+        yield* this.processStream(stream, params.model);
       }
     } catch (error) {
       throw this.handleError(error, "Streaming request failed");
@@ -341,7 +361,7 @@ export class AnthropicProvider implements Provider {
    * @returns Array of model IDs
    */
   listModels(): string[] {
-    return ANTHROPIC_MODELS.map((m) => m.id);
+    return ANTHROPIC_MODELS.filter((model) => !model.deprecated).map((m) => m.id);
   }
 
   /**
@@ -350,7 +370,7 @@ export class AnthropicProvider implements Provider {
    * @returns Promise resolving to array of ModelInfo
    */
   async listModelsAsync(): Promise<ModelInfo[]> {
-    return ANTHROPIC_MODELS;
+    return ANTHROPIC_MODELS.filter((model) => !model.deprecated);
   }
 
   /**
@@ -552,6 +572,7 @@ export class AnthropicProvider implements Provider {
    * Build the Anthropic API request from completion params
    */
   private buildRequest(params: CompletionParams): MessageCreateParams {
+    const modelInfo = getModelInfo(this.name, params.model);
     const config = this.createTransformConfig(params.model);
     const { data: messages, warnings } = anthropicTransform.transformMessages(
       params.messages,
@@ -576,8 +597,10 @@ export class AnthropicProvider implements Provider {
       messages: messages as Anthropic.MessageParam[],
       max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
       ...(system && { system }),
-      ...(params.temperature !== undefined && { temperature: params.temperature }),
-      ...(params.topP !== undefined && { top_p: params.topP }),
+      ...(modelInfo.supportsSampling !== false &&
+        params.temperature !== undefined && { temperature: params.temperature }),
+      ...(modelInfo.supportsSampling !== false &&
+        params.topP !== undefined && { top_p: params.topP }),
       ...(params.stopSequences && { stop_sequences: params.stopSequences }),
     };
 
@@ -587,15 +610,31 @@ export class AnthropicProvider implements Provider {
     }
 
     const thinkingConfig = this.resolveThinkingConfig(params);
-    if (thinkingConfig) {
+    if (modelInfo.thinkingMode === "adaptive" && (thinkingConfig || modelInfo.requiresThinking)) {
+      Object.assign(request, {
+        thinking: { type: "adaptive" },
+        output_config: {
+          effort:
+            this.resolveReasoningEffort(params, modelInfo) ??
+            modelInfo.defaultReasoningEffort ??
+            "high",
+        },
+      });
+      delete request.temperature;
+      delete request.top_p;
+    } else if (thinkingConfig && request.max_tokens > 1024) {
       (
         request as MessageCreateParams & { thinking?: { type: string; budget_tokens: number } }
       ).thinking = {
         type: "enabled",
-        budget_tokens: thinkingConfig.budgetTokens,
+        budget_tokens: Math.max(
+          1024,
+          Math.min(thinkingConfig.budgetTokens, request.max_tokens - 1)
+        ),
       };
       // Extended thinking requires temperature = 1
       request.temperature = 1;
+      delete request.top_p;
     }
 
     return request;
@@ -666,7 +705,8 @@ export class AnthropicProvider implements Provider {
    * Process streaming response and yield normalized events
    */
   private async *processStream(
-    stream: ReturnType<Anthropic["messages"]["stream"]>
+    stream: ReturnType<Anthropic["messages"]["stream"]>,
+    model: string
   ): AsyncIterable<StreamEvent> {
     // Track state for tool calls
     const toolCallState: Map<number, { id: string; name: string; inputJson: string }> = new Map();
@@ -676,8 +716,22 @@ export class AnthropicProvider implements Provider {
     let cacheReadTokens: number | undefined;
     let cacheWriteTokens: number | undefined;
     let stopReason: StopReason = "end_turn";
+    const reasoningBlocks = new Map<number, Record<string, unknown>>();
 
     for await (const event of stream) {
+      if (
+        event.type === "content_block_start" &&
+        (event.content_block.type === "thinking" ||
+          event.content_block.type === "redacted_thinking")
+      ) {
+        reasoningBlocks.set(event.index, { ...event.content_block });
+      } else if (event.type === "content_block_delta") {
+        const block = reasoningBlocks.get(event.index);
+        if (block && event.delta.type === "thinking_delta")
+          block.thinking = `${block.thinking ?? ""}${event.delta.thinking}`;
+        if (block && event.delta.type === "signature_delta")
+          block.signature = `${block.signature ?? ""}${event.delta.signature}`;
+      }
       yield* this.processStreamEvent(event, toolCallState);
 
       // Track usage from message_delta
@@ -721,6 +775,12 @@ export class AnthropicProvider implements Provider {
         }
       }
     }
+
+    if (reasoningBlocks.size > 0)
+      yield {
+        type: "provider_metadata",
+        metadata: { provider: this.name, model, replay: [...reasoningBlocks.values()] },
+      };
 
     // Emit usage event with new flat structure
     const usageEvent: StreamUsageEvent = {

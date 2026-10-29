@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * Doubao Provider (ByteDance/Volcengine)
  *
@@ -62,6 +63,6 @@ export class DoubaoProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "doubao-1-5-pro-256k-250115";
+    return DEFAULT_MODEL_IDS.doubao;
   }
 }

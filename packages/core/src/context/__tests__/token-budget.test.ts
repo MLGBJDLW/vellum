@@ -194,29 +194,29 @@ describe("token-budget", () => {
     it("should return correct window for Anthropic models", () => {
       // Use actual model IDs from the centralized catalog
       expect(getModelContextWindow("claude-sonnet-4-5")).toBe(200_000);
-      expect(getModelContextWindow("claude-3-5-sonnet-20241022")).toBe(200_000);
+      expect(getModelContextWindow("claude-haiku-4-5-20251001")).toBe(200_000);
     });
 
     it("should return correct window for OpenAI models", () => {
       expect(getModelContextWindow("gpt-4o")).toBe(128_000);
-      expect(getModelContextWindow("gpt-4")).toBe(8_192);
-      expect(getModelContextWindow("gpt-3.5-turbo")).toBe(16_385);
-      expect(getModelContextWindow("o1")).toBe(200_000);
+      expect(getModelContextWindow("gpt-6.1-sol")).toBe(1_050_000);
+      expect(getModelContextWindow("gpt-6-luna")).toBe(1_050_000);
+      expect(getModelContextWindow("o3")).toBe(200_000);
     });
 
     it("should return correct window for Google models", () => {
-      expect(getModelContextWindow("gemini-2.0-flash")).toBe(1_048_576);
-      expect(getModelContextWindow("gemini-1.5-pro")).toBe(2_097_152);
+      expect(getModelContextWindow("gemini-3.8-flash")).toBe(1_048_576);
+      expect(getModelContextWindow("gemini-4-argon")).toBe(1_048_576);
     });
 
     it("should return correct window for DeepSeek models", () => {
-      // DeepSeek models have 128K context windows per official documentation
-      expect(getModelContextWindow("deepseek-chat")).toBe(128_000);
-      expect(getModelContextWindow("deepseek-coder")).toBe(128_000);
+      // DeepSeek V4 models use the current 1M context window
+      expect(getModelContextWindow("deepseek-flash")).toBe(1_000_000);
+      expect(getModelContextWindow("deepseek-v4-pro")).toBe(1_000_000);
     });
 
     it("should match versioned model names via prefix", () => {
-      expect(getModelContextWindow("claude-3-5-sonnet-20241022")).toBe(200_000);
+      expect(getModelContextWindow("claude-haiku-4-5-20251001")).toBe(200_000);
       expect(getModelContextWindow("gpt-4o-2024-08-06")).toBe(128_000);
     });
 
@@ -224,7 +224,7 @@ describe("token-budget", () => {
       // Note: The centralized catalog uses exact matching, case-sensitive
       // The legacy wrapper only handles known models case-insensitively
       expect(getModelContextWindow("gpt-4o")).toBe(128_000);
-      expect(getModelContextWindow("gemini-2.0-flash")).toBe(1_048_576);
+      expect(getModelContextWindow("gemini-3.8-flash")).toBe(1_048_576);
     });
 
     it("should return default (128K) for unknown models", () => {
@@ -298,7 +298,7 @@ describe("token-budget", () => {
   describe("integration", () => {
     it("should correctly flow through budget calculation and usage check", () => {
       // Simulate a typical workflow
-      const contextWindow = getModelContextWindow("claude-3-5-sonnet");
+      const contextWindow = getModelContextWindow("claude-haiku-4-5-20251001");
       expect(contextWindow).toBe(200_000);
 
       const budget = calculateTokenBudget({

@@ -7,6 +7,8 @@
  * @module @vellum/provider/openrouter
  */
 
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+import { OPENROUTER_MODELS } from "./models/providers/openrouter.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo, ProviderOptions } from "./types.js";
 
@@ -108,99 +110,7 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
    * @returns Array of popular OpenRouter models
    */
   protected getModelCatalog(): ModelInfo[] {
-    return [
-      {
-        id: "openai/gpt-4o",
-        name: "GPT-4o (via OpenRouter)",
-        provider: "openrouter",
-        contextWindow: 128000,
-        maxOutputTokens: 16384,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 2.5,
-        outputPrice: 10.0,
-      },
-      {
-        id: "openai/gpt-4o-mini",
-        name: "GPT-4o Mini (via OpenRouter)",
-        provider: "openrouter",
-        contextWindow: 128000,
-        maxOutputTokens: 16384,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.15,
-        outputPrice: 0.6,
-      },
-      {
-        id: "anthropic/claude-3.5-sonnet",
-        name: "Claude 3.5 Sonnet (via OpenRouter)",
-        provider: "openrouter",
-        contextWindow: 200000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 3.0,
-        outputPrice: 15.0,
-      },
-      {
-        id: "anthropic/claude-3-haiku",
-        name: "Claude 3 Haiku (via OpenRouter)",
-        provider: "openrouter",
-        contextWindow: 200000,
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.25,
-        outputPrice: 1.25,
-      },
-      {
-        id: "google/gemini-pro-1.5",
-        name: "Gemini Pro 1.5 (via OpenRouter)",
-        provider: "openrouter",
-        contextWindow: 2000000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: true,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 1.25,
-        outputPrice: 5.0,
-      },
-      {
-        id: "meta-llama/llama-3.3-70b-instruct",
-        name: "Llama 3.3 70B Instruct (via OpenRouter)",
-        provider: "openrouter",
-        contextWindow: 128000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 0.4,
-        outputPrice: 0.4,
-      },
-      {
-        id: "mistralai/mistral-large",
-        name: "Mistral Large (via OpenRouter)",
-        provider: "openrouter",
-        contextWindow: 128000,
-        maxOutputTokens: 8192,
-        supportsTools: true,
-        supportsVision: false,
-        supportsReasoning: false,
-        supportsStreaming: true,
-        inputPrice: 2.0,
-        outputPrice: 6.0,
-      },
-    ];
+    return OPENROUTER_MODELS;
   }
 
   /**
@@ -209,6 +119,6 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "openai/gpt-4o";
+    return DEFAULT_MODEL_IDS.openrouter;
   }
 }

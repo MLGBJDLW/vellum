@@ -43,17 +43,17 @@ describe("AnthropicProvider", () => {
     it("should return list of supported models", () => {
       const provider = new AnthropicProvider();
       const models = provider.listModels();
-      expect(models).toContain("claude-sonnet-4-20250514");
-      expect(models).toContain("claude-3-5-sonnet-20241022");
-      expect(models).toContain("claude-3-5-haiku-20241022");
-      expect(models).toContain("claude-3-opus-20240229");
+      expect(models).toContain("claude-sonnet-5-5");
+      expect(models).toContain("claude-opus-4-7");
+      expect(models).toContain("claude-haiku-5-5");
+      expect(models).not.toContain("claude-3-opus-20240229");
     });
   });
 
   describe("getDefaultModel", () => {
     it("should return default model", () => {
       const provider = new AnthropicProvider();
-      expect(provider.getDefaultModel()).toBe("claude-sonnet-4-6");
+      expect(provider.getDefaultModel()).toBe("claude-sonnet-5-5");
     });
   });
 
@@ -319,7 +319,7 @@ describe("AnthropicProvider", () => {
     it("should return model info for known models", async () => {
       const provider = new AnthropicProvider();
       const models = await provider.listModelsAsync();
-      const sonnet = models.find((m) => m.id === "claude-sonnet-4-20250514");
+      const sonnet = models.find((m) => m.id === "claude-sonnet-5-5");
       expect(sonnet).toBeDefined();
       expect(sonnet?.supportsReasoning).toBe(true);
       expect(sonnet?.supportsTools).toBe(true);
@@ -362,7 +362,8 @@ describe("AnthropicProvider", () => {
           };
         }
       ).buildRequest({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-opus-4-5-20251101",
+        maxTokens: 32768,
         messages: [{ role: "user", content: "Hello" }],
         thinking: { enabled: true, reasoningEffort: "high" },
       });

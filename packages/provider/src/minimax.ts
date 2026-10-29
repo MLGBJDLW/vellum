@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * MiniMax Provider
  *
@@ -46,14 +47,14 @@ export class MiniMaxProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "MiniMax-M2";
+    return DEFAULT_MODEL_IDS.minimax;
   }
 
   protected override buildExtraBody(params: CompletionParams): Record<string, unknown> | undefined {
     const baseExtra = super.buildExtraBody(params) ?? {};
     const modelInfo = this.getModelCatalog().find((model) => model.id === params.model);
 
-    if (params.thinking?.enabled && modelInfo?.supportsReasoning) {
+    if (modelInfo?.supportsReasoning) {
       return {
         ...baseExtra,
         reasoning_split: true,

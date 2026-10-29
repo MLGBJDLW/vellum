@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * Moonshot Provider (月之暗面/Kimi)
  *
@@ -67,6 +68,6 @@ export class MoonshotProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "moonshot-v1-32k";
+    return DEFAULT_MODEL_IDS.moonshot;
   }
 }

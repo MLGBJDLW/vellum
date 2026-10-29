@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * Groq Provider
  *
@@ -60,6 +61,6 @@ export class GroqProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "llama-3.3-70b-versatile";
+    return DEFAULT_MODEL_IDS.groq;
   }
 }

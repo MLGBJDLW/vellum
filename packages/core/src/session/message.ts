@@ -132,6 +132,14 @@ export const SessionMessageMetadataSchema = z.object({
   model: z.string().optional(),
   /** Provider used for generation */
   provider: z.string().optional(),
+  providerMetadata: z
+    .object({
+      provider: z.string(),
+      model: z.string(),
+      replay: z.array(z.record(z.string(), z.unknown())).optional(),
+      reasoningContent: z.string().optional(),
+    })
+    .optional(),
   /** Token usage statistics */
   tokens: z
     .object({
@@ -391,6 +399,9 @@ function messageToCompletionMessage(message: SessionMessage): CompletionMessage 
     return {
       role,
       content: firstPart.text,
+      ...(message.metadata.providerMetadata && {
+        providerMetadata: message.metadata.providerMetadata,
+      }),
     };
   }
 
@@ -398,6 +409,9 @@ function messageToCompletionMessage(message: SessionMessage): CompletionMessage 
   return {
     role,
     content: contentParts,
+    ...(message.metadata.providerMetadata && {
+      providerMetadata: message.metadata.providerMetadata,
+    }),
   };
 }
 

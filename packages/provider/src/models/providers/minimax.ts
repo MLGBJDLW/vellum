@@ -1,105 +1,44 @@
 /**
- * MiniMax model definitions
- * @module models/providers/minimax
+ * minimax text/tool model catalog, audited 2026-10-29.
+ * Sources, exclusions and endpoint constraints: docs/research/provider-model-audit.md.
+ * Account/region availability still requires provider discovery; missing prices are unknown.
  */
-
 import type { ModelInfo } from "../types.js";
 
-/**
- * MiniMax model catalog
- * Pricing: https://platform.minimaxi.com/document/Price
- * Models: https://platform.minimaxi.com/document/Models
- */
 export const MINIMAX_MODELS: ModelInfo[] = [
-  // ==========================================================================
-  // MiniMax M2.7 (Latest - 2026)
-  // ==========================================================================
   {
-    id: "MiniMax-M2.7",
-    name: "MiniMax M2.7",
+    id: "MiniMax-M3.1-Flash",
+    name: "MiniMax M3.1 Flash",
     provider: "minimax",
-    contextWindow: 204_800,
-    maxOutputTokens: 65_536,
+    contextWindow: 1000000,
     supportsTools: true,
-    supportsVision: false,
+    supportsVision: true,
     supportsReasoning: true,
     supportsStreaming: true,
-    supportsPromptCache: false,
-    inputPrice: 0.3,
-    outputPrice: 1.2,
+    supportsPromptCache: true,
     deprecated: false,
-    description: "MiniMax M2.7 — next-gen autonomous real-world productivity model",
-  },
-
-  // ==========================================================================
-  // MiniMax M2.5 (Feb 2026)
-  // ==========================================================================
-  {
-    id: "MiniMax-M2.5",
-    name: "MiniMax M2.5",
-    provider: "minimax",
-    contextWindow: 196_608,
-    maxOutputTokens: 65_536,
-    supportsTools: true,
-    supportsVision: false,
-    supportsReasoning: true,
-    supportsStreaming: true,
-    supportsPromptCache: false,
-    inputPrice: 0.3,
-    outputPrice: 1.2,
-    deprecated: false,
-    description: "MiniMax M2.5 — SOTA coding & agentic tasks, 80.2% SWE-Bench (Feb 12 2026)",
-  },
-
-  // ==========================================================================
-  // MiniMax M2 Series
-  // ==========================================================================
-  {
-    id: "MiniMax-M2",
-    name: "MiniMax M2",
-    provider: "minimax",
-    contextWindow: 192_000,
-    maxOutputTokens: 16_384,
-    supportsTools: true,
-    supportsVision: false,
-    supportsReasoning: true,
-    supportsStreaming: true,
-    supportsPromptCache: false,
-    inputPrice: 0.3,
-    outputPrice: 1.2,
-    deprecated: false,
-    description: "MiniMax's flagship M2 reasoning model",
-  },
-  {
-    id: "MiniMax-M2.1",
-    name: "MiniMax M2.1",
-    provider: "minimax",
-    contextWindow: 192_000,
-    maxOutputTokens: 16_384,
-    supportsTools: true,
-    supportsVision: false,
-    supportsReasoning: true,
-    supportsStreaming: true,
-    supportsPromptCache: false,
-    inputPrice: 0.3,
-    outputPrice: 1.2,
-    deprecated: false,
-    description: "MiniMax's improved M2.1 reasoning model",
-  },
-  {
-    id: "MiniMax-Text-01",
-    name: "MiniMax Text 01",
-    provider: "minimax",
-    contextWindow: 128_000,
-    maxOutputTokens: 8_192,
-    supportsTools: true,
-    supportsVision: false,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    supportsPromptCache: false,
     inputPrice: 0.15,
     outputPrice: 0.6,
+    cacheReadsPrice: 0.015,
+    supportsSampling: false,
+    requiresThinking: true,
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    defaultReasoningEffort: "max",
+  },
+  {
+    id: "MiniMax-M3",
+    name: "MiniMax M3",
+    provider: "minimax",
+    contextWindow: 1000000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
     deprecated: false,
-    description: "MiniMax's general text model",
+    inputPrice: 0.3,
+    outputPrice: 1.2,
+    cacheReadsPrice: 0.06,
+    supportsSampling: false,
   },
 ];

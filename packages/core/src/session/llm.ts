@@ -6,7 +6,7 @@
  * LLM streaming utilities for agent loop integration.
  *
  * Wraps provider streaming with:
- * - MAX_OUTPUT_TOKENS enforcement
+ * - Model-specific output budget enforcement
  * - Abort signal integration
  * - Tool call repair (case mismatch handling)
  * - Unified event emission
@@ -35,8 +35,8 @@ import { CONFIG_DEFAULTS } from "../config/defaults.js";
 // =============================================================================
 
 /**
- * Maximum output tokens for streaming completions.
- * Enforced across all providers.
+ * Default output budget for streaming completions. Explicit budgets can use
+ * the full advertised model output limit.
  */
 export const MAX_OUTPUT_TOKENS = 32768;
 
@@ -65,7 +65,7 @@ export const StreamConfigSchema = z.object({
   system: z.string().optional(),
   /** Sampling temperature */
   temperature: z.number().min(0).max(2).optional(),
-  /** Maximum tokens to generate (capped at MAX_OUTPUT_TOKENS) */
+  /** Maximum tokens to generate (capped at the model's advertised limit) */
   maxTokens: z.number().positive().optional(),
   /** Enable extended thinking */
   thinking: z
@@ -338,8 +338,13 @@ export namespace LLM {
     // Validate config
     const validated = StreamConfigSchema.parse(config);
 
-    // Enforce MAX_OUTPUT_TOKENS
-    const maxTokens = Math.min(validated.maxTokens ?? MAX_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS);
+    // Honor explicit generation budgets up to the selected model's actual limit.
+    // Keep a practical default without truncating every modern model at 32K.
+    const modelInfo = getModelInfo(validated.providerType, validated.model);
+    const requestedMaxTokens = validated.maxTokens ?? MAX_OUTPUT_TOKENS;
+    const maxTokens = modelInfo.maxOutputTokens
+      ? Math.min(requestedMaxTokens, modelInfo.maxOutputTokens)
+      : requestedMaxTokens;
 
     // Resolve provider
     if (!registry) {
@@ -370,9 +375,10 @@ export namespace LLM {
       messages: buildMessages(validated.messages, validated.system),
       temperature: validated.temperature,
       maxTokens,
-      tools: validated.tools,
+      tools: modelInfo.supportsTools ? validated.tools : undefined,
       thinking: resolvedThinking,
       extraBody: validated.extraBody,
+      abortSignal: validated.abortSignal,
     };
 
     // Create abort-aware stream

@@ -1,3 +1,5 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+import { normalizeDiscoveredModels } from "./models/discovery.js";
 /**
  * Google Provider Implementation
  *
@@ -172,7 +174,15 @@ export class GoogleProvider implements Provider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "gemini-3.1-flash-preview";
+    return DEFAULT_MODEL_IDS.google;
+  }
+
+  async refreshModels(): Promise<import("./models/types.js").ModelInfo[]> {
+    this.ensureInitialized();
+    const models: unknown[] = [];
+    if (!this.client) throw new Error("Google provider is not initialized");
+    for await (const model of await this.client.models.list()) models.push(model);
+    return normalizeDiscoveredModels("google", models);
   }
 
   /**
@@ -287,7 +297,14 @@ export class GoogleProvider implements Provider {
         });
       }
 
-      return this.normalizeResponse(response);
+      return {
+        ...this.normalizeResponse(response),
+        providerMetadata: {
+          provider: this.name,
+          model: params.model,
+          replay: (response.candidates?.[0]?.content?.parts ?? []).map((part) => ({ ...part })),
+        },
+      };
     } catch (error) {
       throw this.handleError(error, "Completion request failed");
     }
@@ -313,7 +330,7 @@ export class GoogleProvider implements Provider {
       });
 
       if (stream) {
-        yield* this.processStream(stream);
+        yield* this.processStream(stream, params.model);
       }
     } catch (error) {
       throw this.handleError(error, "Streaming request failed");
@@ -364,7 +381,7 @@ export class GoogleProvider implements Provider {
    * @returns Array of model IDs
    */
   listModels(): string[] {
-    return GOOGLE_MODELS.map((m) => m.id);
+    return GOOGLE_MODELS.filter((model) => !model.deprecated).map((m) => m.id);
   }
 
   /**
@@ -373,7 +390,7 @@ export class GoogleProvider implements Provider {
    * @returns Promise resolving to array of ModelInfo
    */
   async listModelsAsync(): Promise<ModelInfo[]> {
-    return GOOGLE_MODELS;
+    return GOOGLE_MODELS.filter((model) => !model.deprecated);
   }
 
   /**
@@ -562,7 +579,7 @@ export class GoogleProvider implements Provider {
   }
 
   private isGemini3Model(modelId: string): boolean {
-    return modelId.toLowerCase().startsWith("gemini-3");
+    return /^gemini-[34]/.test(modelId.toLowerCase());
   }
 
   private isGemini25Model(modelId: string): boolean {
@@ -649,6 +666,7 @@ export class GoogleProvider implements Provider {
 
     // Build config
     const config: GenerateContentConfig = {
+      ...(params.abortSignal && { abortSignal: params.abortSignal }),
       maxOutputTokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
       ...(systemInstruction && { systemInstruction }),
       ...(params.temperature !== undefined && { temperature: params.temperature }),
@@ -724,13 +742,15 @@ export class GoogleProvider implements Provider {
    * Process streaming response and yield normalized events
    */
   private async *processStream(
-    stream: AsyncIterable<GenerateContentResponse>
+    stream: AsyncIterable<GenerateContentResponse>,
+    model: string
   ): AsyncIterable<StreamEvent> {
     // Track state for tool calls
     let inputTokens = 0;
     let outputTokens = 0;
     let stopReason: StopReason = "end_turn";
     let toolCallIndex = 0;
+    const replay: Record<string, unknown>[] = [];
 
     for await (const chunk of stream) {
       const candidate = chunk.candidates?.[0];
@@ -738,6 +758,7 @@ export class GoogleProvider implements Provider {
       // Process content parts
       if (candidate?.content?.parts) {
         for (const part of candidate.content.parts) {
+          replay.push({ ...part });
           // Check if this part is thinking/reasoning content (Gemini 2.5 models)
           // The SDK marks thinking parts with thought: true
           const isThought = "thought" in part && part.thought === true;
@@ -835,6 +856,9 @@ export class GoogleProvider implements Provider {
         outputTokens = chunk.usageMetadata.candidatesTokenCount ?? 0;
       }
     }
+
+    if (replay.length > 0)
+      yield { type: "provider_metadata", metadata: { provider: this.name, model, replay } };
 
     // Emit usage event with new flat structure
     const usageEvent: StreamUsageEvent = {

@@ -99,6 +99,7 @@ export type {
   ProviderCredential,
   // T002: Provider options and completion params
   ProviderOptions,
+  ProviderResponseMetadata,
   ProviderType,
   StopReason,
   // T002: Stream citation event

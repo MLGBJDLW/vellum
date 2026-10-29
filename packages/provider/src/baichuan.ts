@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * Baichuan Provider (百川)
  *
@@ -61,6 +62,6 @@ export class BaichuanProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "Baichuan4";
+    return DEFAULT_MODEL_IDS.baichuan;
   }
 }
