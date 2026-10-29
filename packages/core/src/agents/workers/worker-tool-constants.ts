@@ -50,6 +50,8 @@ export const WORKER_TOOL_SETS: Record<string, readonly string[]> = {
     "list_dir",
     "web_fetch",
     "web_search",
+    "fetch_tool",
+    "search_tool",
     "doc_lookup",
   ],
   security: ["read_file", "search_files", "codebase_search", "list_dir", "lsp"],

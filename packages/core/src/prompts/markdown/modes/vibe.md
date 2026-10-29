@@ -113,7 +113,7 @@ export const bar = foo() + 1;
 | edit | ✅ | `write_file`, `apply_patch`, `apply_diff`, `multi_edit` |
 | filesystem | ✅ | `move_file`, `copy_file`, `delete_file`, `create_directory` |
 | execute | ✅ | `bash`, `shell` |
-| browser | ✅ | `web_fetch`, `web_search`, `browser` |
+| browser | ✅ | `fetch_tool`, `search_tool`, `web_fetch`, `web_search`, `browser` |
 | mcp | ✅ | external tools via MCP |
 | lsp | ✅ | `lsp_rename` |
 | git | ✅ | status, diff, commit |

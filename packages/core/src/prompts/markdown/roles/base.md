@@ -315,8 +315,10 @@ Plans should be **specific** and **actionable**:
 | Tool | Purpose |
 |------|---------|
 | `browser` | Headless browser automation |
-| `web_fetch` | Fetch web page content |
-| `web_search` | Search the web |
+| `fetch_tool` | Fetch readable web page content using the configured extraction provider |
+| `search_tool` | Search the web using configured providers and existing credentials |
+| `web_fetch` | Make an explicit HTTP request with a method, headers, or body |
+| `web_search` | Compatibility name for web search; prefer `search_tool` |
 
 #### Memory
 

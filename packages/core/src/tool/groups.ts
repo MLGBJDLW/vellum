@@ -100,7 +100,7 @@ export const BUILTIN_TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
   },
 
   browser: {
-    tools: ["browser", "web_fetch", "web_search"],
+    tools: ["browser", "fetch_tool", "search_tool", "web_fetch", "web_search"],
     description: "Web browsing, fetching, and search tools",
   },
 
