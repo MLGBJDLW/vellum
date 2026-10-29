@@ -40,7 +40,7 @@ import {
 } from "@vellum/core";
 import { getProviderModels } from "@vellum/provider";
 import { createId } from "@vellum/shared";
-import { Box, Text, useApp as useInkApp, useInput, useStdout } from "ink";
+import { Box, Text, useApp as useInkApp, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DefaultContextProvider } from "./commands/index.js";
 import {
@@ -191,11 +191,7 @@ import {
   initializeEnterprise,
   shutdownEnterprise,
 } from "./tui/enterprise-integration.js";
-import {
-  type PersistenceStatus,
-  usePersistence,
-  usePersistenceShortcuts,
-} from "./tui/hooks/index.js";
+import { type PersistenceStatus, usePersistence } from "./tui/hooks/index.js";
 import { useAlternateBuffer } from "./tui/hooks/useAlternateBuffer.js";
 import { useBacktrack } from "./tui/hooks/useBacktrack.js";
 import { useCopyMode } from "./tui/hooks/useCopyMode.js";
@@ -210,6 +206,7 @@ import { useProviderStatus } from "./tui/hooks/useProviderStatus.js";
 import { isScreenReaderEnabled, useScreenReader } from "./tui/hooks/useScreenReader.js";
 import { type SidebarContent, useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
 import { useSnapshots } from "./tui/hooks/useSnapshots.js";
+import { useInput } from "./tui/hooks/useTerminalInput.js";
 import { useTerminalDimensions } from "./tui/hooks/useTerminalSize.js";
 import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
 import type { VimMode } from "./tui/hooks/useVim.js";
@@ -1671,15 +1668,6 @@ function AppContent({
     return () => setPersistenceRef(null);
   }, [persistence]);
 
-  // Initialize persistence keyboard shortcuts
-  usePersistenceShortcuts({
-    persistence,
-    enabled: true,
-    onSave: () => announce("Session saved"),
-    onCheckpointCreated: (id) => announce(`Checkpoint: ${id.slice(0, 8)}`),
-    onError: (error) => notifyError(error),
-  });
-
   // ==========================================================================
   // FIX 4: Real Todo and Memory Data
   // ==========================================================================
@@ -2917,28 +2905,31 @@ function AppContent({
     [addMessage, clearMessages, clearSession]
   );
 
-  const handlePromptSubmit = useCallback(async () => {
-    if (!interactivePrompt) {
-      return;
-    }
+  const handlePromptSubmit = useCallback(
+    async (submittedValue: string) => {
+      if (!interactivePrompt) {
+        return;
+      }
 
-    const prompt = interactivePrompt;
-    const input = promptValue.trim();
-    const resolvedValue = input === "" ? (prompt.defaultValue ?? "") : input;
+      const prompt = interactivePrompt;
+      const input = submittedValue.trim();
+      const resolvedValue = input === "" ? (prompt.defaultValue ?? "") : input;
 
-    setInteractivePrompt(null);
-    setPromptValue("");
+      setInteractivePrompt(null);
+      setPromptValue("");
 
-    try {
-      const result = await prompt.handler(resolvedValue);
-      await handleCommandResult(result);
-    } catch (error) {
-      addMessage({
-        role: "assistant",
-        content: `[x] ${error instanceof Error ? error.message : String(error)}`,
-      });
-    }
-  }, [interactivePrompt, promptValue, handleCommandResult, addMessage]);
+      try {
+        const result = await prompt.handler(resolvedValue);
+        await handleCommandResult(result);
+      } catch (error) {
+        addMessage({
+          role: "assistant",
+          content: `[x] ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    },
+    [interactivePrompt, handleCommandResult, addMessage]
+  );
 
   const handlePromptCancel = useCallback(() => {
     if (!interactivePrompt) {
@@ -3025,6 +3016,12 @@ function AppContent({
       return;
     }
 
+    if (key.escape && (showModelSelector || showModeSelector)) {
+      setShowModelSelector(false);
+      setShowModeSelector(false);
+      return;
+    }
+
     if (applicationState.focusedArea === "tools" && key.escape) {
       dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
       return;
@@ -3093,7 +3090,7 @@ function AppContent({
     }
 
     // Ctrl+C - cancel operation when loading; otherwise exit
-    if (key.ctrl && inputChar === "c") {
+    if (key.ctrl && !key.shift && !key.meta && inputChar === "c") {
       if (isLoading && cancellationRef.current) {
         cancellationRef.current.cancel("user_ctrl_c");
         setIsLoading(false);
@@ -4164,7 +4161,7 @@ interface AppContentViewProps {
     mode: string;
     credentialsConfigured: boolean;
   }) => void;
-  readonly handlePromptSubmit: () => void;
+  readonly handlePromptSubmit: (value: string) => void;
   readonly handlePromptCancel: () => void;
   readonly handlePromptSelectOption: (option: string) => Promise<void>;
   readonly handleReject: () => void;
@@ -4423,7 +4420,6 @@ interface AppOverlaysProps {
   readonly currentMode: CodingMode;
   readonly currentModel: string;
   readonly currentProvider: string;
-  readonly dismissUpdateBanner: () => void;
   readonly handleApprove: () => void;
   readonly handleApproveAlways: () => void;
   readonly handleModeSelect: (mode: CodingMode) => void;
@@ -4448,7 +4444,6 @@ interface AppOverlaysProps {
   readonly onApproveAll: () => void;
   readonly onRejectAll: () => void;
   readonly themeContext: ThemeContextValue;
-  readonly updateAvailable: { current: string; latest: string } | null;
   /** Current LSP confirmation request (null if no dialog active) */
   readonly currentConfirmRequest: import("@vellum/lsp").ConfirmationRequest | null;
   /** Callback when user responds to LSP confirmation */
@@ -4555,7 +4550,6 @@ function AppOverlays({
   currentMode,
   currentModel,
   currentProvider,
-  dismissUpdateBanner,
   handleApprove,
   handleApproveAlways,
   handleModeSelect,
@@ -4578,7 +4572,6 @@ function AppOverlays({
   onApproveAll,
   onRejectAll,
   themeContext,
-  updateAvailable,
   currentConfirmRequest,
   respondToConfirmation,
   showSidebar,
@@ -4588,19 +4581,10 @@ function AppOverlays({
 
   return (
     <>
-      {updateAvailable && (
-        <UpdateBanner
-          currentVersion={updateAvailable.current}
-          latestVersion={updateAvailable.latest}
-          dismissible
-          onDismiss={dismissUpdateBanner}
-          compact
-        />
-      )}
-
       {showModeSelector && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="round"
@@ -4619,6 +4603,7 @@ function AppOverlays({
       {showSessionManager && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.compact.top}
           marginLeft={margins.compact.left}
           borderStyle="round"
@@ -4639,6 +4624,7 @@ function AppOverlays({
       {activeApproval && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="double"
@@ -4659,6 +4645,7 @@ function AppOverlays({
       {currentConfirmRequest && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           width={confirmWidth}
@@ -4674,6 +4661,7 @@ function AppOverlays({
       {showModelSelector && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="round"
@@ -4693,6 +4681,7 @@ function AppOverlays({
       {pendingOperation && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.loading.top}
           marginLeft={margins.loading.left}
           borderStyle="round"
@@ -4709,6 +4698,7 @@ function AppOverlays({
       {showHelpModal && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="round"
@@ -4726,6 +4716,7 @@ function AppOverlays({
       {showApprovalQueue && pendingApprovals.length > 1 && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.compact.top}
           marginLeft={margins.compact.left}
           borderStyle="double"
@@ -4746,6 +4737,7 @@ function AppOverlays({
       {checkpointDiff.isVisible && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.compact.top}
           marginLeft={margins.compact.left}
           borderStyle="double"
@@ -5315,44 +5307,15 @@ function AppContentView({
 
       {showMainView && (
         <>
-          <AppOverlays
-            activeApproval={activeApproval}
-            activeRiskLevel={activeRiskLevel}
-            activeSessionId={activeSessionId}
-            checkpointDiff={checkpointDiff}
-            closeCheckpointDiff={closeCheckpointDiff}
-            closeSessionManager={closeSessionManager}
-            currentMode={currentMode}
-            currentModel={currentModel}
-            currentProvider={currentProvider}
-            dismissUpdateBanner={dismissUpdateBanner}
-            handleApprove={handleApprove}
-            handleApproveAlways={handleApproveAlways}
-            handleModeSelect={handleModeSelect}
-            handleModelSelect={handleModelSelect}
-            handleReject={handleReject}
-            handleSessionSelected={handleSessionSelected}
-            loadSessionPreviewMessages={loadSessionPreviewMessages}
-            pendingOperation={pendingOperation}
-            sessions={sessions}
-            showModeSelector={showModeSelector}
-            showModelSelector={showModelSelector}
-            showSessionManager={showSessionManager}
-            showHelpModal={showHelpModal}
-            closeHelpModal={closeHelpModal}
-            showApprovalQueue={showApprovalQueue}
-            closeApprovalQueue={closeApprovalQueue}
-            pendingApprovals={pendingApprovals}
-            onApproveQueueItem={onApproveQueueItem}
-            onRejectQueueItem={onRejectQueueItem}
-            onApproveAll={onApproveAll}
-            onRejectAll={onRejectAll}
-            themeContext={themeContext}
-            updateAvailable={updateAvailable}
-            currentConfirmRequest={currentConfirmRequest}
-            respondToConfirmation={respondToConfirmation}
-            showSidebar={showSidebar}
-          />
+          {updateAvailable && (
+            <UpdateBanner
+              currentVersion={updateAvailable.current}
+              latestVersion={updateAvailable.latest}
+              dismissible
+              onDismiss={dismissUpdateBanner}
+              compact
+            />
+          )}
 
           <AdaptiveLayout
             regularLayout={
@@ -5377,6 +5340,43 @@ function AppContentView({
           >
             {screenReaderContent}
           </AdaptiveLayout>
+
+          <AppOverlays
+            activeApproval={activeApproval}
+            activeRiskLevel={activeRiskLevel}
+            activeSessionId={activeSessionId}
+            checkpointDiff={checkpointDiff}
+            closeCheckpointDiff={closeCheckpointDiff}
+            closeSessionManager={closeSessionManager}
+            currentMode={currentMode}
+            currentModel={currentModel}
+            currentProvider={currentProvider}
+            handleApprove={handleApprove}
+            handleApproveAlways={handleApproveAlways}
+            handleModeSelect={handleModeSelect}
+            handleModelSelect={handleModelSelect}
+            handleReject={handleReject}
+            handleSessionSelected={handleSessionSelected}
+            loadSessionPreviewMessages={loadSessionPreviewMessages}
+            pendingOperation={pendingOperation}
+            sessions={sessions}
+            showModeSelector={showModeSelector}
+            showModelSelector={showModelSelector}
+            showSessionManager={showSessionManager}
+            showHelpModal={showHelpModal}
+            closeHelpModal={closeHelpModal}
+            showApprovalQueue={showApprovalQueue}
+            closeApprovalQueue={closeApprovalQueue}
+            pendingApprovals={pendingApprovals}
+            onApproveQueueItem={onApproveQueueItem}
+            onRejectQueueItem={onRejectQueueItem}
+            onApproveAll={onApproveAll}
+            onRejectAll={onRejectAll}
+            themeContext={themeContext}
+            currentConfirmRequest={currentConfirmRequest}
+            respondToConfirmation={respondToConfirmation}
+            showSidebar={showSidebar}
+          />
         </>
       )}
     </>

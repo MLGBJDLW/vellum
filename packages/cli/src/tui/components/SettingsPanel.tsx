@@ -9,9 +9,10 @@
 
 import type { CodingMode } from "@vellum/core";
 import { loadConfig } from "@vellum/core";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
+import { useInput } from "../hooks/useTerminalInput.js";
 import {
   type DiffViewMode,
   getAlternateBufferEnabled,
@@ -29,6 +30,7 @@ import {
   type ThinkingSettings,
 } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { TextInput } from "./Input/TextInput.js";
 
 // =============================================================================
 // Types
@@ -330,11 +332,17 @@ function SettingRow({
   isSelected,
   isEditing,
   editValue,
+  isActive,
+  onEditChange,
+  onEditSubmit,
 }: {
   item: SettingItem;
   isSelected: boolean;
   isEditing: boolean;
   editValue?: string;
+  isActive: boolean;
+  onEditChange: (value: string) => void;
+  onEditSubmit: (value: string) => void;
 }): React.ReactElement {
   const { theme } = useTheme();
 
@@ -361,10 +369,20 @@ function SettingRow({
         </Text>
       </Box>
       <Box flexGrow={1}>
-        <Text color={isEditing ? theme.colors.info : theme.colors.muted} bold={isEditing}>
-          {displayValue}
-          {editableIndicator}
-        </Text>
+        {isEditing ? (
+          <TextInput
+            value={editValue ?? ""}
+            onChange={onEditChange}
+            onSubmit={onEditSubmit}
+            focused={isActive}
+            showBorder={false}
+          />
+        ) : (
+          <Text color={theme.colors.muted}>
+            {displayValue}
+            {editableIndicator}
+          </Text>
+        )}
       </Box>
     </Box>
   );
@@ -452,41 +470,44 @@ export function SettingsPanel({
     setEditValue(String(item.value));
   }, [items, selectedIndex]);
 
-  const confirmEdit = useCallback(() => {
-    const item = items[selectedIndex];
-    if (!item?.editable || !item.onChange) {
+  const confirmEdit = useCallback(
+    (editValue: string) => {
+      const item = items[selectedIndex];
+      if (!item?.editable || !item.onChange) {
+        setIsEditing(false);
+        return;
+      }
+
+      let newValue: string | number | boolean = editValue;
+
+      // Convert based on type
+      switch (item.type) {
+        case "boolean":
+          newValue =
+            editValue.toLowerCase() === "true" ||
+            editValue.toLowerCase() === "on" ||
+            editValue === "1";
+          break;
+        case "number":
+          newValue = parseFloat(editValue) || 0;
+          break;
+        case "select":
+          // Validate against options
+          if (item.options && !item.options.includes(editValue)) {
+            // Find closest match or keep current
+            const match = item.options.find((opt) =>
+              opt.toLowerCase().startsWith(editValue.toLowerCase())
+            );
+            newValue = match ?? item.value;
+          }
+          break;
+      }
+
+      item.onChange(newValue);
       setIsEditing(false);
-      return;
-    }
-
-    let newValue: string | number | boolean = editValue;
-
-    // Convert based on type
-    switch (item.type) {
-      case "boolean":
-        newValue =
-          editValue.toLowerCase() === "true" ||
-          editValue.toLowerCase() === "on" ||
-          editValue === "1";
-        break;
-      case "number":
-        newValue = parseFloat(editValue) || 0;
-        break;
-      case "select":
-        // Validate against options
-        if (item.options && !item.options.includes(editValue)) {
-          // Find closest match or keep current
-          const match = item.options.find((opt) =>
-            opt.toLowerCase().startsWith(editValue.toLowerCase())
-          );
-          newValue = match ?? item.value;
-        }
-        break;
-    }
-
-    item.onChange(newValue);
-    setIsEditing(false);
-  }, [items, selectedIndex, editValue]);
+    },
+    [items, selectedIndex]
+  );
 
   const cancelEdit = useCallback(() => {
     setIsEditing(false);
@@ -520,17 +541,7 @@ export function SettingsPanel({
             cancelEdit();
             return;
           }
-          if (key.return) {
-            confirmEdit();
-            return;
-          }
-          if (key.backspace || key.delete) {
-            setEditValue((prev) => prev.slice(0, -1));
-            return;
-          }
-          if (input && !key.ctrl && !key.meta) {
-            setEditValue((prev) => prev + input);
-          }
+          // The shared TextInput owns edits, paste and confirmation.
           return;
         }
 
@@ -577,7 +588,6 @@ export function SettingsPanel({
         navigateItem,
         startEdit,
         cycleValue,
-        confirmEdit,
         cancelEdit,
         onClose,
       ]
@@ -619,6 +629,9 @@ export function SettingsPanel({
             isSelected={idx === selectedIndex}
             isEditing={isEditing && idx === selectedIndex}
             editValue={isEditing && idx === selectedIndex ? editValue : undefined}
+            isActive={isActive}
+            onEditChange={setEditValue}
+            onEditSubmit={confirmEdit}
           />
         ))}
       </Box>

@@ -7,7 +7,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import matter from "gray-matter";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 import type { ZodError } from "zod";
 import { Err, Ok, type Result } from "../../types/result.js";
 import type { ValidationIssue } from "./errors.js";

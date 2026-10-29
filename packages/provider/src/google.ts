@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+import { DEFAULT_MODEL_IDS, getProviderModels } from "./models/catalog.js";
 import { normalizeDiscoveredModels } from "./models/discovery.js";
 /**
  * Google Provider Implementation
@@ -25,7 +25,6 @@ import { ErrorCode } from "@vellum/shared";
 import { createProviderError, ProviderError } from "./errors.js";
 import type { ReasoningEffort } from "./models/index.js";
 import { getModelInfo } from "./models/index.js";
-import { GOOGLE_MODELS } from "./models/providers/google.js";
 import { googleTransform } from "./transforms/google.js";
 import type { TransformConfig } from "./transforms/types.js";
 import type {
@@ -381,7 +380,7 @@ export class GoogleProvider implements Provider {
    * @returns Array of model IDs
    */
   listModels(): string[] {
-    return GOOGLE_MODELS.filter((model) => !model.deprecated).map((m) => m.id);
+    return getProviderModels("google").map((m) => m.id);
   }
 
   /**
@@ -390,7 +389,7 @@ export class GoogleProvider implements Provider {
    * @returns Promise resolving to array of ModelInfo
    */
   async listModelsAsync(): Promise<ModelInfo[]> {
-    return GOOGLE_MODELS.filter((model) => !model.deprecated);
+    return getProviderModels("google");
   }
 
   /**

@@ -1212,9 +1212,9 @@ export async function handleSkillMigrate(options: SkillMigrateOptions): Promise<
 // =============================================================================
 
 export {
-  handleSkillList as executeSkillList,
-  handleSkillShow as executeSkillShow,
   handleSkillCreate as executeSkillCreate,
-  handleSkillValidate as executeSkillValidate,
+  handleSkillList as executeSkillList,
   handleSkillMigrate as executeSkillMigrate,
+  handleSkillShow as executeSkillShow,
+  handleSkillValidate as executeSkillValidate,
 };

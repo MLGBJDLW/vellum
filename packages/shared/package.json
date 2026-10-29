@@ -16,13 +16,13 @@
     "clean": "rimraf dist"
   },
   "devDependencies": {
-    "@types/node": "^22.19.7",
-    "tsup": "^8.5.1",
+    "@types/node": "^22.20.5",
+    "tsup": "^9.0.0",
     "typescript": "^7.0.2"
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
-    "undici": "^7.10.0",
-    "zod": "^4.3.6"
+    "undici": "^8.12.3",
+    "zod": "^4.6.7"
   }
 }

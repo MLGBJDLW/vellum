@@ -273,8 +273,8 @@ export {
   type AuditEventType,
   AuditLogger,
   type FullEnterpriseConfig,
-  type ServerInfo,
   isEnterpriseMode,
+  type ServerInfo,
 };
 
 // Note: ToolCallInfo is intentionally not re-exported here to avoid name collision

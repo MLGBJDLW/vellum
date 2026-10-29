@@ -333,10 +333,10 @@ export {
   CircuitBreaker,
   type CircuitBreakerOptions,
   CircuitOpenError,
-  ProviderFallbackChain,
   type FallbackConfig,
-  type FallbackResult,
   type FallbackProvider,
+  type FallbackResult,
+  ProviderFallbackChain,
   RateLimiter,
   type RateLimiterConfig,
 };

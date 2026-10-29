@@ -235,42 +235,38 @@ const displayModeListeners: Set<DisplayModeListener> = new Set();
  *
  * @returns Current display mode ("full" or "compact")
  */
-export { getThinkingDisplayMode };
-
 /**
  * Get whether thinking blocks start expanded by default.
  *
  * @returns True if expanded by default, false if collapsed
  */
-export { getThinkingExpandedByDefault };
-
 /**
  * Get whether thinking blocks auto-collapse after streaming.
  */
-export { getThinkingAutoCollapse };
-
 /**
  * Get the auto-collapse delay in milliseconds.
  */
-export { getThinkingAutoCollapseDelayMs };
-
 /**
  * Subscribe to thinking expanded-by-default changes.
  *
  * @param listener - Callback function for expanded-by-default changes
  * @returns Unsubscribe function
  */
-export { subscribeToThinkingExpandedByDefault };
-
 /**
  * Subscribe to thinking auto-collapse changes.
  */
-export { subscribeToThinkingAutoCollapse };
-
 /**
  * Subscribe to thinking auto-collapse delay changes.
  */
-export { subscribeToThinkingAutoCollapseDelay };
+export {
+  getThinkingAutoCollapse,
+  getThinkingAutoCollapseDelayMs,
+  getThinkingDisplayMode,
+  getThinkingExpandedByDefault,
+  subscribeToThinkingAutoCollapse,
+  subscribeToThinkingAutoCollapseDelay,
+  subscribeToThinkingExpandedByDefault,
+};
 
 /**
  * Set the thinking display mode.

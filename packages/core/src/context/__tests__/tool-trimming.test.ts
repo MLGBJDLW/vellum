@@ -255,8 +255,8 @@ describe("pruneToolOutputs - Protected Tools", () => {
     const skillBlock = content?.find((b) => b.tool_use_id === "tool-1");
     const readFileBlock = content?.find((b) => b.tool_use_id === "tool-2");
 
-    expect((skillBlock?.content as string).length).toBe(20000); // Unchanged
-    expect((readFileBlock?.content as string).length).toBe(5000); // Trimmed
+    expect((skillBlock?.content as string)?.length).toBe(20000); // Unchanged
+    expect((readFileBlock?.content as string)?.length).toBe(5000); // Trimmed
   });
 
   it("should truncate all tools when protected list is empty", () => {
@@ -368,8 +368,8 @@ describe("pruneToolOutputs - Protected Tools", () => {
 
     // Store original content reference
     const originalContent = (
-      (originalMessages[1]?.content as ToolResultBlock[])[0] as ToolResultBlock
-    ).content;
+      (originalMessages[1]?.content as ToolResultBlock[])?.[0] as ToolResultBlock
+    )?.content;
 
     const result = pruneToolOutputs(originalMessages, {
       maxOutputChars: 5000,
@@ -378,13 +378,14 @@ describe("pruneToolOutputs - Protected Tools", () => {
 
     // Original should be unchanged
     expect(
-      ((originalMessages[1]?.content as ToolResultBlock[])[0] as ToolResultBlock).content
+      ((originalMessages[1]?.content as ToolResultBlock[])?.[0] as ToolResultBlock)?.content
     ).toBe(originalContent);
     expect((originalContent as string).length).toBe(20000);
 
     // Result should have trimmed content
-    const resultContent = ((result.messages[1]?.content as ToolResultBlock[])[0] as ToolResultBlock)
-      .content;
+    const resultContent = (
+      (result.messages[1]?.content as ToolResultBlock[])?.[0] as ToolResultBlock
+    )?.content;
     expect((resultContent as string).length).toBe(5000);
   });
 

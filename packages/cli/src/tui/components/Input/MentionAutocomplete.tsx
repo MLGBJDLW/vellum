@@ -10,8 +10,9 @@
  */
 
 import { getAllMentionSuggestions, type MentionSuggestion, type MentionType } from "@vellum/shared";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================

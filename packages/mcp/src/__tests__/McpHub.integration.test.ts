@@ -587,7 +587,7 @@ describe("McpHub Integration Tests (T050)", () => {
 
       const toolEvent = events.find((e) => e.event === "tool:called");
       expect(toolEvent).toBeDefined();
-      expect((toolEvent?.data as { duration: number }).duration).toBeGreaterThanOrEqual(0);
+      expect((toolEvent?.data as { duration: number })?.duration).toBeGreaterThanOrEqual(0);
     });
   });
 

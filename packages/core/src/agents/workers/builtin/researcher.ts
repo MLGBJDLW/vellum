@@ -51,11 +51,7 @@ export const researcherWorker: BaseWorker = createBaseWorker({
     specializations: ["research", "exploration", "discovery", "documentation"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    // Execute using the worker executor with researcher-specific configuration
-    const result = await executeWorkerTask("researcher", context, {
-      maxIterations: 25, // Research may need many iterations for thorough results
-      timeout: 300000, // 5 minutes for web-based research
-    });
+    const result = await executeWorkerTask("researcher", context);
 
     // Ensure filesModified is always empty for read-only worker
     return {

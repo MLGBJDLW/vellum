@@ -6,7 +6,7 @@
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
-import { ConsoleSpanExporter, TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace-node";
+import { ConsoleSpanExporter, TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace";
 
 import type { TelemetryConfig } from "./types.js";
 

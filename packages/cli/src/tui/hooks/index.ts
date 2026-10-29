@@ -187,12 +187,6 @@ export {
   type UsePersistenceReturn,
   usePersistence,
 } from "./usePersistence.js";
-export {
-  PERSISTENCE_SHORTCUTS,
-  type UsePersistenceShortcutsOptions,
-  type UsePersistenceShortcutsReturn,
-  usePersistenceShortcuts,
-} from "./usePersistenceShortcuts.js";
 // Placeholder rotation hook (UX improvement)
 export {
   DEFAULT_PLACEHOLDER_EXAMPLES,

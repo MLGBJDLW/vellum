@@ -15,7 +15,7 @@ import type { VellumError } from "../errors/types.js";
 import type { Result } from "../types/result.js";
 import { Err, Ok } from "../types/result.js";
 import { gitNotInitializedError, gitOperationFailedError } from "./errors.js";
-import { getNoGpgFlags, getSanitizedEnv } from "./safety.js";
+import { getNoGpgFlags, getSanitizedEnv, SNAPSHOT_GIT_ENV_KEYS } from "./safety.js";
 
 // =============================================================================
 // T011-T015: GitOperations Class
@@ -107,6 +107,7 @@ export class GitOperations {
       binary: "git",
       maxConcurrentProcesses: 1,
       trimmed: true,
+      allowEnvironment: SNAPSHOT_GIT_ENV_KEYS,
       config: Object.entries(config).map(([k, v]) => `${k}=${v}`),
     };
 

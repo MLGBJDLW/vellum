@@ -9,11 +9,10 @@ import {
 } from "@vellum/shared";
 import { nanoid } from "nanoid";
 
-// Re-export ErrorCode for backward compatibility
-export { ErrorCode };
-
 // Re-export shared severity type with different name to avoid conflict
 export type { SharedErrorSeverity };
+// Re-export ErrorCode for backward compatibility
+export { ErrorCode };
 
 /**
  * Error severity levels that determine handling strategy.

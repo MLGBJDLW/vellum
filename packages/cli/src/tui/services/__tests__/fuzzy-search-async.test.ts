@@ -1,7 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { fuzzySearchAsync, fuzzySearchMultiAsync } from "../fuzzy-search.js";
+import {
+  createPreparedSearch,
+  fuzzySearch,
+  fuzzySearchAsync,
+  fuzzySearchMulti,
+  fuzzySearchMultiAsync,
+} from "../fuzzy-search.js";
 
 describe("fuzzy-search-async", () => {
+  it("keeps all matching commands unless the caller supplies a result limit", async () => {
+    const commands = Array.from({ length: 25 }, (_, index) => ({ name: `command-${index}` }));
+    const prepared = createPreparedSearch(commands, "name");
+    const results = [
+      fuzzySearch(commands, "command", "name"),
+      fuzzySearchMulti(commands, "command", { keys: ["name"] }),
+      prepared("command"),
+      await fuzzySearchAsync(commands, "command", "name", { chunkSize: 12 }),
+      await fuzzySearchMultiAsync(commands, "command", { keys: ["name"], chunkSize: 12 }),
+    ];
+    for (const matches of results) expect(matches).toHaveLength(commands.length);
+    expect(fuzzySearch(commands, "command", "name", { limit: 3 })).toHaveLength(3);
+  });
+
   describe("fuzzySearchAsync", () => {
     const testItems = [
       { name: "apple", description: "red fruit" },

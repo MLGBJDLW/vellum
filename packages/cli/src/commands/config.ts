@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { findProjectConfig, loadConfig } from "@vellum/core";
+import { getDefaultModelId } from "@vellum/provider";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, success } from "./types.js";
 
@@ -118,13 +119,11 @@ function createDefaultConfig(configPath: string): void {
     $schema: "https://vellum.dev/schemas/config.json",
     llm: {
       provider: "anthropic",
-      model: "claude-sonnet-4-6",
+      model: getDefaultModelId("anthropic"),
       maxTokens: 4096,
       temperature: 0.7,
     },
     agent: {
-      maxToolCalls: 50,
-      maxTurns: 100,
       maxRetries: 3,
     },
     permissions: {

@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+import { DEFAULT_MODEL_IDS, getProviderModels } from "./models/catalog.js";
 /**
  * OpenAI Provider Implementation
  *
@@ -27,7 +27,6 @@ import { createProviderError, ProviderError } from "./errors.js";
 import { normalizeDiscoveredModels } from "./models/discovery.js";
 import type { ReasoningEffort } from "./models/index.js";
 import { getModelInfo } from "./models/index.js";
-import { OPENAI_MODELS } from "./models/providers/openai.js";
 import {
   buildResponsesRequest,
   mapResponsesStream,
@@ -254,7 +253,8 @@ export class OpenAIProvider {
       this.client = new OpenAI({
         apiKey,
         baseURL: options.baseUrl,
-        timeout: options.timeout ?? 60000,
+        // Retain the SDK's reasoning-aware default unless the caller sets a timeout.
+        timeout: options.timeout,
         defaultHeaders: options.headers,
       });
 
@@ -307,9 +307,12 @@ export class OpenAIProvider {
       const result = this.normalizeResponse(response as ChatCompletion, isOSeries);
       const provider = this.getProviderTypeForModelInfo();
       const message = (response as ChatCompletion).choices[0]?.message as
-        | CompatibleReasoningPayload
+        | (CompatibleReasoningPayload & { content?: unknown })
         | undefined;
-      const replay = provider === "openrouter" ? message?.reasoning_details : undefined;
+      const replay =
+        provider === "openrouter"
+          ? message?.reasoning_details
+          : this.getThinkingReplay(message?.content);
       return {
         ...result,
         ...(result.thinking || replay?.length
@@ -425,7 +428,7 @@ export class OpenAIProvider {
    * @returns Array of model IDs
    */
   listModels(): string[] {
-    return OPENAI_MODELS.filter((model) => !model.deprecated).map((m) => m.id);
+    return getProviderModels(this.getProviderTypeForModelInfo()).map((m) => m.id);
   }
 
   /**
@@ -434,7 +437,7 @@ export class OpenAIProvider {
    * @returns Promise resolving to array of ModelInfo
    */
   async listModelsAsync(): Promise<ModelInfo[]> {
-    return OPENAI_MODELS.filter((model) => !model.deprecated);
+    return getProviderModels(this.getProviderTypeForModelInfo());
   }
 
   /**
@@ -559,6 +562,16 @@ export class OpenAIProvider {
    */
   protected supportsReasoningContent(): boolean {
     return false;
+  }
+
+  /** Compatible providers may return structured content instead of a string. */
+  protected normalizeAssistantContent(content: unknown): { text: string; thinking?: string } {
+    return { text: typeof content === "string" ? content : "" };
+  }
+
+  /** Native thinking blocks that must survive tool continuation without re-encoding. */
+  protected getThinkingReplay(_content: unknown): Record<string, unknown>[] | undefined {
+    return undefined;
   }
 
   /**
@@ -811,8 +824,9 @@ export class OpenAIProvider {
     }
 
     const message = choice.message;
-    const content = message.content ?? "";
-    let thinking: string | undefined;
+    const normalizedContent = this.normalizeAssistantContent(message.content);
+    const content = normalizedContent.text;
+    let thinking: string | undefined = normalizedContent.thinking;
     const toolCalls: ToolCall[] = [];
 
     // Extract reasoning content for models that support it
@@ -904,6 +918,9 @@ export class OpenAIProvider {
 
       if (choice) {
         const delta = choice.delta;
+        const normalizedContent = this.normalizeAssistantContent(delta.content);
+        const nativeThinking = this.getThinkingReplay(delta.content);
+        if (nativeThinking) reasoningDetails.push(...structuredClone(nativeThinking));
 
         // Handle reasoning content (for O-series and compatible providers)
         // DeepSeek streams reasoning in delta.reasoning_content
@@ -916,7 +933,10 @@ export class OpenAIProvider {
           // encrypted items and repeated-index deltas. Do not merge or trim it.
           reasoningDetails.push(...structuredClone(deltaWithReasoning.reasoning_details));
         }
-        const rawReasoning = deltaWithReasoning.reasoning_content ?? deltaWithReasoning.reasoning;
+        const rawReasoning =
+          deltaWithReasoning.reasoning_content ??
+          deltaWithReasoning.reasoning ??
+          normalizedContent.thinking;
         if (rawReasoning) {
           reasoningContent += rawReasoning;
           const reasoningEvent: StreamReasoningEvent = {
@@ -936,10 +956,10 @@ export class OpenAIProvider {
         }
 
         // Handle text content
-        if (delta.content) {
+        if (normalizedContent.text) {
           const textEvent: StreamTextEvent = {
             type: "text",
-            content: delta.content,
+            content: normalizedContent.text,
           };
           yield textEvent;
         }

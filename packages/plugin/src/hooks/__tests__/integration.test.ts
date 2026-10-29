@@ -424,7 +424,7 @@ describe("integration - hook + phase 10 integration", () => {
     const config = parseHooksConfig("/hooks.json", configJson, pathContext);
 
     // Verify path was expanded
-    expect((config[0]?.action as { path: string }).path).toBe(
+    expect((config[0]?.action as { path: string })?.path).toBe(
       "/home/user/.vellum/plugins/security/scripts/init.py"
     );
   });

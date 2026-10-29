@@ -13,14 +13,30 @@
 
 import { fetchWithPool } from "@vellum/shared";
 
+import { getProviderModels } from "./models/catalog.js";
+import { normalizeDiscoveredModels } from "./models/discovery.js";
 import { LMSTUDIO_MODELS, OLLAMA_MODELS } from "./models/providers/local.js";
+import type { ModelInfo } from "./models/types.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
-import type {
-  CredentialValidationResult,
-  ModelInfo,
-  ProviderCredential,
-  ProviderOptions,
-} from "./types.js";
+import type { CredentialValidationResult, ProviderCredential, ProviderOptions } from "./types.js";
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+function discoveryDeadline(signal?: AbortSignal) {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new DOMException("Model discovery timed out", "TimeoutError")),
+    10_000
+  );
+  timer.unref();
+  return {
+    signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+    dispose: () => clearTimeout(timer),
+  };
+}
 
 // =============================================================================
 // LocalProvider Abstract Base Class
@@ -42,6 +58,36 @@ import type {
  * ```
  */
 export abstract class LocalProvider extends OpenAICompatibleProvider {
+  abstract override listModelsAsync(signal?: AbortSignal): Promise<ModelInfo[]>;
+
+  private configuredBaseUrl?: string;
+  private discoveryHeaders: Record<string, string> = {};
+
+  protected get localBaseUrl(): string {
+    return (this.configuredBaseUrl ?? this.defaultBaseUrl).replace(/\/$/, "");
+  }
+
+  /** Discovery uses the same credential/header owner as completion requests. */
+  protected fetchLocal(
+    url: string,
+    options: {
+      method: "GET" | "POST";
+      signal: AbortSignal;
+      headers?: Record<string, string>;
+      body?: string;
+    }
+  ): Promise<Response> {
+    const headers = new Headers(this.discoveryHeaders);
+    new Headers(options.headers).forEach((value, key) => {
+      headers.set(key, value);
+    });
+    return fetchWithPool(url, {
+      ...options,
+      headers: Object.fromEntries(headers),
+      redirect: "error",
+    });
+  }
+
   /**
    * Initialize the provider with configuration options
    *
@@ -57,7 +103,17 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
       apiKey: options.apiKey ?? "local-no-key-required",
       baseUrl: options.baseUrl ?? this.defaultBaseUrl,
     };
-    return super.initialize(finalOptions);
+    await super.initialize(finalOptions);
+    this.configuredBaseUrl = finalOptions.baseUrl;
+    const headers = new Headers(options.headers);
+    if (options.apiKey && !headers.has("authorization")) {
+      headers.set("authorization", `Bearer ${options.apiKey}`);
+    }
+    this.discoveryHeaders = Object.fromEntries(headers);
+  }
+
+  override async refreshModels(signal?: AbortSignal): Promise<ModelInfo[]> {
+    return this.listModelsAsync(signal);
   }
 
   /**
@@ -71,10 +127,11 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
    */
   async validateCredential(_credential: ProviderCredential): Promise<CredentialValidationResult> {
     try {
-      const response = await fetchWithPool(`${this.defaultBaseUrl}/models`, {
+      const response = await this.fetchLocal(`${this.localBaseUrl}/models`, {
         method: "GET",
         signal: AbortSignal.timeout(5000), // 5 second timeout
       });
+      await response.body?.cancel();
 
       if (response.ok) {
         return { valid: true };
@@ -96,10 +153,11 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
    */
   async isServerRunning(): Promise<boolean> {
     try {
-      const response = await fetchWithPool(`${this.defaultBaseUrl}/models`, {
+      const response = await this.fetchLocal(`${this.localBaseUrl}/models`, {
         method: "GET",
         signal: AbortSignal.timeout(5000),
       });
+      await response.body?.cancel();
       return response.ok;
     } catch {
       return false;
@@ -124,7 +182,7 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
       return {
         valid: false,
         error:
-          `Cannot connect to ${this.providerName} at ${this.defaultBaseUrl}. ` +
+          `Cannot connect to ${this.providerName} at ${this.localBaseUrl}. ` +
           `Please ensure ${this.providerName} is running.`,
       };
     }
@@ -135,7 +193,7 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
         valid: false,
         error:
           `Connection to ${this.providerName} timed out. ` +
-          `Server may be busy or unreachable at ${this.defaultBaseUrl}.`,
+          `Server may be busy or unreachable at ${this.localBaseUrl}.`,
       };
     }
 
@@ -207,7 +265,7 @@ export class OllamaProvider extends LocalProvider {
    * Base URL without /v1 suffix for Ollama-native endpoints
    */
   private get ollamaBaseUrl(): string {
-    return this.defaultBaseUrl.replace(/\/v1$/, "");
+    return this.localBaseUrl.replace(/\/v1$/, "");
   }
 
   /**
@@ -228,15 +286,17 @@ export class OllamaProvider extends LocalProvider {
    *
    * @returns Promise resolving to array of ModelInfo
    */
-  async listModelsAsync(): Promise<ModelInfo[]> {
+  async listModelsAsync(signal?: AbortSignal): Promise<ModelInfo[]> {
+    const deadline = discoveryDeadline(signal);
     try {
       // Ollama uses /api/tags for listing models (not OpenAI-compatible)
-      const response = await fetchWithPool(`${this.ollamaBaseUrl}/api/tags`, {
+      const response = await this.fetchLocal(`${this.ollamaBaseUrl}/api/tags`, {
         method: "GET",
-        signal: AbortSignal.timeout(10000),
+        signal: deadline.signal,
       });
 
       if (!response.ok) {
+        await response.body?.cancel();
         console.warn(
           `Ollama /api/tags returned status ${response.status}, returning empty model list`
         );
@@ -245,20 +305,51 @@ export class OllamaProvider extends LocalProvider {
 
       const data = (await response.json()) as OllamaTagsResponse;
 
-      return data.models.map((model) => ({
+      const records: Record<string, unknown>[] = data.models.map((model) => ({
+        ...model,
         id: model.name,
-        name: model.name,
-        provider: "ollama" as const,
-        contextWindow: 4096, // Default, varies by model
-        maxOutputTokens: 4096,
-        supportsTools: true, // Most Ollama models support tools
-        supportsVision: this.modelSupportsVision(model.name),
-        supportsReasoning: false,
-        supportsStreaming: true,
-        // Local models are free
-        inputPrice: 0,
-        outputPrice: 0,
       }));
+      let next = 0;
+      // Metadata requests share one deadline and at most four connections, regardless of catalog size.
+      await Promise.all(
+        Array.from({ length: Math.min(4, records.length) }, async () => {
+          while (next < records.length && !deadline.signal.aborted) {
+            const record = records[next++];
+            if (!record) continue;
+            try {
+              const detailsResponse = await this.fetchLocal(`${this.ollamaBaseUrl}/api/show`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ model: record.id }),
+                signal: deadline.signal,
+              });
+              if (!detailsResponse.ok) {
+                await detailsResponse.body?.cancel();
+                continue; // Missing metadata keeps known capabilities or explicit unknowns.
+              }
+              const details = asRecord(await detailsResponse.json());
+              const info = asRecord(details.model_info);
+              const architecture = info["general.architecture"];
+              const configuredContext =
+                typeof details.parameters === "string"
+                  ? /^num_ctx\s+(\d+)\s*$/m.exec(details.parameters)?.[1]
+                  : undefined;
+              Object.assign(record, {
+                capabilities: details.capabilities,
+                context_length: configuredContext
+                  ? Number(configuredContext)
+                  : typeof architecture === "string"
+                    ? info[`${architecture}.context_length`]
+                    : undefined,
+              });
+            } catch {
+              // Failure to inspect a model is not evidence that it rejects tools.
+            }
+          }
+        })
+      );
+      deadline.signal.throwIfAborted();
+      return normalizeDiscoveredModels("ollama", records);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -269,6 +360,8 @@ export class OllamaProvider extends LocalProvider {
       }
 
       return [];
+    } finally {
+      deadline.dispose();
     }
   }
 
@@ -280,8 +373,7 @@ export class OllamaProvider extends LocalProvider {
    * @returns Empty array (sync model list not available)
    */
   listModels(): string[] {
-    // Cannot list models synchronously - must use listModelsAsync
-    return [];
+    return getProviderModels("ollama").map((model) => model.id);
   }
 
   /**
@@ -291,18 +383,6 @@ export class OllamaProvider extends LocalProvider {
    */
   getDefaultModel(): string {
     return "llama3.2";
-  }
-
-  /**
-   * Check if a model name suggests vision support
-   *
-   * @param modelName - Name of the model
-   * @returns true if model likely supports vision
-   */
-  private modelSupportsVision(modelName: string): boolean {
-    const visionKeywords = ["vision", "llava", "bakllava", "moondream"];
-    const lowerName = modelName.toLowerCase();
-    return visionKeywords.some((keyword) => lowerName.includes(keyword));
   }
 
   /**
@@ -316,10 +396,11 @@ export class OllamaProvider extends LocalProvider {
   async validateCredential(_credential: ProviderCredential): Promise<CredentialValidationResult> {
     try {
       // Use Ollama-native endpoint for validation
-      const response = await fetchWithPool(`${this.ollamaBaseUrl}/api/tags`, {
+      const response = await this.fetchLocal(`${this.ollamaBaseUrl}/api/tags`, {
         method: "GET",
         signal: AbortSignal.timeout(5000),
       });
+      await response.body?.cancel();
 
       if (response.ok) {
         return { valid: true };
@@ -391,14 +472,55 @@ export class LMStudioProvider extends LocalProvider {
    *
    * @returns Promise resolving to array of ModelInfo
    */
-  async listModelsAsync(): Promise<ModelInfo[]> {
+  async listModelsAsync(signal?: AbortSignal): Promise<ModelInfo[]> {
+    const deadline = discoveryDeadline(signal);
     try {
-      const response = await fetchWithPool(`${this.defaultBaseUrl}/models`, {
+      // Native bulk metadata reports tool training, vision and configured instance context.
+      const native = await this.fetchLocal(
+        `${this.localBaseUrl.replace(/\/v1$/, "")}/api/v1/models`,
+        {
+          method: "GET",
+          signal: deadline.signal,
+        }
+      );
+      if (native.ok) {
+        const payload = asRecord(await native.json());
+        if (!Array.isArray(payload.models))
+          throw new Error("LM Studio model response is missing models");
+        const records = payload.models.flatMap((value) => {
+          const model = asRecord(value);
+          if (model.type !== "llm" || typeof model.key !== "string") return [];
+          const instances = Array.isArray(model.loaded_instances) ? model.loaded_instances : [];
+          const loaded = instances.flatMap((value) => {
+            const instance = asRecord(value);
+            return typeof instance.id === "string"
+              ? [
+                  {
+                    ...model,
+                    id: instance.id,
+                    context_length: asRecord(instance.config).context_length,
+                  },
+                ]
+              : [];
+          });
+          return loaded.some((instance) => instance.id === model.key)
+            ? loaded
+            : [{ ...model, id: model.key }, ...loaded];
+        });
+        return normalizeDiscoveredModels("lmstudio", records);
+      }
+      const nativeStatus = native.status;
+      await native.body?.cancel();
+      if (nativeStatus !== 404 && nativeStatus !== 405)
+        throw new Error(`LM Studio metadata returned HTTP ${nativeStatus}`);
+      // Older servers/proxies may expose only OpenAI-compatible listing; capabilities stay unknown.
+      const response = await this.fetchLocal(`${this.localBaseUrl}/models`, {
         method: "GET",
-        signal: AbortSignal.timeout(10000),
+        signal: deadline.signal,
       });
 
       if (!response.ok) {
+        await response.body?.cancel();
         console.warn(
           `LM Studio /models returned status ${response.status}, returning empty model list`
         );
@@ -414,20 +536,7 @@ export class LMStudioProvider extends LocalProvider {
         }>;
       };
 
-      return data.data.map((model) => ({
-        id: model.id,
-        name: model.id,
-        provider: "lmstudio" as const,
-        contextWindow: 4096, // Default, varies by model
-        maxOutputTokens: 4096,
-        supportsTools: true,
-        supportsVision: false, // Assume no vision unless detected
-        supportsReasoning: false,
-        supportsStreaming: true,
-        // Local models are free
-        inputPrice: 0,
-        outputPrice: 0,
-      }));
+      return normalizeDiscoveredModels("lmstudio", data.data);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -438,6 +547,8 @@ export class LMStudioProvider extends LocalProvider {
       }
 
       return [];
+    } finally {
+      deadline.dispose();
     }
   }
 
@@ -449,7 +560,7 @@ export class LMStudioProvider extends LocalProvider {
    * @returns Empty array (sync model list not available)
    */
   listModels(): string[] {
-    return [];
+    return getProviderModels("lmstudio").map((model) => model.id);
   }
 
   /**

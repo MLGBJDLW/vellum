@@ -50,10 +50,6 @@ export const coderWorker: BaseWorker = createBaseWorker({
     specializations: ["implementation", "refactoring", "typescript", "javascript"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    // Execute using the worker executor with coder-specific configuration
-    return executeWorkerTask("coder", context, {
-      maxIterations: 25, // Complex implementations may need more iterations
-      timeout: 180000, // 3 minutes for larger tasks
-    });
+    return executeWorkerTask("coder", context);
   },
 });

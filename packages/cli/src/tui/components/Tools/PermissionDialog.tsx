@@ -8,11 +8,12 @@
  * @module tui/components/Tools/PermissionDialog
  */
 
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type React from "react";
 import { useId, useRef } from "react";
 import { useMouseContextOptional } from "../../context/MouseContext.js";
 import type { ToolExecution } from "../../context/ToolsContext.js";
+import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { BannerShimmerText } from "../Banner/ShimmerText.js";

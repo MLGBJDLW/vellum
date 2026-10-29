@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+import { DEFAULT_MODEL_IDS, getProviderModels } from "./models/catalog.js";
 import { normalizeDiscoveredModels } from "./models/discovery.js";
 /**
  * Anthropic Provider Implementation
@@ -28,7 +28,6 @@ import { ErrorCode } from "@vellum/shared";
 import { createProviderError, ProviderError } from "./errors.js";
 import type { ReasoningEffort } from "./models/index.js";
 import { getModelInfo } from "./models/index.js";
-import { ANTHROPIC_MODELS } from "./models/providers/anthropic.js";
 import { anthropicTransform } from "./transforms/anthropic.js";
 import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
 import type { TransformConfig } from "./transforms/types.js";
@@ -241,7 +240,8 @@ export class AnthropicProvider implements Provider {
       this.client = new Anthropic({
         apiKey,
         baseURL: options.baseUrl,
-        timeout: options.timeout ?? 60000,
+        // Retain the SDK's reasoning-aware default unless the caller sets a timeout.
+        timeout: options.timeout,
         defaultHeaders: options.headers,
       });
 
@@ -361,7 +361,7 @@ export class AnthropicProvider implements Provider {
    * @returns Array of model IDs
    */
   listModels(): string[] {
-    return ANTHROPIC_MODELS.filter((model) => !model.deprecated).map((m) => m.id);
+    return getProviderModels("anthropic").map((m) => m.id);
   }
 
   /**
@@ -370,7 +370,7 @@ export class AnthropicProvider implements Provider {
    * @returns Promise resolving to array of ModelInfo
    */
   async listModelsAsync(): Promise<ModelInfo[]> {
-    return ANTHROPIC_MODELS.filter((model) => !model.deprecated);
+    return getProviderModels("anthropic");
   }
 
   /**
@@ -592,7 +592,8 @@ export class AnthropicProvider implements Provider {
         : undefined;
 
     // Build base request
-    const request: MessageCreateParams = {
+    // Current SDKs omit sampling fields; older supported Claude models still accept them.
+    const request: MessageCreateParams & { temperature?: number; top_p?: number } = {
       model: params.model,
       messages: messages as Anthropic.MessageParam[],
       max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,

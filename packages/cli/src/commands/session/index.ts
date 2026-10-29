@@ -163,6 +163,16 @@ export const sessionCommand: SlashCommand = {
 };
 
 export {
+  createResumeCommand,
+  findSessionById,
+  getMostRecentSession,
+  type ResumeSessionEventData,
+  type SessionLookupOptions,
+  type SessionLookupResult,
+  SHORT_ID_LENGTH,
+} from "./resume.js";
+export { createSearchCommand, type SearchSessionEventData } from "./search.js";
+export {
   archiveCommand,
   createArchiveCommand,
   createDeleteCommand,
@@ -176,13 +186,3 @@ export {
   searchCommand,
   showCommand,
 };
-export {
-  createResumeCommand,
-  findSessionById,
-  getMostRecentSession,
-  type ResumeSessionEventData,
-  type SessionLookupOptions,
-  type SessionLookupResult,
-  SHORT_ID_LENGTH,
-} from "./resume.js";
-export { createSearchCommand, type SearchSessionEventData } from "./search.js";

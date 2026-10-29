@@ -38,7 +38,7 @@ vi.mock("@opentelemetry/sdk-node", () => {
   };
 });
 
-vi.mock("@opentelemetry/sdk-trace-node", () => {
+vi.mock("@opentelemetry/sdk-trace", () => {
   return {
     ConsoleSpanExporter: class MockConsoleSpanExporter {
       type = "console";

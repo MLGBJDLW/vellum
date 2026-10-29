@@ -12,7 +12,7 @@ export default defineConfig({
   clean: true,
   logLevel: "error",
   silent: true,
-  target: "node20",
+  target: "node22",
   platform: "node",
   splitting: false,
   sourcemap: false,
@@ -24,7 +24,7 @@ export default defineConfig({
   },
   banner: {
     // Provide CJS compatibility for bundled dependencies that use require()
-    js: `import { createRequire } from 'module';const require = createRequire(import.meta.url);`,
+    js: `import { createRequire as createVellumRequire } from 'node:module';const require = createVellumRequire(import.meta.url);`,
   },
   async onSuccess() {
     // Copy prompts from @vellum/core to dist/markdown for runtime discovery
@@ -71,7 +71,6 @@ export default defineConfig({
     "ink",
     "ink-gradient",
     "ink-spinner",
-    "ink-text-input",
 
     // Keep LLM SDKs external to reduce bundle size
     "@anthropic-ai/sdk",
@@ -83,9 +82,6 @@ export default defineConfig({
 
     // Shiki (large, has wasm)
     "shiki",
-
-    // Neo-blessed (large TUI lib)
-    "neo-blessed",
   ],
 
   esbuildOptions(options) {

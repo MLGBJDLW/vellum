@@ -5,7 +5,7 @@
 import type { Stats } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 import { z } from "zod";
 import { AgentLevelSchema } from "./level.js";
 import type { ExtendedModeConfig, ToolPermissions } from "./modes.js";

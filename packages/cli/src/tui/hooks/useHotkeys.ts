@@ -9,10 +9,10 @@
  */
 
 import type { Key } from "ink";
-import { useInput } from "ink";
 import { useCallback, useMemo } from "react";
 import { useApp } from "../context/AppContext.js";
 import type { ExtendedKey } from "../types/ink-extended.js";
+import { useInput } from "./useTerminalInput.js";
 
 // =============================================================================
 // Types

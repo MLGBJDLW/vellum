@@ -360,7 +360,7 @@ export function parseEnhancedKey(data: string): EnhancedKeyEvent | undefined {
   // Match CSI u format: ESC [ number ; modifiers u
   // Also match CSI ~ format: ESC [ number ; modifiers ~
   // biome-ignore lint/suspicious/noControlCharactersInRegex: Terminal escape sequences require control characters
-  const match = data.match(/^\x1b\[(\d+)(?:;(\d+))?([u~])$/);
+  const match = data.match(/^\x1b\[(\d+)(?::\d*)?(?::\d+)?(?:;(\d+)(?::([123]))?)?([u~])$/);
   if (!match) {
     return undefined;
   }
@@ -368,9 +368,9 @@ export function parseEnhancedKey(data: string): EnhancedKeyEvent | undefined {
   const keyCode = parseInt(match[1] ?? "0", 10);
   const modifierValue = match[2] ? parseInt(match[2], 10) - 1 : 0;
 
-  // Extract event type from upper bits (if REPORT_EVENTS enabled)
-  const eventType = (((modifierValue >> 7) & 0x03) as 1 | 2 | 3 | undefined) || undefined;
-  const modifiers = modifierValue & 0x7f;
+  // Kitty encodes event type after a colon, not in modifier bits.
+  const eventType = match[3] ? (Number(match[3]) as 1 | 2 | 3) : undefined;
+  const modifiers = modifierValue;
 
   const shift = (modifiers & KittyModifiers.SHIFT) !== 0;
   const alt = (modifiers & KittyModifiers.ALT) !== 0;

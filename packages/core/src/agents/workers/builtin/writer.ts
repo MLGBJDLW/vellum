@@ -48,9 +48,6 @@ export const writerWorker: BaseWorker = createBaseWorker({
     specializations: ["documentation", "readme", "api-docs", "changelog", "markdown"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    // Execute using the worker executor with writer-specific configuration
-    return executeWorkerTask("writer", context, {
-      maxIterations: 15, // Documentation tasks are typically well-scoped
-    });
+    return executeWorkerTask("writer", context);
   },
 });

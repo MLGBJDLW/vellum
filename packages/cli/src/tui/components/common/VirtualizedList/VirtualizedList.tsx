@@ -634,5 +634,5 @@ const VirtualizedList = forwardRef(VirtualizedListInner) as <T>(
 // Add display name for debugging
 (VirtualizedList as React.FC).displayName = "VirtualizedList";
 
-export { VirtualizedList };
 export type { VirtualizedListProps, VirtualizedListRef };
+export { VirtualizedList };

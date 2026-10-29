@@ -49,10 +49,6 @@ export const qaWorker: BaseWorker = createBaseWorker({
     specializations: ["testing", "debugging", "verification", "vitest"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    // Execute using the worker executor with QA-specific configuration
-    return executeWorkerTask("qa", context, {
-      maxIterations: 20, // Tests may need multiple iterations to get right
-      timeout: 180000, // 3 minutes for test suites
-    });
+    return executeWorkerTask("qa", context);
   },
 });

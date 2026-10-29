@@ -54,7 +54,17 @@ const SENSITIVE_ENV_VARS = [
   "GPG_TTY",
   "GIT_TERMINAL_PROMPT",
   "SSH_AUTH_SOCK",
+  // Snapshot commands are non-interactive. Do not inherit pager executables;
+  // simple-git also rejects these unless unsafe pager execution is enabled.
+  "GIT_PAGER",
+  "PAGER",
+  "EDITOR",
+  "VISUAL",
+  "PREFIX",
 ] as const;
+
+/** Only fixed snapshot routing and non-interactive settings may reach simple-git. */
+export const SNAPSHOT_GIT_ENV_KEYS = ["GIT_TERMINAL_PROMPT", "GIT_DIR", "GIT_WORK_TREE"] as const;
 
 /**
  * Normalizes a path for comparison by resolving it and converting to lowercase
@@ -194,9 +204,12 @@ export function checkProtectedPath(targetPath: string): Result<true, VellumError
 export function getSanitizedEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = { ...process.env };
 
-  // Unset sensitive environment variables
-  for (const varName of SENSITIVE_ENV_VARS) {
-    delete env[varName];
+  // Do not promote ambient Git controls into explicit trusted .env() overrides.
+  // Callers set their own repository paths after sanitization.
+  const sensitive = new Set<string>(SENSITIVE_ENV_VARS);
+  for (const varName of Object.keys(env)) {
+    const normalized = varName.toUpperCase();
+    if (normalized.startsWith("GIT_") || sensitive.has(normalized)) delete env[varName];
   }
 
   // Set GIT_TERMINAL_PROMPT to 0 to disable credential prompts

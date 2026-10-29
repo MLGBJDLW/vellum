@@ -1,4 +1,5 @@
 import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+
 /**
  * Groq Provider
  *
@@ -8,9 +9,10 @@ import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
  * @module @vellum/provider/groq
  */
 
+import { getModelInfo } from "./models/index.js";
 import { GROQ_MODELS } from "./models/providers/groq.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
-import type { ModelInfo } from "./types.js";
+import type { CompletionParams, ModelInfo } from "./types.js";
 
 // =============================================================================
 // Groq Provider Implementation
@@ -36,6 +38,15 @@ import type { ModelInfo } from "./types.js";
  * ```
  */
 export class GroqProvider extends OpenAICompatibleProvider {
+  protected override buildExtraBody(params: CompletionParams): Record<string, unknown> | undefined {
+    if (!getModelInfo("groq", params.model).supportsReasoning) return params.extraBody;
+    // GPT-OSS rejects reasoning_format; other Groq reasoning routes use parsed output.
+    const format = params.model.startsWith("openai/gpt-oss-")
+      ? { include_reasoning: params.thinking?.enabled ?? false }
+      : { reasoning_format: params.thinking?.enabled ? "parsed" : "hidden" };
+    return { ...format, ...params.extraBody };
+  }
+
   /**
    * Default base URL for Groq's OpenAI-compatible API
    */

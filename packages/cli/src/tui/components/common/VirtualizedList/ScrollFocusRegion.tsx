@@ -453,6 +453,7 @@ export const ScrollFocusRegion: React.FC<ScrollFocusRegionProps> = ({
       {/* Content area */}
       <Box flexDirection="column">
         {visibleLines.map((line, idx) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
           <Text key={`${state.scrollTop}-${idx}`} wrap="truncate">
             {line}
           </Text>

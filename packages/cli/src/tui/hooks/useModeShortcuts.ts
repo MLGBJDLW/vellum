@@ -9,8 +9,8 @@
 
 import type { CodingMode, ModeManager } from "@vellum/core";
 import { CODING_MODES } from "@vellum/core";
-import { useInput } from "ink";
 import { useCallback, useRef } from "react";
+import { useInput } from "./useTerminalInput.js";
 
 // =============================================================================
 // Types

@@ -7,6 +7,10 @@
  * @module tui/components/session/__tests__/session.test
  */
 
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createSession, SessionListService, StorageManager } from "@vellum/core";
 import { getIcons } from "@vellum/shared";
 import { render } from "ink-testing-library";
 import type React from "react";
@@ -243,6 +247,54 @@ describe("SessionPreview", () => {
 // =============================================================================
 
 describe("SessionPicker", () => {
+  it("renders and selects a session reopened from its JSON index", async () => {
+    const basePath = await mkdtemp(join(tmpdir(), "vellum-picker-roundtrip-"));
+    let screen: ReturnType<typeof render> | undefined;
+    try {
+      const storage = await StorageManager.create({ basePath, compressionEnabled: false });
+      const saved = createSession({ title: "Persisted session" });
+      saved.metadata.summary = "Saved summary";
+      await storage.save(saved);
+      const indexBefore = await readFile(join(basePath, "index.json"), "utf8");
+      const reopened = await StorageManager.create({ basePath, compressionEnabled: false });
+      const recent = await new SessionListService(reopened).getRecentSessions(50);
+      const onSelect = vi.fn();
+      await act(async () => {
+        screen = renderWithTheme(
+          <SessionPicker
+            sessions={recent.map((session) => ({
+              id: session.id,
+              title: session.title,
+              timestamp: session.lastActive,
+              messageCount: session.messageCount,
+              lastMessage: session.summary,
+            }))}
+            onSelect={onSelect}
+            onClose={vi.fn()}
+            isOpen
+          />
+        );
+      });
+      expect(screen?.lastFrame()).toContain("Persisted session");
+      expect(screen?.lastFrame()).toContain("2 messages");
+      expect(screen?.lastFrame()).not.toContain("Invalid Date");
+      await act(async () => {
+        screen?.stdin.write("\r");
+      });
+      expect(onSelect).toHaveBeenCalledWith(saved.metadata.id);
+      expect((await reopened.load(saved.metadata.id)).metadata.lastActive).toEqual(
+        saved.metadata.lastActive
+      );
+      expect(await readFile(join(basePath, "index.json"), "utf8")).toBe(indexBefore);
+    } finally {
+      await act(async () => {
+        screen?.unmount();
+        screen?.cleanup();
+      });
+      await rm(basePath, { recursive: true, force: true });
+    }
+  });
+
   it("renders nothing when closed", () => {
     const sessions = [createTestSession()];
 

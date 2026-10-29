@@ -288,7 +288,7 @@
   "modelSelector": {
     "title": "选择模型：",
     "current": "当前：",
-    "keybindings": "↑↓ 导航 • Enter 选择"
+    "keybindings": "↑↓ 导航 • Enter 选择 • Esc 关闭"
   },
   "modeSelector": {
     "title": "个人助理：",

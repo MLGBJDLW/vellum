@@ -172,6 +172,11 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
     invalidHint: "Available: {{codes}}",
     saved: "Language preference saved",
   },
+  modelSelector: {
+    title: "Select Model:",
+    current: "Current: ",
+    keybindings: "↑↓ navigate • Enter select • Esc close",
+  },
   modeSelector: {
     title: "Personal assistant",
     current: "(current)",
@@ -406,6 +411,11 @@ const ZH_TRANSLATIONS: Record<string, unknown> = {
     invalid: "无效的语言代码: {{code}}",
     invalidHint: "可用: {{codes}}",
     saved: "语言偏好已保存",
+  },
+  modelSelector: {
+    title: "选择模型：",
+    current: "当前：",
+    keybindings: "↑↓ 导航 • Enter 选择 • Esc 关闭",
   },
   modeSelector: {
     title: "个人助理",

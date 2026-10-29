@@ -5,7 +5,7 @@ analysis, organization, and software work through one adaptive `orch` entry poin
 
 ## Get started
 
-Requires Node.js 20 or newer.
+Requires Node.js 22.22.1+ or 24.11.0+.
 
 ```bash
 npm install -g @butlerw/vellum

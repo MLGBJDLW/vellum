@@ -11,6 +11,7 @@ import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppProvider } from "../../context/AppContext.js";
+import { BracketedPasteProvider } from "../../context/BracketedPasteContext.js";
 import type { HotkeyDefinition } from "../useHotkeys.js";
 import { useHotkeys } from "../useHotkeys.js";
 
@@ -24,6 +25,35 @@ async function tick(): Promise<void> {
 }
 
 describe("useHotkeys - ctrl control-character sequences", () => {
+  it("keeps enhanced Ctrl+Shift+C distinct from Ctrl+C for global consumers", async () => {
+    const copy = vi.fn();
+    const cancel = vi.fn();
+    const { stdin, unmount } = render(
+      <AppProvider>
+        <BracketedPasteProvider>
+          <Harness
+            hotkeys={[
+              { key: "c", ctrl: true, shift: true, handler: copy },
+              { key: "c", ctrl: true, handler: cancel },
+            ]}
+          />
+        </BracketedPasteProvider>
+      </AppProvider>
+    );
+    await act(async () => {
+      stdin.write("\x1b[99;6u");
+      await tick();
+    });
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(cancel).not.toHaveBeenCalled();
+    await act(async () => {
+      stdin.write("\x1b[99;5u");
+      await tick();
+    });
+    expect(cancel).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
   it("triggers Ctrl+G hotkey when stdin receives \\x07", async () => {
     const handler = vi.fn();
 

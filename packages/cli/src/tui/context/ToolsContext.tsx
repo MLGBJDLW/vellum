@@ -712,4 +712,4 @@ export function ToolsProvider({
 // Exports
 // =============================================================================
 
-export { ToolsContext, initialState };
+export { initialState, ToolsContext };

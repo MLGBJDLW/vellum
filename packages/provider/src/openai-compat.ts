@@ -17,6 +17,7 @@
  * @module @vellum/provider/openai-compat
  */
 
+import { getProviderModels, MODEL_CATALOG } from "./models/catalog.js";
 import { OpenAIProvider } from "./openai.js";
 import type { TransformConfig } from "./transforms/types.js";
 import type { CompletionParams, ModelInfo, ProviderOptions, ProviderType } from "./types.js";
@@ -94,7 +95,7 @@ export abstract class OpenAICompatibleProvider extends OpenAIProvider {
    * @returns Array of model IDs
    */
   listModels(): string[] {
-    return this.getModelCatalog().map((m) => m.id);
+    return this.currentModels().map((m) => m.id);
   }
 
   /**
@@ -103,7 +104,14 @@ export abstract class OpenAICompatibleProvider extends OpenAIProvider {
    * @returns Promise resolving to array of ModelInfo
    */
   async listModelsAsync(): Promise<ModelInfo[]> {
-    return this.getModelCatalog();
+    return this.currentModels();
+  }
+
+  /** Use the shared catalog after refresh; custom subclasses retain their own catalog. */
+  private currentModels(): ModelInfo[] {
+    return MODEL_CATALOG.has(this.providerName as ProviderType)
+      ? getProviderModels(this.providerName)
+      : this.getModelCatalog();
   }
 
   /**
@@ -114,7 +122,7 @@ export abstract class OpenAICompatibleProvider extends OpenAIProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    const models = this.getModelCatalog();
+    const models = this.currentModels();
     const firstModel = models[0];
     return firstModel ? firstModel.id : "gpt-4o";
   }

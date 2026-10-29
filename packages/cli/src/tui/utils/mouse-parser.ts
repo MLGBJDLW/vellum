@@ -231,7 +231,9 @@ function parseSgr(data: string): MouseEvent | null {
   const terminator = data.at(-1);
   if (terminator !== "M" && terminator !== "m") return null;
 
-  const [btnText, colText, rowText] = data.slice(3, -1).split(";");
+  const fields = data.slice(3, -1).split(";");
+  if (fields.length !== 3) return null;
+  const [btnText, colText, rowText] = fields;
   if (!btnText || !colText || !rowText) return null;
   if (!/^\d+$/.test(btnText) || !/^\d+$/.test(colText) || !/^\d+$/.test(rowText)) {
     return null;
@@ -240,6 +242,14 @@ function parseSgr(data: string): MouseEvent | null {
   const btn = Number.parseInt(btnText, 10);
   const col = Number.parseInt(colText, 10);
   const row = Number.parseInt(rowText, 10);
+  if (
+    !Number.isSafeInteger(btn) ||
+    !Number.isSafeInteger(col) ||
+    !Number.isSafeInteger(row) ||
+    col < 1 ||
+    row < 1
+  )
+    return null;
   const isRelease = terminator === "m";
 
   const { button, action } = decodeAction(btn, isRelease);

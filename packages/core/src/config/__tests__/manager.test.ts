@@ -294,7 +294,7 @@ model = "some-model"
 
         expect(errorHandler).toHaveBeenCalledTimes(1);
         expect(errorHandler.mock.calls[0]?.[0]).toBeInstanceOf(Error);
-        expect((errorHandler.mock.calls[0]?.[0] as Error).message).toContain(
+        expect((errorHandler.mock.calls[0]?.[0] as Error)?.message).toContain(
           "No config file found"
         );
 

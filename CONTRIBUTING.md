@@ -31,8 +31,8 @@ Thank you for your interest in contributing to Vellum! This guide will help you 
 
 | Tool | Version |
 |------|---------|
-| Node.js | 20+ |
-| pnpm | 9+ |
+| Node.js | 22.22.1+ or 24.11.0+ |
+| pnpm | 12.16.1 (from packageManager) |
 | Bun | 1.1+ (optional) |
 
 ### Installation

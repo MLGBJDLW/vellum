@@ -288,7 +288,7 @@
   "modelSelector": {
     "title": "Select Model:",
     "current": "Current: ",
-    "keybindings": "↑↓ navigate • Enter select"
+    "keybindings": "↑↓ navigate • Enter select • Esc close"
   },
   "modeSelector": {
     "title": "Personal Assistant:",

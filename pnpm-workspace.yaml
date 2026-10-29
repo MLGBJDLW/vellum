@@ -1,2 +1,28 @@
 packages:
   - "packages/*"
+
+# Keep test/build commands deterministic; dependency changes require an explicit install.
+verifyDepsBeforeRun: error
+
+overrides:
+  ink: "npm:@jrichman/ink@7.1.0"
+
+allowBuilds:
+  esbuild: true
+  keytar: true
+  "@google/genai": false
+  protobufjs: false
+
+minimumReleaseAgeExclude:
+  - "@biomejs/biome@2.6.4"
+  - "@biomejs/cli-android-arm64@2.6.4"
+  - "@biomejs/cli-android-x64@2.6.4"
+  - "@biomejs/cli-darwin-arm64@2.6.4"
+  - "@biomejs/cli-darwin-x64@2.6.4"
+  - "@biomejs/cli-linux-arm64-musl@2.6.4"
+  - "@biomejs/cli-linux-arm64@2.6.4"
+  - "@biomejs/cli-linux-x64-musl@2.6.4"
+  - "@biomejs/cli-linux-x64@2.6.4"
+  - "@biomejs/cli-win32-arm64@2.6.4"
+  - "@biomejs/cli-win32-x64@2.6.4"
+  - "@opentelemetry/semantic-conventions@1.44.0"

@@ -628,8 +628,8 @@ export interface ModelInfo {
   contextWindow: number;
   /** Maximum output tokens (if different from context) */
   maxOutputTokens?: number;
-  /** Whether the model supports function/tool calling */
-  supportsTools: boolean;
+  /** Tool support; omitted means unknown, not an explicit rejection. */
+  supportsTools?: boolean;
   /** Whether the model supports image inputs */
   supportsVision: boolean;
   /** Whether the model supports extended thinking/reasoning */

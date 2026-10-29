@@ -112,7 +112,7 @@ describe("LLMLogger", () => {
         requestId: "req-1",
         inputTokens: 100,
       });
-      expect((transport.entries[0]?.data as Record<string, unknown>).totalTokens).toBeUndefined();
+      expect((transport.entries[0]?.data as Record<string, unknown>)?.totalTokens).toBeUndefined();
 
       // Only outputTokens
       llmLogger.logRequestComplete({
@@ -121,7 +121,7 @@ describe("LLMLogger", () => {
         requestId: "req-2",
         outputTokens: 50,
       });
-      expect((transport.entries[1]?.data as Record<string, unknown>).totalTokens).toBeUndefined();
+      expect((transport.entries[1]?.data as Record<string, unknown>)?.totalTokens).toBeUndefined();
     });
   });
 

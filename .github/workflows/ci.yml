@@ -12,10 +12,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20'
-  PNPM_VERSION: '9.15.0'
+  NODE_VERSION: "24"
+  PNPM_VERSION: "12.16.1"
   # Increase Node.js heap size for large test suites (12k+ tests)
-  NODE_OPTIONS: '--max-old-space-size=8192'
+  NODE_OPTIONS: "--max-old-space-size=8192"
 
 jobs:
   should-skip:
@@ -55,21 +55,21 @@ jobs:
     if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6.1.0
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Run lint
         run: pnpm lint
@@ -82,31 +82,21 @@ jobs:
     if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6.1.0
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - name: Turbo cache
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-turbo-typecheck-${{ hashFiles('**/tsconfig.json') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-typecheck-${{ hashFiles('**/tsconfig.json') }}-
-            ${{ runner.os }}-turbo-typecheck-
-            ${{ runner.os }}-turbo-
-
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
@@ -125,35 +115,24 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        node: ['20', '22']
+        node: ["22", "24"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6.1.0
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
-      - name: Turbo cache
-        uses: actions/cache@v4
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-node${{ matrix.node }}-turbo-test-${{ hashFiles('**/vitest.config.*') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-node${{ matrix.node }}-turbo-test-${{ hashFiles('**/vitest.config.*') }}-
-            ${{ runner.os }}-node${{ matrix.node }}-turbo-test-
-            ${{ runner.os }}-node${{ matrix.node }}-turbo-
-            ${{ runner.os }}-turbo-
-
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
@@ -162,7 +141,7 @@ jobs:
         run: pnpm test:run
         env:
           # Extra memory for large test suites
-          NODE_OPTIONS: '--max-old-space-size=8192'
+          NODE_OPTIONS: "--max-old-space-size=8192"
 
   # Quick check for Version PRs (fast pass)
   quick-check:
@@ -185,7 +164,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -204,7 +183,7 @@ jobs:
 
       - name: Comment on PR (no changeset)
         if: steps.check.outputs.has_changeset == 'false'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9.0.0
         with:
           script: |
             const body = `⚠️ **No changeset detected**

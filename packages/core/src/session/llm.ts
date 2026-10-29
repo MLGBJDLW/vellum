@@ -375,7 +375,8 @@ export namespace LLM {
       messages: buildMessages(validated.messages, validated.system),
       temperature: validated.temperature,
       maxTokens,
-      tools: modelInfo.supportsTools ? validated.tools : undefined,
+      // Unknown metadata must not silently disable tools explicitly requested by the agent.
+      tools: modelInfo.supportsTools !== false ? validated.tools : undefined,
       thinking: resolvedThinking,
       extraBody: validated.extraBody,
       abortSignal: validated.abortSignal,

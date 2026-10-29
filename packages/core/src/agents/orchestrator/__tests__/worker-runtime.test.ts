@@ -8,10 +8,12 @@ import { CostService } from "../../../cost/service.js";
 import { PromptLoader } from "../../../prompts/prompt-loader.js";
 import { createUserMessage, LLM, SessionParts } from "../../../session/index.js";
 import { UnifiedToolContainer } from "../../../tool/container.js";
+import { createTaskPacket } from "../../protocol/task-packet.js";
 import { createContextIsolator } from "../../session/context-isolator.js";
 import { createPermissionInheritance } from "../../session/permission-inheritance.js";
 import { createResourceQuotaManager } from "../../session/resource-quota.js";
 import { createSubsessionManager } from "../../session/subsession-manager.js";
+import { coderWorker } from "../../workers/builtin/coder.js";
 import { createOrchestrator } from "../core.js";
 
 vi.mock("../../../session/index.js", async (importOriginal) => ({
@@ -42,6 +44,7 @@ function createRuntime() {
     tools,
     readFile,
     sessions,
+    root,
     orchestrator: createOrchestrator({
       modeRegistry: createModeRegistry(),
       subsessionManager: sessions,
@@ -60,6 +63,63 @@ function finalStream(text: string): ReturnType<typeof LLM.stream> {
 afterEach(() => vi.resetAllMocks());
 
 describe("Orchestrator worker runtime", () => {
+  it("allows a built-in worker to complete useful work beyond its former implicit turn limit", async () => {
+    const { sessions, root } = createRuntime();
+    const worker = sessions.create({ agentSlug: "coder", level: 2, parentId: root.id });
+    let requests = 0;
+    vi.mocked(LLM.stream).mockImplementation(() => {
+      requests += 1;
+      if (requests > 26) return finalStream("Reviewed all 26 files.");
+      return (async function* () {
+        yield {
+          type: "toolCall" as const,
+          id: `read-${requests}`,
+          name: "read_file",
+          input: { path: `file-${requests}.ts` },
+        };
+        yield { type: "done" as const, stopReason: "tool_use" as const };
+      })();
+    });
+
+    const result = await coderWorker.execute({
+      subsession: worker,
+      taskPacket: createTaskPacket(
+        "Review 26 source files",
+        { kind: "builtin", slug: "coder" },
+        "orch"
+      ),
+    });
+
+    expect(requests).toBe(27);
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({ output: "Reviewed all 26 files.", iterations: 27 });
+  });
+
+  it("keeps an explicit task deadline when a built-in worker has no implicit timeout", async () => {
+    const { sessions, root } = createRuntime();
+    const worker = sessions.create({ agentSlug: "coder", level: 2, parentId: root.id });
+    vi.mocked(LLM.stream).mockImplementation(({ abortSignal }) =>
+      (async function* () {
+        yield { type: "text" as const, content: "Partial evidence" };
+        await new Promise<void>((resolve) => {
+          if (abortSignal?.aborted) resolve();
+          else abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        throw new Error("Stream cancelled at explicit task deadline");
+      })()
+    );
+    const result = await coderWorker.execute({
+      subsession: worker,
+      taskPacket: createTaskPacket("Inspect source", { kind: "builtin", slug: "coder" }, "orch", {
+        constraints: { timeout: 1_000 },
+      }),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(vi.mocked(LLM.stream).mock.calls[0]?.[0].abortSignal?.aborted).toBe(true);
+  });
+
   it("executes a real worker from an empty legacy mode registry and returns its evidence", async () => {
     const { orchestrator, sessions } = createRuntime();
     vi.mocked(LLM.stream).mockReturnValue(finalStream("source-backed research result"));
@@ -404,25 +464,25 @@ describe("Delegated session budgets", () => {
     }
   });
 
-  it.each([
-    "tokens",
-    "cost",
-  ] as const)("applies the parent's explicit %s budget to child continuation", async (budget) => {
-    const { loop, terminated } = createParent({
-      costLimits: {
-        ...(budget === "cost" ? { maxCostPerSession: 0.001 } : {}),
-        pauseOnLimitReached: true,
-        warningThreshold: 0.8,
-      },
-      terminationLimits: budget === "tokens" ? { maxTokens: 50 } : undefined,
-    });
-    vi.mocked(LLM.stream).mockReturnValueOnce(parentStream()).mockReturnValueOnce(childStream());
-    await loop.run();
-    expect(LLM.stream).toHaveBeenCalledTimes(2);
-    expect(terminated).toHaveBeenCalledWith(
-      budget === "tokens" ? "max_tokens" : "cost_limit",
-      expect.anything()
-    );
-    expect(JSON.stringify(loop.getMessages())).toContain("Worker stopped before completion");
-  });
+  it.each(["tokens", "cost"] as const)(
+    "applies the parent's explicit %s budget to child continuation",
+    async (budget) => {
+      const { loop, terminated } = createParent({
+        costLimits: {
+          ...(budget === "cost" ? { maxCostPerSession: 0.001 } : {}),
+          pauseOnLimitReached: true,
+          warningThreshold: 0.8,
+        },
+        terminationLimits: budget === "tokens" ? { maxTokens: 50 } : undefined,
+      });
+      vi.mocked(LLM.stream).mockReturnValueOnce(parentStream()).mockReturnValueOnce(childStream());
+      await loop.run();
+      expect(LLM.stream).toHaveBeenCalledTimes(2);
+      expect(terminated).toHaveBeenCalledWith(
+        budget === "tokens" ? "max_tokens" : "cost_limit",
+        expect.anything()
+      );
+      expect(JSON.stringify(loop.getMessages())).toContain("Worker stopped before completion");
+    }
+  );
 });

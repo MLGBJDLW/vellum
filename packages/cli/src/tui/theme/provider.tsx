@@ -202,5 +202,5 @@ export function ThemeProvider({
 // Exports
 // =============================================================================
 
-export { ThemeContext };
 export type { ThemeContextValue };
+export { ThemeContext };

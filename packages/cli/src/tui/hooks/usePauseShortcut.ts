@@ -7,8 +7,8 @@
  * @module tui/hooks/usePauseShortcut
  */
 
-import { useInput } from "ink";
 import { useCallback } from "react";
+import { useInput } from "./useTerminalInput.js";
 
 // =============================================================================
 // Types

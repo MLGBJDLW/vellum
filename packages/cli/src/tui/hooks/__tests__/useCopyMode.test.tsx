@@ -9,6 +9,14 @@ import type React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { type UseCopyModeReturn, useCopyMode } from "../useCopyMode.js";
 
+// Prevent clipboard access for every test; module mocks are always hoisted.
+vi.mock("node:child_process", () => ({
+  exec: vi.fn((_cmd: string, _opts: unknown, cb: (err: null) => void) => {
+    cb?.(null);
+    return { stdin: { write: vi.fn(), end: vi.fn() } };
+  }),
+}));
+
 // =============================================================================
 // Test Helper Component
 // =============================================================================
@@ -293,14 +301,6 @@ describe("useCopyMode", () => {
   describe("copySelection", () => {
     it("deactivates mode after copy", async () => {
       const result = renderCopyModeHook();
-
-      // Mock child_process exec to prevent actual clipboard access
-      vi.mock("node:child_process", () => ({
-        exec: vi.fn((_cmd: string, _opts: unknown, cb: (err: null) => void) => {
-          cb?.(null);
-          return { stdin: { write: vi.fn(), end: vi.fn() } };
-        }),
-      }));
 
       result.current.enterCopyMode();
       result.rerender();

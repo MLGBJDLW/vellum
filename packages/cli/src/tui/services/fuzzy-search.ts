@@ -195,7 +195,7 @@ export function fuzzySearch<T>(
   key?: keyof T,
   options: FuzzySearchOptions = {}
 ): FuzzyResult<T>[] {
-  const { limit, threshold = -10000 } = options;
+  const { limit = Number.POSITIVE_INFINITY, threshold = -10000 } = options;
 
   if (!query) {
     // No query - return all items with neutral score
@@ -342,7 +342,7 @@ export function fuzzySearchMulti<T extends object>(
   query: string,
   options: MultiFieldSearchOptions<T>
 ): FuzzyResult<T>[] {
-  const { keys, limit, threshold = -10000 } = options;
+  const { keys, limit = Number.POSITIVE_INFINITY, threshold = -10000 } = options;
 
   if (!query) {
     // No query - return all items
@@ -590,7 +590,7 @@ export function createPreparedSearch<T>(
       }));
 
   return (query: string, options: FuzzySearchOptions = {}): FuzzyResult<T>[] => {
-    const { limit, threshold = -10000 } = options;
+    const { limit = Number.POSITIVE_INFINITY, threshold = -10000 } = options;
 
     if (!query) {
       const results: FuzzyResult<T>[] = prepared.map(({ item, prepared: p }) => ({

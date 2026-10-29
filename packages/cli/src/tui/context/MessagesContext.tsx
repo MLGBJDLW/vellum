@@ -868,4 +868,4 @@ export function MessagesProvider({
 // Exports
 // =============================================================================
 
-export { MessagesContext, initialState };
+export { initialState, MessagesContext };

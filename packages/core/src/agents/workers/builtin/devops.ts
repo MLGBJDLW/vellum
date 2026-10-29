@@ -50,10 +50,6 @@ export const devopsWorker: BaseWorker = createBaseWorker({
     specializations: ["deployment", "ci-cd", "docker", "infrastructure"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    // Execute using the worker executor with devops-specific configuration
-    return executeWorkerTask("devops", context, {
-      maxIterations: 20, // DevOps tasks may involve multiple steps
-      timeout: 300000, // 5 minutes for deployment tasks
-    });
+    return executeWorkerTask("devops", context);
   },
 });

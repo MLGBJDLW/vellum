@@ -50,10 +50,7 @@ export const securityWorker: BaseWorker = createBaseWorker({
     specializations: ["vulnerability", "audit", "security-review", "compliance"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    // Execute using the worker executor with security-specific configuration
-    const result = await executeWorkerTask("security", context, {
-      maxIterations: 25, // Security audits may need thorough analysis
-    });
+    const result = await executeWorkerTask("security", context);
 
     // Ensure filesModified is always empty for read-only worker
     return {

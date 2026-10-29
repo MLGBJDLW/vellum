@@ -630,9 +630,8 @@ export function truncate(messages: ContextMessage[], options: TruncateOptions): 
 // Exports
 // ============================================================================
 
-export type { ToolPairAnalysis };
 export {
   createTruncationStateManager,
   TruncationStateManager,
 } from "./improvements/truncation-state-manager.js";
-export type { TruncationRecoveryOptions };
+export type { ToolPairAnalysis, TruncationRecoveryOptions };
