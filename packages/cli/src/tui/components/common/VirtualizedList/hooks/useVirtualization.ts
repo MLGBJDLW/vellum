@@ -339,6 +339,9 @@ export function useVirtualization<T = unknown>(
     // Detect mutation type
     const mutationType = detectMutationType(prevDataIdsRef.current, currentIds);
     prevDataIdsRef.current = currentIds;
+    // A streamed text update changes data/estimator identities without changing
+    // the item index. Avoid scheduling a no-op state update during layout work.
+    if (mutationType === "none" && dataLength === blockSumsState.heights.length) return;
 
     // In development, warn about non-append mutations that require cache rebuild
     if (
@@ -400,7 +403,7 @@ export function useVirtualization<T = unknown>(
 
       return createBlockSums(newHeights);
     });
-  }, [dataLength, data, keyExtractor, estimatedItemHeight]);
+  }, [dataLength, data, keyExtractor, estimatedItemHeight, blockSumsState.heights.length]);
 
   // ============================================================================
   // Update measured height (keeps heightCache and blockSumsState in sync)
@@ -548,11 +551,6 @@ export function useVirtualization<T = unknown>(
     }
   }, []);
 
-  // Track previous values to avoid unnecessary measurements
-  const prevStartIndexRef = useRef(startIndex);
-  const prevEndIndexRef = useRef(endIndex);
-  const prevDataLengthRef = useRef(dataLength);
-
   // Periodic measurement tick to catch dynamic content height changes
   // This ensures collapsible content like ThinkingBlock gets re-measured when expanded
   const [measureTick, setMeasureTick] = useState(0);
@@ -599,57 +597,16 @@ export function useVirtualization<T = unknown>(
     [data, keyExtractor]
   );
 
-  // Measure container and visible items when visible range changes or on periodic tick
-  // FIX: Added proper dependency array to prevent measuring on every single render
-  // which was causing extreme CPU usage and frame drops
-  // FIX2: Added periodic re-measurement to catch dynamic content changes (ThinkingBlock expand/collapse)
-  // FIX3: Enhanced detection for significant height changes (>5px threshold) to catch collapsible content
+  // Terminal dimensions are rows, so even a one-row change must update the
+  // scroll extent. Measure each visible item once and batch only changed heights.
   // biome-ignore lint/correctness/useExhaustiveDependencies: measureTick intentionally triggers periodic re-measurement
   useLayoutEffect(() => {
-    // Check if we actually need to re-measure
-    const rangeChanged =
-      prevStartIndexRef.current !== startIndex ||
-      prevEndIndexRef.current !== endIndex ||
-      prevDataLengthRef.current !== dataLength;
-
-    prevStartIndexRef.current = startIndex;
-    prevEndIndexRef.current = endIndex;
-    prevDataLengthRef.current = dataLength;
-
     // Measure container
     if (containerRef.current) {
       const height = Math.round(measureElement(containerRef.current).height);
       if (measuredContainerHeight !== height && height > 0) {
         setMeasuredContainerHeight(height);
       }
-    }
-
-    // FIX3: Check for significant height changes in visible items
-    // This catches ThinkingBlock expand/collapse which can cause large height deltas
-    const HEIGHT_CHANGE_THRESHOLD = 5; // pixels
-    let forceRemeasure = false;
-
-    for (let i = startIndex; i <= endIndex; i++) {
-      const itemRef = getItemRefByIndex(i);
-      if (itemRef) {
-        const currentHeight = Math.round(measureElement(itemRef).height);
-        const cachedHeight = heights[i] ?? 0;
-        if (Math.abs(currentHeight - cachedHeight) > HEIGHT_CHANGE_THRESHOLD) {
-          forceRemeasure = true;
-          break;
-        }
-      }
-    }
-
-    // Measure visible items when:
-    // 1. Range changed (scroll/data update)
-    // 2. Initial mount (heights.length === 0)
-    // 3. measureTick changed (periodic check for dynamic content)
-    // 4. FIX3: Significant height change detected (forceRemeasure)
-    // Note: measureTick is in deps, so this runs periodically
-    if (!rangeChanged && heights.length > 0 && !forceRemeasure) {
-      // No changes needed - skip expensive remeasurement
-      return;
     }
 
     // Collect all height updates for batch processing

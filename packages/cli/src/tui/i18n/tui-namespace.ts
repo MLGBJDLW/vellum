@@ -178,9 +178,9 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
     keybindings: "↑↓ navigate • Enter select • Esc close",
   },
   modeSelector: {
-    title: "Personal assistant",
+    title: "Select Mode:",
     current: "(current)",
-    keybindings: "Enter: use orch · /mode: legacy overrides",
+    keybindings: "↑↓ navigate • Enter select • 1-4 choose mode",
   },
   onboarding: {
     selectProvider: "Select your AI Provider:",
@@ -418,9 +418,9 @@ const ZH_TRANSLATIONS: Record<string, unknown> = {
     keybindings: "↑↓ 导航 • Enter 选择 • Esc 关闭",
   },
   modeSelector: {
-    title: "个人助理",
+    title: "选择模式：",
     current: "(当前)",
-    keybindings: "Enter：使用 orch · /mode：兼容工作流",
+    keybindings: "↑↓ 导航 • Enter 选择 • 1-4 切换模式",
   },
   onboarding: {
     selectProvider: "选择您的 AI 提供商：",

@@ -7,11 +7,13 @@
  * @module tui/components/Checkpoint/CheckpointDiffView
  */
 
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTheme } from "../../theme/index.js";
+import { Clickable, getVisibleClickBounds } from "../common/Clickable.js";
 import { HotkeyHints } from "../common/HotkeyHints.js";
 
 // =============================================================================
@@ -186,6 +188,7 @@ export function CheckpointDiffView({
 
   // State
   const [scrollOffset, setScrollOffset] = useState(0);
+  const listRef = useRef<DOMElement>(null);
 
   // Colors from theme
   const primaryColor = theme.brand.primary;
@@ -203,6 +206,17 @@ export function CheckpointDiffView({
 
   // Calculate visible lines (account for header and footer)
   const maxVisible = Math.max(1, maxHeight - 5);
+  const maxOffset = Math.max(0, diffLines.length - maxVisible);
+  useEffect(() => setScrollOffset((offset) => Math.min(offset, maxOffset)), [maxOffset]);
+  useMouseScroll({
+    enabled: isFocused && !isLoading,
+    bounds: () => {
+      const bounds = getVisibleClickBounds(listRef.current);
+      return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+    },
+    onScroll: (delta) =>
+      setScrollOffset((offset) => Math.max(0, Math.min(offset + delta, maxOffset))),
+  });
 
   // Get visible lines
   const visibleLines = useMemo(
@@ -214,14 +228,15 @@ export function CheckpointDiffView({
   const canScrollUp = scrollOffset > 0;
   const canScrollDown = scrollOffset + maxVisible < diffLines.length;
 
-  // Hotkey hints
-  const hints = useMemo(
-    () => [
-      { keys: "j/k", label: "scroll" },
-      { keys: "PgUp/PgDn", label: "page" },
-      { keys: "q/Esc", label: "close" },
-    ],
-    []
+  const closeButton = (
+    <Clickable
+      id="checkpoint-diff-close"
+      width="auto"
+      enabled={isFocused && !!onClose}
+      onClick={() => onClose?.()}
+    >
+      <HotkeyHints hints={[{ keys: "q/Esc", label: "close" }]} />
+    </Clickable>
   );
 
   /**
@@ -298,6 +313,7 @@ export function CheckpointDiffView({
         <Box paddingY={1}>
           <Text color={mutedColor}>Loading diff...</Text>
         </Box>
+        {closeButton}
       </Box>
     );
   }
@@ -315,7 +331,7 @@ export function CheckpointDiffView({
         <Box paddingY={1}>
           <Text color={mutedColor}>(no changes from this checkpoint)</Text>
         </Box>
-        <HotkeyHints hints={[{ keys: "q/Esc", label: "close" }]} />
+        {closeButton}
       </Box>
     );
   }
@@ -339,7 +355,7 @@ export function CheckpointDiffView({
       </Box>
 
       {/* Diff content */}
-      <Box flexDirection="column" height={maxVisible}>
+      <Box ref={listRef} flexDirection="column" height={maxVisible} overflow="hidden">
         {visibleLines.map((line, idx) => (
           <DiffLineComponent
             // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
@@ -364,7 +380,15 @@ export function CheckpointDiffView({
       </Box>
 
       {/* Hints */}
-      <HotkeyHints hints={hints} />
+      <Box gap={1}>
+        <HotkeyHints
+          hints={[
+            { keys: "j/k", label: "scroll" },
+            { keys: "PgUp/PgDn", label: "page" },
+          ]}
+        />
+        {closeButton}
+      </Box>
     </Box>
   );
 }

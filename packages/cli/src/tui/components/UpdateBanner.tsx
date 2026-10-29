@@ -9,9 +9,10 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { useInput } from "../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../i18n/index.js";
+import { Clickable } from "./common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -62,13 +63,20 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
 }) => {
   const { t } = useTUITranslation();
   const [dismissed, setDismissed] = useState(false);
+  const bannerId = useId();
+  const dismissedRef = useRef(false);
+  const dismiss = useCallback(() => {
+    if (!dismissible || dismissedRef.current) return;
+    dismissedRef.current = true;
+    setDismissed(true);
+    onDismiss?.();
+  }, [dismissible, onDismiss]);
 
   // Handle dismiss key press
   useInput(
     (input, key) => {
       if (dismissible && (input === "d" || input === "D" || key.escape)) {
-        setDismissed(true);
-        onDismiss?.();
+        dismiss();
       }
     },
     { isActive: dismissible && !dismissed }
@@ -83,10 +91,12 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
   if (compact) {
     return (
       <Box>
-        <Text color="yellow">
-          ⬆ v{latestVersion} available
-          {dismissible && <Text color="gray"> {t("update.dismissHint")}</Text>}
-        </Text>
+        <Text color="yellow">⬆ v{latestVersion} available</Text>
+        {dismissible && (
+          <Clickable id={`${bannerId}-dismiss`} width="auto" onClick={dismiss}>
+            <Text color="gray"> {t("update.dismissHint")}</Text>
+          </Clickable>
+        )}
       </Box>
     );
   }
@@ -125,9 +135,11 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
 
       {dismissible && (
         <Box marginTop={1}>
-          <Text color="gray" dimColor>
-            {t("update.dismissInstructions")}
-          </Text>
+          <Clickable id={`${bannerId}-dismiss`} width="auto" onClick={dismiss}>
+            <Text color="gray" dimColor>
+              {t("update.dismissInstructions")}
+            </Text>
+          </Clickable>
         </Box>
       )}
     </Box>

@@ -11,10 +11,11 @@ import * as path from "node:path";
 import type { TrustPromptInfo, TrustScope } from "@vellum/core";
 import { Box, Text } from "ink";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { useInput } from "../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { Clickable } from "./common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -86,19 +87,27 @@ function OptionButton({
   shortcut,
   color,
   isSelected,
+  id,
+  enabled,
+  onSelect,
 }: {
   label: string;
   shortcut: string;
   color: string;
   isSelected?: boolean;
+  id: string;
+  enabled: boolean;
+  onSelect: () => void;
 }): React.ReactElement {
   const { theme } = useTheme();
 
   return (
     <Box marginRight={2}>
-      <Text color={isSelected ? theme.colors.primary : color} bold={isSelected}>
-        [{shortcut}] {label}
-      </Text>
+      <Clickable id={id} width="auto" enabled={enabled} onClick={onSelect}>
+        <Text color={isSelected ? theme.colors.primary : color} bold={isSelected}>
+          [{shortcut}] {label}
+        </Text>
+      </Clickable>
     </Box>
   );
 }
@@ -129,6 +138,19 @@ export function TrustPrompt({
   const { theme } = useTheme();
   const { t } = useTUITranslation();
   const [selectedOption, setSelectedOption] = useState<TrustDecision | null>(null);
+  const promptId = useId();
+  const decided = useRef(false);
+  const choose = useCallback(
+    (decision: TrustDecision) => {
+      if (decided.current) return;
+      decided.current = true;
+      setSelectedOption(decision);
+      if (decision === "yes") onDecision(decision, "session");
+      else if (decision === "always") onDecision(decision, "always");
+      else onDecision(decision);
+    },
+    [onDecision]
+  );
 
   // Handle keyboard input
   useInput(
@@ -141,31 +163,26 @@ export function TrustPrompt({
 
         switch (lowerInput) {
           case "y":
-            setSelectedOption("yes");
-            onDecision("yes", "session");
+            choose("yes");
             break;
           case "n":
-            setSelectedOption("no");
-            onDecision("no");
+            choose("no");
             break;
           case "a":
-            setSelectedOption("always");
-            onDecision("always", "always");
+            choose("always");
             break;
           case "s":
-            setSelectedOption("skip");
-            onDecision("skip");
+            choose("skip");
             break;
           default:
             // Enter defaults to "yes"
             if (key.return) {
-              setSelectedOption("yes");
-              onDecision("yes", "session");
+              choose("yes");
             }
             break;
         }
       },
-      [selectedOption, onDecision]
+      [selectedOption, choose]
     )
   );
 
@@ -232,24 +249,36 @@ export function TrustPrompt({
       {/* Options */}
       <Box>
         <OptionButton
+          id={`${promptId}-yes`}
+          enabled={!selectedOption}
+          onSelect={() => choose("yes")}
           label={t("trust.option_yes")}
           shortcut="Y"
           color={theme.colors.success}
           isSelected={selectedOption === "yes"}
         />
         <OptionButton
+          id={`${promptId}-no`}
+          enabled={!selectedOption}
+          onSelect={() => choose("no")}
           label={t("trust.option_no")}
           shortcut="N"
           color={theme.colors.error}
           isSelected={selectedOption === "no"}
         />
         <OptionButton
+          id={`${promptId}-always`}
+          enabled={!selectedOption}
+          onSelect={() => choose("always")}
           label={t("trust.option_always")}
           shortcut="A"
           color={theme.colors.info}
           isSelected={selectedOption === "always"}
         />
         <OptionButton
+          id={`${promptId}-skip`}
+          enabled={!selectedOption}
+          onSelect={() => choose("skip")}
           label={t("trust.option_skip")}
           shortcut="S"
           color={theme.colors.muted}

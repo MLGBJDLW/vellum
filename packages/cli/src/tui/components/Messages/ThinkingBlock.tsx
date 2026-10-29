@@ -7,8 +7,8 @@
  * Features:
  * - Collapsible: Toggle between collapsed (1-line summary) and expanded view
  * - Duration display: Shows how long thinking took (e.g., "Thought for 3.2s")
- * - Streaming indicator: Shows spinner while thinking is in progress
- * - Character count: Shows length in collapsed mode (e.g., "[...] (1,234 chars)")
+ * - Streaming indicator: Highlights the label while thinking is in progress
+ * - Collapsed activity title: Latest complete provider heading or activity label
  * - Keyboard toggle: 't' key to toggle expand/collapse
  * - Visual distinction: Box border to separate from main content
  * - Tool calls: Optional inline display of tool calls within thinking block
@@ -20,7 +20,6 @@ import { Box, Text } from "ink";
 import type React from "react";
 import { memo, useCallback, useEffect, useId, useMemo, useRef } from "react";
 import type { ToolCallInfo } from "../../context/MessagesContext.js";
-import { useMouseContextOptional } from "../../context/MouseContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
@@ -28,6 +27,7 @@ import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { Clickable } from "../common/Clickable.js";
 import { SPINNER_STYLES, Spinner } from "../common/Spinner.js";
 import { StreamingText } from "./StreamingText.js";
+import { getThinkingActivity } from "./thinkingActivity.js";
 
 // Spinner frames for tool call status
 const TOOL_SPINNER_FRAMES = ["-", "\\", "|", "/"];
@@ -119,9 +119,9 @@ export interface ThinkingBlockProps {
   readonly persistenceId?: string;
   /** Enable keyboard toggle with 't' key (default: false to avoid conflicts) */
   readonly enableKeyboardToggle?: boolean;
-  /** Maximum lines to show in collapsed preview (default: 1) */
+  /** @deprecated Collapsed thinking always uses a single activity title. */
   readonly collapsedPreviewLines?: number;
-  /** Maximum characters to show in collapsed preview (default: 80) */
+  /** Maximum terminal columns for the activity title (default: 56) */
   readonly collapsedPreviewChars?: number;
   /** Show character count in header (default: true) */
   readonly showCharCount?: boolean;
@@ -142,7 +142,7 @@ export interface ThinkingBlockProps {
   /**
    * Display mode for thinking content.
    * - "full": Show content (default, can expand/collapse)
-   * - "compact": Only show header, no content preview, cannot expand
+   * - "compact": Start with only the header; still manually expandable
    */
   readonly displayMode?: ThinkingDisplayMode;
 }
@@ -177,28 +177,6 @@ function formatThinkingDuration(ms: number): string {
   const remainingSeconds = (seconds % 60).toFixed(0);
   return `${minutes}m ${remainingSeconds}s`;
 }
-
-/**
- * Get a preview of the content for collapsed mode.
- */
-function getPreview(content: string, maxLines: number, maxChars: number): string {
-  if (!content) return "";
-
-  // Split by newlines and take first N lines
-  const lines = content.split("\n").slice(0, maxLines);
-  let preview = lines.join(" ").trim();
-
-  // Truncate to max chars
-  if (preview.length > maxChars) {
-    preview = `${preview.slice(0, maxChars - 3)}...`;
-  }
-
-  return preview;
-}
-
-// =============================================================================
-// Component
-// =============================================================================
 
 /**
  * ThinkingBlock - Collapsible display for model thinking/reasoning content.
@@ -239,8 +217,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   autoCollapseDelayMs = 300,
   persistenceId,
   enableKeyboardToggle = false,
-  collapsedPreviewLines = 1,
-  collapsedPreviewChars = 80,
+  collapsedPreviewChars = 56,
   showCharCount = true,
   onToggle,
   onHeightChange,
@@ -251,43 +228,24 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 }: ThinkingBlockProps): React.JSX.Element | null {
   const { theme } = useTheme();
   const clickId = useId();
-  const mouseCtx = useMouseContextOptional();
-  const isMouseActive = mouseCtx?.isMouseActive ?? false;
 
-  // In compact mode, force collapsed and disable keyboard toggle
+  // Compact changes the initial presentation, never the ability to inspect it.
   const isCompactMode = displayMode === "compact";
   const effectiveInitialCollapsed = isCompactMode ? true : initialCollapsed;
-  const effectiveKeyboardToggle = isCompactMode ? false : enableKeyboardToggle;
   const effectiveAutoCollapseDelayMs = Math.max(0, Math.floor(autoCollapseDelayMs));
 
-  const {
-    isCollapsed,
-    toggle: _toggle,
-    setCollapsed,
-  } = useCollapsible({
+  const { isCollapsed, hasUserOverride, toggle, setCollapsed } = useCollapsible({
     initialCollapsed: effectiveInitialCollapsed,
-    toggleKey: effectiveKeyboardToggle ? "t" : undefined,
-    keyboardEnabled: effectiveKeyboardToggle,
+    toggleKey: enableKeyboardToggle ? "t" : undefined,
+    keyboardEnabled: enableKeyboardToggle,
     persistenceId,
+    toggleSignal,
     onToggle,
   });
 
-  // In compact mode, always show as collapsed (never expandable)
-  const effectiveIsCollapsed = isCompactMode ? true : isCollapsed;
-  const lastToggleSignalRef = useRef<number | null>(null);
   const prevStreamingRef = useRef(isStreaming);
+  const prevCompleteRef = useRef(false);
   const autoCollapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (isCompactMode || toggleSignal === undefined) {
-      return;
-    }
-    if (lastToggleSignalRef.current === toggleSignal) {
-      return;
-    }
-    lastToggleSignalRef.current = toggleSignal;
-    _toggle();
-  }, [isCompactMode, toggleSignal, _toggle]);
 
   // Auto-collapse when streaming ends based on expanded/auto-collapse settings.
   useEffect(() => {
@@ -298,7 +256,9 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 
     const wasStreaming = prevStreamingRef.current;
     prevStreamingRef.current = isStreaming;
-    const thinkingCompleted = isThinkingComplete || (!isStreaming && wasStreaming);
+    const thinkingCompleted =
+      (isThinkingComplete && !prevCompleteRef.current) || (!isStreaming && wasStreaming);
+    prevCompleteRef.current = Boolean(isThinkingComplete);
 
     const clearAutoCollapseTimeout = () => {
       if (autoCollapseTimeoutRef.current) {
@@ -307,45 +267,43 @@ export const ThinkingBlock = memo(function ThinkingBlock({
       }
     };
 
-    if (isCompactMode) {
+    if (!autoCollapse || hasUserOverride || isCollapsed || isStreaming || !thinkingCompleted) {
       return clearAutoCollapseTimeout;
     }
 
-    if (!autoCollapse) {
-      return clearAutoCollapseTimeout;
-    }
-
-    if (!isStreaming && !expandedByDefault && !effectiveIsCollapsed) {
-      setCollapsed(true);
-      return clearAutoCollapseTimeout;
-    }
-
-    if (!isStreaming && expandedByDefault && thinkingCompleted) {
-      autoCollapseTimeoutRef.current = setTimeout(() => {
+    autoCollapseTimeoutRef.current = setTimeout(
+      () => {
         setCollapsed(true);
-      }, effectiveAutoCollapseDelayMs);
-    }
+      },
+      expandedByDefault ? effectiveAutoCollapseDelayMs : 0
+    );
 
     return clearAutoCollapseTimeout;
   }, [
     autoCollapse,
     effectiveAutoCollapseDelayMs,
-    effectiveIsCollapsed,
+    hasUserOverride,
+    isCollapsed,
     expandedByDefault,
-    isCompactMode,
     isStreaming,
     isThinkingComplete,
     setCollapsed,
   ]);
 
-  // Notify parent when collapsed state changes (triggers height re-measurement)
-  const prevCollapsedRef = useRef(effectiveIsCollapsed);
+  // Expanded streaming content can add rows too; virtualized lists must measure
+  // it again instead of clipping new content to the previous height.
+  const prevCollapsedRef = useRef(isCollapsed);
+  const prevContentRef = useRef(content);
   useEffect(() => {
-    if (prevCollapsedRef.current !== effectiveIsCollapsed) {
-      prevCollapsedRef.current = effectiveIsCollapsed;
+    if (
+      prevCollapsedRef.current !== isCollapsed ||
+      (!isCollapsed && prevContentRef.current !== content)
+    ) {
       onHeightChange?.();
     }
-  }, [effectiveIsCollapsed, onHeightChange]);
+    prevCollapsedRef.current = isCollapsed;
+    prevContentRef.current = content;
+  }, [isCollapsed, content, onHeightChange]);
 
   // Theme colors
   const thinkingColor = theme.colors.warning ?? "yellow";
@@ -390,9 +348,9 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 
   // Memoized values
   const charCount = useMemo(() => content.length, [content]);
-  const preview = useMemo(
-    () => getPreview(content, collapsedPreviewLines, collapsedPreviewChars),
-    [content, collapsedPreviewLines, collapsedPreviewChars]
+  const activity = useMemo(
+    () => getThinkingActivity(content, isStreaming, collapsedPreviewChars),
+    [content, isStreaming, collapsedPreviewChars]
   );
 
   // Don't render if no content
@@ -400,31 +358,26 @@ export const ThinkingBlock = memo(function ThinkingBlock({
     return null;
   }
 
-  // Build header text
+  // Detailed metadata belongs to the expanded view. The collapsed view is one row.
   const headerParts: string[] = [];
 
-  // Status icon and text
-  if (isStreaming) {
-    headerParts.push("Thinking");
-  } else if (durationMs !== undefined && durationMs > 0) {
-    headerParts.push(`Thought for ${formatThinkingDuration(durationMs)}`);
-  } else {
-    headerParts.push("Thought");
+  if (!isStreaming && durationMs !== undefined && durationMs > 0) {
+    headerParts.push(formatThinkingDuration(durationMs));
   }
 
-  // Character count (when collapsed or streaming)
-  if (showCharCount && charCount > 0 && (effectiveIsCollapsed || isStreaming)) {
-    headerParts.push(`(${formatCharCount(charCount)})`);
+  if (showCharCount && charCount > 0) {
+    headerParts.push(formatCharCount(charCount));
   }
 
-  // Toggle hint (not shown in compact mode since it's not toggleable)
-  if (!isStreaming && !isCompactMode) {
-    headerParts.push(effectiveIsCollapsed ? "[expand ▼]" : "[collapse ▲]");
-  }
+  if (toggleHint) headerParts.push(toggleHint);
+  else if (enableKeyboardToggle) headerParts.push("press 't'");
 
   return (
     <Box
       flexDirection="column"
+      flexGrow={1}
+      flexShrink={1}
+      minWidth={0}
       marginLeft={2}
       marginTop={0}
       marginBottom={0}
@@ -437,79 +390,33 @@ export const ThinkingBlock = memo(function ThinkingBlock({
       borderBottom={false}
     >
       {/* Header row with toggle — clickable to expand/collapse */}
-      <Clickable
-        id={`thinking-toggle-${clickId}`}
-        onClick={_toggle}
-        height={1}
-        enabled={!isCompactMode && !isStreaming}
-      >
-        <Box flexDirection="row" alignItems="center">
-          {/* Streaming spinner */}
-          {isStreaming && (
-            <>
-              <Spinner color={thinkingColor} frames={SPINNER_STYLES.dots} />
-              <Text> </Text>
-            </>
-          )}
-
-          {/* Icon */}
-          <Text color={thinkingColor}>[...] </Text>
-
-          {/* Header text - clickable area concept (visual only in TUI) */}
-          {isStreaming ? (
-            <BannerShimmerText baseColor={thinkingColor} highlightColor="#FFD700" enabled={true}>
-              {headerParts.join(" ")}
-            </BannerShimmerText>
-          ) : (
-            <Text color={thinkingColor} dimColor italic>
-              {headerParts.join(" ")}
-            </Text>
-          )}
-
-          {/* Keyboard hint */}
-          {effectiveKeyboardToggle && !isStreaming && (
-            <Text color={mutedColor} dimColor>
-              {" "}
-              (press 't')
-            </Text>
-          )}
-          {toggleHint && !isStreaming && !isCompactMode && (
-            <Text color={mutedColor} dimColor>
-              {" "}
-              ({toggleHint})
-            </Text>
-          )}
-          {isMouseActive &&
-            !isStreaming &&
-            !isCompactMode &&
-            !toggleHint &&
-            !effectiveKeyboardToggle && (
-              <Text color={mutedColor} dimColor>
-                {" "}
-                [click to toggle]
-              </Text>
+      <Clickable id={`thinking-toggle-${clickId}`} onClick={toggle} height={1}>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
+          <Text wrap="truncate-end">
+            <Text color={thinkingColor}>{isCollapsed ? "▸ " : "▾ "}</Text>
+            {isStreaming ? (
+              <BannerShimmerText baseColor={thinkingColor} highlightColor="#FFD700" enabled>
+                Thinking
+              </BannerShimmerText>
+            ) : (
+              <Text color={thinkingColor}>Thinking</Text>
             )}
+            <Text color={mutedColor}>{` · ${activity}`}</Text>
+            {!isCollapsed && headerParts.length > 0 && (
+              <Text color={mutedColor} dimColor>{` (${headerParts.join(" · ")})`}</Text>
+            )}
+          </Text>
         </Box>
       </Clickable>
 
-      {/* Content area - In compact mode, don't show any content (no preview) */}
-      {isCompactMode ? null : effectiveIsCollapsed ? (
-        // Collapsed: show preview only
-        content && (
-          <Box marginLeft={2} marginTop={0}>
-            <Text color={mutedColor} dimColor wrap="truncate">
-              {formatInlineThinking(preview)}
-            </Text>
-          </Box>
-        )
-      ) : (
-        // Expanded: show full content with typewriter effect and inline formatting
+      {/* Render all received content immediately on expansion, including mid-stream. */}
+      {!isCollapsed && (
         <Box marginLeft={2} marginTop={0} flexDirection="column">
           <Text color={thinkingColor} dimColor>
             <StreamingText
               content={content}
               isStreaming={isStreaming}
-              typewriterEffect={true}
+              typewriterEffect={false}
               cursorBlink={true}
               formatFn={formatInlineThinking}
             />
@@ -518,7 +425,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
       )}
 
       {/* Tool calls (when present) */}
-      {toolCalls && toolCalls.length > 0 && (
+      {!isCollapsed && toolCalls && toolCalls.length > 0 && (
         <Box marginLeft={2} marginTop={0} flexDirection="column">
           {toolCalls.map((toolCall) => {
             // Determine status indicator and color

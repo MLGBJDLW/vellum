@@ -135,8 +135,10 @@ import { Banner } from "./tui/components/Banner/index.js";
 import { BacktrackControls } from "./tui/components/backtrack/BacktrackControls.js";
 import { CheckpointDiffView } from "./tui/components/Checkpoint/CheckpointDiffView.js";
 import { SnapshotCheckpointPanel } from "./tui/components/Checkpoint/SnapshotCheckpointPanel.js";
+import { ConnectedLspSetupPanel } from "./tui/components/ConnectedLspSetupPanel.js";
 // New status components (Phase 35+)
 import { AutoApprovalStatus } from "./tui/components/common/AutoApprovalStatus.js";
+import { Clickable } from "./tui/components/common/Clickable.js";
 import { CostWarning } from "./tui/components/common/CostWarning.js";
 import { ErrorBoundary } from "./tui/components/common/ErrorBoundary.js";
 import { DEFAULT_HOTKEYS, HotkeyHelpModal } from "./tui/components/common/HotkeyHelpModal.js";
@@ -147,7 +149,7 @@ import type { AutocompleteOption } from "./tui/components/Input/Autocomplete.js"
 import { EnhancedCommandInput } from "./tui/components/Input/EnhancedCommandInput.js";
 import type { SlashCommand } from "./tui/components/Input/slash-command-utils.js";
 import { TextInput } from "./tui/components/Input/TextInput.js";
-import { InitErrorBanner, LspSetupPanel, McpPanel } from "./tui/components/index.js";
+import { InitErrorBanner, McpPanel } from "./tui/components/index.js";
 import { getSidebarWidth, Layout } from "./tui/components/Layout.js";
 import { MemoryPanel, type MemoryPanelProps } from "./tui/components/MemoryPanel.js";
 import { MessageList } from "./tui/components/Messages/MessageList.js";
@@ -156,6 +158,7 @@ import { ModeSelector } from "./tui/components/ModeSelector.js";
 import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
 import { AdaptiveLayout } from "./tui/components/ScreenReaderLayout.js";
+import { type SettingCategory, SettingsPanel } from "./tui/components/SettingsPanel.js";
 import { SIDEBAR_PANELS, SidebarHeader } from "./tui/components/Sidebar/SidebarHeader.js";
 import { SystemStatusPanel } from "./tui/components/Sidebar/SystemStatusPanel.js";
 import { ModelStatusBar } from "./tui/components/Status/ModelStatusBar.js";
@@ -179,6 +182,7 @@ import { useLsp } from "./tui/context/LspContext.js";
 import { useMcp } from "./tui/context/McpContext.js";
 import type { Message } from "./tui/context/MessagesContext.js";
 import { useMessages } from "./tui/context/MessagesContext.js";
+import { MouseInteractionScope } from "./tui/context/MouseContext.js";
 import { RootProvider } from "./tui/context/RootProvider.js";
 import { type ToolExecution, useTools } from "./tui/context/ToolsContext.js";
 // =============================================================================
@@ -1280,7 +1284,10 @@ function AppContent({
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showSessionManager, setShowSessionManager] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [settingsCategory, setSettingsCategory] = useState<SettingCategory | null>(null);
   const [showApprovalQueue, setShowApprovalQueue] = useState(false);
+  const [showBranchSelector, setShowBranchSelector] = useState(false);
+  const { currentConfirmRequest: lspConfirmation } = useLsp();
   const [checkpointDiff, setCheckpointDiff] = useState<{
     content: string;
     snapshotHash?: string;
@@ -1684,7 +1691,7 @@ function AppContent({
       setShowApprovalQueue(true);
     }
 
-    if (currentCount <= 1 && showApprovalQueue) {
+    if (currentCount <= 1 && previousCount > 1 && showApprovalQueue) {
       setShowApprovalQueue(false);
     }
   }, [pendingApproval.length, showApprovalQueue]);
@@ -2169,6 +2176,11 @@ function AppContent({
     modeManager,
     enabled:
       !showModeSelector &&
+      !showBranchSelector &&
+      settingsCategory === null &&
+      !showApprovalQueue &&
+      !checkpointDiff.isVisible &&
+      !lspConfirmation &&
       !showModelSelector &&
       !hasActiveApproval &&
       !showSessionManager &&
@@ -2515,6 +2527,11 @@ function AppContent({
   useHotkeys(hotkeyDefinitions, {
     enabled:
       !showModeSelector &&
+      !showBranchSelector &&
+      settingsCategory === null &&
+      !showApprovalQueue &&
+      !checkpointDiff.isVisible &&
+      !lspConfirmation &&
       !showModelSelector &&
       !hasActiveApproval &&
       !showSessionManager &&
@@ -2690,6 +2707,22 @@ function AppContent({
           exit();
           setTimeout(() => process.exit(0), 50);
         }, 150);
+        return;
+      }
+
+      if (event === "settings:open") {
+        const category = (data as { category?: string } | undefined)?.category;
+        const allowed: readonly string[] = [
+          "general",
+          "model",
+          "mode",
+          "theme",
+          "diff",
+          "thinking",
+        ];
+        setSettingsCategory(
+          allowed.includes(category ?? "") ? (category as SettingCategory) : "general"
+        );
         return;
       }
 
@@ -2995,6 +3028,20 @@ function AppContent({
 
   // Handle Ctrl+C and ESC for cancellation
   useInput((inputChar, key) => {
+    if ((showBranchSelector || lspConfirmation) && !(key.ctrl && inputChar === "c")) return;
+    if (showApprovalQueue && key.escape) {
+      setShowApprovalQueue(false);
+      return;
+    }
+    if (
+      (hasActiveApproval ||
+        showApprovalQueue ||
+        showHelpModal ||
+        settingsCategory !== null ||
+        checkpointDiff.isVisible) &&
+      !(key.ctrl && inputChar === "c")
+    )
+      return;
     if (interactivePrompt) {
       if (key.escape) {
         handlePromptCancel();
@@ -3021,6 +3068,12 @@ function AppContent({
       setShowModeSelector(false);
       return;
     }
+
+    if (
+      (showModelSelector || showModeSelector || showSessionManager) &&
+      !(key.ctrl && inputChar === "c")
+    )
+      return;
 
     if (applicationState.focusedArea === "tools" && key.escape) {
       dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
@@ -4002,6 +4055,20 @@ function AppContent({
       branches={branches}
       cancelOnboarding={cancelOnboarding}
       closeSessionManager={closeSessionManager}
+      openModeSelector={() => setShowModeSelector(true)}
+      openModelSelector={() => setShowModelSelector(true)}
+      settingsCategory={settingsCategory}
+      closeSettings={() => setSettingsCategory(null)}
+      closeModeSelector={() => setShowModeSelector(false)}
+      closeModelSelector={() => setShowModelSelector(false)}
+      openApprovalQueue={() => setShowApprovalQueue(true)}
+      showBranchSelector={showBranchSelector}
+      onBranchOpenChange={setShowBranchSelector}
+      onSelectSidebar={setSidebarContent}
+      closeSidebar={() => {
+        setShowSidebar(false);
+        dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
+      }}
       commandOptions={commandOptions}
       credentialManager={credentialManager}
       getSubcommands={getSubcommands}
@@ -4123,6 +4190,17 @@ interface AppContentViewProps {
   readonly branches: ReturnType<typeof useBacktrack>["branches"];
   readonly cancelOnboarding: () => void;
   readonly closeSessionManager: () => void;
+  readonly openModeSelector: () => void;
+  readonly openModelSelector: () => void;
+  readonly settingsCategory: SettingCategory | null;
+  readonly closeSettings: () => void;
+  readonly closeModeSelector: () => void;
+  readonly closeModelSelector: () => void;
+  readonly openApprovalQueue: () => void;
+  readonly showBranchSelector: boolean;
+  readonly onBranchOpenChange: (open: boolean) => void;
+  readonly onSelectSidebar: (panel: SidebarContent) => void;
+  readonly closeSidebar: () => void;
   readonly commandOptions: readonly AutocompleteOption[];
   readonly credentialManager: CredentialManager | null;
   readonly getSubcommands: (commandName: string) => AutocompleteOption[] | undefined;
@@ -4276,6 +4354,10 @@ function renderSidebarContent({
   announce,
   showSidebar,
   isFocused,
+  mouseEnabled,
+  onActivate,
+  onSelectPanel,
+  onClose,
   panelWidth,
   panelHeight,
   sidebarContent,
@@ -4292,6 +4374,10 @@ function renderSidebarContent({
   readonly announce: (message: string) => void;
   readonly showSidebar: boolean;
   readonly isFocused: boolean;
+  readonly mouseEnabled: boolean;
+  readonly onActivate: () => void;
+  readonly onSelectPanel: (panel: SidebarContent) => void;
+  readonly onClose: () => void;
   readonly panelWidth: number;
   readonly panelHeight: number;
   readonly sidebarContent: SidebarContent;
@@ -4318,6 +4404,7 @@ function renderSidebarContent({
       <TodoPanel
         items={todoItems}
         isFocused={isFocused}
+        mouseEnabled={mouseEnabled}
         maxHeight={panelHeight}
         width={panelWidth}
         onRefresh={refreshTodos}
@@ -4333,11 +4420,13 @@ function renderSidebarContent({
   } else if (sidebarContent === "snapshots") {
     panelContent = (
       <SnapshotCheckpointPanel
+        width={panelWidth}
         snapshots={snapshots.snapshots}
         isLoading={snapshots.isLoading}
         error={snapshots.error}
         isInitialized={snapshots.isInitialized}
         isFocused={isFocused}
+        mouseEnabled={mouseEnabled}
         maxHeight={panelHeight}
         onRestore={async (hash) => {
           const result = await snapshots.restore(hash);
@@ -4365,13 +4454,19 @@ function renderSidebarContent({
     );
   } else if (sidebarContent === "lsp") {
     panelContent = (
-      <LspSetupPanel isActive={isFocused} onClose={() => announce("LSP panel closed")} />
+      <ConnectedLspSetupPanel
+        isActive={isFocused}
+        mouseEnabled={mouseEnabled}
+        maxHeight={panelHeight}
+        onClose={onClose}
+      />
     );
   } else {
     panelContent = (
       <MemoryPanel
         entries={memoryEntries}
         isFocused={isFocused}
+        mouseEnabled={mouseEnabled}
         maxHeight={panelHeight}
         width={panelWidth}
       />
@@ -4379,33 +4474,45 @@ function renderSidebarContent({
   }
 
   return (
-    <Box flexDirection="column" height="100%">
-      <SidebarHeader panel={sidebarContent} isFocused={isFocused} />
-      <Box flexGrow={1} minHeight={0} overflow="hidden">
-        {panelContent}
-      </Box>
-      {taskChain && taskChain.nodes.size > 0 && (
-        <Box marginTop={1}>
-          <MaxSizedBox maxHeight={12} truncationIndicator="... (more tasks)">
-            <AgentProgress
-              chain={taskChain}
-              currentTaskId={currentTaskId}
-              showDetails={false}
-              progressBarWidth={12}
-            />
-          </MaxSizedBox>
+    <MouseInteractionScope enabled={mouseEnabled} onActivate={onActivate}>
+      <Box flexDirection="column" height="100%">
+        <SidebarHeader
+          panel={sidebarContent}
+          isFocused={isFocused}
+          mouseEnabled={mouseEnabled}
+          onSelectPanel={onSelectPanel}
+          onClose={onClose}
+        />
+        <Box flexGrow={1} minHeight={0} overflow="hidden">
+          {panelContent}
         </Box>
-      )}
-      <SystemStatusPanel
-        compact={panelHeight < 14}
-        persistence={persistence}
-        snapshotCount={snapshots.snapshots.length}
-      />
-    </Box>
+        {taskChain && taskChain.nodes.size > 0 && (
+          <Box marginTop={1}>
+            <MaxSizedBox maxHeight={12} truncationIndicator="... (more tasks)">
+              <AgentProgress
+                chain={taskChain}
+                currentTaskId={currentTaskId}
+                showDetails={false}
+                progressBarWidth={12}
+              />
+            </MaxSizedBox>
+          </Box>
+        )}
+        <SystemStatusPanel
+          compact={panelHeight < 14}
+          persistence={persistence}
+          snapshotCount={snapshots.snapshots.length}
+        />
+      </Box>
+    </MouseInteractionScope>
   );
 }
 
 interface AppOverlaysProps {
+  readonly settingsCategory: SettingCategory | null;
+  readonly closeSettings: () => void;
+  readonly closeModeSelector: () => void;
+  readonly closeModelSelector: () => void;
   readonly activeApproval: ToolApprovalState["activeApproval"];
   readonly activeRiskLevel: ToolApprovalState["activeRiskLevel"];
   readonly activeSessionId: string;
@@ -4541,6 +4648,10 @@ function useOverlayPositioning(showSidebar: boolean): {
 }
 
 function AppOverlays({
+  settingsCategory,
+  closeSettings,
+  closeModeSelector,
+  closeModelSelector,
   activeApproval,
   activeRiskLevel,
   activeSessionId,
@@ -4565,7 +4676,7 @@ function AppOverlays({
   showHelpModal,
   closeHelpModal,
   showApprovalQueue,
-  closeApprovalQueue: _closeApprovalQueue,
+  closeApprovalQueue,
   pendingApprovals,
   onApproveQueueItem,
   onRejectQueueItem,
@@ -4578,19 +4689,61 @@ function AppOverlays({
 }: AppOverlaysProps): React.JSX.Element {
   const { margins, loadingMinWidth, isNarrow, contentWidth } = useOverlayPositioning(showSidebar);
   const confirmWidth = Math.min(contentWidth, Math.max(24, contentWidth - margins.standard.left));
+  // Exactly one overlay owns input, even when asynchronous approvals arrive over a picker.
+  const activeOverlay = currentConfirmRequest
+    ? "lsp"
+    : showApprovalQueue
+      ? "queue"
+      : activeApproval
+        ? "approval"
+        : pendingOperation
+          ? "operation"
+          : checkpointDiff.isVisible
+            ? "diff"
+            : showHelpModal
+              ? "help"
+              : showSessionManager
+                ? "session"
+                : showModelSelector
+                  ? "model"
+                  : settingsCategory !== null
+                    ? "settings"
+                    : showModeSelector
+                      ? "mode"
+                      : null;
 
   return (
     <>
-      {showModeSelector && (
+      {activeOverlay === "settings" && settingsCategory !== null && (
         <Box
           position="absolute"
           opaque
+          overflowY="scroll"
+          scrollbar={false}
+          flexDirection="column"
+          marginTop={margins.compact.top}
+          marginLeft={margins.compact.left}
+          width={Math.max(24, contentWidth - margins.compact.left - 2)}
+        >
+          <SettingsPanel initialCategory={settingsCategory} onClose={closeSettings} isActive />
+        </Box>
+      )}
+      {activeOverlay === "mode" && (
+        <Box
+          flexDirection="column"
+          position="absolute"
+          opaque
+          overflowY="scroll"
+          scrollbar={false}
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="round"
           borderColor={themeContext.theme.colors.info}
           padding={isNarrow ? 0 : 1}
         >
+          <Clickable id="mode-selector-close" onClick={closeModeSelector}>
+            <Text>[Close]</Text>
+          </Clickable>
           <ModeSelector
             currentMode={currentMode}
             onSelect={handleModeSelect}
@@ -4600,10 +4753,12 @@ function AppOverlays({
         </Box>
       )}
 
-      {showSessionManager && (
+      {activeOverlay === "session" && (
         <Box
           position="absolute"
           opaque
+          overflowY="scroll"
+          scrollbar={false}
           marginTop={margins.compact.top}
           marginLeft={margins.compact.left}
           borderStyle="round"
@@ -4621,10 +4776,12 @@ function AppOverlays({
         </Box>
       )}
 
-      {activeApproval && (
+      {activeOverlay === "approval" && activeApproval && (
         <Box
           position="absolute"
           opaque
+          overflowY="scroll"
+          scrollbar={false}
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="double"
@@ -4642,10 +4799,12 @@ function AppOverlays({
         </Box>
       )}
 
-      {currentConfirmRequest && (
+      {activeOverlay === "lsp" && currentConfirmRequest && (
         <Box
           position="absolute"
           opaque
+          overflowY="scroll"
+          scrollbar={false}
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           width={confirmWidth}
@@ -4658,16 +4817,22 @@ function AppOverlays({
         </Box>
       )}
 
-      {showModelSelector && (
+      {activeOverlay === "model" && (
         <Box
+          flexDirection="column"
           position="absolute"
           opaque
+          overflowY="scroll"
+          scrollbar={false}
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="round"
           borderColor={themeContext.theme.colors.success}
           padding={isNarrow ? 0 : 1}
         >
+          <Clickable id="model-selector-close" onClick={closeModelSelector}>
+            <Text>[Close]</Text>
+          </Clickable>
           <ModelSelector
             currentModel={currentModel}
             currentProvider={currentProvider}
@@ -4678,10 +4843,12 @@ function AppOverlays({
         </Box>
       )}
 
-      {pendingOperation && (
+      {activeOverlay === "operation" && pendingOperation && (
         <Box
           position="absolute"
           opaque
+          overflowY="scroll"
+          scrollbar={false}
           marginTop={margins.loading.top}
           marginLeft={margins.loading.left}
           borderStyle="round"
@@ -4695,10 +4862,12 @@ function AppOverlays({
         </Box>
       )}
 
-      {showHelpModal && (
+      {activeOverlay === "help" && (
         <Box
           position="absolute"
           opaque
+          overflowY="scroll"
+          scrollbar={false}
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="round"
@@ -4713,31 +4882,40 @@ function AppOverlays({
         </Box>
       )}
 
-      {showApprovalQueue && pendingApprovals.length > 1 && (
+      {activeOverlay === "queue" && (
         <Box
           position="absolute"
           opaque
+          overflowY="scroll"
+          scrollbar={false}
           marginTop={margins.compact.top}
           marginLeft={margins.compact.left}
           borderStyle="double"
           borderColor={themeContext.theme.colors.warning}
           padding={isNarrow ? 0 : 1}
         >
-          <ApprovalQueue
-            executions={pendingApprovals}
-            onApprove={onApproveQueueItem}
-            onReject={onRejectQueueItem}
-            onApproveAll={onApproveAll}
-            onRejectAll={onRejectAll}
-            isFocused={showApprovalQueue}
-          />
+          <Box flexDirection="column">
+            <Clickable id="approval-queue-close" onClick={closeApprovalQueue}>
+              <Text>[Close]</Text>
+            </Clickable>
+            <ApprovalQueue
+              executions={pendingApprovals}
+              onApprove={onApproveQueueItem}
+              onReject={onRejectQueueItem}
+              onApproveAll={onApproveAll}
+              onRejectAll={onRejectAll}
+              isFocused={showApprovalQueue}
+            />
+          </Box>
         </Box>
       )}
 
-      {checkpointDiff.isVisible && (
+      {activeOverlay === "diff" && (
         <Box
           position="absolute"
           opaque
+          overflowY="scroll"
+          scrollbar={false}
           marginTop={margins.compact.top}
           marginLeft={margins.compact.left}
           borderStyle="double"
@@ -4759,6 +4937,8 @@ function AppOverlays({
 }
 
 interface AppHeaderProps {
+  readonly mouseEnabled: boolean;
+  readonly onBranchOpenChange: (open: boolean) => void;
   readonly backtrackState: ReturnType<typeof useBacktrack>["backtrackState"];
   readonly branches: ReturnType<typeof useBacktrack>["branches"];
   readonly currentMode: CodingMode;
@@ -4773,6 +4953,8 @@ interface AppHeaderProps {
 }
 
 function AppHeader({
+  mouseEnabled,
+  onBranchOpenChange,
   backtrackState,
   branches,
   currentMode,
@@ -4815,6 +4997,8 @@ function AppHeader({
         <BacktrackControls
           backtrackState={backtrackState}
           branches={branches}
+          mouseEnabled={mouseEnabled}
+          onOpenChange={onBranchOpenChange}
           onUndo={undoBacktrack}
           onRedo={redoBacktrack}
           onCreateBranch={handleCreateBacktrackBranch}
@@ -4842,6 +5026,17 @@ function AppContentView({
   branches,
   cancelOnboarding,
   closeSessionManager,
+  openModeSelector,
+  openModelSelector,
+  settingsCategory,
+  closeSettings,
+  closeModeSelector,
+  closeModelSelector,
+  openApprovalQueue,
+  showBranchSelector,
+  onBranchOpenChange,
+  onSelectSidebar,
+  closeSidebar,
   commandOptions,
   credentialManager,
   getSubcommands,
@@ -4933,26 +5128,36 @@ function AppContentView({
 }: AppContentViewProps): React.JSX.Element {
   // LSP Confirm Dialog State (exposed from LspContext)
   const { currentConfirmRequest, respondToConfirmation } = useLsp();
-  const { state: applicationState } = useApplicationState();
+  const { state: applicationState, dispatch: dispatchApplication } = useApplicationState();
   const terminalSize = useTerminalDimensions();
+  const hasBlockingDialog = Boolean(
+    showOnboarding ||
+      showModeSelector ||
+      showModelSelector ||
+      showSessionManager ||
+      showHelpModal ||
+      settingsCategory !== null ||
+      activeApproval ||
+      pendingOperation ||
+      currentConfirmRequest ||
+      checkpointDiff.isVisible ||
+      showApprovalQueue
+  );
+  const hasModalOverlay = hasBlockingDialog || !!interactivePrompt;
+  const hasBlockingOverlay = hasModalOverlay || showBranchSelector;
+  const promptFocused = !suppressPromptEnter && !hasBlockingDialog && !showBranchSelector;
   const sidebarFocused =
-    showSidebar &&
-    applicationState.focusedArea === "tools" &&
-    !showOnboarding &&
-    !showModeSelector &&
-    !showModelSelector &&
-    !showSessionManager &&
-    !showHelpModal &&
-    !activeApproval &&
-    !interactivePrompt &&
-    !pendingOperation &&
-    !currentConfirmRequest;
+    showSidebar && applicationState.focusedArea === "tools" && !hasBlockingOverlay;
   const sidebarWidth = getSidebarWidth(terminalSize.width) || terminalSize.width;
 
   const sidebar = renderSidebarContent({
     announce,
     showSidebar,
     isFocused: sidebarFocused,
+    mouseEnabled: !hasBlockingOverlay,
+    onActivate: () => dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "tools" }),
+    onSelectPanel: onSelectSidebar,
+    onClose: closeSidebar,
     panelWidth: Math.max(12, sidebarWidth - 3),
     panelHeight: Math.max(
       6,
@@ -4970,12 +5175,25 @@ function AppContentView({
     onOpenCheckpointDiff,
   });
 
+  const canOpenPicker = !isLoading && !hasBlockingOverlay;
+
   const footer = (
     <StatusBar
       mode={currentMode}
       agentName={agentName}
       agentLevel={agentLevel}
       modelName={currentModel}
+      onModeClick={canOpenPicker ? openModeSelector : undefined}
+      onModelClick={canOpenPicker ? openModelSelector : undefined}
+      onThinkingClick={
+        canOpenPicker
+          ? () => {
+              const enabled = toggleThinking();
+              announce(enabled ? "Thinking mode enabled" : "Thinking mode disabled");
+            }
+          : undefined
+      }
+      onApprovalClick={!hasBlockingOverlay ? openApprovalQueue : undefined}
       tokens={{
         current: totalTokens,
         max: contextWindow,
@@ -4998,7 +5216,7 @@ function AppContentView({
       cost={tokenUsage.totalCost}
       trustMode={trustMode}
       thinking={{ active: thinkingModeEnabled }}
-      showAllModes={showModeSelector}
+      showAllModes={false}
       persistence={persistence}
     />
   );
@@ -5058,31 +5276,26 @@ function AppContentView({
     (isLoading && !followupPrompt) || !!interactivePrompt || !!pendingOperation;
 
   const commandInputFocused =
-    !sidebarFocused &&
-    (!isLoading || !!followupPrompt) &&
-    !showModeSelector &&
-    !showModelSelector &&
-    !showSessionManager &&
-    !showHelpModal &&
-    !activeApproval &&
-    !interactivePrompt &&
-    !pendingOperation &&
-    !currentConfirmRequest;
+    !sidebarFocused && (!isLoading || !!followupPrompt) && !hasBlockingOverlay;
 
   const headerContent = (
-    <AppHeader
-      backtrackState={backtrackState}
-      branches={branches}
-      currentMode={currentMode}
-      currentTip={currentTip}
-      dismissTip={dismissTip}
-      handleCreateBacktrackBranch={handleCreateBacktrackBranch}
-      handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
-      initError={initError}
-      redoBacktrack={redoBacktrack}
-      specPhase={specPhase}
-      undoBacktrack={undoBacktrack}
-    />
+    <MouseInteractionScope enabled={!hasModalOverlay}>
+      <AppHeader
+        mouseEnabled={!isLoading && !hasModalOverlay}
+        onBranchOpenChange={onBranchOpenChange}
+        backtrackState={backtrackState}
+        branches={branches}
+        currentMode={currentMode}
+        currentTip={currentTip}
+        dismissTip={dismissTip}
+        handleCreateBacktrackBranch={handleCreateBacktrackBranch}
+        handleSwitchBacktrackBranch={handleSwitchBacktrackBranch}
+        initError={initError}
+        redoBacktrack={redoBacktrack}
+        specPhase={specPhase}
+        undoBacktrack={undoBacktrack}
+      />
+    </MouseInteractionScope>
   );
 
   const layoutBody = (
@@ -5097,16 +5310,11 @@ function AppContentView({
           scrollKeyMode={commandInputFocused ? "page" : "all"}
           forceFollowOnInput={false}
           useAltBuffer={alternateBufferEnabled}
-          enableScroll={!alternateBufferEnabled}
-          isFocused={
-            !sidebarFocused &&
-            !showModeSelector &&
-            !showModelSelector &&
-            !showSessionManager &&
-            !showHelpModal &&
-            !activeApproval &&
-            !interactivePrompt &&
-            !pendingOperation
+          enableScroll
+          isFocused={!sidebarFocused && !hasBlockingOverlay}
+          mouseEnabled={!hasBlockingOverlay}
+          onMouseActivate={() =>
+            dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" })
           }
         />
       </Box>
@@ -5190,7 +5398,7 @@ function AppContentView({
                     void handlePromptSelectOption(option);
                   }}
                   onCancel={handlePromptCancel}
-                  isFocused={!suppressPromptEnter}
+                  isFocused={promptFocused}
                   showHelpText={false}
                 />
               ) : (
@@ -5203,7 +5411,7 @@ function AppContentView({
                       onChange={setPromptValue}
                       onSubmit={handlePromptSubmit}
                       mask={interactivePrompt.inputType === "password" ? "*" : undefined}
-                      focused={!suppressPromptEnter}
+                      focused={promptFocused}
                       suppressEnter={suppressPromptEnter}
                       showBorder={false}
                     />
@@ -5239,21 +5447,28 @@ function AppContentView({
             <VimModeIndicator enabled={vimEnabled} mode={vimMode} />
           </Box>
         )}
-        <EnhancedCommandInput
-          onMessage={handleMessage}
-          onCommand={handleCommand}
-          commands={commandOptions}
-          getSubcommands={getSubcommands}
-          getLevel3Items={getLevel3Items}
-          groupedCommands={true}
-          categoryOrder={categoryOrder}
-          categoryLabels={categoryLabels}
-          placeholder={commandPlaceholder}
-          disabled={commandInputDisabled}
-          focused={commandInputFocused}
-          historyKey="vellum-command-history"
-          cwd={process.cwd()}
-        />
+        <Clickable
+          id="composer-focus"
+          priority={-10}
+          enabled={!hasBlockingOverlay}
+          onClick={() => dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" })}
+        >
+          <EnhancedCommandInput
+            onMessage={handleMessage}
+            onCommand={handleCommand}
+            commands={commandOptions}
+            getSubcommands={getSubcommands}
+            getLevel3Items={getLevel3Items}
+            groupedCommands={true}
+            categoryOrder={categoryOrder}
+            categoryLabels={categoryLabels}
+            placeholder={commandPlaceholder}
+            disabled={commandInputDisabled}
+            focused={commandInputFocused}
+            historyKey="vellum-command-history"
+            cwd={process.cwd()}
+          />
+        </Clickable>
       </Box>
     </>
   );
@@ -5342,6 +5557,10 @@ function AppContentView({
           </AdaptiveLayout>
 
           <AppOverlays
+            settingsCategory={settingsCategory}
+            closeSettings={closeSettings}
+            closeModeSelector={closeModeSelector}
+            closeModelSelector={closeModelSelector}
             activeApproval={activeApproval}
             activeRiskLevel={activeRiskLevel}
             activeSessionId={activeSessionId}

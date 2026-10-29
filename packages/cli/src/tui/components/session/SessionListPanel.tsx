@@ -6,11 +6,13 @@
  * @module tui/components/session/SessionListPanel
  */
 
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTheme } from "../../theme/index.js";
+import { Clickable, getVisibleClickBounds } from "../common/Clickable.js";
 import { SessionItem } from "./SessionItem.js";
 import type { SessionListPanelProps } from "./types.js";
 
@@ -79,16 +81,35 @@ export function SessionListPanel({
   const [selectedIndex, setSelectedIndex] = useState(() => {
     if (selectedSessionId) {
       const index = sessions.findIndex((s) => s.id === selectedSessionId);
-      return index >= 0 ? index : 0;
+      return Math.max(index, 0);
     }
     return 0;
   });
 
   // Track scroll offset for virtualization
   const [scrollOffset, setScrollOffset] = useState(0);
+  const listRef = useRef<DOMElement>(null);
 
   // Calculate visible items (account for header)
-  const maxVisible = Math.max(1, maxHeight - 2);
+  // Reserve borders/header/footer plus the selected item's two border rows.
+  const rowHeight = sessions.some((session) => session.lastMessage) ? 2 : 1;
+  const maxVisible = Math.max(1, Math.floor((maxHeight - 6) / rowHeight));
+  useEffect(() => {
+    setSelectedIndex((index) => Math.min(index, Math.max(0, sessions.length - 1)));
+    setScrollOffset((offset) => Math.min(offset, Math.max(0, sessions.length - maxVisible)));
+  }, [sessions.length, maxVisible]);
+
+  useMouseScroll({
+    enabled: isFocused,
+    bounds: () => {
+      const bounds = getVisibleClickBounds(listRef.current);
+      return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+    },
+    onScroll: (delta) =>
+      setScrollOffset((offset) =>
+        Math.max(0, Math.min(offset + delta, Math.max(0, sessions.length - maxVisible)))
+      ),
+  });
 
   // Get visible sessions based on scroll
   const visibleSessions = useMemo(
@@ -225,17 +246,23 @@ export function SessionListPanel({
       </Box>
 
       {/* Session list */}
-      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+      <Box ref={listRef} flexDirection="column" flexGrow={1} overflow="hidden">
         {visibleSessions.map((session, visibleIndex) => {
           const actualIndex = scrollOffset + visibleIndex;
           return (
-            <SessionItem
+            <Clickable
               key={session.id}
-              session={session}
-              isSelected={actualIndex === selectedIndex}
-              isActive={session.id === activeSessionId}
-              onSelect={onSelectSession}
-            />
+              id={`session-list-${session.id}`}
+              enabled={isFocused}
+              onClick={() => navigateToIndex(actualIndex)}
+            >
+              <SessionItem
+                session={session}
+                isSelected={actualIndex === selectedIndex}
+                isActive={session.id === activeSessionId}
+                onSelect={onSelectSession}
+              />
+            </Clickable>
           );
         })}
       </Box>

@@ -9,8 +9,9 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { memo } from "react";
+import { memo, useCallback, useId, useRef } from "react";
 import { useTheme } from "../../theme/index.js";
+import { Clickable } from "./Clickable.js";
 
 // =============================================================================
 // Types
@@ -135,8 +136,45 @@ export const CostWarning: React.FC<CostWarningProps> = memo(function CostWarning
   awaitingApproval = false,
   severity: severityProp,
   compact = false,
+  onApprove,
+  onDeny,
 }) {
   const { theme } = useTheme();
+  const warningId = useId();
+  const approvalState = useRef({ awaiting: awaitingApproval, handled: false });
+  if (approvalState.current.awaiting !== awaitingApproval) {
+    approvalState.current = { awaiting: awaitingApproval, handled: false };
+  }
+  const decide = useCallback(
+    (approved: boolean) => {
+      const callback = approved ? onApprove : onDeny;
+      if (!awaitingApproval || approvalState.current.handled || !callback) return;
+      approvalState.current.handled = true;
+      callback();
+    },
+    [awaitingApproval, onApprove, onDeny]
+  );
+  const approvalControls = awaitingApproval ? (
+    <Box gap={1}>
+      <Clickable
+        id={`${warningId}-approve`}
+        width="auto"
+        enabled={!!onApprove}
+        onClick={() => decide(true)}
+      >
+        <Text color={onApprove ? theme.colors.warning : theme.colors.muted}>[y] to continue</Text>
+      </Clickable>
+      <Text color={theme.colors.warning}>or</Text>
+      <Clickable
+        id={`${warningId}-deny`}
+        width="auto"
+        enabled={!!onDeny}
+        onClick={() => decide(false)}
+      >
+        <Text color={onDeny ? theme.colors.warning : theme.colors.muted}>[n] to stop</Text>
+      </Clickable>
+    </Box>
+  ) : null;
 
   // Determine severity from props or calculate from percentage
   const severity = severityProp ?? getSeverityFromPercent(percentUsed, limitReached);
@@ -167,6 +205,7 @@ export const CostWarning: React.FC<CostWarningProps> = memo(function CostWarning
         <Text color={color}>
           {COST_SYMBOL} {limitDisplay} ({percentUsed.toFixed(0)}%)
         </Text>
+        {approvalControls && <Box marginLeft={1}>{approvalControls}</Box>}
       </Box>
     );
   }
@@ -215,7 +254,8 @@ export const CostWarning: React.FC<CostWarningProps> = memo(function CostWarning
       {/* Approval prompt */}
       {awaitingApproval && (
         <Box marginTop={1} marginLeft={4}>
-          <Text color={theme.colors.warning}>Press [y] to continue or [n] to stop</Text>
+          <Text color={theme.colors.warning}>Press </Text>
+          {approvalControls}
         </Box>
       )}
     </Box>

@@ -9,14 +9,16 @@
 
 import type { MemoryEntry, MemoryEntryType } from "@vellum/core";
 import { getIcons } from "@vellum/shared";
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import { useInput } from "../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { isEndKey, isHomeKey } from "../types/ink-extended.js";
 import { truncateToDisplayWidth } from "../utils/index.js";
+import { Clickable, getVisibleClickBounds } from "./common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -33,6 +35,8 @@ export interface MemoryPanelProps {
   readonly width?: number;
   /** Whether the panel is focused for keyboard input */
   readonly isFocused?: boolean;
+  /** Allow visible sidebar mouse actions without claiming keyboard focus. */
+  readonly mouseEnabled?: boolean;
   /** Callback when an entry is selected */
   readonly onSelectEntry?: (entry: MemoryEntry) => void;
   /** Callback when Enter is pressed on an entry */
@@ -276,15 +280,24 @@ export function MemoryPanel({
   maxHeight = DEFAULT_MAX_HEIGHT,
   width = 80,
   isFocused = true,
+  mouseEnabled = isFocused,
   onSelectEntry,
   onActivateEntry,
   showDetails = false,
 }: MemoryPanelProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
+  const panelId = useId();
+  const panelNode = useRef<DOMElement>(null);
+  const getBounds = useCallback(() => {
+    const bounds = getVisibleClickBounds(panelNode.current);
+    return bounds && { ...bounds, left: bounds.left - 1, top: bounds.top - 1 };
+  }, []);
 
   // Track selection and scroll
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
   const [scrollOffset, setScrollOffset] = useState(0);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -315,22 +328,37 @@ export function MemoryPanel({
   const navigateToIndex = useCallback(
     (newIndex: number) => {
       const clampedIndex = Math.max(0, Math.min(newIndex, entries.length - 1));
+      selectedIndexRef.current = clampedIndex;
       setSelectedIndex(clampedIndex);
 
       // Adjust scroll to keep selection visible
-      if (clampedIndex < scrollOffset) {
-        setScrollOffset(clampedIndex);
-      } else if (clampedIndex >= scrollOffset + maxVisible) {
-        setScrollOffset(clampedIndex - maxVisible + 1);
-      }
+      setScrollOffset((offset) =>
+        clampedIndex < offset
+          ? clampedIndex
+          : clampedIndex >= offset + maxVisible
+            ? clampedIndex - maxVisible + 1
+            : offset
+      );
 
       // Notify parent
       if (onSelectEntry && entries[clampedIndex]) {
         onSelectEntry(entries[clampedIndex]);
       }
     },
-    [entries, scrollOffset, maxVisible, onSelectEntry]
+    [entries, maxVisible, onSelectEntry]
   );
+  const activateEntry = useCallback(
+    (entry: MemoryEntry) => {
+      setExpandedKey((current) => (current === entry.key ? null : entry.key));
+      onActivateEntry?.(entry);
+    },
+    [onActivateEntry]
+  );
+  useMouseScroll({
+    enabled: mouseEnabled,
+    bounds: getBounds,
+    onScroll: (delta) => navigateToIndex(selectedIndexRef.current + delta),
+  });
 
   // Handle keyboard input
   useInput(
@@ -375,8 +403,7 @@ export function MemoryPanel({
 
       // Enter to activate
       if (key.return && selectedEntry) {
-        setExpandedKey((current) => (current === selectedEntry.key ? null : selectedEntry.key));
-        onActivateEntry?.(selectedEntry);
+        activateEntry(selectedEntry);
       }
       if (key.escape) setExpandedKey(null);
     },
@@ -401,7 +428,7 @@ export function MemoryPanel({
   const estimatedWidth = width;
 
   return (
-    <Box flexDirection="column">
+    <Box ref={panelNode} flexDirection="column">
       {/* Header */}
       <Box marginBottom={1} paddingX={1}>
         <Text color={theme.colors.primary} bold>
@@ -416,27 +443,57 @@ export function MemoryPanel({
       {/* Scroll indicator - up */}
       {canScrollUp && (
         <Box paddingX={1}>
-          <Text dimColor>↑ {scrollOffset} more above</Text>
+          <Clickable
+            id={`${panelId}-previous`}
+            enabled={mouseEnabled}
+            onClick={() => navigateToIndex(selectedIndex - PAGE_SIZE)}
+          >
+            <Text dimColor>↑ {scrollOffset} more above</Text>
+          </Clickable>
         </Box>
       )}
 
       {/* Memory list */}
       <Box flexDirection="column" paddingX={1}>
         {visibleEntries.map((entry, i) => (
-          <MemoryItem
+          <Clickable
             key={entry.key}
-            entry={entry}
-            isSelected={scrollOffset + i === selectedIndex}
-            width={estimatedWidth}
-          />
+            id={`${panelId}-entry-${entry.key}`}
+            enabled={mouseEnabled}
+            onClick={() => {
+              navigateToIndex(scrollOffset + i);
+              activateEntry(entry);
+            }}
+          >
+            <MemoryItem
+              entry={entry}
+              isSelected={scrollOffset + i === selectedIndex}
+              width={estimatedWidth}
+            />
+          </Clickable>
         ))}
       </Box>
 
       {/* Scroll indicator - down */}
       {canScrollDown && (
         <Box paddingX={1}>
-          <Text dimColor>↓ {entries.length - scrollOffset - maxVisible} more below</Text>
+          <Clickable
+            id={`${panelId}-next`}
+            enabled={mouseEnabled}
+            onClick={() => navigateToIndex(selectedIndex + PAGE_SIZE)}
+          >
+            <Text dimColor>↓ {entries.length - scrollOffset - maxVisible} more below</Text>
+          </Clickable>
         </Box>
+      )}
+      {expandedKey !== null && !showDetails && (
+        <Clickable
+          id={`${panelId}-collapse`}
+          enabled={mouseEnabled}
+          onClick={() => setExpandedKey(null)}
+        >
+          <Text dimColor>[Esc] Collapse</Text>
+        </Clickable>
       )}
 
       {/* Details panel */}

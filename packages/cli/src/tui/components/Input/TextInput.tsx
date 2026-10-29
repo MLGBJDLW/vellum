@@ -9,7 +9,17 @@
 
 import type { Key } from "ink";
 import { Box, Text, useStdin } from "ink";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  type Ref,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import stripAnsi from "strip-ansi";
 import { useAnimationControls } from "../../context/AnimationContext.js";
 import { usePasteHandler } from "../../context/BracketedPasteContext.js";
@@ -25,7 +35,13 @@ import { HighlightedText } from "./HighlightedText.js";
 /**
  * Props for the TextInput component.
  */
+export interface TextInputHandle {
+  /** Complete an external edit synchronously, before the next framed key. */
+  readonly replaceValue: (value: string) => void;
+}
+
 export interface TextInputProps {
+  readonly ref?: Ref<TextInputHandle>;
   /** Current input value (controlled) */
   readonly value: string;
   /** Callback when value changes */
@@ -146,6 +162,7 @@ function getLineKey(lineStartPos: number): string {
  * ```
  */
 function TextInputComponent({
+  ref,
   value,
   onChange: onValueChange,
   onSubmit,
@@ -198,6 +215,22 @@ function TextInputComponent({
     cursorPositionRef.current = position;
     setCursorPosition(position);
   }, []);
+
+  // Completion is an editor edit, just like typing or paste. Updating its
+  // existing refs here keeps the following key in a coalesced stdin chunk from
+  // reading the preceding controlled prop before React can commit the parent.
+  useImperativeHandle(
+    ref,
+    () => ({
+      replaceValue(next: string) {
+        const normalized = normalizeInputValue(next, multiline);
+        const replacement = maxLength === undefined ? normalized : normalized.slice(0, maxLength);
+        onChange(replacement);
+        setCursor(replacement.length);
+      },
+    }),
+    [maxLength, multiline, onChange, setCursor]
+  );
 
   // Undo/Redo stacks for Ctrl+Z support
   const [undoStack, setUndoStack] = useState<Array<{ value: string; cursor: number }>>([]);

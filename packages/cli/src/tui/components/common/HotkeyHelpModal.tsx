@@ -9,9 +9,10 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTheme } from "../../theme/index.js";
+import { Clickable } from "./Clickable.js";
 
 // =============================================================================
 // Types
@@ -121,6 +122,7 @@ export function HotkeyHelpModal({
   title = "Keyboard Shortcuts",
 }: HotkeyHelpModalProps): React.JSX.Element | null {
   const { theme } = useTheme();
+  const modalId = useId();
 
   // Handle keyboard input for closing
   useInput(
@@ -182,7 +184,9 @@ export function HotkeyHelpModal({
 
       {/* Close hint */}
       <Box marginTop={1}>
-        <Text dimColor>Press Esc or q to close</Text>
+        <Clickable id={`${modalId}-close`} width="auto" enabled={isVisible} onClick={onClose}>
+          <Text dimColor>Press Esc or q to close</Text>
+        </Clickable>
       </Box>
     </Box>
   );

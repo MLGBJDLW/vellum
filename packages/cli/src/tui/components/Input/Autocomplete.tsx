@@ -7,8 +7,10 @@
  * @module tui/components/Input/Autocomplete
  */
 
-import { Box, Text } from "ink";
-import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Box, type DOMElement, Text } from "ink";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useMouseInteractionEnabled } from "../../context/MouseContext.js";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import {
   type FuzzyResult,
@@ -17,6 +19,7 @@ import {
   type HighlightRange,
 } from "../../services/fuzzy-search.js";
 import { useTheme } from "../../theme/index.js";
+import { Clickable, getVisibleClickBounds } from "../common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -44,7 +47,7 @@ export interface AutocompleteProps {
   readonly input: string;
   /** All available options to filter from (string[] for backward compat, or structured) */
   readonly options: readonly string[] | readonly AutocompleteOption[];
-  /** Callback when an option is selected (Tab or Enter) */
+  /** Complete an option on mouse click; the parent owns keyboard Tab/Enter. */
   readonly onSelect: (value: string) => void;
   /** Callback when autocomplete is cancelled (Escape) */
   readonly onCancel: () => void;
@@ -365,7 +368,7 @@ function HighlightedOption({
 function AutocompleteComponent({
   input,
   options,
-  onSelect: _onSelect, // kept for API compatibility; selection handled by parent CommandInput
+  onSelect,
   onCancel,
   onSelectionChange,
   visible = true,
@@ -376,14 +379,13 @@ function AutocompleteComponent({
   categoryLabels = {},
 }: AutocompleteProps) {
   const { theme } = useTheme();
-
-  const isActive = active ?? visible;
+  const mouseInteractionEnabled = useMouseInteractionEnabled();
+  const menuRef = useRef<DOMElement>(null);
+  const menuId = useId();
+  const isActive = visible && (active ?? true);
 
   // Currently selected index in the selectable options
-  const [selectedIndex, setSelectedIndex] = useState(0);
-
-  // Window start index for scrollable rendering (in terms of display items)
-  const [windowStart, setWindowStart] = useState(0);
+  const [selection, setSelection] = useState({ key: "", index: 0 });
 
   // Normalize and filter options
   const normalizedOptions = useMemo(() => normalizeOptions(options), [options]);
@@ -419,6 +421,46 @@ function AutocompleteComponent({
     return { displayItems: items, selectableOptions: selectable };
   }, [filteredOptions, grouped, categoryOrder, categoryLabels]);
 
+  // Derive the reset before rendering or notifying the parent, so a changed
+  // query/submenu can never temporarily expose the preceding menu's selection.
+  const selectionKey = JSON.stringify([
+    input,
+    visible,
+    selectableOptions.map(({ option }) => option.name),
+  ]);
+  const selectedIndex =
+    selection.key === selectionKey
+      ? clamp(selection.index, 0, Math.max(0, selectableOptions.length - 1))
+      : 0;
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
+  if (selection.key !== selectionKey) setSelection({ key: selectionKey, index: 0 });
+
+  const selectIndex = useCallback(
+    (index: number) => {
+      const next = clamp(index, 0, Math.max(0, selectableOptions.length - 1));
+      selectedIndexRef.current = next;
+      setSelection({ key: selectionKey, index: next });
+      onSelectionChange?.(next, selectableOptions.length > 0, selectableOptions[next]?.option);
+    },
+    [onSelectionChange, selectableOptions, selectionKey]
+  );
+
+  const getMenuBounds = useCallback(() => {
+    const bounds = getVisibleClickBounds(menuRef.current);
+    return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+  }, []);
+  useMouseScroll({
+    enabled: isActive && mouseInteractionEnabled && selectableOptions.length > 0,
+    priority: 20,
+    scrollSpeed: 1,
+    bounds: getMenuBounds,
+    onScroll: useCallback(
+      (delta: number) => selectIndex(selectedIndexRef.current + delta),
+      [selectIndex]
+    ),
+  });
+
   // Calculate visible items (windowed) for grouped display
   const { visibleItems, overflowCount } = useMemo(() => {
     if (displayItems.length <= maxVisible) {
@@ -438,7 +480,7 @@ function AutocompleteComponent({
     }
 
     // Adjust window to keep selected visible
-    let start = windowStart;
+    let start = 0;
     if (selectedDisplayIndex < start) {
       start = selectedDisplayIndex;
     } else if (selectedDisplayIndex >= start + maxVisible) {
@@ -453,38 +495,13 @@ function AutocompleteComponent({
     const overflow = Math.max(0, displayItems.length - (start + maxVisible));
 
     return { visibleItems: items, overflowCount: overflow };
-  }, [displayItems, maxVisible, windowStart, selectedIndex]);
-
-  // Track previous input to only reset selection when input actually changes
-  const prevInputRef = useRef(input);
-
-  // Reset selection when input value actually changes
-  useEffect(() => {
-    if (prevInputRef.current !== input) {
-      startTransition(() => {
-        setSelectedIndex(0);
-        setWindowStart(0);
-      });
-      prevInputRef.current = input;
-    }
-  }, [input]);
+  }, [displayItems, maxVisible, selectedIndex]);
 
   // Notify parent of selection changes
   useEffect(() => {
     const selectedOption = selectableOptions[selectedIndex]?.option;
     onSelectionChange?.(selectedIndex, selectableOptions.length > 0, selectedOption);
   }, [selectedIndex, selectableOptions, onSelectionChange]);
-
-  // Keep selection in bounds when filtered list changes
-  useEffect(() => {
-    if (selectableOptions.length === 0) {
-      setSelectedIndex(0);
-      setWindowStart(0);
-      return;
-    }
-
-    setSelectedIndex((prev) => clamp(prev, 0, selectableOptions.length - 1));
-  }, [selectableOptions.length]);
 
   // Handle keyboard input for arrow navigation and escape only
   // Note: Enter/Tab selection is handled by parent CommandInput to avoid race condition
@@ -495,13 +512,13 @@ function AutocompleteComponent({
 
         // Arrow down - move selection down
         if (key.downArrow) {
-          setSelectedIndex((prev) => Math.min(prev + 1, selectableOptions.length - 1));
+          selectIndex(selectedIndexRef.current + 1);
           return;
         }
 
         // Arrow up - move selection up
         if (key.upArrow) {
-          setSelectedIndex((prev) => Math.max(prev - 1, 0));
+          selectIndex(selectedIndexRef.current - 1);
           return;
         }
 
@@ -511,7 +528,7 @@ function AutocompleteComponent({
           return;
         }
       },
-      [visible, selectableOptions, onCancel]
+      [visible, selectableOptions, onCancel, selectIndex]
     ),
     { isActive: isActive && selectableOptions.length > 0 }
   );
@@ -530,6 +547,7 @@ function AutocompleteComponent({
 
   return (
     <Box
+      ref={menuRef}
       flexDirection="column"
       borderStyle="single"
       borderColor={borderColor}
@@ -555,7 +573,15 @@ function AutocompleteComponent({
         const highlights = item.highlights ?? [];
 
         return (
-          <Box key={opt.name} flexDirection="row">
+          <Clickable
+            key={`${selectionKey}:${opt.name}`}
+            id={`${menuId}:${selectionKey}:${opt.name}`}
+            enabled={isActive}
+            onClick={() => {
+              selectIndex(item.selectableIndex ?? 0);
+              onSelect(opt.name);
+            }}
+          >
             {isSelected ? (
               <Text inverse>
                 <Text color={highlightColor} bold>
@@ -586,7 +612,7 @@ function AutocompleteComponent({
                 )}
               </Text>
             )}
-          </Box>
+          </Clickable>
         );
       })}
 

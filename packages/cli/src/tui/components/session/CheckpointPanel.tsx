@@ -8,13 +8,15 @@
  */
 
 import type { SessionCheckpoint } from "@vellum/core";
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { truncateToDisplayWidth } from "../../utils/index.js";
+import { Clickable, getVisibleClickBounds } from "../common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -169,6 +171,32 @@ export function CheckpointPanel({
 
   // Selection state
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const listRef = useRef<DOMElement>(null);
+  const maxVisible = 8;
+  const maxOffset = Math.max(0, checkpoints.length - maxVisible);
+  useEffect(() => {
+    setSelectedIndex((index) => Math.min(index, Math.max(0, checkpoints.length - 1)));
+    setScrollOffset((offset) => Math.min(offset, maxOffset));
+  }, [checkpoints.length, maxOffset]);
+  useEffect(() => {
+    setScrollOffset((offset) =>
+      selectedIndex < offset
+        ? selectedIndex
+        : selectedIndex >= offset + maxVisible
+          ? selectedIndex - maxVisible + 1
+          : offset
+    );
+  }, [selectedIndex]);
+  useMouseScroll({
+    enabled: isOpen,
+    bounds: () => {
+      const bounds = getVisibleClickBounds(listRef.current);
+      return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+    },
+    onScroll: (delta) =>
+      setScrollOffset((offset) => Math.max(0, Math.min(offset + delta, maxOffset))),
+  });
 
   // Get colors from theme
   const primaryColor = theme.brand.primary;
@@ -193,7 +221,7 @@ export function CheckpointPanel({
   const handleNavigation = useCallback(
     (input: string, key: { downArrow: boolean; upArrow: boolean }): boolean => {
       if (input === "j" || key.downArrow) {
-        setSelectedIndex((prev) => Math.min(prev + 1, checkpoints.length - 1));
+        setSelectedIndex((prev) => Math.max(0, Math.min(prev + 1, checkpoints.length - 1)));
         return true;
       }
       if (input === "k" || key.upArrow) {
@@ -269,7 +297,36 @@ export function CheckpointPanel({
         <Text bold color={primaryColor}>
           📌 {t("persistence.checkpoint.title")}
         </Text>
-        <Text dimColor>j/k navigate • Enter rollback • n new • d delete • Esc close</Text>
+        <Box gap={1}>
+          <Text dimColor>j/k navigate</Text>
+          <Clickable
+            id="checkpoint-rollback"
+            width="auto"
+            enabled={isOpen && !isEmpty}
+            onClick={() => handleAction("", { return: true })}
+          >
+            <Text dimColor>Enter rollback</Text>
+          </Clickable>
+          <Clickable
+            id="checkpoint-new"
+            width="auto"
+            enabled={isOpen}
+            onClick={() => handleAction("n", { return: false })}
+          >
+            <Text dimColor>n new</Text>
+          </Clickable>
+          <Clickable
+            id="checkpoint-delete"
+            width="auto"
+            enabled={isOpen && !isEmpty}
+            onClick={() => handleAction("d", { return: false })}
+          >
+            <Text dimColor>d delete</Text>
+          </Clickable>
+          <Clickable id="checkpoint-close" width="auto" enabled={isOpen} onClick={onClose}>
+            <Text dimColor>Esc close</Text>
+          </Clickable>
+        </Box>
       </Box>
 
       {/* Checkpoint List */}
@@ -278,18 +335,24 @@ export function CheckpointPanel({
           <Text color={mutedColor}>{t("persistence.checkpoint.empty")}</Text>
         </Box>
       ) : (
-        <Box flexDirection="column">
-          {checkpoints.map((checkpoint, index) => (
-            <CheckpointItem
+        <Box ref={listRef} flexDirection="column">
+          {checkpoints.slice(scrollOffset, scrollOffset + maxVisible).map((checkpoint, index) => (
+            <Clickable
               key={checkpoint.id}
-              checkpoint={checkpoint}
-              isSelected={index === selectedIndex}
-              messagesToLose={getMessagesToLose(checkpoint)}
-              primaryColor={primaryColor}
-              warningColor={warningColor}
-              textColor={textColor}
-              mutedColor={mutedColor}
-            />
+              id={`checkpoint-${checkpoint.id}`}
+              enabled={isOpen}
+              onClick={() => setSelectedIndex(scrollOffset + index)}
+            >
+              <CheckpointItem
+                checkpoint={checkpoint}
+                isSelected={scrollOffset + index === selectedIndex}
+                messagesToLose={getMessagesToLose(checkpoint)}
+                primaryColor={primaryColor}
+                warningColor={warningColor}
+                textColor={textColor}
+                mutedColor={mutedColor}
+              />
+            </Clickable>
           ))}
         </Box>
       )}

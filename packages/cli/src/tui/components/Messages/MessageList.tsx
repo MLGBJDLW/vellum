@@ -34,6 +34,7 @@ import {
 } from "../../../commands/think.js";
 import { useLayoutPositionContext } from "../../context/LayoutPositionContext.js";
 import type { Message, ToolCallInfo } from "../../context/MessagesContext.js";
+import { MouseInteractionScope } from "../../context/MouseContext.js";
 import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
 import { useAnimatedScrollbar } from "../../hooks/useAnimatedScrollbar.js";
 import { useDiffMode } from "../../hooks/useDiffMode.js";
@@ -45,6 +46,7 @@ import { useTheme } from "../../theme/index.js";
 import { isEndKey, isHomeKey } from "../../types/ink-extended.js";
 import { estimateMessageHeight } from "../../utils/heightEstimator.js";
 import { BannerShimmerText } from "../Banner/ShimmerText.js";
+import { Clickable } from "../common/Clickable.js";
 import { MaxSizedBox } from "../common/MaxSizedBox.js";
 import { Spinner } from "../common/Spinner.js";
 import { StreamingIndicator } from "../common/StreamingIndicator.js";
@@ -68,6 +70,8 @@ import { ToolResultPreview } from "./ToolResultPreview.js";
 /** ASCII text spinner animation frames for running tools (no Unicode/emoji) */
 const SPINNER_FRAMES = ["-", "\\", "|", "/"] as const;
 const THINKING_TOGGLE_HINT = "Alt+E";
+// Unique across list remounts, matching useCollapsible's persisted action receipt.
+let nextThinkingToggleSignal = 0;
 
 // =============================================================================
 // Types
@@ -104,6 +108,9 @@ export interface MessageListProps {
    * @default true
    */
   readonly isFocused?: boolean;
+  /** Visible history remains mouse-operable while another area has keyboard focus. */
+  readonly mouseEnabled?: boolean;
+  readonly onMouseActivate?: () => void;
 
   // ===========================================================================
   // Callbacks
@@ -649,6 +656,8 @@ const MessageList = memo(function MessageList({
   messages,
   isStreaming,
   isFocused,
+  mouseEnabled = isFocused !== false,
+  onMouseActivate,
   // Callbacks
   onScrollChange,
   // Configuration
@@ -663,7 +672,7 @@ const MessageList = memo(function MessageList({
   useVirtualizedList: _useVirtualizedList,
   forceFollowOnInput = false,
   useAltBuffer = false,
-  enableScroll = false,
+  enableScroll = true,
 }: MessageListProps) {
   // Merge isStreaming and isLoading for backward compatibility
   // isStreaming takes precedence over deprecated isLoading
@@ -800,7 +809,10 @@ const MessageList = memo(function MessageList({
   const thinkingIndicatorHeight = showThinkingIndicator ? 3 : 0;
   const [following, setFollowing] = useState(autoScroll);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [thinkingToggleNonce, setThinkingToggleNonce] = useState(0);
+  const [thinkingToggle, setThinkingToggle] = useState<{
+    messageId: string;
+    signal: number;
+  } | null>(null);
 
   const scrollToBottom = useCallback(() => {
     virtualizedListRef.current?.scrollToEnd();
@@ -819,14 +831,22 @@ const MessageList = memo(function MessageList({
   }, []);
 
   const { scrollbarColor: animatedThumbColor, scrollByWithAnimation } = useAnimatedScrollbar(
-    isFocused !== false,
+    isFocused !== false || mouseEnabled,
     scrollBy
   );
 
+  const getHistoryBounds = useCallback(
+    () => virtualizedListRef.current?.getViewportBounds() ?? null,
+    []
+  );
   useMouseScroll({
-    enabled: enableScroll && isFocused !== false,
-    onScroll: scrollByWithAnimation,
-    bounds: layout?.contentBounds,
+    priority: 0,
+    enabled: enableScroll && mouseEnabled,
+    onScroll: (delta) => {
+      onMouseActivate?.();
+      scrollByWithAnimation(delta);
+    },
+    bounds: getHistoryBounds,
   });
 
   useInput(
@@ -835,8 +855,11 @@ const MessageList = memo(function MessageList({
         (key.meta && ["e", "ê", "€"].includes(char.toLowerCase())) ||
         char === "\x1be" ||
         char === "´";
-      if (isAltE && thinkingDisplayMode !== "compact" && activeThinkingMessageId) {
-        setThinkingToggleNonce((previous) => previous + 1);
+      if (isAltE && activeThinkingMessageId) {
+        setThinkingToggle({
+          messageId: activeThinkingMessageId,
+          signal: ++nextThinkingToggleSignal,
+        });
         return;
       }
       const list = virtualizedListRef.current;
@@ -884,18 +907,12 @@ const MessageList = memo(function MessageList({
       if (!message.thinking || message.thinking.length === 0) {
         return { signal: undefined, hint: undefined };
       }
-      if (thinkingDisplayMode === "compact") {
-        return { signal: undefined, hint: undefined };
-      }
-      if (message.id !== activeThinkingMessageId) {
-        return { signal: undefined, hint: undefined };
-      }
       return {
-        signal: thinkingToggleNonce > 0 ? thinkingToggleNonce : undefined,
-        hint: THINKING_TOGGLE_HINT,
+        signal: thinkingToggle?.messageId === message.id ? thinkingToggle.signal : undefined,
+        hint: message.id === activeThinkingMessageId ? THINKING_TOGGLE_HINT : undefined,
       };
     },
-    [activeThinkingMessageId, thinkingDisplayMode, thinkingToggleNonce]
+    [activeThinkingMessageId, thinkingToggle]
   );
 
   // Callback to trigger re-measurement when ThinkingBlock height changes
@@ -1038,42 +1055,47 @@ const MessageList = memo(function MessageList({
       : undefined;
 
   return (
-    <Box flexDirection="column" flexGrow={1} minHeight={0} height={computedMaxHeight}>
-      <Box flexDirection="row" flexGrow={1} minHeight={0} height={listHeight}>
-        <Box flexDirection="column" flexGrow={1} minHeight={0} height={listHeight}>
-          <VirtualizedList
-            ref={virtualizedListRef}
-            data={virtualizedMessages}
-            renderItem={renderMessageItem}
-            keyExtractor={keyExtractor}
-            estimatedItemHeight={estimatedItemHeightForVirtualization}
-            initialScrollIndex={autoScroll ? SCROLL_TO_ITEM_END : 0}
-            initialScrollOffsetInIndex={autoScroll ? SCROLL_TO_ITEM_END : 0}
-            onScrollStateChange={handleVirtualizedScrollChange}
-            scrollbarThumbColor={animatedThumbColor}
-            alignToBottom
-            isStreaming={hasActiveStreaming}
-          />
-        </Box>
-      </Box>
-
-      {/* Thinking indicator - shows while agent is processing before first token */}
-      {showThinkingIndicator && <ThinkingIndicator />}
-
-      {!following && (
-        <Box flexShrink={0}>
-          {unreadCount > 0 ? (
-            <NewMessagesBanner
-              unreadCount={unreadCount}
-              isAtBottom={false}
-              onJumpToBottom={scrollToBottom}
+    <MouseInteractionScope enabled={mouseEnabled} onActivate={onMouseActivate}>
+      <Box flexDirection="column" flexGrow={1} minHeight={0} height={computedMaxHeight}>
+        <Box flexDirection="row" flexGrow={1} minHeight={0} height={listHeight}>
+          <Box flexDirection="column" flexGrow={1} minHeight={0} height={listHeight}>
+            <VirtualizedList
+              ref={virtualizedListRef}
+              data={virtualizedMessages}
+              renderItem={renderMessageItem}
+              keyExtractor={keyExtractor}
+              estimatedItemHeight={estimatedItemHeightForVirtualization}
+              initialScrollIndex={autoScroll ? SCROLL_TO_ITEM_END : 0}
+              initialScrollOffsetInIndex={autoScroll ? SCROLL_TO_ITEM_END : 0}
+              onScrollStateChange={handleVirtualizedScrollChange}
+              scrollbarThumbColor={animatedThumbColor}
+              alignToBottom
+              isStreaming={hasActiveStreaming}
+              enableMouseInteraction={enableScroll && mouseEnabled}
             />
-          ) : (
-            <Text dimColor>Reading history · PgDn to return to latest</Text>
-          )}
+          </Box>
         </Box>
-      )}
-    </Box>
+
+        {/* Thinking indicator - shows while agent is processing before first token */}
+        {showThinkingIndicator && <ThinkingIndicator />}
+
+        {!following && (
+          <Box flexShrink={0}>
+            {unreadCount > 0 ? (
+              <NewMessagesBanner
+                unreadCount={unreadCount}
+                isAtBottom={false}
+                onJumpToBottom={scrollToBottom}
+              />
+            ) : (
+              <Clickable id="history-return-to-latest" onClick={scrollToBottom}>
+                <Text dimColor>Reading history · Click to return to latest · PgDn</Text>
+              </Clickable>
+            )}
+          </Box>
+        )}
+      </Box>
+    </MouseInteractionScope>
   );
 });
 

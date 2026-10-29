@@ -20,7 +20,8 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useId, useMemo } from "react";
+import { Clickable } from "../Clickable.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuration
@@ -215,9 +216,10 @@ export const NewMessagesBanner: React.FC<NewMessagesBannerProps> = ({
   config,
   width,
 }) => {
+  const clickId = useId();
   const mergedConfig = useMemo(() => ({ ...DEFAULT_BANNER_CONFIG, ...config }), [config]);
 
-  const { isVisible, displayText } = useNewMessagesBanner(
+  const { isVisible, displayText, handleJump } = useNewMessagesBanner(
     unreadCount,
     isAtBottom,
     onJumpToBottom,
@@ -242,13 +244,25 @@ export const NewMessagesBanner: React.FC<NewMessagesBannerProps> = ({
       width={width ?? "100%"}
       paddingX={1}
     >
-      <Box paddingX={2} paddingY={0} borderStyle="round" borderColor={mergedConfig.backgroundColor}>
-        <Text color={mergedConfig.textColor} backgroundColor={mergedConfig.backgroundColor} bold>
-          {" "}
-          {messageText}
-          {hintText}{" "}
-        </Text>
-      </Box>
+      <Clickable
+        id={`new-messages-${clickId}`}
+        onClick={handleJump}
+        enabled={!!onJumpToBottom}
+        width="auto"
+      >
+        <Box
+          paddingX={2}
+          paddingY={0}
+          borderStyle="round"
+          borderColor={mergedConfig.backgroundColor}
+        >
+          <Text color={mergedConfig.textColor} backgroundColor={mergedConfig.backgroundColor} bold>
+            {" "}
+            {messageText}
+            {hintText}{" "}
+          </Text>
+        </Box>
+      </Clickable>
     </Box>
   );
 };

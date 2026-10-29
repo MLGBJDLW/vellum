@@ -26,14 +26,22 @@ import { error, success } from "./types.js";
 let runtimeMouseMode: MouseMode | null = null;
 
 /**
- * Callback to notify the TUI that mouse mode has changed at runtime.
- * Set by the App component during initialization.
+ * Legacy callback for consumers outside React. React uses the external store below.
  */
 let onMouseModeChange: ((mode: MouseMode) => void) | null = null;
+const mouseModeListeners = new Set<() => void>();
+
+/** External-store subscription shared by mounted mouse input owners. */
+export function subscribeMouseModeChange(listener: () => void): () => void {
+  mouseModeListeners.add(listener);
+  return () => {
+    mouseModeListeners.delete(listener);
+  };
+}
 
 /**
  * Set the callback for runtime mouse mode changes.
- * Called by the App component during initialization.
+ * Mounted input owners use subscribeMouseModeChange instead.
  */
 export function setMouseModeChangeCallback(cb: ((mode: MouseMode) => void) | null): void {
   onMouseModeChange = cb;
@@ -98,8 +106,8 @@ function handleMouseStatus(): CommandResult {
     `Config mode: ${config.mouseMode}`,
     `Runtime override: ${isOverridden ? runtimeMouseMode : "none"}`,
     "",
-    `Mouse disabled (env): ${config.mouseDisabled}`,
-    `Clicks disabled (env): ${config.mouseClicksDisabled}`,
+    `Mouse disabled (config): ${config.mouseDisabled}`,
+    `Clicks disabled (config): ${config.mouseClicksDisabled}`,
     `No-flicker enabled: ${config.synchronizedOutput}`,
     "",
     "─".repeat(40),
@@ -115,6 +123,7 @@ function handleMouseStatus(): CommandResult {
 function switchMouseMode(mode: MouseMode): CommandResult {
   const previous = getEffectiveMouseMode();
   runtimeMouseMode = mode;
+  for (const listener of mouseModeListeners) listener();
 
   if (onMouseModeChange) {
     onMouseModeChange(mode);

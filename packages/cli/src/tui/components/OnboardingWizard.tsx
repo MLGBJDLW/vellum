@@ -24,13 +24,15 @@ import {
   type PROVIDER_INFO,
   OnboardingWizard as WizardCore,
 } from "@vellum/core";
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import { useInput } from "../hooks/useTerminalInput.js";
 import { useTerminalDimensions } from "../hooks/useTerminalSize.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { Clickable, getVisibleClickBounds } from "./common/Clickable.js";
 import { TextInput } from "./Input/TextInput.js";
 
 // =============================================================================
@@ -133,12 +135,22 @@ function ProviderSelectContent({
 
   // Track focused index for keyboard navigation
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const listRef = useRef<DOMElement>(null);
   const visibleCount = Math.max(3, Math.min(8, height - (error ? 20 : 18)));
   const startIndex = Math.max(
     0,
     Math.min(focusedIndex - Math.floor(visibleCount / 2), providers.length - visibleCount)
   );
   const selectedProvider = providers[focusedIndex];
+  useMouseScroll({
+    scrollSpeed: 1,
+    bounds: () => {
+      const bounds = getVisibleClickBounds(listRef.current);
+      return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+    },
+    onScroll: (delta) =>
+      setFocusedIndex((index) => Math.max(0, Math.min(index + delta, providers.length - 1))),
+  });
 
   // Handle keyboard input
   useInput(
@@ -170,7 +182,7 @@ function ProviderSelectContent({
   return (
     <Box flexDirection="column">
       <Text bold>{t("onboarding.selectProvider")}</Text>
-      <Box flexDirection="column" marginTop={1}>
+      <Box ref={listRef} flexDirection="column" marginTop={1}>
         {providers.slice(startIndex, startIndex + visibleCount).map((provider, offset) => {
           const index = startIndex + offset;
           const isFocused = index === focusedIndex;
@@ -184,7 +196,11 @@ function ProviderSelectContent({
             : t("onboarding.noApiKeyNeeded");
 
           return (
-            <Box key={provider.id} flexDirection="column">
+            <Clickable
+              key={provider.id}
+              id={`onboarding-provider-${provider.id}`}
+              onClick={() => onSelect(provider.id)}
+            >
               <Text
                 color={isFocused ? theme.colors.primary : undefined}
                 bold={isFocused}
@@ -192,7 +208,7 @@ function ProviderSelectContent({
               >
                 {indicator} {providerName} {apiNote}
               </Text>
-            </Box>
+            </Clickable>
           );
         })}
       </Box>
@@ -207,8 +223,18 @@ function ProviderSelectContent({
           <Text color={theme.colors.error}>! {error}</Text>
         </Box>
       )}
-      <Box marginTop={1}>
+      <Box marginTop={1} gap={1}>
         <Text color={theme.colors.muted}>{t("onboarding.providerNav")}</Text>
+        <Clickable
+          id="onboarding-provider-continue"
+          width="auto"
+          enabled={!!selectedProvider}
+          onClick={() => {
+            if (selectedProvider) onSelect(selectedProvider.id);
+          }}
+        >
+          <Text color={theme.colors.muted}>Enter: Continue</Text>
+        </Clickable>
       </Box>
     </Box>
   );
@@ -277,6 +303,16 @@ function ModeSelectContent({
 
   // Track focused index for keyboard navigation
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const listRef = useRef<DOMElement>(null);
+  useMouseScroll({
+    scrollSpeed: 1,
+    bounds: () => {
+      const bounds = getVisibleClickBounds(listRef.current);
+      return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+    },
+    onScroll: (delta) =>
+      setFocusedIndex((index) => Math.max(0, Math.min(index + delta, modes.length - 1))),
+  });
 
   // Handle keyboard input
   useInput(
@@ -308,30 +344,36 @@ function ModeSelectContent({
   return (
     <Box flexDirection="column">
       <Text bold>{t("onboarding.selectMode")}</Text>
-      <Box flexDirection="column" marginTop={1}>
+      <Box ref={listRef} flexDirection="column" marginTop={1}>
         {modes.map((mode, index) => {
           const isFocused = index === focusedIndex;
           const indicator = isFocused ? ">" : " ";
 
           return (
-            <Box key={mode.id} flexDirection="column">
-              <Text color={isFocused ? theme.colors.primary : undefined} bold={isFocused}>
-                {indicator} {mode.icon} {mode.name}
-              </Text>
-              <Text
-                color={isFocused ? theme.colors.primary : theme.colors.muted}
-                dimColor={!isFocused}
-              >
-                {"   "}
-                {mode.description}
-              </Text>
-              <Text
-                color={isFocused ? theme.colors.primary : theme.colors.muted}
-                dimColor={!isFocused}
-              >
-                {"   "}Best for: {mode.useCase}
-              </Text>
-            </Box>
+            <Clickable
+              key={mode.id}
+              id={`onboarding-mode-${mode.id}`}
+              onClick={() => onSelect(mode.id)}
+            >
+              <Box flexDirection="column">
+                <Text color={isFocused ? theme.colors.primary : undefined} bold={isFocused}>
+                  {indicator} {mode.icon} {mode.name}
+                </Text>
+                <Text
+                  color={isFocused ? theme.colors.primary : theme.colors.muted}
+                  dimColor={!isFocused}
+                >
+                  {"   "}
+                  {mode.description}
+                </Text>
+                <Text
+                  color={isFocused ? theme.colors.primary : theme.colors.muted}
+                  dimColor={!isFocused}
+                >
+                  {"   "}Best for: {mode.useCase}
+                </Text>
+              </Box>
+            </Clickable>
           );
         })}
       </Box>
@@ -340,8 +382,19 @@ function ModeSelectContent({
           <Text color={theme.colors.error}>! {error}</Text>
         </Box>
       )}
-      <Box marginTop={1}>
+      <Box marginTop={1} gap={1}>
         <Text color={theme.colors.muted}>{t("onboarding.modeNav")}</Text>
+        <Clickable
+          id="onboarding-mode-continue"
+          width="auto"
+          enabled={!!modes[focusedIndex]}
+          onClick={() => {
+            const mode = modes[focusedIndex];
+            if (mode) onSelect(mode.id);
+          }}
+        >
+          <Text color={theme.colors.muted}>Enter: Continue</Text>
+        </Clickable>
       </Box>
       <Box>
         <Text color={theme.colors.info}>{t("onboarding.modeSwitchHint")}</Text>
@@ -357,10 +410,12 @@ function CompleteContent({
   provider,
   mode,
   credentialsConfigured,
+  onContinue,
 }: {
   provider: OnboardingProvider;
   mode: string;
   credentialsConfigured: boolean;
+  onContinue: () => void;
 }): React.ReactElement {
   const { theme } = useTheme();
   const completeStep = createCompleteStep();
@@ -378,7 +433,9 @@ function CompleteContent({
         {formatQuickStart(completeStep.getQuickStartTips(), completeStep.getNextSteps(summary))}
       </Text>
       <Box marginTop={1}>
-        <Text color={theme.colors.success}>Press Enter to start using Vellum!</Text>
+        <Clickable id="onboarding-complete" width="auto" onClick={onContinue}>
+          <Text color={theme.colors.success}>Press Enter to start using Vellum!</Text>
+        </Clickable>
       </Box>
     </Box>
   );
@@ -594,6 +651,13 @@ export function OnboardingWizard({
     [state, wizard, onComplete]
   );
 
+  const handleBack = useCallback(() => {
+    if (state.isLoading || state.input !== "" || state.step === "welcome") return;
+    const currentIndex = ONBOARDING_STEPS.indexOf(state.step);
+    const previousStep = ONBOARDING_STEPS[currentIndex - 1];
+    if (previousStep) setState((s) => ({ ...s, step: previousStep, error: null }));
+  }, [state.isLoading, state.input, state.step]);
+
   // Handle keyboard input
   useInput(
     useCallback(
@@ -623,17 +687,10 @@ export function OnboardingWizard({
 
         // Backspace on empty input = back
         if (key.backspace && state.input === "" && state.step !== "welcome") {
-          const steps = ONBOARDING_STEPS;
-          const currentIndex = steps.indexOf(state.step);
-          if (currentIndex > 0) {
-            const prevStep = steps[currentIndex - 1];
-            if (prevStep) {
-              setState((s) => ({ ...s, step: prevStep, error: null }));
-            }
-          }
+          handleBack();
         }
       },
-      [state, handleSubmit, onCancel]
+      [state, handleSubmit, handleBack, onCancel]
     )
   );
 
@@ -667,6 +724,7 @@ export function OnboardingWizard({
             provider={state.selectedProvider || "anthropic"}
             mode={state.selectedMode || "orch"}
             credentialsConfigured={state.credentialsConfigured}
+            onContinue={() => handleSubmit()}
           />
         );
     }
@@ -694,8 +752,33 @@ export function OnboardingWizard({
       </Box>
 
       {/* Footer */}
-      <Box marginTop={1} borderStyle="single" borderColor={theme.colors.muted} paddingX={1}>
-        <Text color={theme.colors.muted}>Esc: Cancel | Enter: Continue | Backspace: Back</Text>
+      <Box marginTop={1} borderStyle="single" borderColor={theme.colors.muted} paddingX={1} gap={1}>
+        <Clickable
+          id="onboarding-cancel"
+          width="auto"
+          enabled={!!onCancel}
+          onClick={() => onCancel?.()}
+        >
+          <Text color={theme.colors.muted}>Esc: Cancel</Text>
+        </Clickable>
+        {state.step !== "provider-select" && state.step !== "mode-select" && (
+          <Clickable
+            id="onboarding-continue"
+            width="auto"
+            enabled={!state.isLoading}
+            onClick={() => handleSubmit()}
+          >
+            <Text color={theme.colors.muted}>Enter: Continue</Text>
+          </Clickable>
+        )}
+        <Clickable
+          id="onboarding-back"
+          width="auto"
+          enabled={!state.isLoading && state.input === "" && state.step !== "welcome"}
+          onClick={handleBack}
+        >
+          <Text color={theme.colors.muted}>Backspace: Back</Text>
+        </Clickable>
       </Box>
     </Box>
   );

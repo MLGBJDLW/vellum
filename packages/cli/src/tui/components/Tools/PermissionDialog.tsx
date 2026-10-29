@@ -112,6 +112,7 @@ function RiskBadge({ level }: { readonly level: RiskLevel }): React.JSX.Element 
 function KeybindingHints({
   showAlwaysAllow,
   isMouseActive,
+  enabled,
   onApprove,
   onReject,
   onApproveAlways,
@@ -119,6 +120,7 @@ function KeybindingHints({
 }: {
   readonly showAlwaysAllow: boolean;
   readonly isMouseActive: boolean;
+  readonly enabled: boolean;
   readonly onApprove: () => void;
   readonly onReject: () => void;
   readonly onApproveAlways?: () => void;
@@ -127,7 +129,7 @@ function KeybindingHints({
   const hintId = useId();
   return (
     <Box flexDirection="row" gap={2}>
-      <Clickable id={`perm-approve-${hintId}`} onClick={onApprove} height={1}>
+      <Clickable id={`perm-approve-${hintId}`} onClick={onApprove} width="auto" enabled={enabled}>
         <Text>
           <Text color="green" bold underline={isMouseActive}>
             [y/Enter]
@@ -135,7 +137,7 @@ function KeybindingHints({
           <Text dimColor>{t("permission.approve")}</Text>
         </Text>
       </Clickable>
-      <Clickable id={`perm-reject-${hintId}`} onClick={onReject} height={1}>
+      <Clickable id={`perm-reject-${hintId}`} onClick={onReject} width="auto" enabled={enabled}>
         <Text>
           <Text color="red" bold underline={isMouseActive}>
             [n/Esc]
@@ -144,7 +146,12 @@ function KeybindingHints({
         </Text>
       </Clickable>
       {showAlwaysAllow && onApproveAlways && (
-        <Clickable id={`perm-always-${hintId}`} onClick={onApproveAlways} height={1}>
+        <Clickable
+          id={`perm-always-${hintId}`}
+          onClick={onApproveAlways}
+          width="auto"
+          enabled={enabled}
+        >
           <Text>
             <Text color="cyan" bold underline={isMouseActive}>
               [a]
@@ -313,9 +320,26 @@ export function PermissionDialog({
         <KeybindingHints
           showAlwaysAllow={onApproveAlways !== undefined}
           isMouseActive={isMouseActive}
-          onApprove={onApprove}
-          onReject={onReject}
-          onApproveAlways={onApproveAlways}
+          enabled={isFocused}
+          onApprove={() => {
+            if (handledRef.current || !isFocused) return;
+            handledRef.current = true;
+            onApprove();
+          }}
+          onReject={() => {
+            if (handledRef.current || !isFocused) return;
+            handledRef.current = true;
+            onReject();
+          }}
+          onApproveAlways={
+            onApproveAlways
+              ? () => {
+                  if (handledRef.current || !isFocused) return;
+                  handledRef.current = true;
+                  onApproveAlways();
+                }
+              : undefined
+          }
           t={t}
         />
       </Box>

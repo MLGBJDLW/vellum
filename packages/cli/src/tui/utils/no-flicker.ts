@@ -57,8 +57,8 @@ function loadNoFlickerSettings(): {
 
 /**
  * Resolved mouse mode for the TUI.
- * - 'full': Click + wheel (default when NO_FLICKER enabled)
- * - 'wheel-only': Wheel scroll only, no clicks (safe default)
+ * - 'full': Click + wheel (default on supported interactive terminals)
+ * - 'wheel-only': Wheel scroll only, no clicks
  * - 'disabled': No mouse capture at all
  */
 export type MouseMode = "full" | "wheel-only" | "disabled";
@@ -127,8 +127,7 @@ export function isNoFlickerEnabled(): boolean {
  * Priority: env vars > settings file > defaults.
  * - VELLUM_DISABLE_MOUSE=1 → disabled
  * - VELLUM_DISABLE_MOUSE_CLICKS=1 → wheel-only
- * - NO_FLICKER enabled → full (click + wheel)
- * - NO_FLICKER not enabled → wheel-only (safe default)
+ * - Mouse defaults to full independently of NO_FLICKER
  */
 export function getNoFlickerConfig(): NoFlickerConfig {
   const noFlicker = isNoFlickerEnabled();
@@ -144,11 +143,11 @@ export function getNoFlickerConfig(): NoFlickerConfig {
   const mouseDisabled =
     envMouseDisabled ?? (settings.mouseEnabled !== undefined ? !settings.mouseEnabled : false);
 
-  // Resolve mouseClicksDisabled: env > settings > (depends on noFlicker)
+  // Mouse input capabilities do not depend on synchronized-output support.
   const mouseClicksDisabled =
     mouseDisabled ||
     (envClicksDisabled ??
-      (settings.mouseClicksEnabled !== undefined ? !settings.mouseClicksEnabled : !noFlicker)); // Default: clicks disabled unless NO_FLICKER is on
+      (settings.mouseClicksEnabled !== undefined ? !settings.mouseClicksEnabled : false));
 
   // Resolve mouseMode
   let mouseMode: MouseMode;

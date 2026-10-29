@@ -7,11 +7,13 @@
  * @module tui/components/LspSetupPanel
  */
 
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import { useInput } from "../hooks/useTerminalInput.js";
 import { useTheme } from "../theme/index.js";
+import { Clickable, getVisibleClickBounds } from "./common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -45,96 +47,23 @@ export interface ServerInfo {
 export interface LspSetupPanelProps {
   /** Whether the panel is currently active/focused */
   readonly isActive?: boolean;
+  /** Allow visible sidebar mouse actions without claiming keyboard focus. */
+  readonly mouseEnabled?: boolean;
+  /** Maximum panel height in terminal rows, including fixed action buttons. */
+  readonly maxHeight?: number;
   /** Callback when user wants to close the panel */
   readonly onClose?: () => void;
-  /** Optional custom server list (for testing) */
+  /** Server status read from the configured LSP owner. */
   readonly servers?: readonly ServerInfo[];
-  /** Optional callback when install is triggered */
+  /** Performs real installation; rejects when installation or verification fails. */
   readonly onInstall?: (server: ServerInfo) => Promise<void>;
+  /** Reads workspace language evidence and returns recommended configured server IDs. */
+  readonly onDetect?: () => Promise<readonly string[]>;
 }
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-/**
- * Default LSP servers list.
- * In production, this could be fetched from LspHub or a config file.
- */
-const DEFAULT_LSP_SERVERS: readonly ServerInfo[] = [
-  {
-    id: "typescript-language-server",
-    name: "TypeScript Language Server",
-    installed: false,
-    size: "2.3 MB",
-    installMethod: "npm",
-  },
-  {
-    id: "pyright",
-    name: "Pyright",
-    installed: false,
-    size: "19 MB",
-    installMethod: "npm",
-  },
-  {
-    id: "bash-language-server",
-    name: "Bash Language Server",
-    installed: false,
-    size: "2 MB",
-    installMethod: "npm",
-  },
-  {
-    id: "yaml-language-server",
-    name: "YAML Language Server",
-    installed: false,
-    size: "3.5 MB",
-    installMethod: "npm",
-  },
-  {
-    id: "vscode-json-languageserver",
-    name: "JSON Language Server",
-    installed: false,
-    size: "1.5 MB",
-    installMethod: "npm",
-  },
-  {
-    id: "gopls",
-    name: "gopls",
-    installed: false,
-    size: "50 MB",
-    requiresSystem: true,
-    systemRequirement: "requires Go",
-    installMethod: "system",
-  },
-  {
-    id: "rust-analyzer",
-    name: "rust-analyzer",
-    installed: false,
-    size: "80 MB",
-    requiresSystem: true,
-    systemRequirement: "requires Rust",
-    installMethod: "system",
-  },
-] as const;
 
 // =============================================================================
 // Sub-Components
 // =============================================================================
-
-/**
- * Section header component.
- */
-function SectionHeader({ title, count }: { title: string; count: number }): React.JSX.Element {
-  const { theme } = useTheme();
-
-  return (
-    <Box marginTop={1} marginBottom={0}>
-      <Text color={theme.colors.muted} dimColor>
-        ── {title} ({count}) ──
-      </Text>
-    </Box>
-  );
-}
 
 /**
  * Server list item component.
@@ -143,10 +72,12 @@ function ServerItem({
   server,
   isSelected,
   isInstalling,
+  canInstall,
 }: {
   server: ServerInfo;
   isSelected: boolean;
   isInstalling: boolean;
+  canInstall: boolean;
 }): React.JSX.Element {
   const { theme } = useTheme();
 
@@ -166,20 +97,17 @@ function ServerItem({
   const actionLabel = useMemo(() => {
     if (server.installed) return "";
     if (server.requiresSystem) return "[Guide]";
+    if (!canInstall) return "[Unavailable]";
     return "[Install]";
-  }, [server.installed, server.requiresSystem]);
+  }, [server.installed, server.requiresSystem, canInstall]);
 
   return (
-    <Box>
-      <Box width={2}>
+    <Box width="100%" height={1} flexShrink={0}>
+      <Text wrap="truncate">
         <Text color={isSelected ? theme.colors.primary : theme.colors.muted}>
-          {isSelected ? "▶" : " "}
+          {isSelected ? "▶" : " "}{" "}
         </Text>
-      </Box>
-      <Box width={3}>
-        <Text color={statusColor}>{statusIcon}</Text>
-      </Box>
-      <Box width={32}>
+        <Text color={statusColor}>{statusIcon} </Text>
         <Text
           color={isSelected ? theme.colors.primary : undefined}
           bold={isSelected || server.recommended}
@@ -187,84 +115,19 @@ function ServerItem({
           {server.name}
           {server.recommended && !server.installed ? " ★" : ""}
         </Text>
-      </Box>
-      <Box width={10}>
-        <Text color={theme.colors.muted} dimColor>
-          {server.size ?? ""}
+        <Text color={theme.colors.muted}>{server.size ? ` ${server.size}` : ""}</Text>
+        <Text
+          color={
+            server.requiresSystem
+              ? theme.colors.info
+              : canInstall
+                ? theme.colors.primary
+                : theme.colors.muted
+          }
+        >
+          {actionLabel ? ` ${actionLabel}` : ""}
         </Text>
-      </Box>
-      {server.requiresSystem && !server.installed && (
-        <Box width={16}>
-          <Text color={theme.colors.warning} dimColor>
-            ({server.systemRequirement})
-          </Text>
-        </Box>
-      )}
-      {!server.installed && (
-        <Box>
-          <Text
-            color={server.requiresSystem ? theme.colors.info : theme.colors.primary}
-            bold={isSelected}
-          >
-            {actionLabel}
-          </Text>
-        </Box>
-      )}
-    </Box>
-  );
-}
-
-/**
- * Installation progress indicator with batch support.
- */
-function InstallProgress({
-  serverName,
-  progress,
-  batchProgress,
-}: {
-  serverName: string;
-  progress: number;
-  batchProgress?: { current: number; total: number } | null;
-}): React.JSX.Element {
-  const { theme } = useTheme();
-
-  const barWidth = 20;
-  const filledWidth = Math.round((progress / 100) * barWidth);
-  const emptyWidth = barWidth - filledWidth;
-
-  // Build progress bar: [████████░░]
-  const progressBar = `[${"█".repeat(filledWidth)}${"░".repeat(emptyWidth)}]`;
-
-  return (
-    <Box marginTop={1} flexDirection="column">
-      {batchProgress && (
-        <Text color={theme.colors.info}>
-          Batch install: {batchProgress.current}/{batchProgress.total}
-        </Text>
-      )}
-      <Box gap={1}>
-        <Text color={theme.colors.info}>Installing {serverName}...</Text>
-        <Text color={theme.colors.primary}>{progressBar}</Text>
-        <Text color={theme.colors.info}>{progress}%</Text>
-      </Box>
-    </Box>
-  );
-}
-
-/**
- * Description section about LSP features.
- */
-function FeatureDescription(): React.JSX.Element {
-  const { theme } = useTheme();
-
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text color={theme.colors.muted}>Language servers provide code intelligence features:</Text>
-      <Box paddingLeft={2} flexDirection="column">
-        <Text color={theme.colors.muted}>• Diagnostics (errors, warnings)</Text>
-        <Text color={theme.colors.muted}>• Go to definition, Find references</Text>
-        <Text color={theme.colors.muted}>• Hover documentation</Text>
-      </Box>
+      </Text>
     </Box>
   );
 }
@@ -304,16 +167,27 @@ function FeatureDescription(): React.JSX.Element {
  */
 export function LspSetupPanel({
   isActive = true,
+  mouseEnabled = isActive,
+  maxHeight = 20,
   onClose,
-  servers = DEFAULT_LSP_SERVERS,
+  servers = [],
   onInstall,
+  onDetect,
 }: LspSetupPanelProps): React.JSX.Element {
   const { theme } = useTheme();
+  const panelId = useId();
+  const listNode = useRef<DOMElement>(null);
+  const installInFlight = useRef(false);
+  const detectionInFlight = useRef(false);
+  const getBounds = useCallback(() => {
+    const bounds = getVisibleClickBounds(listNode.current);
+    return bounds && { ...bounds, left: bounds.left - 1, top: bounds.top - 1 };
+  }, []);
 
   // State
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [installing, setInstalling] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Batch install state
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(
@@ -349,8 +223,40 @@ export function LspSetupPanel({
     return { installed: installedServers, available: availableServers };
   }, [servers, detectedServers]);
 
-  // Total selectable items (only available servers are selectable)
-  const selectableCount = available.length;
+  // Include installed entries in navigation so every configured server remains inspectable.
+  const orderedServers = useMemo(() => [...available, ...installed], [available, installed]);
+  const selectableCount = orderedServers.length;
+  const selectedServer = orderedServers[selectedIndex];
+  const panelHeight = Math.max(1, Math.floor(maxHeight));
+  const showSummary = panelHeight >= 10;
+  const statusLines = [
+    error ? `⚠ ${error}` : null,
+    installing
+      ? `Installing ${servers.find((server) => server.id === installing)?.name ?? installing}...${batchProgress ? ` (${batchProgress.current}/${batchProgress.total})` : ""}`
+      : null,
+    isDetecting ? "Detecting project..." : null,
+    !onInstall ? "Installation unavailable. Use /lsp install <server>." : null,
+    !onDetect ? "Project detection unavailable." : null,
+    servers.length === 0 ? "No language server status available." : null,
+  ].filter((line): line is string => line !== null);
+  // Borders + header + two action rows and their divider stay outside the list.
+  const chromeRows = 6 + Number(showSummary);
+  const visibleStatusLines = statusLines.slice(0, Math.max(0, panelHeight - chromeRows - 1));
+  const maxVisible = Math.max(1, panelHeight - chromeRows - visibleStatusLines.length);
+  const startIndex = Math.min(
+    Math.max(0, selectedIndex - maxVisible + 1),
+    Math.max(0, selectableCount - maxVisible)
+  );
+  const visibleServers = orderedServers.slice(startIndex, startIndex + maxVisible);
+  useEffect(() => {
+    setSelectedIndex((index) => Math.min(index, Math.max(0, selectableCount - 1)));
+  }, [selectableCount]);
+  useMouseScroll({
+    enabled: mouseEnabled && !installing && !isDetecting,
+    bounds: getBounds,
+    onScroll: (delta) =>
+      setSelectedIndex((index) => Math.max(0, Math.min(selectableCount - 1, index + delta))),
+  });
 
   // NPM-installable servers
   const npmServers = useMemo(
@@ -360,7 +266,14 @@ export function LspSetupPanel({
 
   // Handle batch install all NPM servers
   const handleInstallAllNpm = useCallback(async () => {
-    if (installing || npmServers.length === 0) return;
+    if (
+      !onInstall ||
+      installInFlight.current ||
+      detectionInFlight.current ||
+      npmServers.length === 0
+    )
+      return;
+    installInFlight.current = true;
 
     setBatchProgress({ current: 0, total: npmServers.length });
     setError(null);
@@ -371,79 +284,66 @@ export function LspSetupPanel({
 
       setBatchProgress({ current: i + 1, total: npmServers.length });
       setInstalling(server.id);
-      setProgress(0);
 
       try {
-        if (onInstall) {
-          await onInstall(server);
-        } else {
-          // Simulate installation progress
-          for (let p = 0; p <= 100; p += 10) {
-            setProgress(p);
-            await new Promise((resolve) => setTimeout(resolve, 50));
-          }
-        }
+        await onInstall(server);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        setError(`Failed to install ${server.name}: ${message}`);
+        setError(`Install failed: ${message} (${server.name})`);
         break;
       }
     }
 
     setInstalling(null);
-    setProgress(0);
     setBatchProgress(null);
-  }, [installing, npmServers, onInstall]);
+    installInFlight.current = false;
+  }, [npmServers, onInstall]);
 
   // Handle project detection
-  const handleDetectProject = useCallback(() => {
-    // In production, this would call LspHub.detectProjectServers()
-    // For now, simulate detection based on common patterns
-    const detected = new Set<string>();
-
-    // Simulate: always recommend TypeScript for now
-    detected.add("typescript-language-server");
-    detected.add("vscode-json-languageserver");
-
-    setDetectedServers(detected);
+  const handleDetectProject = useCallback(async () => {
+    if (!onDetect || detectionInFlight.current || installInFlight.current) return;
+    detectionInFlight.current = true;
+    setIsDetecting(true);
+    setDetectedServers(new Set());
     setError(null);
-  }, []);
+    try {
+      setDetectedServers(new Set(await onDetect()));
+      setSelectedIndex(0);
+    } catch (err) {
+      setError(`Project detection failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      detectionInFlight.current = false;
+      setIsDetecting(false);
+    }
+  }, [onDetect]);
 
   // Handle installation
   const handleInstall = useCallback(
     async (server: ServerInfo) => {
-      if (server.installed || installing) return;
+      if (server.installed || installInFlight.current || detectionInFlight.current) return;
 
       // For system-required servers, just show a guide message
       if (server.requiresSystem) {
         setError(`${server.name} ${server.systemRequirement}. Please install manually.`);
         return;
       }
+      if (!onInstall) return;
 
+      installInFlight.current = true;
       setInstalling(server.id);
-      setProgress(0);
       setError(null);
 
       try {
-        if (onInstall) {
-          await onInstall(server);
-        } else {
-          // Simulate installation progress
-          for (let p = 0; p <= 100; p += 10) {
-            setProgress(p);
-            await new Promise((resolve) => setTimeout(resolve, 100));
-          }
-        }
-        setInstalling(null);
-        setProgress(0);
+        await onInstall(server);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        setError(`Failed to install ${server.name}: ${message}`);
+        setError(`Install failed: ${message} (${server.name})`);
+      } finally {
         setInstalling(null);
-        setProgress(0);
+        installInFlight.current = false;
       }
     },
-    [installing, onInstall]
+    [onInstall]
   );
 
   // Keyboard navigation
@@ -468,12 +368,12 @@ export function LspSetupPanel({
         }
 
         if (key.downArrow || input === "j") {
-          setSelectedIndex((i) => Math.min(selectableCount - 1, i + 1));
+          setSelectedIndex((i) => Math.max(0, Math.min(selectableCount - 1, i + 1)));
           return;
         }
 
         if (key.return && !installing) {
-          const server = available[selectedIndex];
+          const server = orderedServers[selectedIndex];
           if (server) {
             void handleInstall(server);
           }
@@ -488,7 +388,7 @@ export function LspSetupPanel({
 
         // Detect project
         if (input === "d" && !installing) {
-          handleDetectProject();
+          void handleDetectProject();
           return;
         }
       },
@@ -496,7 +396,7 @@ export function LspSetupPanel({
         isActive,
         onClose,
         selectableCount,
-        available,
+        orderedServers,
         selectedIndex,
         handleInstall,
         installing,
@@ -510,91 +410,155 @@ export function LspSetupPanel({
   return (
     <Box
       flexDirection="column"
+      width="100%"
+      height={panelHeight}
+      flexShrink={0}
+      overflow="hidden"
       borderStyle="round"
       borderColor={theme.semantic.border.default}
       paddingX={1}
       paddingY={0}
     >
       {/* Header */}
-      <Box marginBottom={1}>
-        <Text bold color={theme.colors.primary}>
-          🔧 LSP Setup
-        </Text>
+      <Box height={1} flexShrink={0}>
+        <Box flexGrow={1} minWidth={0}>
+          <Text bold color={theme.colors.primary} wrap="truncate">
+            🔧 LSP Setup {selectableCount > 0 ? `${selectedIndex + 1}/${selectableCount}` : ""}
+          </Text>
+        </Box>
         <Box flexGrow={1} />
-        <Text color={theme.colors.muted} dimColor>
-          Esc to close
-        </Text>
+        <Clickable
+          id={`${panelId}-close-header`}
+          width="auto"
+          enabled={mouseEnabled}
+          onClick={() => onClose?.()}
+        >
+          <Text color={theme.colors.muted} dimColor wrap="truncate">
+            Esc to close
+          </Text>
+        </Clickable>
       </Box>
 
-      {/* Feature description */}
-      <FeatureDescription />
-
-      {/* Installed Section */}
-      {installed.length > 0 && (
-        <>
-          <SectionHeader title="Installed" count={installed.length} />
-          <Box flexDirection="column" paddingLeft={1}>
-            {installed.map((server) => (
-              <ServerItem
-                key={server.id}
-                server={server}
-                isSelected={false}
-                isInstalling={installing === server.id}
-              />
-            ))}
-          </Box>
-        </>
-      )}
-
-      {/* Available Section */}
-      {available.length > 0 && (
-        <>
-          <SectionHeader title="Available" count={available.length} />
-          <Box flexDirection="column" paddingLeft={1}>
-            {available.map((server, idx) => (
-              <ServerItem
-                key={server.id}
-                server={server}
-                isSelected={idx === selectedIndex}
-                isInstalling={installing === server.id}
-              />
-            ))}
-          </Box>
-        </>
-      )}
-
-      {/* Installation progress */}
-      {installing && (
-        <InstallProgress
-          serverName={available.find((s) => s.id === installing)?.name ?? installing}
-          progress={progress}
-          batchProgress={batchProgress}
-        />
-      )}
-
-      {/* Error message */}
-      {error && (
-        <Box marginTop={1}>
-          <Text color={theme.colors.error}>⚠ {error}</Text>
+      {showSummary && (
+        <Box height={1} flexShrink={0}>
+          <Text color={theme.colors.muted} wrap="truncate">
+            Available ({available.length}) • Installed ({installed.length})
+          </Text>
         </Box>
       )}
+      {/* Only the list pages; every server row occupies one terminal line. */}
+      <Box
+        ref={listNode}
+        flexDirection="column"
+        height={maxVisible}
+        flexShrink={0}
+        overflow="hidden"
+      >
+        {visibleServers.map((server, idx) => (
+          <Clickable
+            key={server.id}
+            id={`${panelId}-server-${server.id}`}
+            enabled={
+              mouseEnabled &&
+              !installing &&
+              !isDetecting &&
+              (server.installed || !!onInstall || !!server.requiresSystem)
+            }
+            onClick={() => {
+              setSelectedIndex(startIndex + idx);
+              void handleInstall(server);
+            }}
+          >
+            <ServerItem
+              server={server}
+              isSelected={startIndex + idx === selectedIndex}
+              isInstalling={installing === server.id}
+              canInstall={!!onInstall}
+            />
+          </Clickable>
+        ))}
+      </Box>
+      <Box
+        flexDirection="column"
+        height={visibleStatusLines.length}
+        flexShrink={0}
+        overflow="hidden"
+      >
+        {visibleStatusLines.map((line) => (
+          <Text
+            key={line}
+            color={line.startsWith("⚠") ? theme.colors.error : theme.colors.muted}
+            wrap="truncate"
+          >
+            {line}
+          </Text>
+        ))}
+      </Box>
 
       {/* Footer with hints */}
       <Box
-        marginTop={1}
+        flexDirection="column"
+        height={3}
+        flexShrink={0}
         borderStyle="single"
         borderTop
         borderBottom={false}
         borderLeft={false}
         borderRight={false}
         borderColor={theme.semantic.border.default}
-        gap={2}
       >
-        <Text color={theme.colors.muted}>↑↓ Navigate</Text>
-        <Text color={theme.colors.muted}>Enter Install</Text>
-        <Text color={theme.colors.info}>a Install All</Text>
-        <Text color={theme.colors.info}>d Detect</Text>
-        <Text color={theme.colors.muted}>Esc Close</Text>
+        <Box height={1} gap={2} flexShrink={0}>
+          <Clickable
+            id={`${panelId}-install`}
+            width="auto"
+            enabled={
+              mouseEnabled &&
+              !installing &&
+              !isDetecting &&
+              !!selectedServer &&
+              !selectedServer.installed &&
+              (!!onInstall || !!selectedServer.requiresSystem)
+            }
+            onClick={() => {
+              const server = orderedServers[selectedIndex];
+              if (server) void handleInstall(server);
+            }}
+          >
+            <Text color={theme.colors.muted}>Enter Install</Text>
+          </Clickable>
+          <Clickable
+            id={`${panelId}-install-all`}
+            width="auto"
+            enabled={
+              mouseEnabled && !installing && !isDetecting && !!onInstall && npmServers.length > 0
+            }
+            onClick={() => {
+              void handleInstallAllNpm();
+            }}
+          >
+            <Text color={theme.colors.info}>a Install All</Text>
+          </Clickable>
+        </Box>
+        <Box height={1} gap={2} flexShrink={0}>
+          <Clickable
+            id={`${panelId}-detect`}
+            width="auto"
+            enabled={mouseEnabled && !installing && !isDetecting && !!onDetect}
+            onClick={() => {
+              void handleDetectProject();
+            }}
+          >
+            <Text color={theme.colors.info}>d Detect</Text>
+          </Clickable>
+          <Clickable
+            id={`${panelId}-close`}
+            width="auto"
+            enabled={mouseEnabled}
+            onClick={() => onClose?.()}
+          >
+            <Text color={theme.colors.muted}>Esc Close</Text>
+          </Clickable>
+        </Box>
       </Box>
     </Box>
   );

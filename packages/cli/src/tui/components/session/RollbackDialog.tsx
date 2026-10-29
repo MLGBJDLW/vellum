@@ -13,6 +13,7 @@ import type React from "react";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { Clickable } from "../common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -100,7 +101,7 @@ export function RollbackDialog({
         return;
       }
     },
-    { isActive: isOpen }
+    { isActive: isOpen && !!checkpoint }
   );
 
   if (!isOpen || !checkpoint) {
@@ -150,14 +151,14 @@ export function RollbackDialog({
 
       {/* Action Buttons */}
       <Box flexDirection="row" gap={2}>
-        <Box>
+        <Clickable id="rollback-confirm" width="auto" enabled={isOpen} onClick={onConfirm}>
           <Text color={successColor}>[y]</Text>
           <Text color={textColor}> Confirm</Text>
-        </Box>
-        <Box>
+        </Clickable>
+        <Clickable id="rollback-cancel" width="auto" enabled={isOpen} onClick={onCancel}>
           <Text color={errorColor}>[n]</Text>
           <Text color={textColor}> Cancel</Text>
-        </Box>
+        </Clickable>
       </Box>
     </Box>
   );

@@ -11,9 +11,10 @@
 
 import type { CodingMode } from "@vellum/core";
 import { getIcons, type IconSet } from "@vellum/shared";
-import { render } from "ink-testing-library";
+import { cleanup, render } from "ink-testing-library";
 import type React from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ModeIndicator } from "../components/ModeIndicator.js";
 import { ModeSelector } from "../components/ModeSelector.js";
 import { PhaseProgressIndicator } from "../components/PhaseProgressIndicator.js";
@@ -26,6 +27,8 @@ beforeEach(() => {
   // Get icons after setup has configured Unicode mode
   icons = getIcons();
 });
+
+afterEach(() => act(() => cleanup()));
 
 // =============================================================================
 // Test Helpers
@@ -128,7 +131,7 @@ describe("ModeIndicator", () => {
 
 describe("ModeSelector", () => {
   describe("Rendering", () => {
-    it("offers the personal assistant without exposing legacy workflows as choices", () => {
+    it("offers all four existing modes", () => {
       const onSelect = vi.fn();
       const { lastFrame } = renderWithTheme(
         <ModeSelector currentMode="vibe" onSelect={onSelect} isActive={false} />
@@ -136,8 +139,9 @@ describe("ModeSelector", () => {
       const frame = lastFrame() ?? "";
 
       expect(frame).toContain("orch");
-      expect(frame).not.toContain("vibe");
-      expect(frame).not.toContain("spec");
+      expect(frame).toContain("vibe");
+      expect(frame).toContain("plan");
+      expect(frame).toContain("spec");
     });
 
     it("should show shortcut keys", () => {
@@ -148,8 +152,9 @@ describe("ModeSelector", () => {
       const frame = lastFrame() ?? "";
 
       expect(frame).toContain("[1]");
-      expect(frame).not.toContain("[2]");
-      expect(frame).not.toContain("[3]");
+      expect(frame).toContain("[2]");
+      expect(frame).toContain("[3]");
+      expect(frame).toContain("[4]");
     });
 
     it("should indicate current mode", () => {
@@ -198,14 +203,9 @@ describe("ModeSelector", () => {
       const frame = lastFrame() ?? "";
 
       // Translation key is used in tests - checks correct key is applied
-      expect(frame).toContain("Enter: use orch");
+      expect(frame).toContain("Enter select");
+      expect(frame).toContain("1-4 choose mode");
     });
-
-    // Note: Testing stdin/keyboard input with ink-testing-library is complex
-    // because useInput handlers are called asynchronously. The keyboard
-    // shortcuts (1, 2, 3) are tested implicitly through the component
-    // implementation and manual testing. The rendering tests above
-    // verify the UI elements are present.
 
     it("should show focus indicator when active", () => {
       const onSelect = vi.fn();
@@ -215,18 +215,43 @@ describe("ModeSelector", () => {
       const frame = lastFrame() ?? "";
 
       // Focus indicator should be present
-      expect(frame).toContain("❯");
+      expect(frame).toContain("❯ [2] vibe");
     });
 
-    it("returns an existing legacy session to orch on Enter", async () => {
+    it.each(["orch", "vibe", "plan", "spec"] as const)(
+      "keeps the current %s mode selected when Enter is pressed",
+      async (currentMode) => {
+        const onSelect = vi.fn();
+        let screen!: ReturnType<typeof render>;
+        await act(async () => {
+          screen = renderWithTheme(<ModeSelector currentMode={currentMode} onSelect={onSelect} />);
+        });
+        const modes: CodingMode[] = ["orch", "vibe", "plan", "spec"];
+        expect(screen.lastFrame()).toContain(
+          `❯ [${modes.indexOf(currentMode) + 1}] ${currentMode}`
+        );
+        await act(async () => {
+          screen.stdin.write("\r");
+        });
+        expect(onSelect).toHaveBeenCalledExactlyOnceWith(currentMode);
+      }
+    );
+
+    it.each([
+      ["1", "orch"],
+      ["2", "vibe"],
+      ["3", "plan"],
+      ["4", "spec"],
+    ] as const)("chooses %s shortcut mode %s", async (key, mode) => {
       const onSelect = vi.fn();
-      const { stdin, unmount } = renderWithTheme(
-        <ModeSelector currentMode="vibe" onSelect={onSelect} isActive />
-      );
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      stdin.write("\r");
-      await vi.waitFor(() => expect(onSelect).toHaveBeenCalledWith("orch"));
-      unmount();
+      let screen!: ReturnType<typeof render>;
+      await act(async () => {
+        screen = renderWithTheme(<ModeSelector currentMode="orch" onSelect={onSelect} />);
+      });
+      await act(async () => {
+        screen.stdin.write(key);
+      });
+      expect(onSelect).toHaveBeenCalledExactlyOnceWith(mode);
     });
   });
 });

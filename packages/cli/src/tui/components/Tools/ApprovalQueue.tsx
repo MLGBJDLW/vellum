@@ -9,14 +9,16 @@
  */
 
 import type { VellumTheme } from "@vellum/shared";
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ToolExecution } from "../../context/ToolsContext.js";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { truncateToDisplayWidth } from "../../utils/index.js";
+import { Clickable, getVisibleClickBounds } from "../common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -101,10 +103,22 @@ function QueueHeader({
   count,
   theme,
   t,
+  id,
+  enabled,
+  onApproveAll,
+  onRejectAll,
+  onApprove,
+  onReject,
 }: {
   readonly count: number;
   readonly theme: VellumTheme;
   readonly t: (key: string) => string;
+  readonly id: string;
+  readonly enabled: boolean;
+  readonly onApproveAll: () => void;
+  readonly onRejectAll: () => void;
+  readonly onApprove: () => void;
+  readonly onReject: () => void;
 }): React.JSX.Element {
   return (
     <Box flexDirection="column" marginBottom={1}>
@@ -114,21 +128,29 @@ function QueueHeader({
         </Text>
       </Box>
       <Box gap={2}>
-        <Text dimColor>
-          <Text color={theme.colors.success}>[a]</Text> {t("approval.approveAll")}
-        </Text>
-        <Text dimColor>
-          <Text color={theme.colors.error}>[r]</Text> {t("approval.rejectAll")}
-        </Text>
+        <Clickable id={`${id}-approve-all`} width="auto" enabled={enabled} onClick={onApproveAll}>
+          <Text dimColor>
+            <Text color={theme.colors.success}>[a]</Text> {t("approval.approveAll")}
+          </Text>
+        </Clickable>
+        <Clickable id={`${id}-reject-all`} width="auto" enabled={enabled} onClick={onRejectAll}>
+          <Text dimColor>
+            <Text color={theme.colors.error}>[r]</Text> {t("approval.rejectAll")}
+          </Text>
+        </Clickable>
         <Text dimColor>
           <Text color={theme.colors.info}>[↑↓]</Text> {t("approval.navigate")}
         </Text>
-        <Text dimColor>
-          <Text color={theme.colors.success}>[y]</Text> {t("approval.approve")}
-        </Text>
-        <Text dimColor>
-          <Text color={theme.colors.error}>[n]</Text> {t("approval.reject")}
-        </Text>
+        <Clickable id={`${id}-approve`} width="auto" enabled={enabled} onClick={onApprove}>
+          <Text dimColor>
+            <Text color={theme.colors.success}>[y]</Text> {t("approval.approve")}
+          </Text>
+        </Clickable>
+        <Clickable id={`${id}-reject`} width="auto" enabled={enabled} onClick={onReject}>
+          <Text dimColor>
+            <Text color={theme.colors.error}>[n]</Text> {t("approval.reject")}
+          </Text>
+        </Clickable>
       </Box>
     </Box>
   );
@@ -256,6 +278,21 @@ export function ApprovalQueue({
   const { theme } = useTheme();
   const { t } = useTUITranslation();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const queueId = useId();
+  const queueNode = useRef<DOMElement>(null);
+  const getBounds = useCallback(() => {
+    const bounds = getVisibleClickBounds(queueNode.current);
+    return bounds && { ...bounds, left: bounds.left - 1, top: bounds.top - 1 };
+  }, []);
+  useEffect(() => {
+    setSelectedIndex((index) => Math.min(index, Math.max(0, executions.length - 1)));
+  }, [executions.length]);
+  useMouseScroll({
+    enabled: isFocused && executions.length > 0,
+    bounds: getBounds,
+    onScroll: (delta) =>
+      setSelectedIndex((index) => Math.max(0, Math.min(executions.length - 1, index + delta))),
+  });
 
   // Calculate visible window for scrolling
   const startIndex = Math.max(
@@ -375,24 +412,41 @@ export function ApprovalQueue({
 
   return (
     <Box
+      ref={queueNode}
       flexDirection="column"
       borderStyle="round"
       borderColor={theme.semantic.border.default}
       padding={1}
     >
-      <QueueHeader count={executions.length} theme={theme} t={t} />
+      <QueueHeader
+        count={executions.length}
+        theme={theme}
+        t={t}
+        id={queueId}
+        enabled={isFocused}
+        onApproveAll={onApproveAll}
+        onRejectAll={onRejectAll}
+        onApprove={approveSelected}
+        onReject={rejectSelected}
+      />
 
       <Box flexDirection="column">
         {visibleExecutions.map((execution, visibleIdx) => {
           const actualIndex = startIndex + visibleIdx;
           return (
-            <QueueItem
+            <Clickable
               key={execution.id}
-              execution={execution}
-              index={actualIndex}
-              isSelected={actualIndex === selectedIndex}
-              theme={theme}
-            />
+              id={`${queueId}-item-${execution.id}`}
+              enabled={isFocused}
+              onClick={() => setSelectedIndex(actualIndex)}
+            >
+              <QueueItem
+                execution={execution}
+                index={actualIndex}
+                isSelected={actualIndex === selectedIndex}
+                theme={theme}
+              />
+            </Clickable>
           );
         })}
       </Box>

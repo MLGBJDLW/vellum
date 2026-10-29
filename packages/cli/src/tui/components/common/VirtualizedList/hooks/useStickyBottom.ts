@@ -294,7 +294,7 @@ export interface UseStickyBottomResult {
    * @param delta - Scroll delta (negative = up, positive = down)
    * @param source - Source of the scroll event ('wheel' | 'keyboard' | 'programmatic')
    */
-  handleScroll: (delta: number, source: ScrollSource) => void;
+  handleScroll: (delta: number, source: ScrollSource, resultingScrollTop?: number) => void;
   /**
    * Scroll to bottom and lock follow mode.
    * Call this when user clicks "scroll to bottom" button or presses End key.
@@ -391,9 +391,12 @@ export function useStickyBottom(options: UseStickyBottomOptions): UseStickyBotto
 
   // Handle scroll events
   const handleScroll = useCallback(
-    (delta: number, source: ScrollSource) => {
+    (delta: number, source: ScrollSource, resultingScrollTop?: number) => {
       // Calculate if we'll be at bottom after this scroll
-      const newScrollTop = Math.max(0, Math.min(maxScroll, scrollTop + delta));
+      const newScrollTop = Math.max(
+        0,
+        Math.min(maxScroll, resultingScrollTop ?? scrollTop + delta)
+      );
       const newDistanceFromBottom = maxScroll - newScrollTop;
       const willBeAtBottom = newDistanceFromBottom <= bottomThreshold;
 
@@ -428,12 +431,8 @@ export function useStickyBottom(options: UseStickyBottomOptions): UseStickyBotto
     }
   }, [dataLength, isStreaming, state.prevDataLength]);
 
-  // Detect when user reaches bottom (for off mode recovery)
-  useEffect(() => {
-    if (isAtBottom && state.followMode === "off") {
-      dispatch({ type: "REACHED_BOTTOM" });
-    }
-  }, [isAtBottom, state.followMode]);
+  // Only explicit downward navigation restores follow. Content collapse or a
+  // larger viewport can put a reader at the bottom without changing their intent.
 
   // Detect content stability for locked mode release
   useEffect(() => {

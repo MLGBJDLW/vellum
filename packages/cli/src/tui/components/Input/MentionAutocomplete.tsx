@@ -10,10 +10,13 @@
  */
 
 import { getAllMentionSuggestions, type MentionSuggestion, type MentionType } from "@vellum/shared";
-import { Box, Text } from "ink";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Box, type DOMElement, Text } from "ink";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useMouseInteractionEnabled } from "../../context/MouseContext.js";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTheme } from "../../theme/index.js";
+import { Clickable, getVisibleClickBounds } from "../common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -88,8 +91,12 @@ function filterFileSuggestions(
   input: string
 ): FileSuggestion[] {
   if (!input) return [...suggestions];
-  const lower = input.toLowerCase();
-  return suggestions.filter((s) => s.name.toLowerCase().startsWith(lower));
+  // Match complete paths when entering a directory. Besides showing nested
+  // children, this hides stale suggestions while the next directory is loading.
+  const lower = input.replace(/\\/g, "/").toLowerCase();
+  return suggestions.filter((s) =>
+    (lower.includes("/") ? s.path.replace(/\\/g, "/") : s.name).toLowerCase().startsWith(lower)
+  );
 }
 
 /**
@@ -178,10 +185,13 @@ export function MentionAutocomplete({
   maxVisible = 8,
 }: MentionAutocompleteProps): React.ReactElement | null {
   const { theme } = useTheme();
-  const isActive = active ?? visible;
+  const mouseInteractionEnabled = useMouseInteractionEnabled();
+  const menuRef = useRef<DOMElement>(null);
+  const menuId = useId();
+  const isActive = visible && (active ?? true);
 
   // Selected index
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selection, setSelection] = useState({ key: "", index: 0 });
 
   // Get filtered options based on mode
   const { items, total } = useMemo(() => {
@@ -195,11 +205,53 @@ export function MentionAutocomplete({
     return { items: filtered, total: filtered.length };
   }, [mode, input, fileSuggestions]);
 
-  // Reset selection when options change
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Reset on items/input change is intentional
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [items.length, input]);
+  const selectionKey = JSON.stringify([
+    mode,
+    mentionType,
+    input,
+    visible,
+    items.map((item) => ("path" in item ? item.path : item.label)),
+  ]);
+  const selectedIndex =
+    selection.key === selectionKey ? Math.max(0, Math.min(selection.index, total - 1)) : 0;
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
+  if (selection.key !== selectionKey) setSelection({ key: selectionKey, index: 0 });
+
+  const selectIndex = useCallback(
+    (index: number) => {
+      const next = Math.max(0, Math.min(index, total - 1));
+      selectedIndexRef.current = next;
+      setSelection({ key: selectionKey, index: next });
+      onSelectionChange?.(next, total > 0);
+    },
+    [onSelectionChange, selectionKey, total]
+  );
+
+  const completeIndex = useCallback(
+    (index: number) => {
+      const selected = items[index];
+      if (!selected) return;
+      selectIndex(index);
+      onSelect("path" in selected ? selected.path : selected.label, mode);
+    },
+    [items, mode, onSelect, selectIndex]
+  );
+
+  const getMenuBounds = useCallback(() => {
+    const bounds = getVisibleClickBounds(menuRef.current);
+    return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+  }, []);
+  useMouseScroll({
+    enabled: isActive && mouseInteractionEnabled && total > 0,
+    priority: 20,
+    scrollSpeed: 1,
+    bounds: getMenuBounds,
+    onScroll: useCallback(
+      (delta: number) => selectIndex(selectedIndexRef.current + delta),
+      [selectIndex]
+    ),
+  });
 
   // Notify parent of selection changes
   useEffect(() => {
@@ -223,26 +275,19 @@ export function MentionAutocomplete({
       (_input, key) => {
         // Arrow down - move selection down
         if (key.downArrow) {
-          setSelectedIndex((prev) => Math.min(prev + 1, total - 1));
+          selectIndex(selectedIndexRef.current + 1);
           return;
         }
 
         // Arrow up - move selection up
         if (key.upArrow) {
-          setSelectedIndex((prev) => Math.max(prev - 1, 0));
+          selectIndex(selectedIndexRef.current - 1);
           return;
         }
 
         // Tab or Enter - select current option
         if (key.tab || key.return) {
-          const selected = items[selectedIndex];
-          if (selected) {
-            if (mode === "type") {
-              onSelect((selected as MentionSuggestion).label, mode);
-            } else {
-              onSelect((selected as FileSuggestion).path, mode);
-            }
-          }
+          completeIndex(selectedIndexRef.current);
           return;
         }
 
@@ -252,7 +297,7 @@ export function MentionAutocomplete({
           return;
         }
       },
-      [items, selectedIndex, total, mode, onSelect, onCancel]
+      [completeIndex, onCancel, selectIndex]
     ),
     { isActive: isActive && total > 0 }
   );
@@ -274,6 +319,7 @@ export function MentionAutocomplete({
 
   return (
     <Box
+      ref={menuRef}
       flexDirection="column"
       borderStyle="single"
       borderColor={borderColor}
@@ -296,7 +342,12 @@ export function MentionAutocomplete({
           // Render mention type suggestion
           const suggestion = item as MentionSuggestion;
           return (
-            <Box key={suggestion.type} flexDirection="row">
+            <Clickable
+              key={`${selectionKey}:${suggestion.type}`}
+              id={`${menuId}:${selectionKey}:${suggestion.type}`}
+              enabled={isActive}
+              onClick={() => completeIndex(actualIndex)}
+            >
               {isSelected ? (
                 <Text inverse>
                   <Text color={highlightColor} bold>
@@ -319,7 +370,7 @@ export function MentionAutocomplete({
                   </Text>
                 </Text>
               )}
-            </Box>
+            </Clickable>
           );
         }
 
@@ -328,7 +379,12 @@ export function MentionAutocomplete({
         const icon = getFileIcon(fileSuggestion);
 
         return (
-          <Box key={fileSuggestion.path} flexDirection="row">
+          <Clickable
+            key={`${selectionKey}:${fileSuggestion.path}`}
+            id={`${menuId}:${selectionKey}:${fileSuggestion.path}`}
+            enabled={isActive}
+            onClick={() => completeIndex(actualIndex)}
+          >
             {isSelected ? (
               <Text inverse>
                 <Text color={highlightColor} bold>
@@ -352,7 +408,7 @@ export function MentionAutocomplete({
                 )}
               </Text>
             )}
-          </Box>
+          </Clickable>
         );
       })}
 

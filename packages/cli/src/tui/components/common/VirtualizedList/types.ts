@@ -85,6 +85,9 @@ export interface VirtualizedListProps<T> {
    * @default false
    */
   readonly enableScrollPastEnd?: boolean;
+
+  /** Allow native scrollbar gestures; disable while another region or overlay owns input. */
+  readonly enableMouseInteraction?: boolean;
 }
 
 /**
@@ -126,6 +129,8 @@ export interface VirtualizedListRef<T> {
     scrollHeight: number;
     innerHeight: number;
   };
+  /** Actual visible zero-based viewport for input hit-testing. */
+  getViewportBounds: () => import("../../../context/LayoutPositionContext.js").ContentBounds | null;
 
   /** Check if currently sticking to bottom */
   isAtBottom: () => boolean;

@@ -7,7 +7,7 @@
  * @module tui/hooks/useCollapsible
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useInput } from "./useTerminalInput.js";
 
 // =============================================================================
@@ -26,6 +26,8 @@ export interface UseCollapsibleOptions {
   readonly keyboardEnabled?: boolean;
   /** Unique ID for persistence (if provided, state persists across renders) */
   readonly persistenceId?: string;
+  /** Incrementing external toggle, consumed once even across remounts. */
+  readonly toggleSignal?: number;
   /** Animation duration in ms for expand/collapse (default: 0 - instant) */
   readonly animationDuration?: number;
   /** Callback when state changes */
@@ -38,6 +40,8 @@ export interface UseCollapsibleOptions {
 export interface UseCollapsibleReturn {
   /** Whether the content is currently collapsed */
   readonly isCollapsed: boolean;
+  /** A manual action takes precedence over automatic presentation defaults. */
+  readonly hasUserOverride: boolean;
   /** Toggle the collapsed state */
   readonly toggle: () => void;
   /** Expand the content */
@@ -60,13 +64,19 @@ export interface UseCollapsibleReturn {
 const MAX_COLLAPSIBLE_ENTRIES = 100;
 
 /** In-memory storage for collapsible states */
-const collapsibleStateStorage = new Map<string, boolean>();
+interface CollapsibleState {
+  readonly isCollapsed: boolean;
+  readonly hasUserOverride: boolean;
+  readonly lastToggleSignal?: number;
+}
+
+const collapsibleStateStorage = new Map<string, CollapsibleState>();
 
 /**
  * Set a collapsible state with LRU eviction policy.
  * When storage exceeds MAX_COLLAPSIBLE_ENTRIES, oldest entries are removed.
  */
-function setCollapsibleState(key: string, value: boolean): void {
+function setCollapsibleState(key: string, value: CollapsibleState): void {
   // Delete and re-set to move to end (most recently used)
   collapsibleStateStorage.delete(key);
   collapsibleStateStorage.set(key, value);
@@ -119,6 +129,7 @@ export function useCollapsible(options: UseCollapsibleOptions = {}): UseCollapsi
     toggleKey,
     keyboardEnabled = Boolean(toggleKey),
     persistenceId,
+    toggleSignal,
     animationDuration = 0,
     onToggle,
   } = options;
@@ -126,31 +137,34 @@ export function useCollapsible(options: UseCollapsibleOptions = {}): UseCollapsi
   // Initialize from persistence if available
   const getInitialState = (): boolean => {
     if (persistenceId && collapsibleStateStorage.has(persistenceId)) {
-      return collapsibleStateStorage.get(persistenceId) ?? initialCollapsed;
+      return collapsibleStateStorage.get(persistenceId)?.isCollapsed ?? initialCollapsed;
     }
     return initialCollapsed;
   };
 
   const [isCollapsed, setIsCollapsed] = useState(getInitialState);
 
-  // FIX: Auto-collapse when external state indicates "should be collapsed"
-  // This handles the case where streaming ends and we should auto-collapse
-  // (initialCollapsed changes from false to true when streaming completes)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Intentional - only trigger on initialCollapsed change, not isCollapsed
-  useEffect(() => {
-    if (initialCollapsed && !isCollapsed) {
-      setIsCollapsed(true);
-    }
-  }, [initialCollapsed]);
+  // Defaults initialize the block; subsequent prop changes must not overwrite
+  // an explicit user choice, including when a virtualized block remounts.
+  const [hasUserOverride, setHasUserOverride] = useState(
+    () => (persistenceId && collapsibleStateStorage.get(persistenceId)?.hasUserOverride) || false
+  );
+  const lastToggleSignalRef = useRef(
+    persistenceId ? collapsibleStateStorage.get(persistenceId)?.lastToggleSignal : undefined
+  );
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(isCollapsed ? 0 : 1);
 
   // Update persistence when state changes
   useEffect(() => {
     if (persistenceId) {
-      setCollapsibleState(persistenceId, isCollapsed);
+      setCollapsibleState(persistenceId, {
+        isCollapsed,
+        hasUserOverride,
+        lastToggleSignal: lastToggleSignalRef.current,
+      });
     }
-  }, [isCollapsed, persistenceId]);
+  }, [isCollapsed, hasUserOverride, persistenceId]);
 
   // Animation effect
   useEffect(() => {
@@ -196,6 +210,7 @@ export function useCollapsible(options: UseCollapsibleOptions = {}): UseCollapsi
 
   // Toggle function
   const toggle = useCallback(() => {
+    setHasUserOverride(true);
     setIsCollapsed((prev) => {
       const next = !prev;
       onToggle?.(next);
@@ -203,8 +218,16 @@ export function useCollapsible(options: UseCollapsibleOptions = {}): UseCollapsi
     });
   }, [onToggle]);
 
+  useEffect(() => {
+    if (toggleSignal !== undefined && lastToggleSignalRef.current !== toggleSignal) {
+      lastToggleSignalRef.current = toggleSignal;
+      toggle();
+    }
+  }, [toggleSignal, toggle]);
+
   // Expand function
   const expand = useCallback(() => {
+    setHasUserOverride(true);
     if (isCollapsed) {
       setIsCollapsed(false);
       onToggle?.(false);
@@ -213,6 +236,7 @@ export function useCollapsible(options: UseCollapsibleOptions = {}): UseCollapsi
 
   // Collapse function
   const collapse = useCallback(() => {
+    setHasUserOverride(true);
     if (!isCollapsed) {
       setIsCollapsed(true);
       onToggle?.(true);
@@ -242,6 +266,7 @@ export function useCollapsible(options: UseCollapsibleOptions = {}): UseCollapsi
 
   return {
     isCollapsed,
+    hasUserOverride,
     toggle,
     expand,
     collapse,
