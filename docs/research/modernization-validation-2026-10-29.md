@@ -16,11 +16,14 @@ physical terminal emulator. The release is prepared through PR #87.
 | Agent tools and delegation | Built CLI against a local HTTP model fixture; delegated worker reads an isolated file and returns its marker | Four actual HTTP requests complete the parent/worker/tool-result flow. |
 | Local model refresh | Actual local HTTP discovery → shared catalog → LLM stream → SDK request tests | Native capabilities, configured authentication, explicit rejection, unknown capability, cancellation, and bounded metadata lookup are covered. |
 | Git snapshots | Real temporary repositories plus namespace tests | Snapshot creation, diff, restore, checkpoint integration, and safe environment routing pass. |
-| Persisted session metadata | Saved JSON → reopened storage → list service → real session picker; archived index and malformed-entry cases | Date objects are restored at the existing storage boundary; valid sessions remain available and reads do not rewrite the index. |
+| Persisted session metadata | Saved JSON → reopened storage → list service → real session picker; archived index and malformed-entry cases; packaged CLI Ctrl+S/Escape | Date objects are restored at the existing storage boundary. The actual picker opens with stored dates and previews, closes without losing the draft, and editing continues. Unsupported records survive unrelated updates and archives until explicit repair or removal. |
 | Instruction watching | Real temporary file changes | Windows case aliases, newly created nested files, and constrained parent-directory subscriptions are covered. |
 
-The final repository test totals, hosted matrix conclusions, and public release
-identity are recorded in the PR/release validation updates after the last fixes.
+The complete local run passed 439 test files and 13,069 tests (32 skipped and five
+existing TODOs). The six hosted OS/Node combinations also passed after fixture
+cleanup. The final unsupported-record preservation change has an additional
+119-test storage/list check; final commit checks and public release identity are
+recorded in the PR/release validation updates.
 
 ## Review and retained boundaries
 

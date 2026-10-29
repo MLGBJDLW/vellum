@@ -304,6 +304,11 @@ export function createStorageConfig(partial: Partial<StorageConfig> = {}): Stora
 // Storage Manager Class
 // =============================================================================
 
+interface SessionIndexData {
+  entries: Map<string, SessionMetadata>;
+  preservedEntries: Map<string, unknown>;
+}
+
 /**
  * Manages session storage on disk with index-based lookups.
  *
@@ -328,15 +333,19 @@ export class StorageManager {
   /** In-memory session metadata index */
   private index: Map<string, SessionMetadata>;
 
+  /** Unsupported records stay on disk until their ID is explicitly repaired or removed. */
+  private readonly preservedIndexEntries: Map<string, unknown>;
+
   /**
    * Private constructor - use StorageManager.create() factory method.
    *
    * @param config - Storage configuration
    * @param index - Initial index state
    */
-  private constructor(config: StorageConfig, index: Map<string, SessionMetadata>) {
+  private constructor(config: StorageConfig, index: SessionIndexData) {
     this.config = config;
-    this.index = index;
+    this.index = index.entries;
+    this.preservedIndexEntries = index.preservedEntries;
   }
 
   /**
@@ -406,9 +415,7 @@ export class StorageManager {
    * @param config - Storage configuration
    * @returns Map of session IDs to metadata
    */
-  private static async loadIndexFromDisk(
-    config: StorageConfig
-  ): Promise<Map<string, SessionMetadata>> {
+  private static async loadIndexFromDisk(config: StorageConfig): Promise<SessionIndexData> {
     const indexPath = path.join(config.basePath, config.indexFileName);
 
     try {
@@ -417,31 +424,33 @@ export class StorageManager {
     } catch (error) {
       // Return empty Map if file doesn't exist or is invalid
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return new Map();
+        return { entries: new Map(), preservedEntries: new Map() };
       }
       // Log but don't throw for parse errors - start fresh
       console.warn(`Failed to parse index file at ${indexPath}, starting fresh:`, error);
-      return new Map();
+      return { entries: new Map(), preservedEntries: new Map() };
     }
   }
 
   /** Restore runtime metadata types at the JSON boundary without rewriting the index. */
-  private static parseIndex(content: string, indexPath: string): Map<string, SessionMetadata> {
+  private static parseIndex(content: string, indexPath: string): SessionIndexData {
     const parsed: unknown = JSON.parse(content);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       throw new Error("Session index must be an object");
     }
     const index = new Map<string, SessionMetadata>();
+    const preservedEntries = new Map<string, unknown>();
     for (const [id, metadata] of Object.entries(parsed)) {
       const result = SessionMetadataSchema.safeParse(metadata);
       if (result.success) {
         index.set(id, result.data);
       } else {
         // One damaged or unsupported record must not hide other saved sessions.
+        preservedEntries.set(id, metadata);
         console.warn(`Skipping invalid session index entry ${id} in ${indexPath}`);
       }
     }
-    return index;
+    return { entries: index, preservedEntries };
   }
 
   /**
@@ -454,7 +463,11 @@ export class StorageManager {
     const indexPath = path.join(this.config.basePath, this.config.indexFileName);
 
     // Serialize Map as Object for JSON
-    const serialized = JSON.stringify(Object.fromEntries(this.index), null, 2);
+    const serialized = JSON.stringify(
+      Object.fromEntries([...this.preservedIndexEntries, ...this.index]),
+      null,
+      2
+    );
 
     // Write atomically: write to temp file, then rename
     const tempPath = `${indexPath}.tmp`;
@@ -499,6 +512,7 @@ export class StorageManager {
    * ```
    */
   async updateIndex(metadata: SessionMetadata): Promise<void> {
+    this.preservedIndexEntries.delete(metadata.id);
     this.index.set(metadata.id, metadata);
     await this.saveIndex();
   }
@@ -517,7 +531,9 @@ export class StorageManager {
    * ```
    */
   async removeFromIndex(sessionId: string): Promise<void> {
-    if (this.index.delete(sessionId)) {
+    const removedValid = this.index.delete(sessionId);
+    const removedPreserved = this.preservedIndexEntries.delete(sessionId);
+    if (removedValid || removedPreserved) {
       await this.saveIndex();
     }
   }
@@ -785,7 +801,7 @@ export class StorageManager {
     }
 
     // Remove from index if anything was deleted or if entry exists
-    if (deleted || this.index.has(sessionId)) {
+    if (deleted || this.index.has(sessionId) || this.preservedIndexEntries.has(sessionId)) {
       await this.removeFromIndex(sessionId);
       return true;
     }
@@ -1065,7 +1081,7 @@ export class StorageManager {
 
     try {
       const content = await fs.readFile(archivedIndexPath, "utf-8");
-      return Array.from(StorageManager.parseIndex(content, archivedIndexPath).values());
+      return Array.from(StorageManager.parseIndex(content, archivedIndexPath).entries.values());
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         return [];

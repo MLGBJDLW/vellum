@@ -374,6 +374,39 @@ describe("StorageManager", () => {
       expect(index.size).toBe(1);
       expect(index.get(metadata.id)).toEqual(metadata);
       expect(await fs.readFile(indexPath, "utf8")).toBe(content);
+
+      await manager.updateIndex({ ...metadata, title: "Updated valid session" });
+      const afterUpdate = JSON.parse(await fs.readFile(indexPath, "utf8"));
+      expect(afterUpdate.damaged).toEqual(JSON.parse(content).damaged);
+      expect(afterUpdate.legacy).toEqual(JSON.parse(content).legacy);
+      expect(afterUpdate[metadata.id].title).toBe("Updated valid session");
+
+      await manager.removeFromIndex("damaged");
+      const afterRemove = JSON.parse(await fs.readFile(indexPath, "utf8"));
+      expect(afterRemove).not.toHaveProperty("damaged");
+      expect(afterRemove.legacy).toEqual(JSON.parse(content).legacy);
+      expect(await manager.delete("legacy")).toBe(true);
+      expect(JSON.parse(await fs.readFile(indexPath, "utf8"))).not.toHaveProperty("legacy");
+    });
+
+    it("replaces preserved malformed metadata when the same session is explicitly updated", async () => {
+      await fs.mkdir(tempDir, { recursive: true });
+      const metadata = createTestMetadata();
+      const indexPath = path.join(tempDir, "index.json");
+      await fs.writeFile(
+        indexPath,
+        JSON.stringify({ [metadata.id]: { ...metadata, lastActive: "not a date" } }),
+        "utf8"
+      );
+      const manager = await StorageManager.create({ basePath: tempDir });
+      expect((await manager.getIndex()).size).toBe(0);
+      await manager.updateIndex(metadata);
+      expect((await manager.getIndex()).get(metadata.id)).toEqual(metadata);
+      expect(JSON.parse(await fs.readFile(indexPath, "utf8"))[metadata.id]).toEqual(
+        JSON.parse(JSON.stringify(metadata))
+      );
+      await manager.removeFromIndex(metadata.id);
+      expect(JSON.parse(await fs.readFile(indexPath, "utf8"))).toEqual({});
     });
 
     it("should handle corrupted index file gracefully", async () => {
@@ -1024,6 +1057,30 @@ describe("StorageManager", () => {
   });
 
   describe("archiveSession", () => {
+    it("preserves unrelated unsupported records in both indexes while archiving", async () => {
+      const manager = await StorageManager.create({ basePath: tempDir, compressionEnabled: false });
+      const session = createTestSession();
+      await manager.save(session);
+      const indexPath = path.join(tempDir, "index.json");
+      const archivedPath = path.join(tempDir, "archived", "archived-index.json");
+      const preserved = { title: "Unsupported metadata", futureField: { value: 42 } };
+      await fs.writeFile(
+        indexPath,
+        JSON.stringify({ [session.metadata.id]: session.metadata, preserved }),
+        "utf8"
+      );
+      await fs.writeFile(archivedPath, JSON.stringify({ preserved }), "utf8");
+      const reopened = await StorageManager.create({
+        basePath: tempDir,
+        compressionEnabled: false,
+      });
+      await reopened.archiveSession(session.metadata.id);
+      expect(JSON.parse(await fs.readFile(indexPath, "utf8"))).toEqual({ preserved });
+      const archived = JSON.parse(await fs.readFile(archivedPath, "utf8"));
+      expect(archived.preserved).toEqual(preserved);
+      expect(archived[session.metadata.id].status).toBe("archived");
+    });
+
     it("should move session to archived directory", async () => {
       const manager = await StorageManager.create({
         basePath: tempDir,
