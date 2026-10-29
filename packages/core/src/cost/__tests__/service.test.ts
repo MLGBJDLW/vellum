@@ -4,6 +4,7 @@
  * @module @vellum/core/cost/__tests__
  */
 
+import { MODEL_CATALOG, type ModelInfo } from "@vellum/provider";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   calculateCost,
@@ -59,7 +60,7 @@ describe("calculateCostBreakdown", () => {
       provider: "openai",
       usage: {
         inputTokens: 1000,
-        outputTokens: 500,
+        outputTokens: 2500,
         thinkingTokens: 2000,
       },
     });
@@ -68,7 +69,31 @@ describe("calculateCostBreakdown", () => {
     expect(breakdown.reasoning).toBeCloseTo(0.12, 6);
   });
 
-  it("returns zero cost for unknown model", () => {
+  it("bills reasoning once for Responses and separately for Google candidate tokens", () => {
+    const usage = { inputTokens: 1000, outputTokens: 500, thinkingTokens: 200 };
+    const responses = calculateCostBreakdown({ model: "gpt-6.1-sol", provider: "openai", usage });
+    const google = calculateCostBreakdown({ model: "gemini-4-argon", provider: "google", usage });
+    // Both model rates are $2 input/$10 output per million; only Google's thoughts are extra.
+    expect(responses.output).toBeCloseTo(0.003);
+    expect(responses.reasoning).toBeCloseTo(0.002);
+    expect(responses.total).toBeCloseTo(0.007);
+    expect(google.output).toBeCloseTo(0.005);
+    expect(google.reasoning).toBeCloseTo(0.002);
+    expect(google.total).toBeCloseTo(0.009);
+  });
+
+  it("does not invent cache rates when a catalog model leaves them unknown", () => {
+    const breakdown = calculateCostBreakdown({
+      model: "claude-sonnet-5-5",
+      provider: "anthropic",
+      usage: { inputTokens: 1000, outputTokens: 500, cacheReadTokens: 100 },
+    });
+    expect(breakdown.input).toBeGreaterThan(0);
+    expect(breakdown.cacheRead).toBeNaN();
+    expect(breakdown.total).toBeNaN();
+  });
+
+  it("preserves unknown pricing instead of reporting free usage", () => {
     const breakdown = calculateCostBreakdown({
       model: "unknown-model-xyz",
       provider: "unknown",
@@ -78,9 +103,10 @@ describe("calculateCostBreakdown", () => {
       },
     });
 
-    expect(breakdown.total).toBe(0);
-    expect(breakdown.input).toBe(0);
-    expect(breakdown.output).toBe(0);
+    expect(breakdown.total).toBeNaN();
+    expect(breakdown.input).toBeNaN();
+    expect(breakdown.output).toBeNaN();
+    expect(formatCost(breakdown.total)).toBe("Unknown");
   });
 
   it("adjusts OpenAI input tokens for cache", () => {
@@ -175,9 +201,49 @@ describe("getPricing", () => {
     expect(getPricing("nonexistent-model")).toBeUndefined();
   });
 
-  it("handles prefix matching", () => {
-    const pricing = getPricing("claude-3-5-sonnet");
-    expect(pricing).toBeDefined();
+  it("does not borrow rates from a partial or unrelated provider ID", () => {
+    expect(getPricing("claude-3-5-sonnet")).toBeUndefined();
+    expect(getPricing("gpt-4o-custom")).toBeUndefined();
+    expect(getPricing("gpt-6.1-sol", "anthropic")).toBeUndefined();
+    expect(getPricing("claude-3-5-sonnet-20241022", "openai")).toBeUndefined();
+  });
+
+  it("reads current prices and explicit aliases from the canonical provider catalog", () => {
+    expect(getPricing("gpt-6.1-sol", "openai")).toMatchObject({
+      inputPricePerMillion: 2,
+      outputPricePerMillion: 10,
+    });
+    expect(getPricing("deepseek-v4-flash", "deepseek")).toEqual(
+      getPricing("deepseek-flash", "deepseek")
+    );
+    expect(calculateCost(1_000_000, 1_000_000, "gpt-6.1-sol", "openai")).toBe(12);
+    // o3 has explicit flex/priority alternatives, neither is the default rate.
+    expect(calculateCost(1_000, 1_000, "o3", "openai")).toBeCloseTo(0.01);
+  });
+
+  it("uses refreshed provider-scoped rates and preserves known free versus unknown models", () => {
+    const original = MODEL_CATALOG.get("openai");
+    const originalRouter = MODEL_CATALOG.get("openrouter");
+    const base = original?.[0] as ModelInfo;
+    try {
+      MODEL_CATALOG.set("openai", [
+        { ...base, id: "shared-fixture", inputPrice: 2, outputPrice: 4 },
+        { ...base, id: "free-fixture", inputPrice: 0, outputPrice: 0 },
+        { ...base, id: "gpt-4o", inputPrice: undefined, outputPrice: undefined },
+      ]);
+      MODEL_CATALOG.set("openrouter", [
+        { ...base, provider: "openrouter", id: "shared-fixture", inputPrice: 6, outputPrice: 8 },
+      ]);
+      expect(calculateCost(1_000_000, 1_000_000, "shared-fixture", "openai")).toBe(6);
+      expect(calculateCost(1_000_000, 1_000_000, "shared-fixture", "openrouter")).toBe(14);
+      expect(getPricing("shared-fixture")).toBeUndefined();
+      expect(formatCost(calculateCost(100, 100, "free-fixture", "openai"))).toBe("$0.00");
+      expect(getPricing("gpt-4o", "openai")).toBeUndefined();
+      expect(calculateCost(100, 100, "gpt-4o", "openai")).toBeNaN();
+    } finally {
+      if (original) MODEL_CATALOG.set("openai", original);
+      if (originalRouter) MODEL_CATALOG.set("openrouter", originalRouter);
+    }
   });
 });
 
@@ -219,6 +285,21 @@ describe("CostService", () => {
     expect(record.outputTokens).toBe(500);
     expect(record.cost).toBeGreaterThan(0);
     expect(record.sessionId).toBe("test-session");
+  });
+
+  it("keeps unknown usage visible in aggregates and cost events", () => {
+    const events = vi.fn();
+    service.on("costUpdate", events);
+    service.trackUsage({ inputTokens: 1000, outputTokens: 500 }, "gpt-6.1-sol", "openai");
+    service.trackUsage({ inputTokens: 1000, outputTokens: 500 }, "unpriced-fixture", "openai");
+    const summary = service.getSessionSummary();
+    expect(service.getSessionCost().total).toBeNaN();
+    expect(service.getTotalCost().total).toBeNaN();
+    expect(summary.totalCost).toBeNaN();
+    expect(summary.byProvider.openai?.cost).toBeNaN();
+    expect(summary.byModel["unpriced-fixture"]?.cost).toBeNaN();
+    expect(summary.byModel["gpt-6.1-sol"]?.cost).toBeGreaterThan(0);
+    expect(events.mock.calls.at(-1)?.[0].totalSessionCost).toBeNaN();
   });
 
   it("accumulates session cost", () => {
@@ -335,9 +416,9 @@ describe("MODEL_PRICING", () => {
 
   it("has valid pricing structure", () => {
     for (const [_model, pricing] of Object.entries(MODEL_PRICING)) {
-      expect(pricing.inputPricePerMillion).toBeGreaterThan(0);
-      expect(pricing.outputPricePerMillion).toBeGreaterThan(0);
-      expect(pricing.effectiveDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(pricing.inputPricePerMillion).toBeGreaterThanOrEqual(0);
+      expect(pricing.outputPricePerMillion).toBeGreaterThanOrEqual(0);
+      if (pricing.effectiveDate) expect(pricing.effectiveDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
   });
 

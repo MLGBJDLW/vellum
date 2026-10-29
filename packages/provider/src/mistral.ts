@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * Mistral Provider
  *
@@ -63,6 +64,6 @@ export class MistralProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "mistral-large-latest";
+    return DEFAULT_MODEL_IDS.mistral;
   }
 }

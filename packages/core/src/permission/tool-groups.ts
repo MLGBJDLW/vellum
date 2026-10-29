@@ -386,9 +386,11 @@ export const SPEC_MODE_GROUPS: PermissionToolGroupConfig[] = [
  * @returns Array of group configurations for the mode
  */
 export function getDefaultGroupsForMode(
-  mode: "vibe" | "plan" | "spec"
+  mode: "orch" | "vibe" | "plan" | "spec"
 ): PermissionToolGroupConfig[] {
   switch (mode) {
+    case "orch":
+      return PLAN_MODE_GROUPS.map((group) => ({ ...group }));
     case "vibe":
       return [...VIBE_MODE_GROUPS];
     case "plan":

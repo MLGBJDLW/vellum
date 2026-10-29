@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { interpolateColor } from "../components/Banner/ShimmerText.js";
+import { useAnimationControls } from "../context/AnimationContext.js";
 import { useTheme } from "../theme/index.js";
 
 // =============================================================================
@@ -96,6 +97,7 @@ export function useAnimatedScrollbar(
   config: AnimatedScrollbarConfig = {}
 ): UseAnimatedScrollbarReturn {
   const { theme } = useTheme();
+  const { isPaused } = useAnimationControls();
 
   // Merge config with defaults
   const { fadeInDuration, visibleDuration, fadeOutDuration, frameInterval } = {
@@ -142,6 +144,11 @@ export function useAnimatedScrollbar(
    */
   const flashScrollbar = useCallback(() => {
     cleanup();
+    if (isPaused) {
+      setScrollbarColor(activeColor);
+      setPhase("idle");
+      return;
+    }
     isAnimatingRef.current = true;
 
     const startColor = colorRef.current;
@@ -200,6 +207,7 @@ export function useAnimatedScrollbar(
     visibleDuration,
     fadeOutDuration,
     frameInterval,
+    isPaused,
   ]);
 
   /**

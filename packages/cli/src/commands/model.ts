@@ -10,10 +10,15 @@
 
 import {
   getModelInfo,
+  getModelReplacement,
   getProviderModels,
   getSupportedProviders,
   type ModelInfo,
+  ProviderRegistry,
+  type ProviderType,
+  updateDiscoveredModels,
 } from "@vellum/provider";
+import { authSet } from "./auth.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, success } from "./types.js";
 
@@ -35,7 +40,7 @@ let currentConfig: ModelConfig | null = null;
 /**
  * Callback to update model selection.
  */
-let onModelChange: ((provider: string, model: string) => void) | null = null;
+let onModelChange: ((provider: string, model: string) => void | Promise<void>) | null = null;
 
 /**
  * Set the current model configuration.
@@ -47,7 +52,7 @@ let onModelChange: ((provider: string, model: string) => void) | null = null;
 export function setModelCommandConfig(
   provider: string,
   model: string,
-  onChange?: (provider: string, model: string) => void
+  onChange?: (provider: string, model: string) => void | Promise<void>
 ): void {
   currentConfig = { provider, model };
   onModelChange = onChange ?? null;
@@ -80,7 +85,8 @@ function formatContextWindow(tokens: number): string {
 /**
  * Format price for display.
  */
-function formatPrice(pricePer1M: number): string {
+function formatPrice(pricePer1M: number | undefined): string {
+  if (pricePer1M === undefined) return "Unknown";
   if (pricePer1M === 0) {
     return "Free";
   }
@@ -93,8 +99,8 @@ function formatPrice(pricePer1M: number): string {
 function formatModelInfo(_provider: string, model: ModelInfo, isCurrent: boolean): string {
   const marker = isCurrent ? " (current)" : "";
   const ctx = formatContextWindow(model.contextWindow);
-  const priceIn = formatPrice(model.inputPrice ?? 0);
-  const priceOut = formatPrice(model.outputPrice ?? 0);
+  const priceIn = formatPrice(model.inputPrice);
+  const priceOut = formatPrice(model.outputPrice);
   return `    ${model.name}${marker} [${ctx} ctx, ${priceIn}/${priceOut}]`;
 }
 
@@ -125,17 +131,23 @@ export const modelCommand: SlashCommand = {
   ],
   examples: [
     "/model                         - Show current model and options",
-    "/model anthropic/claude-sonnet-4-6  - Switch to Claude Sonnet 4.6",
-    "/model openai/gpt-5.4           - Switch to GPT-5.4",
+    "/model anthropic/claude-opus-4-7 - Switch to Claude Opus 4.7",
+    "/model openai/gpt-6.1-sol       - Switch to GPT-6.1 Sol",
+    "/model refresh openrouter      - Discover current models from the provider",
   ],
   // Dynamic subcommands: list all providers for autocomplete
-  subcommands: getSupportedProviders().map((provider) => ({
-    name: provider,
-    description: `${provider} models`,
-  })),
+  subcommands: [
+    { name: "refresh", description: "Refresh models from a provider" },
+    ...getSupportedProviders().map((provider) => ({
+      name: provider,
+      description: `${provider} models`,
+    })),
+  ],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
     const positional = ctx.parsedArgs.positional as (string | undefined)[];
+    if (positional[0] === "refresh")
+      return refreshModels(positional[1] ?? currentConfig?.provider, ctx);
 
     let requestedModel: string | undefined;
 
@@ -151,7 +163,7 @@ export const modelCommand: SlashCommand = {
     }
 
     if (requestedModel) {
-      return switchToModel(requestedModel);
+      return switchToModel(requestedModel, ctx.credentials);
     }
 
     // Show current model and options
@@ -172,8 +184,8 @@ function showModelInfo(): CommandResult {
     lines.push(`Current: ${currentConfig.provider}/${info.name}`);
     lines.push(
       `  Context: ${formatContextWindow(info.contextWindow)} | ` +
-        `Input: ${formatPrice(info.inputPrice ?? 0)} | ` +
-        `Output: ${formatPrice(info.outputPrice ?? 0)}`
+        `Input: ${formatPrice(info.inputPrice)} | ` +
+        `Output: ${formatPrice(info.outputPrice)}`
     );
     lines.push("");
   } else {
@@ -241,7 +253,10 @@ function showProviderModels(provider: string): CommandResult {
 /**
  * Switch to a specified model.
  */
-function switchToModel(modelSpec: string): CommandResult {
+export async function switchToModel(
+  modelSpec: string,
+  credentials: CommandContext["credentials"]
+): Promise<CommandResult> {
   // Parse provider/model format
   const parts = modelSpec.split("/");
   if (parts.length < 2) {
@@ -268,8 +283,41 @@ function switchToModel(modelSpec: string): CommandResult {
     ]);
   }
 
-  // Get model info (validates model exists or returns default)
-  const info = getModelInfo(provider, modelId);
+  const normalizedProvider = provider.toLowerCase();
+  const replacement = getModelReplacement(normalizedProvider, modelId);
+  if (replacement)
+    return error("INVALID_ARGUMENT", `${modelId} has been retired by ${normalizedProvider}.`, [
+      `/model ${normalizedProvider}/${replacement}`,
+    ]);
+  const info = getModelInfo(normalizedProvider, modelId);
+
+  // Resolve through the same stores used for inference before claiming selection succeeded.
+  // Local servers are allowed without a secret; remote credentials are checked locally only.
+  if (normalizedProvider !== "ollama" && normalizedProvider !== "lmstudio") {
+    const resolved = await credentials.resolve(normalizedProvider).catch(() => null);
+    if (!resolved?.ok) {
+      return error("INTERNAL_ERROR", `Unable to read credentials for ${normalizedProvider}.`, [
+        `/auth set ${normalizedProvider}`,
+      ]);
+    }
+    if (!resolved.value?.value.trim()) {
+      const setup = await authSet(credentials, normalizedProvider);
+      if (setup.kind !== "interactive") return setup;
+      const saveCredential = setup.prompt.handler;
+      return {
+        ...setup,
+        prompt: {
+          ...setup.prompt,
+          helpText: `No local API key found for ${normalizedProvider}. Save a key to use ${info.name}.`,
+          handler: async (value) => {
+            const saved = await saveCredential(value);
+            if (saved.kind !== "success") return saved;
+            return switchToModel(modelSpec, credentials);
+          },
+        },
+      };
+    }
+  }
 
   // Check if already using this model
   if (currentConfig?.provider === provider.toLowerCase() && currentConfig?.model === modelId) {
@@ -278,12 +326,20 @@ function switchToModel(modelSpec: string): CommandResult {
 
   // Update via callback if available
   if (onModelChange) {
-    onModelChange(provider.toLowerCase(), modelId);
+    try {
+      await onModelChange(normalizedProvider, modelId);
+      currentConfig = { provider: normalizedProvider, model: modelId };
+    } catch (cause) {
+      return error(
+        "INTERNAL_ERROR",
+        cause instanceof Error ? cause.message : "Unable to switch models."
+      );
+    }
     return success(
       `Switched to ${info.name}\n` +
         `  Context: ${formatContextWindow(info.contextWindow)} | ` +
-        `Input: ${formatPrice(info.inputPrice ?? 0)} | ` +
-        `Output: ${formatPrice(info.outputPrice ?? 0)}`
+        `Input: ${formatPrice(info.inputPrice)} | ` +
+        `Output: ${formatPrice(info.outputPrice)}`
     );
   }
 
@@ -296,3 +352,33 @@ function switchToModel(modelSpec: string): CommandResult {
 // =============================================================================
 
 export default modelCommand;
+
+async function refreshModels(
+  provider: string | undefined,
+  ctx: CommandContext
+): Promise<CommandResult> {
+  const type = provider?.toLowerCase();
+  if (!type || !getSupportedProviders().includes(type))
+    return error("INVALID_ARGUMENT", "Choose a provider: /model refresh <provider>");
+  try {
+    const registry = new ProviderRegistry({
+      credentialManager: ctx.credentials,
+      enableCache: false,
+    });
+    const instance = await registry.get({ type: type as ProviderType });
+    if (!instance.refreshModels)
+      return error("INTERNAL_ERROR", `${type} does not expose model discovery.`);
+    const models = await instance.refreshModels();
+    updateDiscoveredModels(type as ProviderType, models);
+    return success(
+      `Refreshed ${models.length} models from ${type}. Use /model ${type} to select one. Availability does not verify inference access or billing.`
+    );
+  } catch {
+    // Provider errors may include request details. Keep credentials out of UI logs.
+    return error(
+      "INTERNAL_ERROR",
+      `Could not refresh ${type} models. Check the provider connection and API key; the previous catalog is retained.`,
+      [`/auth set ${type}`, `/model ${type}`]
+    );
+  }
+}

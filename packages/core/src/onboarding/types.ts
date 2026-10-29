@@ -397,6 +397,13 @@ export interface ModeInfo {
  * Mode information for onboarding UI
  */
 export const MODE_INFO: Record<string, ModeInfo> = {
+  orch: {
+    id: "orch",
+    name: "Personal Assistant",
+    description: "Chooses when to act, plan, research, or delegate",
+    useCase: "Research, writing, organization, analysis, and coding",
+    icon: "[Orch]",
+  },
   vibe: {
     id: "vibe" as CodingMode,
     name: "Vibe Mode",

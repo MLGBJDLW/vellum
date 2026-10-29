@@ -12,7 +12,7 @@
  * @see REQ-TOK-002 Token Budget Allocation
  */
 
-import { getContextWindow } from "@vellum/provider";
+import { getContextWindow, getProviderModels, getSupportedProviders } from "@vellum/provider";
 import type { TokenBudget } from "./types.js";
 
 // ============================================================================
@@ -273,6 +273,14 @@ export function calculateBudgetUsage(currentTokens: number, budget: TokenBudget)
 export function getModelContextWindow(providerOrModel: string, modelId?: string): number {
   // Support legacy single-argument usage
   if (modelId === undefined) {
+    // Consult the canonical catalog before legacy name heuristics. This also
+    // covers Kimi, GLM, MiniMax, Doubao and models discovered from local servers.
+    for (const provider of getSupportedProviders()) {
+      const known = getProviderModels(provider).find(
+        (model) => model.id === providerOrModel || model.aliases?.includes(providerOrModel)
+      );
+      if (known) return known.contextWindow;
+    }
     // Legacy: try to infer provider from model name
     const model = providerOrModel.toLowerCase();
     if (

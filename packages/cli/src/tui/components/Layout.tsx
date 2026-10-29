@@ -37,6 +37,19 @@ const SIDEBAR_MIN_WIDTH = tuiConfig.layout.sidebarMinWidth;
 /** Maximum sidebar width in columns */
 const SIDEBAR_MAX_WIDTH = tuiConfig.layout.sidebarMaxWidth;
 
+/** Shared with overlays and sidebar panels so they use the same available columns. */
+export function getSidebarWidth(columns: number): number {
+  if (columns < COMPACT_THRESHOLD) return 0;
+  return Math.max(
+    0,
+    Math.min(
+      columns - 52,
+      SIDEBAR_MAX_WIDTH,
+      Math.max(SIDEBAR_MIN_WIDTH, Math.floor((columns * SIDEBAR_WIDTH_PERCENT) / 100))
+    )
+  );
+}
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -55,6 +68,8 @@ export interface LayoutProps {
   readonly children: React.ReactNode;
   /** Whether to show the sidebar (default: true if sidebar provided) */
   readonly showSidebar?: boolean;
+  /** On narrow terminals, focused sidebar occupies the content pane until Esc. */
+  readonly sidebarFocused?: boolean;
   /** Force compact mode or auto-detect based on terminal width */
   readonly compactMode?: boolean;
   /** Workspace name to show in header separator */
@@ -278,7 +293,7 @@ function SidebarRegion({ children, width, borderColor }: SidebarRegionProps): Re
     <Box
       flexDirection="column"
       flexBasis={width}
-      flexShrink={1}
+      flexShrink={0}
       flexGrow={0}
       width={width}
       minHeight={0}
@@ -301,12 +316,14 @@ function SidebarRegion({ children, width, borderColor }: SidebarRegionProps): Re
  */
 interface ContentRegionProps {
   readonly children: React.ReactNode;
+  readonly hidden?: boolean;
 }
 
-function ContentRegion({ children }: ContentRegionProps): React.JSX.Element {
+function ContentRegion({ children, hidden = false }: ContentRegionProps): React.JSX.Element {
   return (
     <Box
       flexDirection="column"
+      display={hidden ? "none" : "flex"}
       flexGrow={1}
       flexShrink={1}
       minHeight={0}
@@ -375,6 +392,7 @@ export function Layout({
   sidebar,
   children,
   showSidebar,
+  sidebarFocused = false,
   compactMode,
   workspace,
   branch,
@@ -397,11 +415,11 @@ export function Layout({
   const sidebarVisible = useMemo(() => {
     // If explicitly set, use that value
     if (showSidebar !== undefined) {
-      return showSidebar && !isCompact;
+      return showSidebar && (!isCompact || sidebarFocused);
     }
     // Auto-show if sidebar content is provided and not in compact mode
     return !!sidebar && !isCompact;
-  }, [showSidebar, sidebar, isCompact]);
+  }, [showSidebar, sidebar, isCompact, sidebarFocused]);
 
   // Calculate sidebar width based on terminal width - adaptive tiered approach
   const sidebarWidth = useMemo(() => {
@@ -409,21 +427,8 @@ export function Layout({
       return 0;
     }
 
-    // Adaptive calculation based on terminal size
-    const baseWidth = Math.floor(columns * (SIDEBAR_WIDTH_PERCENT / 100));
-
-    // Tiered approach: small terminals get smaller sidebar, large terminals get proportional
-    if (columns < 80) {
-      // Compact: minimum viable sidebar
-      return Math.max(baseWidth, SIDEBAR_MIN_WIDTH);
-    } else if (columns < 120) {
-      // Normal: standard percentage, cap at 35
-      return Math.min(baseWidth, 35);
-    } else {
-      // Wide: allow up to max, but keep percentage-based
-      return Math.min(baseWidth, SIDEBAR_MAX_WIDTH);
-    }
-  }, [sidebarVisible, columns]);
+    return isCompact && sidebarFocused ? columns : getSidebarWidth(columns);
+  }, [sidebarVisible, columns, isCompact, sidebarFocused]);
 
   // Get border colors from theme - use focus color for header/footer, default for sidebar
   const headerBorderColor = theme.colors.primary;
@@ -480,7 +485,7 @@ export function Layout({
       {/* Middle Section: Content + Sidebar (sidebar on right) */}
       <Box flexDirection="row" flexGrow={1} flexShrink={1} minHeight={0}>
         {/* Content Region */}
-        <ContentRegion>
+        <ContentRegion hidden={isCompact && sidebarVisible && sidebarFocused}>
           <LayoutPositionProvider contentBounds={contentBounds}>{children}</LayoutPositionProvider>
         </ContentRegion>
 

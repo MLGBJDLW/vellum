@@ -67,6 +67,7 @@ export class CancellationToken {
   private readonly abortController: AbortController;
   private readonly callbacks: Set<CancelCallback> = new Set();
   private readonly pendingTools: Map<string, PendingTool> = new Map();
+  private readonly toolAbortHandlers = new Map<string, () => void>();
   private _reason?: string;
 
   constructor() {
@@ -163,6 +164,7 @@ export class CancellationToken {
    * @returns AbortController for the tool execution
    */
   registerTool(toolCallId: string, toolName: string): AbortController {
+    this.unregisterTool(toolCallId);
     // If already cancelled, return an already-aborted controller
     if (this.isCancelled) {
       const controller = new AbortController();
@@ -185,6 +187,7 @@ export class CancellationToken {
       controller.abort(this._reason);
     };
     this.abortController.signal.addEventListener("abort", abortHandler, { once: true });
+    this.toolAbortHandlers.set(toolCallId, abortHandler);
 
     return controller;
   }
@@ -195,6 +198,9 @@ export class CancellationToken {
    * @param toolCallId - The tool call to unregister
    */
   unregisterTool(toolCallId: string): void {
+    const handler = this.toolAbortHandlers.get(toolCallId);
+    if (handler) this.abortController.signal.removeEventListener("abort", handler);
+    this.toolAbortHandlers.delete(toolCallId);
     this.pendingTools.delete(toolCallId);
   }
 
@@ -209,7 +215,7 @@ export class CancellationToken {
       } catch {
         // Ignore abort errors
       }
-      this.pendingTools.delete(toolCallId);
+      this.unregisterTool(toolCallId);
     }
   }
 

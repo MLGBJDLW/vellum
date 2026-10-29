@@ -251,10 +251,13 @@ export function useSmoothScroll(options: UseSmoothScrollOptions): UseSmoothScrol
     clearAnimationInterval();
   }, [clearAnimationInterval]);
 
-  return {
-    currentScrollTop,
-    isAnimating,
-    jumpTo,
-    stop,
-  };
+  return useMemo(
+    () => ({
+      currentScrollTop,
+      isAnimating,
+      jumpTo,
+      stop,
+    }),
+    [currentScrollTop, isAnimating, jumpTo, stop]
+  );
 }

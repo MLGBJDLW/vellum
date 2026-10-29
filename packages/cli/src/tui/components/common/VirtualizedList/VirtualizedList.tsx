@@ -22,7 +22,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useScrollOptional } from "../../../context/ScrollContext.js";
 import { tuiConfig } from "../../theme/tokens.js";
 import {
   type FollowMode,
@@ -36,6 +35,7 @@ import {
 import { VirtualizedItemPositionProvider } from "./ItemPositionContext.js";
 import { useAnchorManager } from "./scrollAnchorAPI.js";
 import { SCROLL_TO_ITEM_END, type VirtualizedListProps, type VirtualizedListRef } from "./types.js";
+import { findOffsetIndex } from "./utils/blockSums.js";
 
 /**
  * VirtualizedList - Only renders visible items for optimal performance.
@@ -78,7 +78,7 @@ function VirtualizedListInner<T>(
     initialScrollIndex,
     initialScrollOffsetInIndex,
     scrollbarThumbColor,
-    onScrollTopChange,
+    onScrollStateChange,
     onStickingToBottomChange,
     onFollowModeChange,
     alignToBottom = false,
@@ -163,25 +163,11 @@ function VirtualizedListInner<T>(
       return { startIndex: 0, endIndex: -1 };
     }
 
-    // Find start: last item whose offset <= scrollTop
-    let start = 0;
-    for (let i = offsets.length - 1; i >= 0; i--) {
-      if ((offsets[i] ?? 0) <= renderScrollTop) {
-        start = i;
-        break;
-      }
-    }
-
-    // Find end: last item whose offset <= scrollTop + containerHeight
-    const endLimit = renderScrollTop + effectiveContainerHeight;
-    let end = data.length - 1;
-    for (let i = offsets.length - 1; i >= 0; i--) {
-      if ((offsets[i] ?? 0) <= endLimit) {
-        end = Math.min(i, data.length - 1);
-        break;
-      }
-    }
-
+    const start = Math.min(data.length - 1, findOffsetIndex(offsets, renderScrollTop));
+    const end = Math.min(
+      data.length - 1,
+      findOffsetIndex(offsets, renderScrollTop + effectiveContainerHeight)
+    );
     return { startIndex: Math.max(0, start), endIndex: Math.max(0, end) };
   }, [renderScrollTop, effectiveContainerHeight, offsets, data.length]);
 
@@ -246,6 +232,8 @@ function VirtualizedListInner<T>(
     totalContentHeight: totalHeight,
     dataLength: data.length,
     isStreaming,
+    initiallyFollowing:
+      initialScrollIndex === undefined || initialScrollIndex === SCROLL_TO_ITEM_END,
   });
 
   // Smooth scroll animation
@@ -361,10 +349,21 @@ function VirtualizedListInner<T>(
 
   // Notify parent of scroll changes and dimension updates
   useEffect(() => {
-    if (onScrollTopChange) {
-      onScrollTopChange(anchorScrollTop);
-    }
-  }, [anchorScrollTop, onScrollTopChange]);
+    onScrollStateChange?.({
+      scrollTop: anchorScrollTop,
+      scrollHeight: totalHeight,
+      innerHeight: effectiveContainerHeight,
+      followMode: stickyBottom.followMode,
+      newMessageCount: stickyBottom.newMessageCount,
+    });
+  }, [
+    anchorScrollTop,
+    onScrollStateChange,
+    totalHeight,
+    effectiveContainerHeight,
+    stickyBottom.newMessageCount,
+    stickyBottom.followMode,
+  ]);
 
   // Notify parent of sticking state changes
   useEffect(() => {
@@ -545,98 +544,6 @@ function VirtualizedListInner<T>(
       enableScrollPastEnd,
     ]
   );
-
-  // ==========================================================================
-  // ScrollContext Integration
-  // ==========================================================================
-  const scrollContext = useScrollOptional();
-  const lastReportedScrollTop = useRef<number>(anchorScrollTop);
-  const lastReportedDimensions = useRef({
-    totalHeight: -1,
-    containerHeight: -1,
-  });
-
-  // Report dimensions to ScrollContext when they change
-  useEffect(() => {
-    if (!scrollContext) {
-      return;
-    }
-    if (
-      lastReportedDimensions.current.totalHeight === totalHeight &&
-      lastReportedDimensions.current.containerHeight === effectiveContainerHeight
-    ) {
-      return;
-    }
-    lastReportedDimensions.current = {
-      totalHeight,
-      containerHeight: effectiveContainerHeight,
-    };
-    scrollContext.updateDimensions(totalHeight, effectiveContainerHeight);
-  }, [scrollContext, totalHeight, effectiveContainerHeight]);
-
-  // Sync internal scrollTop changes to ScrollContext (debounced to avoid loops)
-  useEffect(() => {
-    if (scrollContext && anchorScrollTop !== lastReportedScrollTop.current) {
-      lastReportedScrollTop.current = anchorScrollTop;
-      // Only sync if the context's scrollTop differs significantly
-      const contextScrollTop = scrollContext.state.scrollTop;
-      if (Math.abs(anchorScrollTop - contextScrollTop) > 1) {
-        scrollContext.scrollTo(anchorScrollTop);
-      }
-    }
-  }, [scrollContext, anchorScrollTop]);
-
-  // Listen for external scroll commands from ScrollContext
-  useEffect(() => {
-    if (!scrollContext) return;
-
-    const unsubscribe = scrollContext.onScrollChange((externalScrollTop) => {
-      // Avoid reacting to our own updates
-      if (Math.abs(externalScrollTop - anchorScrollTop) <= 1) return;
-
-      // Apply external scroll command
-      const newScrollTop = Math.max(
-        0,
-        Math.min(totalHeight - effectiveContainerHeight, externalScrollTop)
-      );
-      setPendingScrollTop(newScrollTop);
-      setScrollAnchor(getAnchorForScrollTop(newScrollTop));
-
-      // Update sticking state based on position
-      const atBottom = newScrollTop >= totalHeight - effectiveContainerHeight - 1;
-      setIsStickingToBottom(atBottom);
-    });
-
-    return unsubscribe;
-  }, [
-    scrollContext,
-    anchorScrollTop,
-    totalHeight,
-    effectiveContainerHeight,
-    setPendingScrollTop,
-    setScrollAnchor,
-    getAnchorForScrollTop,
-    setIsStickingToBottom,
-  ]);
-
-  // Respond to scrollToBottom via context state changes
-  useEffect(() => {
-    if (scrollContext?.state.isAtBottom && !isStickingToBottom && data.length > 0) {
-      // Context indicates we should be at bottom but we're not sticking
-      // This happens when scrollToBottom() is called on the context
-      setIsStickingToBottom(true);
-      setScrollAnchor({
-        index: data.length - 1,
-        offset: SCROLL_TO_ITEM_END,
-      });
-    }
-  }, [
-    scrollContext?.state.isAtBottom,
-    isStickingToBottom,
-    data.length,
-    setIsStickingToBottom,
-    setScrollAnchor,
-  ]);
 
   // Create ref callback wrapper (now id-based for stable refs across insertions/deletions)
   const createItemRef = useCallback((id: string) => setItemRef(id), [setItemRef]);

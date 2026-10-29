@@ -2,10 +2,6 @@
  * Mode CLI Integration Tests (T042)
  *
  * Tests for:
- * - T037: --mode CLI flag parsing
- * - T038: --approval CLI flag parsing
- * - T039: --sandbox CLI flag parsing
- * - T040: --full-auto shortcut flag
  * - T041: Mode slash commands (/mode, /vibe, /plan, /spec)
  * - T014: Verify mode commands work with new structure
  * - T015: Integration tests for mode switching with agent resolution
@@ -25,6 +21,7 @@ import {
   getModeCommandsManager,
   modeCommand,
   modeSlashCommands,
+  orchCommand,
   planCommand,
   setModeCommandsManager,
   specCommand,
@@ -66,7 +63,9 @@ function createMockContext(
 /**
  * Create a mock ModeManager for testing.
  */
-function createMockModeManager(currentMode: "vibe" | "plan" | "spec" = "vibe"): ModeManager {
+function createMockModeManager(
+  currentMode: "orch" | "vibe" | "plan" | "spec" = "vibe"
+): ModeManager {
   return {
     getCurrentMode: vi.fn().mockReturnValue(currentMode),
     getCurrentConfig: vi.fn().mockReturnValue({
@@ -88,127 +87,7 @@ function createMockModeManager(currentMode: "vibe" | "plan" | "spec" = "vibe"): 
 }
 
 // =============================================================================
-// T037: --mode Flag Tests
-// =============================================================================
-
-describe("T037: --mode CLI Flag", () => {
-  it("should accept valid mode values", () => {
-    // Test validation by importing and calling parse functions
-    // The actual parsing is done by Commander.js, but we test the schema validation
-    const validModes = ["vibe", "plan", "spec"];
-    for (const mode of validModes) {
-      // These would pass Commander validation
-      expect(validModes).toContain(mode);
-    }
-  });
-
-  it("should have default mode of vibe", () => {
-    // Default is set in Commander option definition
-    // This test documents the expected default
-    const defaultMode = "vibe";
-    expect(defaultMode).toBe("vibe");
-  });
-
-  it("should reject invalid mode values", () => {
-    const invalidModes = ["invalid", "fast", "slow", "code"];
-    const validModes = ["vibe", "plan", "spec"];
-    for (const mode of invalidModes) {
-      expect(validModes).not.toContain(mode);
-    }
-  });
-});
-
-// =============================================================================
-// T038: --approval Flag Tests
-// =============================================================================
-
-describe("T038: --approval CLI Flag", () => {
-  it("should accept valid approval policy values", () => {
-    const validPolicies = ["suggest", "auto-edit", "on-request", "full-auto"];
-    for (const policy of validPolicies) {
-      expect(validPolicies).toContain(policy);
-    }
-  });
-
-  it("should reject invalid approval policy values", () => {
-    const invalidPolicies = ["auto", "manual", "never", "always"];
-    const validPolicies = ["suggest", "auto-edit", "on-request", "full-auto"];
-    for (const policy of invalidPolicies) {
-      expect(validPolicies).not.toContain(policy);
-    }
-  });
-});
-
-// =============================================================================
-// T039: --sandbox Flag Tests
-// =============================================================================
-
-describe("T039: --sandbox CLI Flag", () => {
-  it("should accept valid sandbox policy values", () => {
-    const validPolicies = [
-      "workspace-read",
-      "workspace-write",
-      "cwd-read",
-      "cwd-write",
-      "full-access",
-    ];
-    for (const policy of validPolicies) {
-      expect(validPolicies).toContain(policy);
-    }
-  });
-
-  it("should reject invalid sandbox policy values", () => {
-    const invalidPolicies = ["read", "write", "restricted", "unrestricted"];
-    const validPolicies = [
-      "workspace-read",
-      "workspace-write",
-      "cwd-read",
-      "cwd-write",
-      "full-access",
-    ];
-    for (const policy of invalidPolicies) {
-      expect(validPolicies).not.toContain(policy);
-    }
-  });
-});
-
-// =============================================================================
-// T040: --full-auto Shortcut Tests
-// =============================================================================
-
-describe("T040: --full-auto Shortcut Flag", () => {
-  it("should set mode to vibe when --full-auto is used", () => {
-    // This tests the logic that would be applied in index.tsx
-    const options = { fullAuto: true, mode: "plan" as "vibe" | "plan" | "spec" };
-    let effectiveMode: "vibe" | "plan" | "spec" = options.mode;
-    let effectiveApproval: string | undefined;
-
-    if (options.fullAuto) {
-      effectiveMode = "vibe";
-      effectiveApproval = "full-auto";
-    }
-
-    expect(effectiveMode).toBe("vibe");
-    expect(effectiveApproval).toBe("full-auto");
-  });
-
-  it("should not override mode when --full-auto is not used", () => {
-    const options = { fullAuto: false, mode: "plan" as "vibe" | "plan" | "spec" };
-    let effectiveMode: "vibe" | "plan" | "spec" = options.mode;
-    let effectiveApproval: string | undefined;
-
-    if (options.fullAuto) {
-      effectiveMode = "vibe";
-      effectiveApproval = "full-auto";
-    }
-
-    expect(effectiveMode).toBe("plan");
-    expect(effectiveApproval).toBeUndefined();
-  });
-});
-
-// =============================================================================
-// T041: Mode Slash Commands Tests
+// Mode command integration
 // =============================================================================
 
 describe("T041: Mode Slash Commands", () => {
@@ -222,8 +101,9 @@ describe("T041: Mode Slash Commands", () => {
 
   describe("Command Registration", () => {
     it("should export all mode commands", () => {
-      expect(modeSlashCommands).toHaveLength(4);
+      expect(modeSlashCommands).toHaveLength(5);
       expect(modeSlashCommands).toContain(modeCommand);
+      expect(modeSlashCommands).toContain(orchCommand);
       expect(modeSlashCommands).toContain(vibeCommand);
       expect(modeSlashCommands).toContain(planCommand);
       expect(modeSlashCommands).toContain(specCommand);
@@ -251,7 +131,7 @@ describe("T041: Mode Slash Commands", () => {
 
       expect(result.kind).toBe("success");
       if (result.kind === "success") {
-        expect(result.message).toContain("Coding Modes");
+        expect(result.message).toContain("Assistant workflow");
         expect(result.message).toContain("vibe");
         expect(result.message).toContain("plan");
         expect(result.message).toContain("spec");

@@ -86,7 +86,7 @@ export function createCompleteStep(): CompleteStepHandler {
     generateSummary(state: OnboardingState): OnboardingSummary {
       return {
         provider: (state.selectedProvider as OnboardingProvider) || "anthropic",
-        mode: (state.selectedMode as CodingMode) || "vibe",
+        mode: (state.selectedMode as CodingMode) || "orch",
         credentialsConfigured: state.credentialConfigured ?? false,
         warnings: state.error ? [state.error] : [],
       };
@@ -102,7 +102,7 @@ export function createCompleteStep(): CompleteStepHandler {
       // Add credential setup reminder if needed
       if (!summary.credentialsConfigured) {
         steps.push(
-          `⚠️  Credentials not configured - run 'vellum credentials add ${summary.provider}'`
+          `!  Credentials not configured - run 'vellum credentials add ${summary.provider}'`
         );
       }
 
@@ -139,7 +139,7 @@ export function formatCompletionMessage(summary: OnboardingSummary): string {
   const providerInfo = PROVIDER_INFO[summary.provider];
   const modeInfo = MODE_INFO[summary.mode];
 
-  const credStatus = summary.credentialsConfigured ? "✅ Configured" : "⚠️  Not configured";
+  const credStatus = summary.credentialsConfigured ? "✅ Configured" : "!  Not configured";
   const providerIcon = providerInfo?.icon ?? "🤖";
   const providerName = providerInfo?.name ?? summary.provider;
   const modeIcon = modeInfo?.icon ?? "⚡";

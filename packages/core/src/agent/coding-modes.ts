@@ -30,7 +30,7 @@ import {
  * // Output: Mode: vibe, Mode: plan, Mode: spec
  * ```
  */
-export const CODING_MODES = ["vibe", "plan", "spec"] as const;
+export const CODING_MODES = ["orch", "vibe", "plan", "spec"] as const;
 
 /**
  * Schema for coding mode types.
@@ -294,6 +294,23 @@ export const VIBE_MODE: CodingModeConfig = {
   toolGroups: getDefaultGroupsForMode("vibe"),
 } as const;
 
+/** Default personal assistant; planning and delegation are chosen within the task. */
+export const ORCH_MODE: CodingModeConfig = {
+  name: "code",
+  codingMode: "orch",
+  description: "Personal assistant with adaptive planning, execution, and delegation",
+  tools: { edit: true, bash: true, web: true, mcp: true },
+  prompt:
+    "Help with research, writing, organization, analysis, and coding. Choose the simplest effective workflow, delegate independent work when useful, and verify results before claiming completion.",
+  agentName: "orch-agent",
+  approvalPolicy: "auto-edit",
+  sandboxPolicy: "workspace-write",
+  checkpointsRequired: false,
+  checkpointCount: 0,
+  allowedGroups: [...MODE_TOOL_GROUPS.orch],
+  toolGroups: getDefaultGroupsForMode("orch"),
+};
+
 /**
  * Plan mode configuration - plan-then-execute workflow.
  *
@@ -409,6 +426,7 @@ export const SPEC_MODE: CodingModeConfig = {
  * ```
  */
 export const BUILTIN_CODING_MODES = {
+  orch: ORCH_MODE,
   vibe: VIBE_MODE,
   plan: PLAN_MODE,
   spec: SPEC_MODE,

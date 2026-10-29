@@ -52,7 +52,7 @@ export interface HybridCredentialStoreOptions {
   /**
    * Password for encrypted file storage
    */
-  readonly password: string;
+  readonly password?: string;
 
   /**
    * Force file storage regardless of keychain availability
@@ -106,8 +106,8 @@ export class HybridCredentialStore implements CredentialStore {
   /** The actual backing store (keychain or file) */
   private backingStore: CredentialStore | null = null;
 
-  /** Whether initialization has been attempted */
-  private initialized = false;
+  /** Shared by concurrent reads so none can observe a half-initialized store. */
+  private initialization: Promise<void> | undefined;
 
   /** Whether keychain was detected as available */
   private keychainAvailable = false;
@@ -129,12 +129,16 @@ export class HybridCredentialStore implements CredentialStore {
    * Called lazily on first operation to determine which store to use.
    */
   private async initializeStore(): Promise<void> {
-    if (this.initialized) {
-      return;
+    if (!this.initialization) {
+      this.initialization = this.selectBackingStore().catch((error: unknown) => {
+        this.initialization = undefined;
+        throw error;
+      });
     }
+    await this.initialization;
+  }
 
-    this.initialized = true;
-
+  private async selectBackingStore(): Promise<void> {
     // If file storage is forced, use file store directly
     if (this.forceFileStorage) {
       this.backingStore = new EncryptedFileStore({

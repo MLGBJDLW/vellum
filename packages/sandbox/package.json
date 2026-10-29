@@ -10,8 +10,8 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
-    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "build": "tsup src/index.ts --format esm && tsc -p tsconfig.build.json",
+    "dev": "tsup src/index.ts --format esm --watch src --onSuccess \"tsc -p tsconfig.build.json\"",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
   },
@@ -21,6 +21,6 @@
   "devDependencies": {
     "@types/node": "^22.19.7",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   }
 }

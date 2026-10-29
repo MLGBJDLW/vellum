@@ -11,18 +11,14 @@
  * @module cli/commands/credentials
  */
 
-import {
-  CredentialManager,
-  type CredentialRef,
-  type CredentialSource,
-  EnvCredentialStore,
-  HybridCredentialStore,
-} from "@vellum/core";
+import { type CredentialRef, type CredentialSource, getCredentialEnvVars } from "@vellum/core";
+import { getSupportedProviders } from "@vellum/provider";
 import { Box, render, Text, useApp, useInput } from "ink";
 import { useCallback, useEffect, useState } from "react";
 import { createCompatStdout } from "../tui/buffered-stdout.js";
 import { TextInput } from "../tui/components/Input/TextInput.js";
 import { BracketedPasteProvider } from "../tui/context/BracketedPasteContext.js";
+import { createCredentialManager } from "./auth.js";
 
 // =============================================================================
 // Types
@@ -45,53 +41,10 @@ interface CredentialListResult {
 // Constants
 // =============================================================================
 
-const SUPPORTED_PROVIDERS = [
-  "anthropic",
-  "openai",
-  "google",
-  "azure",
-  "bedrock",
-  "vertex",
-  "ollama",
-  "openrouter",
-  "together",
-  "mistral",
-  "cohere",
-  "groq",
-] as const;
-
-type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
-
-const PROVIDER_ENV_VARS: Record<SupportedProvider, string> = {
-  anthropic: "ANTHROPIC_API_KEY",
-  openai: "OPENAI_API_KEY",
-  google: "GOOGLE_API_KEY",
-  azure: "AZURE_OPENAI_API_KEY",
-  bedrock: "AWS_ACCESS_KEY_ID",
-  vertex: "GOOGLE_APPLICATION_CREDENTIALS",
-  ollama: "OLLAMA_API_KEY",
-  openrouter: "OPENROUTER_API_KEY",
-  together: "TOGETHER_API_KEY",
-  mistral: "MISTRAL_API_KEY",
-  cohere: "COHERE_API_KEY",
-  groq: "GROQ_API_KEY",
-};
-
-// =============================================================================
-// Credential Manager Factory
-// =============================================================================
-
-async function createCredentialManager(): Promise<CredentialManager> {
-  const stores = [
-    new EnvCredentialStore(),
-    new HybridCredentialStore({
-      filePath: `${process.env.HOME ?? process.env.USERPROFILE}/.vellum/credentials.enc`,
-      password: process.env.VELLUM_CREDENTIAL_PASSWORD ?? "vellum-default-key",
-    }),
-  ];
-
-  return new CredentialManager(stores);
-}
+const SUPPORTED_PROVIDERS = getSupportedProviders();
+const PROVIDER_ENV_VARS: Record<string, string> = Object.fromEntries(
+  SUPPORTED_PROVIDERS.map((provider) => [provider, getCredentialEnvVars(provider).join(" or ")])
+);
 
 // =============================================================================
 // List Component
@@ -241,9 +194,9 @@ function AddCredential({ provider, onComplete }: AddCredentialProps) {
   const [savedStore, setSavedStore] = useState<CredentialSource | null>(null);
 
   const normalizedProvider = provider.toLowerCase();
-  const isSupported = SUPPORTED_PROVIDERS.includes(normalizedProvider as SupportedProvider);
+  const isSupported = SUPPORTED_PROVIDERS.includes(normalizedProvider);
   const envVar = isSupported
-    ? PROVIDER_ENV_VARS[normalizedProvider as SupportedProvider]
+    ? PROVIDER_ENV_VARS[normalizedProvider]
     : `${normalizedProvider.toUpperCase()}_API_KEY`;
 
   useInput(
@@ -468,7 +421,7 @@ function RemoveCredential({ provider, onComplete }: RemoveCredentialProps) {
     <Box flexDirection="column" padding={1}>
       <Box borderStyle="round" paddingX={1} marginBottom={1}>
         <Text bold color="red">
-          🗑️ Remove Credential: {normalizedProvider}
+          🗑 Remove Credential: {normalizedProvider}
         </Text>
       </Box>
 

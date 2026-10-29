@@ -10,9 +10,9 @@
     }
   },
   "scripts": {
-    "build": "rimraf dist && tsup src/index.ts --format esm --dts",
+    "build": "rimraf dist && tsup src/index.ts --format esm && tsc -p tsconfig.build.json",
     "postbuild": "node -e \"const fs=require('fs');const p=require('path');fs.cpSync(p.join('src','prompts','markdown'),p.join('dist','markdown'),{recursive:true})\"",
-    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "dev": "tsup src/index.ts --format esm --watch src --onSuccess \"tsc -p tsconfig.build.json\"",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
   },
@@ -51,7 +51,7 @@
     "@types/picomatch": "^4.0.2",
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "comments": {
     "keytar-bun-compat": "keytar uses native Node-API bindings. For Bun: ensure node-gyp build tools are available. May require --backend=node flag in some Bun versions."

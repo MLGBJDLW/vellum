@@ -11,7 +11,7 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EncryptedFileStore } from "../stores/encrypted-file-store.js";
 import type { Credential } from "../types.js";
 
@@ -62,11 +62,118 @@ describe("EncryptedFileStore", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     try {
       await rm(testDir, { recursive: true, force: true });
     } catch {
       // Ignore cleanup errors
     }
+  });
+
+  describe("managed encryption secret", () => {
+    it("honors custom passwords and refuses mutation with the wrong password", async () => {
+      const originalStore = new EncryptedFileStore({
+        filePath: testFilePath,
+        password: testPassword,
+      });
+      await originalStore.set(createTestCredential("openai", "fixture-secret"));
+      const original = await readFile(testFilePath, "utf-8");
+      const wrong = new EncryptedFileStore({ filePath: testFilePath, password: "wrong-password" });
+      expect((await wrong.set(createTestCredential("anthropic", "fixture-other"))).ok).toBe(false);
+      expect((await wrong.delete("openai")).ok).toBe(false);
+      expect(await readFile(testFilePath, "utf-8")).toBe(original);
+      await expect(stat(`${testFilePath}.key`)).rejects.toMatchObject({ code: "ENOENT" });
+      const reopened = new EncryptedFileStore({ filePath: testFilePath, password: testPassword });
+      expect((await reopened.get("openai")).ok).toBe(true);
+    });
+
+    it("migrates legacy-default credentials and reopens them with the managed key", async () => {
+      const legacy = new EncryptedFileStore({
+        filePath: testFilePath,
+        password: "vellum-default-key",
+      });
+      await legacy.set(createTestCredential("openai", "fixture-openai-secret"));
+      await legacy.set(createTestCredential("anthropic", "fixture-anthropic-secret"));
+      const original = await readFile(testFilePath, "utf-8");
+      const store = new EncryptedFileStore({ filePath: testFilePath });
+      expect((await store.get("openai")).ok).toBe(true);
+      const migrated = await readFile(testFilePath, "utf-8");
+      expect(migrated === original).toBe(false);
+      expect(JSON.parse(migrated).keySource).toBe("managed");
+      const secret = await readFile(`${testFilePath}.key`, "utf-8");
+      expect(/^[a-f0-9]{64}$/.test(secret.trim())).toBe(true);
+      if (process.platform !== "win32")
+        expect((await stat(`${testFilePath}.key`)).mode & 0o777).toBe(0o600);
+      const reopened = new EncryptedFileStore({ filePath: testFilePath });
+      const result = await reopened.get("anthropic");
+      expect(result.ok && result.value?.value === "fixture-anthropic-secret").toBe(true);
+      const oldPassword = new EncryptedFileStore({
+        filePath: testFilePath,
+        password: "vellum-default-key",
+      });
+      expect((await oldPassword.get("openai")).ok).toBe(false);
+    });
+
+    it("keeps corrupted legacy ciphertext untouched and does not create a managed key", async () => {
+      const legacy = new EncryptedFileStore({
+        filePath: testFilePath,
+        password: "vellum-default-key",
+      });
+      await legacy.set(createTestCredential("openai", "fixture-secret"));
+      const data = JSON.parse(await readFile(testFilePath, "utf-8"));
+      data.credentials.openai.authTag = "00".repeat(16);
+      const original = JSON.stringify(data);
+      await writeFile(testFilePath, original);
+      const store = new EncryptedFileStore({ filePath: testFilePath });
+      expect((await store.get("openai")).ok).toBe(false);
+      expect(await readFile(testFilePath, "utf-8")).toBe(original);
+      await expect(stat(`${testFilePath}.key`)).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    it("preserves the original on failed rotation and retries after reopening", async () => {
+      const legacy = new EncryptedFileStore({
+        filePath: testFilePath,
+        password: "vellum-default-key",
+      });
+      await legacy.set(createTestCredential("openai", "fixture-secret"));
+      const original = await readFile(testFilePath, "utf-8");
+      const store = new EncryptedFileStore({ filePath: testFilePath });
+      // Fault injection at the existing atomic persistence seam; never touches a user path.
+      const save = vi
+        .spyOn(store as unknown as { saveFile: () => Promise<unknown> }, "saveFile")
+        .mockResolvedValueOnce({
+          ok: false,
+          error: { code: "IO_ERROR", message: "Fixture write failure", store: "file" },
+        });
+      expect((await store.get("openai")).ok).toBe(false);
+      expect(await readFile(testFilePath, "utf-8")).toBe(original);
+      expect(save).toHaveBeenCalledOnce();
+      const reopened = new EncryptedFileStore({ filePath: testFilePath });
+      const result = await reopened.get("openai");
+      expect(result.ok && result.value?.value === "fixture-secret").toBe(true);
+    });
+
+    it("reuses the key-creation winner and never falls back when a modern key is lost", async () => {
+      const legacy = new EncryptedFileStore({
+        filePath: testFilePath,
+        password: "vellum-default-key",
+      });
+      await legacy.set(createTestCredential("openai", "fixture-secret"));
+      const first = new EncryptedFileStore({ filePath: testFilePath });
+      const second = new EncryptedFileStore({ filePath: testFilePath });
+      const results = await Promise.all([first.get("openai"), second.get("openai")]);
+      expect(results.every((result) => result.ok && result.value?.value === "fixture-secret")).toBe(
+        true
+      );
+      const ciphertext = await readFile(testFilePath, "utf-8");
+      await rm(`${testFilePath}.key`);
+      const lost = new EncryptedFileStore({ filePath: testFilePath });
+      const result = await lost.get("openai");
+      expect(result.ok).toBe(false);
+      expect((await lost.set(createTestCredential("anthropic", "fixture-other"))).ok).toBe(false);
+      expect(await readFile(testFilePath, "utf-8")).toBe(ciphertext);
+      await expect(stat(`${testFilePath}.key`)).rejects.toMatchObject({ code: "ENOENT" });
+    });
   });
 
   // ===========================================================================
@@ -294,7 +401,7 @@ describe("EncryptedFileStore", () => {
         password: testPassword,
       });
 
-      const unicodeValue = "密钥-κλειδί-مفتاح-🗝️";
+      const unicodeValue = "密钥-κλειδί-مفتاح-🗝";
       const credential = createTestCredential("unicode", unicodeValue);
       await store.set(credential);
 

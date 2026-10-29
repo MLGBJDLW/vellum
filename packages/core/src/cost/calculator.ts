@@ -51,10 +51,17 @@ const MILLION = 1_000_000;
 export function calculateCostBreakdown(params: CostCalculationParams): CostBreakdown {
   const { model, provider, usage } = params;
 
-  const pricing = getPricing(model);
+  const pricing = getPricing(model, provider);
   if (!pricing) {
-    // Unknown model - return zero cost
-    return createEmptyCostBreakdown();
+    // Preserve unknown pricing through aggregation; it must never look like free usage.
+    return {
+      input: Number.NaN,
+      output: Number.NaN,
+      cacheRead: Number.NaN,
+      cacheWrite: Number.NaN,
+      reasoning: Number.NaN,
+      total: Number.NaN,
+    };
   }
 
   // Adjust input tokens based on provider semantics
@@ -70,18 +77,26 @@ export function calculateCostBreakdown(params: CostCalculationParams): CostBreak
 
   // Calculate each cost component
   const inputCost = (adjustedInputTokens / MILLION) * inputPrice;
-  const outputCost = (usage.outputTokens / MILLION) * outputPrice;
+  // Google exposes candidate tokens separately from thoughts. OpenAI Responses,
+  // Chat Completions and compatible adapters report reasoning inside output tokens.
+  const thinkingTokens =
+    provider === "google"
+      ? (usage.thinkingTokens ?? 0)
+      : Math.min(usage.thinkingTokens ?? 0, usage.outputTokens);
+  const visibleOutputTokens =
+    provider === "google" ? usage.outputTokens : usage.outputTokens - thinkingTokens;
+  const outputCost = (visibleOutputTokens / MILLION) * outputPrice;
 
   const cacheReadCost = usage.cacheReadTokens
-    ? (usage.cacheReadTokens / MILLION) * (pricing.cacheReadPricePerMillion ?? inputPrice * 0.1)
+    ? (usage.cacheReadTokens / MILLION) * (pricing.cacheReadPricePerMillion ?? Number.NaN)
     : 0;
 
   const cacheWriteCost = usage.cacheWriteTokens
-    ? (usage.cacheWriteTokens / MILLION) * (pricing.cacheWritePricePerMillion ?? inputPrice * 1.25)
+    ? (usage.cacheWriteTokens / MILLION) * (pricing.cacheWritePricePerMillion ?? Number.NaN)
     : 0;
 
-  const reasoningCost = usage.thinkingTokens
-    ? (usage.thinkingTokens / MILLION) * (pricing.reasoningPricePerMillion ?? outputPrice)
+  const reasoningCost = thinkingTokens
+    ? (thinkingTokens / MILLION) * (pricing.reasoningPricePerMillion ?? outputPrice)
     : 0;
 
   const total = inputCost + outputCost + cacheReadCost + cacheWriteCost + reasoningCost;
@@ -162,6 +177,7 @@ export function calculateCostWithUsage(
  * ```
  */
 export function formatCost(cost: number, options: FormatCostOptions = {}): string {
+  if (!Number.isFinite(cost)) return "Unknown";
   const { currency = "USD", showCurrency = true, minDecimals = 2, maxDecimals = 6 } = options;
 
   if (cost === 0) {

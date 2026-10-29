@@ -7,6 +7,7 @@
 import { getIcons } from "@vellum/shared";
 import { render } from "ink-testing-library";
 import type React from "react";
+import { act } from "react";
 import { describe, expect, it } from "vitest";
 import type { Message } from "../../../context/MessagesContext.js";
 import { ThemeProvider } from "../../../theme/index.js";
@@ -36,6 +37,52 @@ function createMessage(overrides: Partial<Message> = {}): Message {
 }
 
 describe("MessageList", () => {
+  it("keeps a long streaming response inside the viewport", async () => {
+    const pendingMessage = createMessage({
+      id: "streaming-long",
+      role: "assistant",
+      isStreaming: true,
+      content: Array.from({ length: 100 }, (_, index) => `Streaming line ${index}`).join("\n"),
+    });
+    const screen = renderWithTheme(
+      <MessageList messages={[]} pendingMessage={pendingMessage} isStreaming maxHeight={12} />
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    expect((screen.lastFrame() ?? "").split("\n").length).toBeLessThanOrEqual(12);
+    expect(screen.lastFrame()).toContain("Streaming line 99");
+    await act(async () => {
+      screen.stdin.write("\u001b[5~");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    expect(screen.lastFrame()).not.toContain("Streaming line 99");
+    expect(screen.lastFrame()).toContain("Reading history");
+    const readPosition = screen.lastFrame();
+    await act(async () => {
+      screen.rerender(
+        <ThemeProvider>
+          <MessageList
+            messages={[]}
+            pendingMessage={{
+              ...pendingMessage,
+              content: `${pendingMessage.content}\nStreaming line 100`,
+            }}
+            isStreaming
+            maxHeight={12}
+          />
+        </ThemeProvider>
+      );
+      screen.stdin.write("keep reading");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    expect(screen.lastFrame()).not.toContain("Streaming line 100");
+    expect(screen.lastFrame()).toBe(readPosition);
+    await act(async () => {
+      screen.unmount();
+    });
+  });
+
   describe("Rendering", () => {
     it("should render without crashing with empty messages", () => {
       const { lastFrame } = renderWithTheme(<MessageList messages={[]} />);

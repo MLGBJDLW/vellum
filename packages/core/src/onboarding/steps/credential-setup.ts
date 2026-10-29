@@ -289,29 +289,10 @@ export function formatCredentialPrompt(provider: OnboardingProvider): string {
   const info = PROVIDER_INFO[provider];
 
   if (!info.requiresApiKey) {
-    return `
-🏠 ${info.name} (Local)
-
-No API key required! Ollama runs locally on your machine.
-
-Make sure Ollama is installed and running:
-  - Install: https://ollama.ai
-  - Start: ollama serve
-
-Press Enter to continue...
-`;
+    return `${info.name} (Local)\nNo API key required. Start your local model server, then press Enter.`;
   }
 
-  return `
-🔐 Configure ${info.name} API Key
-
-Get your API key from the provider's dashboard:
-  ${getApiKeyUrl(provider)}
-
-Your key will be stored securely (encrypted or in system keychain).
-
-Enter your API key (or 'skip' to configure later):
-`;
+  return `Configure ${info.name} API Key\n${getApiKeyUrl(provider)}\nStored in the system keychain or encrypted local storage.`;
 }
 
 /**

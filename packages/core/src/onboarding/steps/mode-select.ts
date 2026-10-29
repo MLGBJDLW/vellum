@@ -45,7 +45,7 @@ export interface ModeSelectStepHandler {
 /**
  * Valid coding modes
  */
-const VALID_MODES: readonly CodingMode[] = ["vibe", "plan", "spec"] as const;
+const VALID_MODES: readonly CodingMode[] = ["orch", "vibe", "plan", "spec"] as const;
 
 // =============================================================================
 // Implementation
@@ -57,7 +57,7 @@ const VALID_MODES: readonly CodingMode[] = ["vibe", "plan", "spec"] as const;
 export function createModeSelectStep(): ModeSelectStepHandler {
   return {
     getModes(): ModeInfo[] {
-      return VALID_MODES.map((id) => MODE_INFO[id]).filter((m): m is ModeInfo => m !== undefined);
+      return [MODE_INFO.orch].filter((m): m is ModeInfo => m !== undefined);
     },
 
     validateSelection(mode: string): boolean {
@@ -65,8 +65,7 @@ export function createModeSelectStep(): ModeSelectStepHandler {
     },
 
     getDefault(): CodingMode {
-      // Default to vibe mode for fastest experience
-      return "vibe";
+      return "orch";
     },
 
     async execute(_state: OnboardingState, selection: string): Promise<StepResult> {
@@ -102,9 +101,7 @@ export function createModeSelectStep(): ModeSelectStepHandler {
 
       // Normalize selection (allow numbers)
       let normalizedSelection = selection.toLowerCase().trim();
-      if (normalizedSelection === "1") normalizedSelection = "vibe";
-      if (normalizedSelection === "2") normalizedSelection = "plan";
-      if (normalizedSelection === "3") normalizedSelection = "spec";
+      if (normalizedSelection === "1") normalizedSelection = "orch";
 
       // Validate selection
       if (!this.validateSelection(normalizedSelection)) {
@@ -148,7 +145,7 @@ export function createModeSelectStep(): ModeSelectStepHandler {
  */
 export function formatModeList(modes: ModeInfo[]): string {
   const lines: string[] = [
-    "⚡ Choose Your Coding Mode:",
+    "Your Personal Assistant:",
     "",
     ...modes.map((m, index) => {
       const num = index + 1;
@@ -159,7 +156,7 @@ export function formatModeList(modes: ModeInfo[]): string {
         "",
       ].join("\n");
     }),
-    "Enter number (1-3) or mode name:",
+    "Press Enter to continue with orch:",
   ];
 
   return lines.join("\n");
@@ -170,6 +167,7 @@ export function formatModeList(modes: ModeInfo[]): string {
  */
 export function getModeExplanation(mode: CodingMode): string {
   const explanations: Record<CodingMode, string> = {
+    orch: "One personal assistant for research, writing, organization, analysis, and coding. Planning and delegation adapt to the task. Tool permissions remain under your control.",
     vibe: `
 ⚡ VIBE MODE - Fast & Autonomous
 

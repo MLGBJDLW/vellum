@@ -10,10 +10,15 @@
  */
 
 import {
+  createContextIsolator,
   createModeRegistry,
   createOrchestrator,
+  createPermissionInheritance,
+  createResourceQuotaManager,
+  createSubsessionManager,
   type ModeRegistry,
   type OrchestratorCore,
+  type UnifiedToolContainer,
 } from "@vellum/core";
 
 // =============================================================================
@@ -31,9 +36,11 @@ let modeRegistryInstance: ModeRegistry | null = null;
  * Configuration options for orchestrator initialization.
  */
 export interface OrchestratorSingletonConfig {
+  /** The same live tool container used by the primary agent. */
+  toolContainer?: UnifiedToolContainer;
   /** Maximum number of concurrent subagents (default: 3) */
   maxConcurrentSubagents?: number;
-  /** Task timeout in milliseconds (default: 300000) */
+  /** Optional explicit task deadline in milliseconds. */
   taskTimeout?: number;
 }
 
@@ -65,10 +72,25 @@ export interface OrchestratorSingletonConfig {
 export function getOrCreateOrchestrator(config?: OrchestratorSingletonConfig): OrchestratorCore {
   if (!orchestratorInstance) {
     modeRegistryInstance = createModeRegistry();
+    const subsessionManager = config?.toolContainer
+      ? createSubsessionManager({
+          contextIsolator: createContextIsolator(),
+          permissionInheritance: createPermissionInheritance(),
+          resourceQuotaManager: createResourceQuotaManager(),
+          baseToolRegistry: config.toolContainer,
+        })
+      : undefined;
+    const rootSession = subsessionManager?.create({
+      agentSlug: "orch",
+      level: 0,
+      initialContext: { localMemory: { cwd: config?.toolContainer?.getCwd() } },
+    });
     orchestratorInstance = createOrchestrator({
       modeRegistry: modeRegistryInstance,
+      subsessionManager,
+      parentSessionId: rootSession?.id,
       maxConcurrentSubagents: config?.maxConcurrentSubagents ?? 3,
-      taskTimeout: config?.taskTimeout ?? 300_000,
+      taskTimeout: config?.taskTimeout,
     });
   }
   return orchestratorInstance;

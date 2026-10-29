@@ -71,7 +71,7 @@ describe("useStickyBottom", () => {
         expect(newState.lastScrollDirection).toBe("down");
       });
 
-      it("should stay in auto on keyboard navigation up", () => {
+      it("should pause follow on keyboard navigation up", () => {
         const action: StickyBottomAction = {
           type: "SCROLL",
           delta: -100,
@@ -81,7 +81,7 @@ describe("useStickyBottom", () => {
 
         const newState = stickyBottomReducer(autoState, action);
 
-        expect(newState.followMode).toBe("auto");
+        expect(newState.followMode).toBe("off");
         expect(newState.lastScrollDirection).toBe("up");
       });
 
@@ -99,7 +99,7 @@ describe("useStickyBottom", () => {
         expect(newState.lastScrollDirection).toBe("down");
       });
 
-      it("should stay in auto on programmatic scroll up", () => {
+      it("should pause follow on explicit scroll up", () => {
         const action: StickyBottomAction = {
           type: "SCROLL",
           delta: -50,
@@ -109,7 +109,7 @@ describe("useStickyBottom", () => {
 
         const newState = stickyBottomReducer(autoState, action);
 
-        expect(newState.followMode).toBe("auto");
+        expect(newState.followMode).toBe("off");
       });
 
       it("should stay in auto on programmatic scroll down", () => {
@@ -338,7 +338,7 @@ describe("useStickyBottom", () => {
         expect(newState.lastScrollDirection).toBe("down");
       });
 
-      it("should stay locked on keyboard navigation", () => {
+      it("should release the follow lock on keyboard navigation up", () => {
         const action: StickyBottomAction = {
           type: "SCROLL",
           delta: -100,
@@ -348,7 +348,7 @@ describe("useStickyBottom", () => {
 
         const newState = stickyBottomReducer(lockedState, action);
 
-        expect(newState.followMode).toBe("locked");
+        expect(newState.followMode).toBe("off");
       });
 
       it("should transition to auto on CONTENT_STABLE", () => {

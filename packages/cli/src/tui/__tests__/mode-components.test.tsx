@@ -128,19 +128,16 @@ describe("ModeIndicator", () => {
 
 describe("ModeSelector", () => {
   describe("Rendering", () => {
-    it("should render all three modes", () => {
+    it("offers the personal assistant without exposing legacy workflows as choices", () => {
       const onSelect = vi.fn();
       const { lastFrame } = renderWithTheme(
         <ModeSelector currentMode="vibe" onSelect={onSelect} isActive={false} />
       );
       const frame = lastFrame() ?? "";
 
-      expect(frame).toContain(icons.vibe);
-      expect(frame).toContain("vibe");
-      expect(frame).toContain(icons.plan);
-      expect(frame).toContain("plan");
-      expect(frame).toContain(icons.spec);
-      expect(frame).toContain("spec");
+      expect(frame).toContain("orch");
+      expect(frame).not.toContain("vibe");
+      expect(frame).not.toContain("spec");
     });
 
     it("should show shortcut keys", () => {
@@ -151,19 +148,19 @@ describe("ModeSelector", () => {
       const frame = lastFrame() ?? "";
 
       expect(frame).toContain("[1]");
-      expect(frame).toContain("[2]");
-      expect(frame).toContain("[3]");
+      expect(frame).not.toContain("[2]");
+      expect(frame).not.toContain("[3]");
     });
 
     it("should indicate current mode", () => {
       const onSelect = vi.fn();
       const { lastFrame } = renderWithTheme(
-        <ModeSelector currentMode="plan" onSelect={onSelect} isActive={false} />
+        <ModeSelector currentMode="orch" onSelect={onSelect} isActive={false} />
       );
       const frame = lastFrame() ?? "";
 
       // Translation key is used in tests - checks correct key is applied
-      expect(frame).toContain("modeSelector.current");
+      expect(frame).toContain("(current)");
     });
 
     it("should show mode descriptions by default", () => {
@@ -173,7 +170,7 @@ describe("ModeSelector", () => {
       );
       const frame = lastFrame() ?? "";
 
-      expect(frame).toContain("Fast autonomous coding");
+      expect(frame).toContain("Personal assistant");
     });
 
     it("should hide descriptions when showDescriptions is false", () => {
@@ -188,7 +185,7 @@ describe("ModeSelector", () => {
       );
       const frame = lastFrame() ?? "";
 
-      expect(frame).not.toContain("Fast autonomous coding");
+      expect(frame).not.toContain("adaptive planning");
     });
   });
 
@@ -201,7 +198,7 @@ describe("ModeSelector", () => {
       const frame = lastFrame() ?? "";
 
       // Translation key is used in tests - checks correct key is applied
-      expect(frame).toContain("modeSelector.keybindings");
+      expect(frame).toContain("Enter: use orch");
     });
 
     // Note: Testing stdin/keyboard input with ink-testing-library is complex
@@ -221,12 +218,15 @@ describe("ModeSelector", () => {
       expect(frame).toContain("❯");
     });
 
-    it("should not call onSelect when inactive", () => {
+    it("returns an existing legacy session to orch on Enter", async () => {
       const onSelect = vi.fn();
-      renderWithTheme(<ModeSelector currentMode="vibe" onSelect={onSelect} isActive={false} />);
-
-      // With isActive=false, the selector should not process input
-      expect(onSelect).not.toHaveBeenCalled();
+      const { stdin, unmount } = renderWithTheme(
+        <ModeSelector currentMode="vibe" onSelect={onSelect} isActive />
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      stdin.write("\r");
+      await vi.waitFor(() => expect(onSelect).toHaveBeenCalledWith("orch"));
+      unmount();
     });
   });
 });

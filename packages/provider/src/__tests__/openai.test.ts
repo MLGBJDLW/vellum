@@ -43,18 +43,18 @@ describe("OpenAIProvider", () => {
     it("should return list of supported models", () => {
       const provider = new OpenAIProvider();
       const models = provider.listModels();
-      expect(models).toContain("gpt-4o");
-      expect(models).toContain("gpt-4o-mini");
-      expect(models).toContain("gpt-4-turbo");
-      expect(models).toContain("o1");
-      expect(models).toContain("o1-mini");
+      expect(models).toContain("gpt-6.1-sol");
+      expect(models).toContain("gpt-6-luna");
+      expect(models).not.toContain("gpt-4-turbo");
+      expect(models).not.toContain("o1");
+      expect(models).not.toContain("o1-mini");
     });
   });
 
   describe("getDefaultModel", () => {
     it("should return default model", () => {
       const provider = new OpenAIProvider();
-      expect(provider.getDefaultModel()).toBe("gpt-5.4");
+      expect(provider.getDefaultModel()).toBe("gpt-6.1-sol");
     });
   });
 
@@ -255,27 +255,27 @@ describe("OpenAIProvider", () => {
     it("should identify O-series models", () => {
       const provider = new OpenAIProvider();
       const models = provider.listModels();
-      expect(models).toContain("o1");
-      expect(models).toContain("o1-mini");
+      expect(models).not.toContain("o1");
+      expect(models).not.toContain("o1-mini");
       expect(models).toContain("o3");
-      expect(models).toContain("o3-mini");
+      expect(models).not.toContain("o3-mini");
     });
 
     it("should return model info with supportsReasoning for O-series", async () => {
       const provider = new OpenAIProvider();
       const models = await provider.listModelsAsync();
-      const o1 = models.find((m) => m.id === "o1");
+      const o1 = models.find((m) => m.id === "o3");
       expect(o1).toBeDefined();
       expect(o1?.supportsReasoning).toBe(true);
-      expect(o1?.supportsStreaming).toBe(false); // O-series doesn't stream
+      expect(o1?.supportsStreaming).toBe(true); // Responses streams reasoning models
     });
 
     it("should return model info with supportsStreaming for standard models", async () => {
       const provider = new OpenAIProvider();
       const models = await provider.listModelsAsync();
-      const gpt4o = models.find((m) => m.id === "gpt-4o");
+      const gpt4o = models.find((m) => m.id === "gpt-6-luna");
       expect(gpt4o).toBeDefined();
-      expect(gpt4o?.supportsReasoning).toBe(false);
+      expect(gpt4o?.supportsReasoning).toBe(true);
       expect(gpt4o?.supportsStreaming).toBe(true);
     });
   });
@@ -284,7 +284,7 @@ describe("OpenAIProvider", () => {
     it("should return model info for known models", async () => {
       const provider = new OpenAIProvider();
       const models = await provider.listModelsAsync();
-      const gpt4o = models.find((m) => m.id === "gpt-4o");
+      const gpt4o = models.find((m) => m.id === "gpt-6-luna");
       expect(gpt4o).toBeDefined();
       expect(gpt4o?.supportsTools).toBe(true);
       expect(gpt4o?.supportsVision).toBe(true);
@@ -353,7 +353,7 @@ describe("OpenAIProvider", () => {
       expect(request.reasoning_effort).toBe("high");
     });
 
-    it("should include extra_body when provided", () => {
+    it("should merge extension fields at the JSON root", () => {
       const provider = new OpenAIProvider();
       const request = (
         provider as unknown as {
@@ -371,7 +371,8 @@ describe("OpenAIProvider", () => {
         false
       );
 
-      expect(request.extra_body).toEqual({ reasoning_split: true });
+      expect(request).toMatchObject({ reasoning_split: true });
+      expect(request.extra_body).toBeUndefined();
     });
 
     it("should omit extra_body when empty", () => {

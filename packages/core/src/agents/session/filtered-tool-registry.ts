@@ -130,11 +130,18 @@ export interface FilteredToolRegistry {
  * Uses a Map for O(1) lookup of blocked tools.
  */
 class FilteredToolRegistryImpl implements FilteredToolRegistry {
-  private readonly baseRegistry: ToolRegistry;
+  private readonly baseRegistry: Pick<
+    ToolRegistry,
+    "get" | "list" | "has" | "listByKind" | "getDefinitions"
+  >;
   private readonly blockedToolsMap: Map<string, boolean>;
   private readonly _agentLevel: AgentLevel;
 
-  constructor(baseRegistry: ToolRegistry, agentLevel: AgentLevel, toolGroups?: ToolGroupEntry[]) {
+  constructor(
+    baseRegistry: Pick<ToolRegistry, "get" | "list" | "has" | "listByKind" | "getDefinitions">,
+    agentLevel: AgentLevel,
+    toolGroups?: ToolGroupEntry[]
+  ) {
     this.baseRegistry = baseRegistry;
     this._agentLevel = agentLevel;
     this.blockedToolsMap = new Map();
@@ -284,7 +291,7 @@ class FilteredToolRegistryImpl implements FilteredToolRegistry {
  * ```
  */
 export function createFilteredToolRegistry(
-  baseRegistry: ToolRegistry,
+  baseRegistry: Pick<ToolRegistry, "get" | "list" | "has" | "listByKind" | "getDefinitions">,
   agentLevel: AgentLevel,
   toolGroups?: ToolGroupEntry[]
 ): FilteredToolRegistry {

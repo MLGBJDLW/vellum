@@ -1,9 +1,8 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * Zhipu Provider (智谱)
  *
- * Implements support for Zhipu AI's GLM models with JWT authentication.
- * Zhipu uses a unique JWT-based authentication system where the API key
- * is in the format {id}.{secret} and requires generating a signed JWT.
+ * Implements Zhipu's OpenAI-compatible API using direct Bearer credentials.
  *
  * @module @vellum/provider/zhipu
  */
@@ -55,6 +54,7 @@ async function hmacSha256(message: string, secret: string): Promise<string> {
  * @param apiKey - Zhipu API key in format {id}.{secret}
  * @returns JWT token for Authorization header
  * @throws Error if API key format is invalid
+ * @deprecated Current BigModel endpoints accept API keys directly. Kept for callers of older endpoints.
  */
 export async function generateZhipuToken(apiKey: string): Promise<string> {
   const parts = apiKey.split(".");
@@ -129,25 +129,19 @@ export class ZhipuProvider extends OpenAICompatibleProvider {
   readonly providerName = "zhipu";
 
   /**
-   * Initialize the provider with JWT-based authentication
-   *
-   * Zhipu requires JWT tokens instead of simple Bearer tokens.
-   * We generate a JWT from the API key and use it for auth.
+   * Direct API-key authentication avoids the old one-shot JWT expiring during
+   * a long-running session. See https://docs.bigmodel.cn/cn/api/introduction.
    *
    * @param options - Provider configuration
    */
   async initialize(options: ProviderOptions): Promise<void> {
-    if (!options.apiKey) {
+    if (!options.apiKey?.trim()) {
       throw new Error("Zhipu API key is required");
     }
 
-    // Generate JWT token from API key
-    const jwtToken = await generateZhipuToken(options.apiKey);
-
-    // Initialize with JWT token as the "apiKey" for Bearer auth
     const finalOptions: ProviderOptions = {
       ...options,
-      apiKey: jwtToken,
+      apiKey: options.apiKey.trim(),
       baseUrl: options.baseUrl ?? this.defaultBaseUrl,
     };
 
@@ -170,6 +164,6 @@ export class ZhipuProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "glm-4";
+    return DEFAULT_MODEL_IDS.zhipu;
   }
 }

@@ -44,7 +44,7 @@ export interface ModelPricing {
   tiers?: PricingTier[];
 
   /** ISO date string when pricing became effective */
-  effectiveDate: string;
+  effectiveDate?: string;
 
   /** Source URL for pricing reference */
   sourceUrl?: string;
@@ -111,7 +111,7 @@ export interface TokenUsage {
   /** Number of tokens written to cache */
   cacheWriteTokens?: number;
 
-  /** Number of reasoning/thinking tokens */
+  /** Reasoning tokens: included in outputTokens except Google candidate-token usage. */
   thinkingTokens?: number;
 
   /** Total context size (for tiered pricing lookup) */
@@ -138,6 +138,7 @@ export interface CostCalculationParams {
 
 /**
  * Detailed cost breakdown by token type.
+ * Unknown rates are represented as NaN and remain unknown when aggregated.
  */
 export interface CostBreakdown {
   /** Cost for input tokens (USD) */
@@ -194,7 +195,7 @@ export interface CostRecord {
   /** Reasoning token count */
   reasoningTokens?: number;
 
-  /** Calculated total cost (USD) */
+  /** Calculated total cost (USD), or NaN when any required rate is unknown. */
   cost: number;
 
   /** Detailed cost breakdown */

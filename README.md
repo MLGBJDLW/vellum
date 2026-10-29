@@ -1,193 +1,98 @@
-<div align="center">
+# Vellum
 
-<pre>
-██╗   ██╗███████╗██╗     ██╗     ██╗   ██╗███╗   ███╗
-██║   ██║██╔════╝██║     ██║     ██║   ██║████╗ ████║
-██║   ██║█████╗  ██║     ██║     ██║   ██║██╔████╔██║
-╚██╗ ██╔╝██╔══╝  ██║     ██║     ██║   ██║██║╚██╔╝██║
- ╚████╔╝ ███████╗███████╗███████╗╚██████╔╝██║ ╚═╝ ██║
-  ╚═══╝  ╚══════╝╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝
-</pre>
+Your personal AI assistant for the terminal. Vellum helps with research, writing,
+analysis, organization, and software work through one adaptive `orch` entry point.
 
-<h3>Next-generation AI coding assistant for the terminal</h3>
+## Get started
 
-*Write code with AI — powered by 17+ LLM providers, intelligent LSP, and extensible skills*
-
-</div>
-
-<p align="center">
-
-[![npm version](https://img.shields.io/npm/v/@butlerw/vellum?style=for-the-badge&logo=npm&color=CB3837)](https://www.npmjs.com/package/@butlerw/vellum) [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge)](CONTRIBUTING.md)
-
-</p>
-
-<p align="center">
-
-[Getting Started](#-quick-start) | [Features](#-features) | [Modes](#-coding-modes) | [Documentation](docs/) | [Contributing](CONTRIBUTING.md)
-
-</p>
-
----
-
-## ✨ Features
-
-- **17 LLM Providers** — Anthropic, OpenAI, Google, and 14 more
-- **26-Language LSP** — Intelligent code analysis across languages
-- **3 Coding Modes** — vibe, plan, spec for different workflows
-- **MCP Protocol** — Model Context Protocol integration
-- **Skills System** — Extensible domain-specific knowledge
-- **Custom Agents** — Define your own AI personas
-- **Secure Credentials** — System keychain storage
-- **i18n Support** — English and Chinese (中文)
-
-## 📦 Installation
+Requires Node.js 20 or newer.
 
 ```bash
-# npm
 npm install -g @butlerw/vellum
-
-# pnpm
-pnpm add -g @butlerw/vellum
-
-# bun
-bun add -g @butlerw/vellum
-```
-
-## 🚀 Quick Start
-
-```bash
-# Start interactive session
 vellum
-
-# Quick task (vibe mode)
-vellum "fix the type error in src/index.ts"
-
-# Plan mode for complex tasks
-vellum plan "add user authentication"
-
-# Spec mode for large features
-vellum spec "redesign the payment system"
 ```
 
-## 🎯 Coding Modes
+Choose a model with `/model`. Vellum checks environment variables and local
+credential storage. If a cloud provider has no key, a masked input form opens;
+the model changes only after the key is saved. You can also configure a key with
+`/auth set <provider>` or `vellum credentials add <provider>`. Local Ollama and
+LM Studio do not require a cloud API key. A stored key is not proof of provider
+access: account permissions, endpoint availability, and model access still apply.
 
-| Mode | Style | Approval | Use Case |
-|------|-------|----------|----------|
-| ⚡ **vibe** | Full-auto | None | Quick fixes, trusted tasks |
-| 📋 **plan** | Semi-auto | Plan approval | Complex tasks |
-| 📐 **spec** | Guided | 6 checkpoints | Large features |
+Describe the result you need in ordinary language:
 
-Switch modes anytime with `/vibe`, `/plan`, or `/spec`.
+- “Compare these research notes and write a concise brief.”
+- “Organize the files in this workspace and explain your changes.”
+- “Plan and implement the next step, then check the result.”
 
-## 🤖 Supported Providers
-
-| Category | Providers |
-|----------|-----------|
-| **Major** | Anthropic (Claude), OpenAI (GPT), Google (Gemini) |
-| **Cloud** | Groq, DeepSeek, Mistral, OpenRouter, xAI |
-| **China** | Qwen, Yi, Zhipu, Baichuan, Moonshot, MiniMax |
-| **Local** | Ollama, LMStudio |
-
-Configure your provider:
+For a non-interactive task:
 
 ```bash
-vellum config set provider anthropic
-vellum config set api-key YOUR_API_KEY
+vellum run "Summarize the Markdown files in this directory"
+vellum run --provider openai "Find and fix the failing test"
 ```
 
-## 🔧 Key Features
+## One assistant, adaptive work
 
-### Skills System
+`orch` chooses direct execution, planning, a specification, or specialist
+delegation as needed. It reuses the same agent loop, tools, permissions, context
+management, and session history. Verification failures return to the task for
+repair. Simple questions do not require a plan or a delegate.
 
-Extend Vellum with domain-specific knowledge:
+The default approval policy is `auto-edit`, with a `workspace-write` sandbox.
+Use explicit `--approval` and `--sandbox` options to change them. Delegates inherit
+the parent tool permission checker. Cancellation, repeated-action detection,
+concurrency controls, and explicit resource budgets remain active.
 
-```markdown
-~/.vellum/skills/
-├── backend-development/
-├── frontend-design/
-└── code-refactoring/
-```
+Legacy `vibe`, `plan`, and `spec` overrides are retained for existing workflows;
+new sessions and onboarding use `orch`. Use `/orch` or Alt+0 to return to it.
+See [workflow and migration details](docs/modes.md).
 
-See [Skills Documentation](docs/skills.md)
+## Providers
 
-### Custom Agents
+Vellum includes adapters for Anthropic, OpenAI, Google, DeepSeek, Groq, xAI, Qwen,
+OpenRouter, Mistral, Moonshot, Zhipu, MiniMax, Doubao, Yi, Baichuan, Ollama, and
+LM Studio. Model defaults and capabilities come from one shared catalog.
 
-Create specialized AI personas:
+See the [provider audit](docs/research/provider-model-audit.md) for exact models,
+official sources, retired-model removals, protocol adaptations, and vendors whose
+public catalogs could not be verified. Unknown pricing is not treated as free.
+Local and aggregator availability depends on the configured endpoint.
 
-```markdown
-~/.vellum/agents/
-├── code-reviewer.md
-├── architect.md
-└── debugger.md
-```
+## Capabilities
 
-See [Custom Agents Guide](docs/custom-agents.md)
+- Streaming terminal interface with scrollable history and a task sidebar
+- Specialist agents and cancellation-aware delegation
+- Skills, custom prompts, and local memory
+- MCP tools and optional language-server tools for software work
+- Environment, system keychain, and encrypted-file credential storage
+- Persistent sessions with context management
+- English and Chinese interface text
 
-### MCP Integration
+## Documentation
 
-Connect external tools via Model Context Protocol:
+- [Getting started](docs/getting-started.md)
+- [Credentials](docs/credentials.md)
+- [Configuration](docs/configuration.md)
+- [Workflows](docs/modes.md)
+- [Skills](docs/skills.md) and [custom agents](docs/custom-agents.md)
+- [MCP](docs/mcp.md), [LSP](docs/lsp.md), and [terminal UI](docs/tui.md)
+- [Harness source comparison](docs/research/agent-harness.md)
 
-```json
-{
-  "mcpServers": {
-    "filesystem": { "command": "npx", "args": ["-y", "@anthropic/mcp-server-filesystem"] }
-  }
-}
-```
-
-See [MCP Configuration](docs/mcp.md)
-
-## 📚 Documentation
-
-| Topic | Description |
-|-------|-------------|
-| [Getting Started](docs/getting-started.md) | First steps with Vellum |
-| [Configuration](docs/configuration.md) | Settings and customization |
-| [Credentials](docs/credentials.md) | API key management |
-| [Modes](docs/modes.md) | vibe, plan, spec workflows |
-| [Skills](docs/skills.md) | Extending with skills |
-| [Custom Agents](docs/custom-agents.md) | Creating AI personas |
-| [MCP](docs/mcp.md) | Model Context Protocol |
-| [LSP](docs/lsp.md) | Language server support |
-| [TUI](docs/tui.md) | Terminal interface |
-| [Session System](docs/session-system.md) | Managing sessions |
-
-## 🛠️ Development
+## Development
 
 ```bash
-# Clone
-git clone https://github.com/nicepkg/vellum.git
+git clone https://github.com/MLGBJDLW/vellum.git
 cd vellum
-
-# Install dependencies
-pnpm install
-
-# Development mode
-pnpm dev
-
-# Build
+pnpm install --frozen-lockfile
 pnpm build
-
-# Test
-pnpm test
-
-# Lint
+pnpm typecheck
 pnpm lint
+pnpm test:run
 ```
 
-### Project Structure
+The monorepo keeps CLI/UI in `packages/cli`, runtime in `packages/core`, model
+adapters in `packages/provider`, and shared integrations in the other workspace
+packages. See [Contributing](CONTRIBUTING.md) for standards and changesets.
 
-```markdown
-packages/
-├── cli/       # CLI entry point
-├── core/      # Agent loop, orchestration
-├── provider/  # LLM provider adapters
-├── tools/     # Built-in tools
-├── lsp/       # Language server client
-├── mcp/       # MCP integration
-└── shared/    # Shared utilities
-```
-
-## 📄 License
-
-[MIT](LICENSE) © 2025-present
+[MIT](LICENSE)

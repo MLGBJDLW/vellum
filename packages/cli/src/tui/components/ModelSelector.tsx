@@ -104,7 +104,8 @@ function formatContextWindow(tokens: number): string {
 /**
  * Format price for display.
  */
-function formatPrice(pricePer1M: number): string {
+function formatPrice(pricePer1M: number | undefined): string {
+  if (pricePer1M === undefined) return "Unknown";
   if (pricePer1M === 0) {
     return "Free";
   }
@@ -367,8 +368,8 @@ export function ModelSelector({
                     <Box marginLeft={4}>
                       <Text dimColor>
                         {icons.context} {formatContextWindow(opt.model.contextWindow)} ctx •{" "}
-                        {formatPrice(opt.model.inputPrice ?? 0)} in •{" "}
-                        {formatPrice(opt.model.outputPrice ?? 0)} out
+                        {formatPrice(opt.model.inputPrice)} in •{" "}
+                        {formatPrice(opt.model.outputPrice)} out
                       </Text>
                     </Box>
                   )}

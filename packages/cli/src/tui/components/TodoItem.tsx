@@ -133,7 +133,8 @@ export function TodoItem({
 
   // Calculate available width for title
   const fixedWidth = 4 + 2 + 12; // selector + icon + spacing + date
-  const titleWidth = Math.max(width - fixedWidth - 4, 15);
+  const compact = width < 56;
+  const titleWidth = Math.max(1, compact ? width - 6 : width - fixedWidth - 4);
 
   if (isExpanded) {
     return (
@@ -154,6 +155,7 @@ export function TodoItem({
             color={item.status === "completed" ? theme.colors.muted : undefined}
             strikethrough={item.status === "completed"}
             bold={isSelected}
+            wrap="truncate"
           >
             {item.title}
           </Text>
@@ -201,8 +203,12 @@ export function TodoItem({
       >
         {truncate(item.title, titleWidth)}
       </Text>
-      <Text dimColor> </Text>
-      <Text dimColor>{formatDate(item.createdAt)}</Text>
+      {!compact && (
+        <>
+          <Text dimColor> </Text>
+          <Text dimColor>{formatDate(item.createdAt)}</Text>
+        </>
+      )}
     </Box>
   );
 }

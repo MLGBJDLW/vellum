@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * Qwen Provider (Alibaba Cloud)
  *
@@ -9,7 +10,7 @@
 
 import { QWEN_MODELS } from "./models/providers/qwen.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
-import type { ModelInfo } from "./types.js";
+import type { CompletionParams, ModelInfo } from "./types.js";
 
 // =============================================================================
 // Qwen Provider Implementation
@@ -61,6 +62,10 @@ export class QwenProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "qwen-turbo";
+    return DEFAULT_MODEL_IDS.qwen;
+  }
+
+  protected override buildExtraBody(params: CompletionParams): Record<string, unknown> {
+    return { ...params.extraBody, enable_thinking: params.thinking?.enabled ?? false };
   }
 }

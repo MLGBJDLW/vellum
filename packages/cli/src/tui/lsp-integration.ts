@@ -233,8 +233,9 @@ export class LspIntegrationManager extends EventEmitter {
       // Initialize the hub
       await this.hub.initialize();
 
-      // Initialize auto-mode for language detection and server lifecycle
-      await this.hub.initAutoMode();
+      // Register capabilities at startup without scanning the workspace or
+      // prompting to install servers. LSP commands and tool calls start the
+      // required server when the user actually requests language support.
 
       // Get available servers
       const servers = this.hub.getServers();

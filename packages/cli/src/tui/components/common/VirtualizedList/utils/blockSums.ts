@@ -69,9 +69,19 @@ function computeTotalHeight(blockSums: readonly number[]): number {
 // Public API
 // ============================================================================
 
-/**
- * Create initial state from heights array
- */
+/** Last offset at or before the requested row, in logarithmic time. */
+export function findOffsetIndex(offsets: readonly number[], row: number): number {
+  let low = 0;
+  let high = offsets.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if ((offsets[mid] ?? Number.POSITIVE_INFINITY) <= row) low = mid + 1;
+    else high = mid;
+  }
+  return low - 1;
+}
+
+/** Create initial state from heights array. */
 export function createBlockSums(initialHeights?: number[]): BlockSumsState {
   const heights = initialHeights ? [...initialHeights] : [];
   const blockSums = rebuildBlockSums(heights);

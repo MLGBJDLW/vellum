@@ -7,7 +7,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { shouldRunOnboarding } from "../../onboarding/wizard.js";
+import { CredentialManager } from "../../credentials/manager.js";
+import { OnboardingWizard, shouldRunOnboarding } from "../../onboarding/wizard.js";
 
 function getVellumDir(baseDir: string): string {
   return path.join(baseDir, ".vellum");
@@ -46,6 +47,18 @@ describe("Onboarding Wizard integration", () => {
   it("returns true when no Vellum directory exists", async () => {
     const result = await shouldRunOnboarding();
     expect(result).toBe(true);
+  });
+
+  it("keeps credential setup open when the secret cannot be persisted", async () => {
+    const wizard = new OnboardingWizard();
+    wizard.setCredentialManager(new CredentialManager([]));
+    await wizard.executeProviderSelect("openai");
+    const result = await wizard.executeCredentialSetup("test-key-with-enough-characters");
+    expect(result.success).toBe(false);
+    expect(result.next).toBe(false);
+    expect(result.data?.saved).not.toBe(true);
+    expect(wizard.getState().currentStep).toBe("credential-setup");
+    expect(wizard.getState().credentialConfigured).toBe(false);
   });
 
   it("returns true when completed but config is missing", async () => {

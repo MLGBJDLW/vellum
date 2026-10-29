@@ -10,6 +10,7 @@ import {
   batchUpdateHeights,
   computeAnchorDelta,
   createBlockSums,
+  findOffsetIndex,
   getHeight,
   prefixSum,
   removeFromStart,
@@ -20,6 +21,23 @@ import {
 const BLOCK_SIZE = 32;
 
 describe("blockSums", () => {
+  it("locates a row in long histories without scanning all offsets", () => {
+    let reads = 0;
+    const offsets = new Proxy(
+      Array.from({ length: 100_000 }, (_, index) => index * 3),
+      {
+        get(target, property, receiver) {
+          if (typeof property === "string" && /^\d+$/.test(property)) reads++;
+          return Reflect.get(target, property, receiver);
+        },
+      }
+    );
+    expect(findOffsetIndex(offsets, 13)).toBe(4);
+    expect(reads).toBeLessThan(20);
+    expect(findOffsetIndex([0, 4, 4, 9], 4)).toBe(2);
+    expect(findOffsetIndex([], 0)).toBe(-1);
+  });
+
   // ==========================================================================
   // createBlockSums
   // ==========================================================================

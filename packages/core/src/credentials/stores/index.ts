@@ -13,7 +13,7 @@ export type { CredentialStore, CredentialStoreError } from "../types.js";
 // T005: Encrypted File Store
 export { EncryptedFileStore, type EncryptedFileStoreOptions } from "./encrypted-file-store.js";
 // T004: Environment Variable Store
-export { EnvCredentialStore } from "./env-store.js";
+export { EnvCredentialStore, getCredentialEnvVars } from "./env-store.js";
 
 // T011: Hybrid Store (auto-switches between keychain and file)
 export { HybridCredentialStore, type HybridCredentialStoreOptions } from "./hybrid-store.js";

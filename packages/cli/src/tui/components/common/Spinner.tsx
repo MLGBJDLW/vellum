@@ -16,7 +16,7 @@
 import { Text } from "ink";
 import InkSpinner from "ink-spinner";
 import type React from "react";
-import { useAnimationFrame } from "../../context/AnimationContext.js";
+import { useAnimationControls, useAnimationFrame } from "../../context/AnimationContext.js";
 import { useTheme } from "../../theme/index.js";
 
 // =============================================================================
@@ -261,11 +261,12 @@ export function Spinner({
 
   // Use global animation context for custom frames
   const frameIndex = useAnimationFrame(effectiveFrames);
+  const { isPaused } = useAnimationControls();
 
   const spinnerColor = color ?? theme.semantic.text.primary;
 
   // Use ink-spinner if type is specified or useInkSpinner is true
-  if (type || useInkSpinner) {
+  if ((type || useInkSpinner) && !isPaused) {
     return (
       <Text color={spinnerColor}>
         <InkSpinner type={type ?? "dots"} />

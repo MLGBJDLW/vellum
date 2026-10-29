@@ -97,6 +97,30 @@ describe("EnvCredentialStore", () => {
   // ===========================================================================
 
   describe("Store Properties", () => {
+    it(
+      "discovers provider aliases and includes them in the credential listing",
+      withEnv(
+        {
+          DASHSCOPE_API_KEY: "test-dashscope-secret",
+          QWEN_API_KEY: undefined,
+          ZHIPUAI_API_KEY: "test-zhipu-secret",
+          ZHIPU_API_KEY: undefined,
+          ARK_API_KEY: "test-ark-secret",
+          DOUBAO_API_KEY: undefined,
+        },
+        async () => {
+          for (const provider of ["qwen", "zhipu", "doubao"]) {
+            const result = await store.get(provider);
+            expect(result.ok && result.value).toBeTruthy();
+          }
+          const listed = await store.list();
+          expect(listed.ok && listed.value.map((item) => item.provider)).toEqual(
+            expect.arrayContaining(["qwen", "zhipu", "doubao"])
+          );
+        }
+      )
+    );
+
     it("should have name 'env'", () => {
       expect(store.name).toBe("env");
     });

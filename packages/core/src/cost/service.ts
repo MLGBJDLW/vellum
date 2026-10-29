@@ -10,7 +10,7 @@
 
 import { EventEmitter } from "node:events";
 import type { Logger } from "../logger/logger.js";
-import { calculateCostBreakdown, sumCostBreakdowns } from "./calculator.js";
+import { calculateCostBreakdown, formatCost, sumCostBreakdowns } from "./calculator.js";
 import type {
   CostBreakdown,
   CostRecord,
@@ -45,11 +45,11 @@ import type {
  *
  * // Get session cost
  * const breakdown = service.getSessionCost();
- * console.log(`Session total: $${breakdown.total.toFixed(4)}`);
+ * console.log(`Session total: ${formatCost(breakdown.total)}`);
  *
  * // Listen for cost updates
  * service.on('costUpdate', (event) => {
- *   console.log(`New cost: $${event.cost.toFixed(4)}`);
+ *   console.log(`New cost: ${formatCost(event.cost)}`);
  * });
  * ```
  */
@@ -107,7 +107,9 @@ export class CostService extends EventEmitter {
     this.records.push(record);
     this.updateCosts(breakdown);
 
-    this.logger?.debug(`[CostService] Tracked: ${model} - $${breakdown.total.toFixed(6)}`);
+    this.logger?.debug(
+      `[CostService] Tracked: ${provider}/${model} - ${formatCost(breakdown.total)}`
+    );
 
     const event: CostUpdateEvent = {
       sessionId: this.sessionId,

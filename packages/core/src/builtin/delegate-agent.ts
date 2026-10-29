@@ -10,9 +10,6 @@
 import { z } from "zod";
 import { defineTool, ok } from "../types/index.js";
 
-/** Default maximum conversation turns for subagent */
-const DEFAULT_MAX_TURNS = 10;
-
 /**
  * Schema for delegate_agent tool parameters
  */
@@ -23,20 +20,20 @@ export const delegateAgentParamsSchema = z.object({
   targetAgent: z
     .string()
     .optional()
-    .describe("Target agent slug to spawn (e.g. 'coder', 'reviewer')"),
+    .describe(
+      "Specialist: coder, qa, writer, analyst, architect, devops, security, or researcher. Omit for automatic routing."
+    ),
   /** Additional context to provide to the subagent */
   context: z.string().optional().describe("Additional context to help the subagent"),
   /** Model to use for the subagent (optional, uses default if not specified) */
   model: z.string().optional().describe("Model identifier for the subagent (optional)"),
-  /** Maximum conversation turns allowed (default: 10) */
+  /** Optional explicit turn budget; omitted workers use progress guards. */
   maxTurns: z
     .number()
     .int()
     .positive()
-    .max(100)
     .optional()
-    .default(DEFAULT_MAX_TURNS)
-    .describe("Maximum conversation turns for the subagent (default: 10)"),
+    .describe("Optional explicit maximum conversation turns for this subagent"),
 });
 
 /** Inferred type for delegate_agent parameters */
@@ -58,7 +55,7 @@ export interface DelegateAgentSignal {
   /** Model to use */
   model?: string;
   /** Maximum turns allowed */
-  maxTurns: number;
+  maxTurns?: number;
   /** ID of this delegation for tracking */
   delegationId: string;
 }
@@ -118,7 +115,7 @@ export const delegateAgentTool = defineTool({
   async execute(input, _ctx) {
     // Note: Cancellation is handled at the agent loop level for delegations
 
-    const { task, targetAgent, context, model, maxTurns = DEFAULT_MAX_TURNS } = input;
+    const { task, targetAgent, context, model, maxTurns } = input;
 
     const delegationId = generateDelegationId();
 
@@ -141,7 +138,7 @@ export const delegateAgentTool = defineTool({
     if (model) {
       parts.push(`Model: ${model}`);
     }
-    parts.push(`Max turns: ${maxTurns}`);
+    if (maxTurns !== undefined) parts.push(`Max turns: ${maxTurns}`);
 
     return ok({
       signal,

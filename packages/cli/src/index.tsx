@@ -11,6 +11,7 @@ import {
   type CodingMode,
   OnboardingWizard as CoreOnboardingWizard,
   createAgentFactory,
+  createModeManager,
   getToolEventBus,
   LLM,
   normalizeMode,
@@ -19,7 +20,12 @@ import {
   UnifiedToolContainer,
 } from "@vellum/core";
 import { createLspTools, LspHub } from "@vellum/lsp";
-import { ProviderRegistry } from "@vellum/provider";
+import {
+  getDefaultModelId,
+  getModelReplacement,
+  getSupportedProviders,
+  ProviderRegistry,
+} from "@vellum/provider";
 import { createId } from "@vellum/shared";
 import { Command } from "commander";
 import { render } from "ink";
@@ -152,7 +158,7 @@ setupGlobalShutdownHandlers();
  */
 export interface ChatOptions {
   /** Model to use for AI responses */
-  model: string;
+  model?: string;
   /** Provider to use (anthropic, openai, etc.) */
   provider: string;
   /** Language/locale for UI */
@@ -212,7 +218,17 @@ function parseSandbox(value: string): SandboxPolicy {
 
 const program = new Command();
 
-program.name("vellum").description("Next-generation AI coding agent").version(version);
+function parseProvider(value: string): string {
+  const provider = value.toLowerCase();
+  if (!getSupportedProviders().includes(provider)) {
+    throw new Error(
+      `Unknown provider: ${value}. Choose from ${getSupportedProviders().join(", ")}`
+    );
+  }
+  return provider;
+}
+
+program.name("vellum").description("Your personal AI assistant").version(version);
 
 // =============================================================================
 // T037-T040: Chat Command with Mode Flags
@@ -221,11 +237,16 @@ program.name("vellum").description("Next-generation AI coding agent").version(ve
 program
   .command("chat", { isDefault: true })
   .description("Start interactive chat session")
-  .option("-m, --model <model>", "Model to use", "claude-sonnet-4-6")
-  .option("-p, --provider <provider>", "Provider to use", "anthropic")
+  .option("-m, --model <model>", "Model to use (defaults to the provider's current model)")
+  .option("-p, --provider <provider>", "Provider to use", parseProvider, "anthropic")
   .option("-l, --language <locale>", "Language/locale to use (e.g., en, zh)")
   // T037: --mode flag
-  .option("--mode <mode>", `Set coding mode (${CODING_MODES.join("|")})`, parseMode, "vibe")
+  .option(
+    "--mode <mode>",
+    `Workflow override (${CODING_MODES.join("|")}); defaults to orch`,
+    parseMode,
+    "orch"
+  )
   // T038: --approval flag
   .option(
     "--approval <policy>",
@@ -235,7 +256,7 @@ program
   // T039: --sandbox flag
   .option("--sandbox <policy>", `Set sandbox policy (${SANDBOX_POLICIES.join("|")})`, parseSandbox)
   // T040: --full-auto shortcut
-  .option("--full-auto", "Shortcut for --mode=vibe --approval=full-auto", false)
+  .option("--full-auto", "Use full-auto approval for the selected workflow", false)
   // Role selection (overrides mode default)
   .option(
     "-r, --role <role>",
@@ -245,13 +266,15 @@ program
   // Theme selection
   .option("--theme <theme>", "UI theme (dark|parchment|dracula|etc.)", "parchment")
   .option("--banner", "Show banner on startup", false)
-  .action(async (options: ChatOptions) => {
+  .action(async (options: ChatOptions, command: Command) => {
     // T040: Apply --full-auto shortcut
-    let effectiveMode = options.mode;
+    const effectiveMode =
+      command.getOptionValueSource("mode") !== "cli" && process.env.VELLUM_MODE
+        ? parseMode(process.env.VELLUM_MODE)
+        : options.mode;
     let effectiveApproval = options.approval;
 
     if (options.fullAuto) {
-      effectiveMode = "vibe";
       effectiveApproval = "full-auto";
     }
 
@@ -268,15 +291,29 @@ program
       const loadResult = await wizard.loadState();
       if (loadResult.ok) {
         const userConfig = wizard.generateConfig();
-        if (userConfig.provider) {
+        if (userConfig.provider && command.getOptionValueSource("provider") !== "cli") {
           effectiveProvider = userConfig.provider;
         }
-        if (userConfig.model) {
+        if (userConfig.model && !options.model && effectiveProvider === userConfig.provider) {
           effectiveModel = userConfig.model;
         }
       }
     } catch {
       // Use CLI defaults if config loading fails
+    }
+
+    effectiveModel ??= getDefaultModelId(effectiveProvider);
+    if (!effectiveModel) {
+      throw new Error(
+        `No default model for ${effectiveProvider}. Select a provider and model explicitly.`
+      );
+    }
+    const replacement = getModelReplacement(effectiveProvider, effectiveModel);
+    if (replacement) {
+      if (options.model)
+        throw new Error(`${effectiveProvider}/${effectiveModel} has retired. Use ${replacement}.`);
+      console.error(`[Vellum] ${effectiveModel} has retired; using ${replacement}.`);
+      effectiveModel = replacement;
     }
 
     // Create AgentLoop with real LLM provider
@@ -295,10 +332,13 @@ program
       LLM.initialize(providerRegistry);
 
       // Get mode config for the selected coding mode
+      const modeManager = createModeManager({
+        initialMode: effectiveMode,
+        requireSpecConfirmation: true,
+      });
       const modeConfig = BUILTIN_CODING_MODES[effectiveMode];
 
       // Initialize orchestrator singleton for task delegation
-      const orchestrator = getOrCreateOrchestrator();
 
       // Create PromptBuilder with MD prompts (REQ-001: Use MD prompts)
       const factoryResult = await createAgentFactory({
@@ -322,6 +362,7 @@ program
         eventBus: toolEventBus,
       });
       toolContainer.registerBuiltins();
+      const orchestrator = getOrCreateOrchestrator({ toolContainer });
 
       // Initialize LSP and register LSP tools to UnifiedToolContainer
       // This ensures Agent has access to LSP tools (lsp_diagnostics, lsp_hover, etc.)
@@ -358,6 +399,7 @@ program
       agentLoop = new AgentLoop({
         sessionId: createId(),
         mode: modeConfig,
+        modeManager,
         providerType: effectiveProvider,
         model: effectiveModel,
         cwd: process.cwd(),
@@ -373,6 +415,7 @@ program
         // Enable AGENTS.md and Skills integration for project context
         enableAgentsIntegration: true,
         enableSkillsIntegration: true,
+        contextManagement: { enabled: true },
       });
     } catch (error) {
       initError = error instanceof Error ? error : new Error(String(error));
@@ -478,17 +521,24 @@ program
 program
   .command("run <prompt>")
   .description("Run a single prompt")
-  .option("-m, --model <model>", "Model to use", "claude-3-opus-20240229")
-  .option("-p, --provider <provider>", "Provider to use", "anthropic")
+  .option("-m, --model <model>", "Model to use (defaults to the provider's current model)")
+  .option("-p, --provider <provider>", "Provider to use", parseProvider, "anthropic")
   .action(async (prompt, options) => {
-    await handleRun(prompt, options);
+    const model = options.model ?? getDefaultModelId(options.provider);
+    if (!model) throw new Error(`No default model for ${options.provider}`);
+    const replacement = getModelReplacement(options.provider, model);
+    if (replacement)
+      throw new Error(`${options.provider}/${model} has retired. Use ${replacement}.`);
+    await handleRun(prompt, { ...options, model });
   });
 
 program
   .command("config")
   .description("Manage configuration")
   .action(() => {
-    console.log("Config management coming soon");
+    console.log(
+      "Use /config inside Vellum to inspect or edit configuration.\nManage API keys with: vellum credentials add <provider>\nOr use /auth set <provider> in an interactive session."
+    );
   });
 
 // =============================================================================

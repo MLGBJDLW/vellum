@@ -45,15 +45,15 @@ describe("GoogleProvider", () => {
       const models = provider.listModels();
       expect(models).toContain("gemini-2.5-pro");
       expect(models).toContain("gemini-2.5-flash");
-      expect(models).toContain("gemini-1.5-pro");
-      expect(models).toContain("gemini-1.5-flash");
+      expect(models).toContain("gemini-4-argon");
+      expect(models).toContain("gemini-3.8-flash");
     });
   });
 
   describe("getDefaultModel", () => {
     it("should return default model", () => {
       const provider = new GoogleProvider();
-      expect(provider.getDefaultModel()).toBe("gemini-3.1-flash-preview");
+      expect(provider.getDefaultModel()).toBe("gemini-3.8-flash");
     });
   });
 
@@ -282,7 +282,7 @@ describe("GoogleProvider", () => {
       expect(request.config.thinkingConfig).toBeUndefined();
     });
 
-    it("should omit thinking config when reasoning effort is unsupported and no budget is provided", () => {
+    it("maps reasoning effort to a token budget for Gemini 2.5", () => {
       const provider = new GoogleProvider();
       const request = (
         provider as unknown as {
@@ -294,7 +294,10 @@ describe("GoogleProvider", () => {
         thinking: { enabled: true, reasoningEffort: "high" },
       });
 
-      expect(request.config.thinkingConfig).toBeUndefined();
+      expect(request.config.thinkingConfig).toEqual({
+        thinkingBudget: 4096,
+        includeThoughts: true,
+      });
     });
 
     it("should fall back to default reasoning effort when unsupported", () => {
@@ -306,12 +309,12 @@ describe("GoogleProvider", () => {
           };
         }
       ).buildRequest({
-        model: "gemini-3-pro-preview",
+        model: "gemini-3.8-flash",
         messages: [{ role: "user", content: "Hello" }],
-        thinking: { enabled: true, reasoningEffort: "medium" },
+        thinking: { enabled: true, reasoningEffort: "minimal" },
       });
 
-      expect(request.config.thinkingConfig?.thinkingLevel).toBe("LOW");
+      expect(request.config.thinkingConfig?.thinkingLevel).toBe("MEDIUM");
       expect(request.config.thinkingConfig?.includeThoughts).toBe(true);
     });
   });

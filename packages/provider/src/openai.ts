@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * OpenAI Provider Implementation
  *
@@ -23,9 +24,15 @@ import type {
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
 import { createProviderError, ProviderError } from "./errors.js";
+import { normalizeDiscoveredModels } from "./models/discovery.js";
 import type { ReasoningEffort } from "./models/index.js";
 import { getModelInfo } from "./models/index.js";
 import { OPENAI_MODELS } from "./models/providers/openai.js";
+import {
+  buildResponsesRequest,
+  mapResponsesStream,
+  normalizeResponsesResult,
+} from "./openai-responses.js";
 import { openaiTransform } from "./transforms/openai.js";
 import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
 import type { TransformConfig } from "./transforms/types.js";
@@ -76,6 +83,19 @@ const O_SERIES_MODEL_PATTERN = /^o[13](-|$)/;
  * Default maximum tokens for completions
  */
 const DEFAULT_MAX_TOKENS = 4096;
+
+interface CompatibleReasoningPayload {
+  reasoning_content?: string;
+  reasoning?: string;
+  reasoning_details?: Record<string, unknown>[];
+}
+
+function visibleReasoningDetails(details: Record<string, unknown>[]): string {
+  return details
+    .map((detail) => detail.text ?? detail.summary)
+    .filter((text): text is string => typeof text === "string")
+    .join("");
+}
 
 // =============================================================================
 // Provider Options
@@ -167,7 +187,16 @@ export class OpenAIProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "gpt-5.4";
+    return DEFAULT_MODEL_IDS.openai;
+  }
+
+  async refreshModels(): Promise<import("./models/types.js").ModelInfo[]> {
+    const models: unknown[] = [];
+    for await (const model of this.ensureInitialized().models.list()) models.push(model);
+    return normalizeDiscoveredModels(
+      this.getProviderTypeForModelInfo() as import("./types.js").ProviderType,
+      models
+    );
   }
 
   /**
@@ -258,11 +287,43 @@ export class OpenAIProvider {
     this.ensureInitialized();
 
     try {
+      if (getModelInfo(this.getProviderTypeForModelInfo(), params.model).api === "responses") {
+        const request = buildResponsesRequest(
+          params,
+          this.getProviderTypeForModelInfo(),
+          this.resolveReasoningEffort(params)
+        );
+        const response = await this.ensureInitialized().responses.create(request, {
+          signal: params.abortSignal,
+        });
+        return normalizeResponsesResult(response, this.getProviderTypeForModelInfo(), params.model);
+      }
       const isOSeries = this.isOSeriesModel(params.model);
       const request = this.buildRequest(params, isOSeries);
-      const response = await this.client?.chat.completions.create(request);
+      const response = await this.client?.chat.completions.create(request, {
+        signal: params.abortSignal,
+      });
 
-      return this.normalizeResponse(response as ChatCompletion, isOSeries);
+      const result = this.normalizeResponse(response as ChatCompletion, isOSeries);
+      const provider = this.getProviderTypeForModelInfo();
+      const message = (response as ChatCompletion).choices[0]?.message as
+        | CompatibleReasoningPayload
+        | undefined;
+      const replay = provider === "openrouter" ? message?.reasoning_details : undefined;
+      return {
+        ...result,
+        ...(result.thinking || replay?.length
+          ? {
+              providerMetadata: {
+                provider,
+                model: params.model,
+                ...(replay?.length
+                  ? { replay: structuredClone(replay) }
+                  : { reasoningContent: result.thinking }),
+              },
+            }
+          : {}),
+      };
     } catch (error) {
       throw this.handleError(error, "Completion request failed");
     }
@@ -281,6 +342,27 @@ export class OpenAIProvider {
   async *stream(params: CompletionParams): AsyncIterable<StreamEvent> {
     this.ensureInitialized();
 
+    if (getModelInfo(this.getProviderTypeForModelInfo(), params.model).api === "responses") {
+      try {
+        const request = buildResponsesRequest(
+          params,
+          this.getProviderTypeForModelInfo(),
+          this.resolveReasoningEffort(params)
+        );
+        const stream = await this.ensureInitialized().responses.create(
+          {
+            ...request,
+            stream: true,
+          },
+          { signal: params.abortSignal }
+        );
+        yield* mapResponsesStream(stream, this.getProviderTypeForModelInfo(), params.model);
+      } catch (error) {
+        throw this.handleError(error, "Streaming request failed");
+      }
+      return;
+    }
+
     const isOSeries = this.isOSeriesModel(params.model);
 
     // O-series models don't support streaming - fall back to non-streaming
@@ -291,9 +373,11 @@ export class OpenAIProvider {
 
     try {
       const request = this.buildStreamingRequest(params);
-      const stream = await this.client?.chat.completions.create(request);
+      const stream = await this.client?.chat.completions.create(request, {
+        signal: params.abortSignal,
+      });
 
-      yield* this.processStream(stream as AsyncIterable<ChatCompletionChunk>);
+      yield* this.processStream(stream as AsyncIterable<ChatCompletionChunk>, params.model);
     } catch (error) {
       throw this.handleError(error, "Streaming request failed");
     }
@@ -341,7 +425,7 @@ export class OpenAIProvider {
    * @returns Array of model IDs
    */
   listModels(): string[] {
-    return OPENAI_MODELS.map((m) => m.id);
+    return OPENAI_MODELS.filter((model) => !model.deprecated).map((m) => m.id);
   }
 
   /**
@@ -350,7 +434,7 @@ export class OpenAIProvider {
    * @returns Promise resolving to array of ModelInfo
    */
   async listModelsAsync(): Promise<ModelInfo[]> {
-    return OPENAI_MODELS;
+    return OPENAI_MODELS.filter((model) => !model.deprecated);
   }
 
   /**
@@ -447,7 +531,7 @@ export class OpenAIProvider {
   /**
    * Ensure the provider is initialized before making requests
    */
-  private ensureInitialized(): void {
+  private ensureInitialized(): OpenAI {
     if (!this.initialized || !this.client) {
       throw new ProviderError("Provider not initialized. Call initialize() first.", {
         code: ErrorCode.PROVIDER_INITIALIZATION_FAILED,
@@ -455,6 +539,7 @@ export class OpenAIProvider {
         retryable: false,
       });
     }
+    return this.client;
   }
 
   /**
@@ -527,10 +612,6 @@ export class OpenAIProvider {
       resolved = fallback;
     }
 
-    if (resolved === "none") {
-      return undefined;
-    }
-
     if (requested && !allowedEfforts.includes(requested)) {
       if (process.env.VELLUM_DEBUG) {
         console.debug(
@@ -584,10 +665,16 @@ export class OpenAIProvider {
       } else {
         request.max_tokens = DEFAULT_MAX_TOKENS;
       }
-      if (params.temperature !== undefined) {
+      if (
+        params.temperature !== undefined &&
+        getModelInfo(this.getProviderTypeForModelInfo(), params.model).supportsSampling !== false
+      ) {
         request.temperature = params.temperature;
       }
-      if (params.topP !== undefined) {
+      if (
+        params.topP !== undefined &&
+        getModelInfo(this.getProviderTypeForModelInfo(), params.model).supportsSampling !== false
+      ) {
         request.top_p = params.topP;
       }
       if (params.presencePenalty !== undefined) {
@@ -617,16 +704,14 @@ export class OpenAIProvider {
 
     const extraBody = this.buildExtraBody(params);
     if (extraBody && Object.keys(extraBody).length > 0) {
-      (
-        request as ChatCompletionCreateParamsNonStreaming & { extra_body?: Record<string, unknown> }
-      ).extra_body = extraBody;
+      // The JS SDK expects extension fields in the JSON body itself. `extra_body`
+      // is a Python SDK convention and was silently ignoring provider controls.
+      Object.assign(request, extraBody);
     }
 
     const reasoningEffort = this.resolveReasoningEffort(params);
     if (reasoningEffort) {
-      (
-        request as ChatCompletionCreateParamsNonStreaming & { reasoning_effort?: string }
-      ).reasoning_effort = reasoningEffort;
+      Object.assign(request, { reasoning_effort: reasoningEffort });
     }
 
     return request;
@@ -660,10 +745,16 @@ export class OpenAIProvider {
     } else {
       request.max_tokens = DEFAULT_MAX_TOKENS;
     }
-    if (params.temperature !== undefined) {
+    if (
+      params.temperature !== undefined &&
+      getModelInfo(this.getProviderTypeForModelInfo(), params.model).supportsSampling !== false
+    ) {
       request.temperature = params.temperature;
     }
-    if (params.topP !== undefined) {
+    if (
+      params.topP !== undefined &&
+      getModelInfo(this.getProviderTypeForModelInfo(), params.model).supportsSampling !== false
+    ) {
       request.top_p = params.topP;
     }
     if (params.presencePenalty !== undefined) {
@@ -681,16 +772,12 @@ export class OpenAIProvider {
 
     const extraBody = this.buildExtraBody(params);
     if (extraBody && Object.keys(extraBody).length > 0) {
-      (
-        request as ChatCompletionCreateParamsStreaming & { extra_body?: Record<string, unknown> }
-      ).extra_body = extraBody;
+      Object.assign(request, extraBody);
     }
 
     const reasoningEffort = this.resolveReasoningEffort(params);
     if (reasoningEffort) {
-      (
-        request as ChatCompletionCreateParamsStreaming & { reasoning_effort?: string }
-      ).reasoning_effort = reasoningEffort;
+      Object.assign(request, { reasoning_effort: reasoningEffort });
     }
 
     return request;
@@ -730,19 +817,19 @@ export class OpenAIProvider {
 
     // Extract reasoning content for models that support it
     // This includes O-series (o1, o3) and compatible providers
-    if (isOSeries || this.supportsReasoningContent()) {
+    if (
+      isOSeries ||
+      this.supportsReasoningContent() ||
+      "reasoning_content" in message ||
+      "reasoning" in message ||
+      "reasoning_details" in message
+    ) {
       // Models may return reasoning in a separate field
-      const messageWithReasoning = message as typeof message & {
-        reasoning_content?: string;
-        reasoning_details?: Array<{ text?: string }>;
-      };
-      if (messageWithReasoning.reasoning_content) {
-        thinking = messageWithReasoning.reasoning_content;
+      const messageWithReasoning = message as typeof message & CompatibleReasoningPayload;
+      if (messageWithReasoning.reasoning_content || messageWithReasoning.reasoning) {
+        thinking = messageWithReasoning.reasoning_content ?? messageWithReasoning.reasoning;
       } else if (messageWithReasoning.reasoning_details) {
-        thinking = messageWithReasoning.reasoning_details
-          .map((detail) => detail.text?.trim())
-          .filter((detail): detail is string => Boolean(detail && detail.length > 0))
-          .join("\n");
+        thinking = visibleReasoningDetails(messageWithReasoning.reasoning_details);
       }
     }
 
@@ -797,7 +884,8 @@ export class OpenAIProvider {
    * Process streaming response and yield normalized events
    */
   protected async *processStream(
-    stream: AsyncIterable<ChatCompletionChunk>
+    stream: AsyncIterable<ChatCompletionChunk>,
+    model?: string
   ): AsyncIterable<StreamEvent> {
     // Track state for tool calls
     const toolCallState: Map<
@@ -808,6 +896,8 @@ export class OpenAIProvider {
     let inputTokens = 0;
     let outputTokens = 0;
     let stopReason: StopReason = "end_turn";
+    let reasoningContent = "";
+    const reasoningDetails: Record<string, unknown>[] = [];
 
     for await (const chunk of stream) {
       const choice = chunk.choices[0];
@@ -817,21 +907,25 @@ export class OpenAIProvider {
 
         // Handle reasoning content (for O-series and compatible providers)
         // DeepSeek streams reasoning in delta.reasoning_content
-        const deltaWithReasoning = delta as typeof delta & {
-          reasoning_content?: string;
-          reasoning_details?: Array<{ text?: string }>;
-        };
-        if (deltaWithReasoning.reasoning_content) {
+        const deltaWithReasoning = delta as typeof delta & CompatibleReasoningPayload;
+        if (
+          this.getProviderTypeForModelInfo() === "openrouter" &&
+          deltaWithReasoning.reasoning_details
+        ) {
+          // The gateway requires the original sequence, including signatures,
+          // encrypted items and repeated-index deltas. Do not merge or trim it.
+          reasoningDetails.push(...structuredClone(deltaWithReasoning.reasoning_details));
+        }
+        const rawReasoning = deltaWithReasoning.reasoning_content ?? deltaWithReasoning.reasoning;
+        if (rawReasoning) {
+          reasoningContent += rawReasoning;
           const reasoningEvent: StreamReasoningEvent = {
             type: "reasoning",
-            content: deltaWithReasoning.reasoning_content,
+            content: rawReasoning,
           };
           yield reasoningEvent;
         } else if (deltaWithReasoning.reasoning_details) {
-          const reasoningText = deltaWithReasoning.reasoning_details
-            .map((detail) => detail.text?.trim())
-            .filter((detail): detail is string => Boolean(detail && detail.length > 0))
-            .join("\n");
+          const reasoningText = visibleReasoningDetails(deltaWithReasoning.reasoning_details);
           if (reasoningText.length > 0) {
             const reasoningEvent: StreamReasoningEvent = {
               type: "reasoning",
@@ -958,6 +1052,16 @@ export class OpenAIProvider {
         outputTokens = chunk.usage.completion_tokens;
       }
     }
+
+    if (model && (reasoningContent || reasoningDetails.length > 0))
+      yield {
+        type: "provider_metadata",
+        metadata: {
+          provider: this.getProviderTypeForModelInfo(),
+          model,
+          ...(reasoningDetails.length > 0 ? { replay: reasoningDetails } : { reasoningContent }),
+        },
+      };
 
     // Emit usage event with new flat structure
     const usageEvent: StreamUsageEvent = {

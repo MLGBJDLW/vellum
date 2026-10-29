@@ -83,6 +83,8 @@ export class PromptBuilder {
 
   /** Optional PromptLoader instance for external prompt loading */
   #loader: PromptLoader | null = null;
+  #externalRoles = new Map<string, PromptLayer>();
+  #externalModes = new Map<string, PromptLayer>();
 
   /** Complete system prompt override (replaces all layers when set) */
   #systemPromptOverride: string | null = null;
@@ -135,7 +137,10 @@ export class PromptBuilder {
 
     const content = await this.#loader.loadRole(role as AgentRole);
     if (content) {
-      this.#addLayer(content, 2, "role");
+      const previous = this.#externalRoles.get(role);
+      this.#layers = this.#layers.filter((layer) => layer !== previous);
+      const layer = this.#addLayer(content, 2, "role");
+      if (layer) this.#externalRoles.set(role, layer);
     }
 
     return this;
@@ -165,9 +170,35 @@ export class PromptBuilder {
 
     const content = await this.#loader.loadMode(mode);
     if (content) {
-      this.#addLayer(content, 3, "mode");
+      const previous = this.#externalModes.get(mode);
+      this.#layers = this.#layers.filter((layer) => layer !== previous);
+      const layer = this.#addLayer(content, 3, "mode");
+      if (layer) this.#externalModes.set(mode, layer);
     }
 
+    return this;
+  }
+
+  /** Replace workflow layers atomically while retaining user overrides and base instructions. */
+  async replaceExternalWorkflow(role: string, mode: string): Promise<this> {
+    if (!this.#loader) throw new Error("PromptLoader required for external workflow loading.");
+    const [roleContent, modeContent] = await Promise.all([
+      this.#loader.loadRole(role as AgentRole),
+      this.#loader.loadMode(mode),
+    ]);
+    const previous = new Set([
+      ...[...this.#externalRoles].filter(([name]) => name !== "base").map(([, layer]) => layer),
+      ...this.#externalModes.values(),
+    ]);
+    this.#layers = this.#layers.filter((layer) => !previous.has(layer));
+    for (const name of this.#externalRoles.keys()) {
+      if (name !== "base") this.#externalRoles.delete(name);
+    }
+    this.#externalModes.clear();
+    const roleLayer = this.#addLayer(roleContent ?? "", 2, "role");
+    const modeLayer = this.#addLayer(modeContent ?? "", 3, "mode");
+    if (roleLayer) this.#externalRoles.set(role, roleLayer);
+    if (modeLayer) this.#externalModes.set(mode, modeLayer);
     return this;
   }
 
@@ -632,16 +663,22 @@ export class PromptBuilder {
    * @param priority - The priority level (1-4)
    * @param source - The layer source
    */
-  #addLayer(content: string, priority: PromptPriority, source: PromptLayerSource): void {
+  #addLayer(
+    content: string,
+    priority: PromptPriority,
+    source: PromptLayerSource
+  ): PromptLayer | undefined {
     if (!content || content.trim().length === 0) {
       return; // Skip empty content
     }
 
-    this.#layers.push({
+    const layer: PromptLayer = {
       content: content.trim(),
       priority,
       source,
-    });
+    };
+    this.#layers.push(layer);
+    return layer;
   }
 
   /**

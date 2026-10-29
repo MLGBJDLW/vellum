@@ -8,6 +8,7 @@
  * @see REQ-COST-002 - Pricing data management
  */
 
+import { MODEL_CATALOG, type ModelInfo, type ProviderType } from "@vellum/provider";
 import type { ModelPricing } from "./types.js";
 
 // =============================================================================
@@ -15,41 +16,13 @@ import type { ModelPricing } from "./types.js";
 // =============================================================================
 
 /**
- * Model pricing table.
- * All prices are in USD per million tokens.
- *
- * @updated 2026-04-04 - Added Claude 4.6, GPT-5.4, Gemini 3.1 models
+ * Historical exact-ID rates for reading sessions whose models have left the catalog.
+ * Current catalog entries always take precedence, including entries with unknown prices.
+ * Do not add current models here; their pricing belongs to the provider catalog.
  */
-export const MODEL_PRICING: Record<string, ModelPricing> = {
-  // ==========================================================================
-  // Anthropic Claude 4.6 Models (latest)
-  // ==========================================================================
-  "claude-opus-4-6": {
-    inputPricePerMillion: 5.0,
-    outputPricePerMillion: 25.0,
-    cacheReadPricePerMillion: 0.5,
-    cacheWritePricePerMillion: 6.25,
-    effectiveDate: "2026-04-01",
-  },
-  "claude-sonnet-4-6": {
-    inputPricePerMillion: 3.0,
-    outputPricePerMillion: 15.0,
-    cacheReadPricePerMillion: 0.3,
-    cacheWritePricePerMillion: 3.75,
-    effectiveDate: "2026-04-01",
-  },
-  "claude-haiku-4-5-20251001": {
-    inputPricePerMillion: 1.0,
-    outputPricePerMillion: 5.0,
-    cacheReadPricePerMillion: 0.1,
-    cacheWritePricePerMillion: 1.25,
-    effectiveDate: "2025-10-01",
-  },
-
-  // ==========================================================================
-  // Anthropic Claude 4 Models
-  // ==========================================================================
+const LEGACY_MODEL_PRICING: Record<string, ModelPricing & { provider: ProviderType }> = {
   "claude-sonnet-4-20250514": {
+    provider: "anthropic",
     inputPricePerMillion: 3.0,
     outputPricePerMillion: 15.0,
     cacheReadPricePerMillion: 0.3,
@@ -62,6 +35,7 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     effectiveDate: "2025-05-14",
   },
   "claude-3-5-sonnet-20241022": {
+    provider: "anthropic",
     inputPricePerMillion: 3.0,
     outputPricePerMillion: 15.0,
     cacheReadPricePerMillion: 0.3,
@@ -69,6 +43,7 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     effectiveDate: "2024-10-22",
   },
   "claude-3-5-haiku-20241022": {
+    provider: "anthropic",
     inputPricePerMillion: 0.8,
     outputPricePerMillion: 4.0,
     cacheReadPricePerMillion: 0.08,
@@ -76,6 +51,7 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     effectiveDate: "2024-10-22",
   },
   "claude-3-opus-20240229": {
+    provider: "anthropic",
     inputPricePerMillion: 15.0,
     outputPricePerMillion: 75.0,
     cacheReadPricePerMillion: 1.5,
@@ -83,86 +59,39 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     effectiveDate: "2024-02-29",
   },
 
-  // ==========================================================================
-  // OpenAI GPT-5.4 Models (latest, April 2026)
-  // ==========================================================================
-  "gpt-5.4": {
-    inputPricePerMillion: 2.5,
-    outputPricePerMillion: 10.0,
-    cacheReadPricePerMillion: 1.25,
-    effectiveDate: "2026-04-01",
-  },
-  "gpt-5.4-mini": {
-    inputPricePerMillion: 0.15,
-    outputPricePerMillion: 0.6,
-    effectiveDate: "2026-04-01",
-  },
-  "gpt-5.4-nano": {
-    inputPricePerMillion: 0.05,
-    outputPricePerMillion: 0.2,
-    effectiveDate: "2026-04-01",
-  },
-  "gpt-5.3-codex": {
-    inputPricePerMillion: 1.75,
-    outputPricePerMillion: 14.0,
-    effectiveDate: "2026-02-24",
-  },
-  "gpt-5.2-codex": {
-    inputPricePerMillion: 1.75,
-    outputPricePerMillion: 14.0,
-    effectiveDate: "2026-01-01",
-  },
-
-  // ==========================================================================
-  // Google Gemini 3.1 Models (latest, 2026)
-  // ==========================================================================
-  "gemini-3.1-pro-preview": {
-    inputPricePerMillion: 1.25,
-    outputPricePerMillion: 10.0,
-    effectiveDate: "2026-03-01",
-  },
   "gemini-3.1-flash-preview": {
+    provider: "google",
     inputPricePerMillion: 0.5,
     outputPricePerMillion: 3.0,
     effectiveDate: "2026-03-01",
   },
   "gemini-3.1-flash-lite-preview": {
+    provider: "google",
     inputPricePerMillion: 0.25,
     outputPricePerMillion: 1.5,
     effectiveDate: "2026-03-01",
   },
 
-  // ==========================================================================
-  // OpenAI GPT Models (legacy)
-  // ==========================================================================
-  "gpt-4o": {
-    inputPricePerMillion: 2.5,
-    outputPricePerMillion: 10.0,
-    cacheReadPricePerMillion: 1.25,
-    effectiveDate: "2024-11-01",
-  },
-  "gpt-4o-mini": {
-    inputPricePerMillion: 0.15,
-    outputPricePerMillion: 0.6,
-    cacheReadPricePerMillion: 0.075,
-    effectiveDate: "2024-07-18",
-  },
   "gpt-4-turbo": {
+    provider: "openai",
     inputPricePerMillion: 10.0,
     outputPricePerMillion: 30.0,
     effectiveDate: "2024-04-09",
   },
   "gpt-4": {
+    provider: "openai",
     inputPricePerMillion: 30.0,
     outputPricePerMillion: 60.0,
     effectiveDate: "2023-03-14",
   },
   "gpt-3.5-turbo": {
+    provider: "openai",
     inputPricePerMillion: 0.5,
     outputPricePerMillion: 1.5,
     effectiveDate: "2023-06-13",
   },
   o1: {
+    provider: "openai",
     inputPricePerMillion: 15.0,
     outputPricePerMillion: 60.0,
     cacheReadPricePerMillion: 7.5,
@@ -170,6 +99,7 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     effectiveDate: "2024-12-17",
   },
   "o1-mini": {
+    provider: "openai",
     inputPricePerMillion: 3.0,
     outputPricePerMillion: 12.0,
     cacheReadPricePerMillion: 1.5,
@@ -177,15 +107,14 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     effectiveDate: "2024-09-12",
   },
 
-  // ==========================================================================
-  // Google Gemini Models
-  // ==========================================================================
   "gemini-2.0-flash": {
+    provider: "google",
     inputPricePerMillion: 0.1,
     outputPricePerMillion: 0.4,
     effectiveDate: "2025-02-01",
   },
   "gemini-1.5-pro": {
+    provider: "google",
     inputPricePerMillion: 1.25,
     outputPricePerMillion: 5.0,
     tiers: [
@@ -195,6 +124,7 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     effectiveDate: "2024-05-01",
   },
   "gemini-1.5-flash": {
+    provider: "google",
     inputPricePerMillion: 0.075,
     outputPricePerMillion: 0.3,
     tiers: [
@@ -204,16 +134,15 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     effectiveDate: "2024-05-01",
   },
 
-  // ==========================================================================
-  // DeepSeek Models
-  // ==========================================================================
   "deepseek-chat": {
+    provider: "deepseek",
     inputPricePerMillion: 0.14,
     outputPricePerMillion: 0.28,
     cacheReadPricePerMillion: 0.014,
     effectiveDate: "2025-01-01",
   },
   "deepseek-reasoner": {
+    provider: "deepseek",
     inputPricePerMillion: 0.55,
     outputPricePerMillion: 2.19,
     cacheReadPricePerMillion: 0.055,
@@ -221,48 +150,40 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     effectiveDate: "2025-01-01",
   },
 
-  // ==========================================================================
-  // Groq Models (Hosted open source)
-  // ==========================================================================
   "llama-3.1-70b-versatile": {
+    provider: "groq",
     inputPricePerMillion: 0.59,
     outputPricePerMillion: 0.79,
     effectiveDate: "2024-07-01",
   },
-  "llama-3.1-8b-instant": {
-    inputPricePerMillion: 0.05,
-    outputPricePerMillion: 0.08,
-    effectiveDate: "2024-07-01",
-  },
   "mixtral-8x7b-32768": {
+    provider: "groq",
     inputPricePerMillion: 0.24,
     outputPricePerMillion: 0.24,
     effectiveDate: "2024-01-01",
   },
 
-  // ==========================================================================
-  // xAI Grok Models
-  // ==========================================================================
   "grok-2": {
+    provider: "xai",
     inputPricePerMillion: 5.0,
     outputPricePerMillion: 10.0,
     effectiveDate: "2024-08-01",
   },
   "grok-2-mini": {
+    provider: "xai",
     inputPricePerMillion: 2.0,
     outputPricePerMillion: 4.0,
     effectiveDate: "2024-08-01",
   },
 
-  // ==========================================================================
-  // Mistral Models
-  // ==========================================================================
   "mistral-large-latest": {
+    provider: "mistral",
     inputPricePerMillion: 2.0,
     outputPricePerMillion: 6.0,
     effectiveDate: "2024-02-01",
   },
   "mistral-small-latest": {
+    provider: "mistral",
     inputPricePerMillion: 0.2,
     outputPricePerMillion: 0.6,
     effectiveDate: "2024-02-01",
@@ -287,44 +208,66 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
  * }
  * ```
  */
-export function getPricing(model: string): ModelPricing | undefined {
-  // Direct lookup
-  if (MODEL_PRICING[model]) {
-    return MODEL_PRICING[model];
-  }
+export function getPricing(model: string, provider?: string): ModelPricing | undefined {
+  const matches = Array.from(MODEL_CATALOG.values())
+    .flat()
+    .filter(
+      (entry) =>
+        (provider === undefined || entry.provider === provider) &&
+        (entry.id === model || entry.aliases?.includes(model))
+    );
 
-  // Try to find by prefix match (for versioned models)
-  const modelLower = model.toLowerCase();
-  for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
-    if (modelLower.startsWith(key.toLowerCase())) {
-      return pricing;
-    }
-    if (key.toLowerCase().startsWith(modelLower)) {
-      return pricing;
-    }
-  }
+  // Provider-less compatibility calls must not guess between identically named routes.
+  if (matches.length > 1) return undefined;
+  if (matches[0]) return toPricing(matches[0]);
 
+  const historical = LEGACY_MODEL_PRICING[model];
+  if (historical && (provider === undefined || historical.provider === provider)) {
+    return historical;
+  }
   return undefined;
 }
 
-/**
- * Check if pricing data exists for a model.
- *
- * @param model - Model identifier
- * @returns true if pricing data is available
- */
-export function hasPricing(model: string): boolean {
-  return getPricing(model) !== undefined;
+function toPricing(model: ModelInfo): ModelPricing | undefined {
+  if (model.inputPrice === undefined || model.outputPrice === undefined) return undefined;
+  return {
+    inputPricePerMillion: model.inputPrice,
+    outputPricePerMillion: model.outputPrice,
+    cacheReadPricePerMillion: model.cacheReadsPrice,
+    cacheWritePricePerMillion: model.cacheWritesPrice,
+    // Service-tier alternatives are not context thresholds for the default request.
+    tiers: model.tiers
+      ?.filter((tier) => tier.name !== "flex" && tier.name !== "priority")
+      .map((tier) => ({
+        contextWindow: tier.contextWindow,
+        inputPricePerMillion: tier.inputPrice,
+        outputPricePerMillion: tier.outputPrice,
+      })),
+  };
+}
+
+/** Whether exact provider/model pricing is known. */
+export function hasPricing(model: string, provider?: string): boolean {
+  return getPricing(model, provider) !== undefined;
+}
+
+/** Models with unambiguous known pricing, including exact historical IDs. */
+export function getSupportedModels(): string[] {
+  return Array.from(
+    new Set([
+      ...Object.keys(LEGACY_MODEL_PRICING),
+      ...Array.from(MODEL_CATALOG.values()).flatMap((models) => models.map((model) => model.id)),
+    ])
+  ).filter((model) => hasPricing(model));
 }
 
 /**
- * Get all supported model names.
- *
- * @returns Array of model names with pricing data
+ * Compatibility snapshot derived from the canonical catalog and historical records.
+ * Use getPricing(model, provider) for runtime lookup so explicit discovery is reflected.
  */
-export function getSupportedModels(): string[] {
-  return Object.keys(MODEL_PRICING);
-}
+export const MODEL_PRICING: Record<string, ModelPricing> = Object.fromEntries(
+  getSupportedModels().map((model) => [model, getPricing(model) as ModelPricing])
+);
 
 /**
  * Get the appropriate tier pricing based on context size.

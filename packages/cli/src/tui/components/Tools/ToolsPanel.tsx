@@ -11,6 +11,7 @@ import { useMemo } from "react";
 import { useTools } from "../../context/ToolsContext.js";
 import { useTheme } from "../../theme/index.js";
 import { HotkeyHints } from "../common/HotkeyHints.js";
+import { ToolResultPreview } from "../Messages/ToolResultPreview.js";
 import { ToolParams } from "./ToolParams.js";
 
 /** Shell tool names that support streaming output */
@@ -103,7 +104,7 @@ export function ToolsPanel({ maxItems = 10 }: ToolsPanelProps): React.JSX.Elemen
       ) : (
         <Box flexDirection="column" marginTop={1}>
           {recent.map((execution) => (
-            <Text key={execution.id}>
+            <Text key={execution.id} wrap="truncate">
               {statusGlyph(execution.status)} {execution.toolName} ({statusLabel(execution.status)})
             </Text>
           ))}
@@ -160,11 +161,7 @@ export function ToolsPanel({ maxItems = 10 }: ToolsPanelProps): React.JSX.Elemen
           {latest.status === "complete" && latest.result !== undefined && (
             <Box marginTop={1} flexDirection="column">
               <Text dimColor>Result:</Text>
-              <Text>
-                {typeof latest.result === "string"
-                  ? latest.result
-                  : JSON.stringify(latest.result, null, 2)}
-              </Text>
+              <ToolResultPreview result={latest.result} toolName={latest.toolName} maxLines={3} />
             </Box>
           )}
         </Box>

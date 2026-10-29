@@ -27,6 +27,7 @@ import {
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { useTerminalDimensions } from "../hooks/useTerminalSize.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { TextInput } from "./Input/TextInput.js";
@@ -76,8 +77,12 @@ interface WizardState {
  */
 function ProgressBar({ currentStep }: { currentStep: OnboardingStep }): React.ReactElement {
   const { theme } = useTheme();
-  const currentIndex = ONBOARDING_STEPS.indexOf(currentStep);
-  const total = ONBOARDING_STEPS.length;
+  const steps =
+    currentStep === "mode-select"
+      ? ONBOARDING_STEPS
+      : ONBOARDING_STEPS.filter((step) => step !== "mode-select");
+  const currentIndex = steps.indexOf(currentStep);
+  const total = steps.length;
 
   return (
     <Box marginBottom={1}>
@@ -89,11 +94,7 @@ function ProgressBar({ currentStep }: { currentStep: OnboardingStep }): React.Re
       </Text>
       <Text color={theme.colors.muted}>
         {" "}
-        [
-        {ONBOARDING_STEPS.map((_s: OnboardingStep, i: number) =>
-          i <= currentIndex ? "●" : "○"
-        ).join("")}
-        ]
+        [{steps.map((_s: OnboardingStep, i: number) => (i <= currentIndex ? "●" : "○")).join("")}]
       </Text>
     </Box>
   );
@@ -103,16 +104,12 @@ function ProgressBar({ currentStep }: { currentStep: OnboardingStep }): React.Re
  * Welcome step content
  */
 function WelcomeContent(): React.ReactElement {
-  const { theme } = useTheme();
   const welcomeStep = createWelcomeStep();
   const content = welcomeStep.getContent();
 
   return (
     <Box flexDirection="column">
       <Text>{formatWelcomeContent(content)}</Text>
-      <Box marginTop={1}>
-        <Text color={theme.colors.muted}>Press Enter to continue, Esc to skip setup</Text>
-      </Box>
     </Box>
   );
 }
@@ -131,9 +128,16 @@ function ProviderSelectContent({
   const { t } = useTUITranslation();
   const providerStep = createProviderSelectStep();
   const providers = providerStep.getProviders();
+  const { height } = useTerminalDimensions();
 
   // Track focused index for keyboard navigation
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const visibleCount = Math.max(3, Math.min(8, height - (error ? 20 : 18)));
+  const startIndex = Math.max(
+    0,
+    Math.min(focusedIndex - Math.floor(visibleCount / 2), providers.length - visibleCount)
+  );
+  const selectedProvider = providers[focusedIndex];
 
   // Handle keyboard input
   useInput(
@@ -166,32 +170,37 @@ function ProviderSelectContent({
     <Box flexDirection="column">
       <Text bold>{t("onboarding.selectProvider")}</Text>
       <Box flexDirection="column" marginTop={1}>
-        {providers.map((provider, index) => {
+        {providers.slice(startIndex, startIndex + visibleCount).map((provider, offset) => {
+          const index = startIndex + offset;
           const isFocused = index === focusedIndex;
           const indicator = isFocused ? ">" : " ";
-          const providerName = t(`providers.${provider.id}.name`);
-          const providerDescription = t(`providers.${provider.id}.description`);
-          const providerShortcut = t(`providers.${provider.id}.shortcut`);
+          const translatedName = t(`providers.${provider.id}.name`);
+          const providerName = translatedName.startsWith("providers.")
+            ? provider.name
+            : translatedName;
           const apiNote = provider.requiresApiKey
             ? t("onboarding.apiKeyRequired")
             : t("onboarding.noApiKeyNeeded");
 
           return (
             <Box key={provider.id} flexDirection="column">
-              <Text color={isFocused ? theme.colors.primary : undefined} bold={isFocused}>
-                {indicator} {providerShortcut} {providerName}
-              </Text>
               <Text
-                color={isFocused ? theme.colors.primary : theme.colors.muted}
-                dimColor={!isFocused}
+                color={isFocused ? theme.colors.primary : undefined}
+                bold={isFocused}
+                wrap="truncate"
               >
-                {"   "}
-                {providerDescription} {apiNote}
+                {indicator} {providerName} {apiNote}
               </Text>
             </Box>
           );
         })}
       </Box>
+      <Text dimColor wrap="truncate">
+        {focusedIndex + 1}/{providers.length} ·{" "}
+        {selectedProvider?.requiresApiKey
+          ? selectedProvider.envVar
+          : t("onboarding.noApiKeyNeeded")}
+      </Text>
       {error && (
         <Box marginTop={1}>
           <Text color={theme.colors.error}>! {error}</Text>
@@ -233,7 +242,7 @@ function CredentialSetupContent({
       )}
       <Box marginTop={1}>
         <Text color={theme.colors.muted}>
-          Press Backspace to go back, 'skip' to configure later
+          Press Enter to use a saved key, Backspace to go back, or type 'skip' to configure later
         </Text>
       </Box>
     </Box>
@@ -346,7 +355,7 @@ function CompleteContent({
   const completeStep = createCompleteStep();
   const summary = {
     provider,
-    mode: mode as "vibe" | "plan" | "spec",
+    mode: mode as "orch" | "vibe" | "plan" | "spec",
     credentialsConfigured,
     warnings: [],
   };
@@ -517,7 +526,8 @@ export function OnboardingWizard({
           if (result.success && result.next) {
             setState((s) => ({
               ...s,
-              step: "mode-select",
+              step: "complete",
+              selectedMode: "orch",
               input: "",
               isLoading: false,
               credentialsConfigured: (result.data?.saved as boolean) ?? false,
@@ -538,7 +548,7 @@ export function OnboardingWizard({
               step: "complete",
               input: "",
               isLoading: false,
-              selectedMode: (result.data?.mode as string) || "vibe",
+              selectedMode: (result.data?.mode as string) || "orch",
             }));
           } else if (result.back) {
             setState((s) => ({ ...s, step: "credential-setup", input: "", isLoading: false }));
@@ -555,7 +565,7 @@ export function OnboardingWizard({
           // Fire completion callback - parent component handles transition
           onComplete?.({
             provider: state.selectedProvider || "anthropic",
-            mode: state.selectedMode || "vibe",
+            mode: state.selectedMode || "orch",
             credentialsConfigured: state.credentialsConfigured,
           });
           break;
@@ -581,8 +591,13 @@ export function OnboardingWizard({
           return;
         }
 
+        if (state.isLoading) return;
+
         // Enter to submit
         if (key.return) {
+          // Selectors own Enter. Handling it twice overwrites the chosen provider
+          // with the default and races the wizard's persisted state.
+          if (state.step === "provider-select" || state.step === "mode-select") return;
           handleSubmit();
           return;
         }
@@ -629,7 +644,7 @@ export function OnboardingWizard({
         return (
           <CompleteContent
             provider={state.selectedProvider || "anthropic"}
-            mode={state.selectedMode || "vibe"}
+            mode={state.selectedMode || "orch"}
             credentialsConfigured={state.credentialsConfigured}
           />
         );
@@ -639,7 +654,7 @@ export function OnboardingWizard({
   return (
     <Box flexDirection="column" padding={1}>
       {/* Header */}
-      <Box borderStyle="round" borderColor="#DAA520" paddingX={2} paddingY={1} marginBottom={1}>
+      <Box borderStyle="round" borderColor="#DAA520" paddingX={2} marginBottom={1}>
         <Text bold color="#DAA520">
           ✦ Vellum Setup Wizard
         </Text>
@@ -649,7 +664,7 @@ export function OnboardingWizard({
       <ProgressBar currentStep={state.step} />
 
       {/* Content */}
-      <Box flexDirection="column" marginY={1}>
+      <Box flexDirection="column" marginBottom={1}>
         {state.isLoading ? (
           <Text color={theme.colors.info}>Processing...</Text>
         ) : (

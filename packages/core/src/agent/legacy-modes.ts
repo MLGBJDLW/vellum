@@ -87,7 +87,7 @@ export const LEGACY_MODES = Object.keys(LEGACY_MODE_MAP) as readonly string[];
 /**
  * Valid CodingMode values for validation.
  */
-const VALID_CODING_MODES: readonly CodingMode[] = ["vibe", "plan", "spec"];
+const VALID_CODING_MODES: readonly CodingMode[] = ["orch", "vibe", "plan", "spec"];
 
 /**
  * Checks if a string is a valid CodingMode.
@@ -158,7 +158,7 @@ export function legacyToNewMode(legacy: string): CodingMode | undefined {
  * @example
  * ```typescript
  * emitDeprecationWarning('code', 'vibe');
- * // Console: ⚠️ 'code' mode is deprecated. Use 'vibe' instead.
+ * // Console: ! 'code' mode is deprecated. Use 'vibe' instead.
  *
  * // With VELLUM_SUPPRESS_DEPRECATION=true, no warning is emitted
  * ```
@@ -169,7 +169,7 @@ export function emitDeprecationWarning(legacyName: string, newName: CodingMode):
     return;
   }
 
-  console.warn(`⚠️ '${legacyName}' mode is deprecated. Use '${newName}' instead.`);
+  console.warn(`! '${legacyName}' mode is deprecated. Use '${newName}' instead.`);
 }
 
 /**

@@ -54,10 +54,10 @@ function createTestModeManager(initialMode?: CodingMode): ModeManager {
 // =============================================================================
 
 describe("E2E: CLI Flag → ModeManager Initialization", () => {
-  it("initializes with default vibe mode when no flag provided", () => {
+  it("initializes with the personal assistant when no flag is provided", () => {
     const manager = createTestModeManager();
 
-    expect(manager.getCurrentMode()).toBe("vibe");
+    expect(manager.getCurrentMode()).toBe("orch");
     expect(manager.getCurrentHandler()).toBeDefined();
   });
 

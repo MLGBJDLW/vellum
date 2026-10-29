@@ -239,6 +239,17 @@ export class GoogleTransform extends AbstractProviderTransform<
         continue;
       }
 
+      const metadata = message.providerMetadata;
+      if (
+        message.role === "assistant" &&
+        metadata?.provider === "google" &&
+        metadata.model === config.modelId &&
+        metadata.replay?.length
+      ) {
+        result.push({ role: "model", parts: metadata.replay as unknown as GeminiContent["parts"] });
+        continue;
+      }
+
       const transformed = this.transformMessage(message, warnings, isThinkingModel);
       if (transformed) {
         result.push(transformed);
@@ -255,7 +266,13 @@ export class GoogleTransform extends AbstractProviderTransform<
     if (!modelId) return false;
 
     // Gemini 2.5+ models support thinking/reasoning
-    const thinkingPatterns = ["gemini-2.5", "gemini-3", "gemini-exp", "gemini-2.0-flash-thinking"];
+    const thinkingPatterns = [
+      "gemini-2.5",
+      "gemini-3",
+      "gemini-4",
+      "gemini-exp",
+      "gemini-2.0-flash-thinking",
+    ];
 
     return thinkingPatterns.some((pattern) =>
       modelId.toLowerCase().includes(pattern.toLowerCase())

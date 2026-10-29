@@ -13,7 +13,15 @@ import type { ProviderType } from "../types.js";
 /**
  * Reasoning effort levels supported by models
  */
-export const reasoningEffortSchema = z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]);
+export const reasoningEffortSchema = z.enum([
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
 
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 
@@ -58,7 +66,15 @@ export const modelInfoSchema = z.object({
   /** Maximum context window in tokens */
   contextWindow: z.number().int().positive(),
   /** Maximum output tokens the model can generate */
-  maxOutputTokens: z.number().int().positive(),
+  maxOutputTokens: z.number().int().positive().optional(),
+  /** Required wire API when the provider offers more than one protocol. */
+  api: z.enum(["responses", "chat-completions"]).optional(),
+  /** False for models that reject sampling controls. */
+  supportsSampling: z.boolean().optional(),
+  /** Anthropic thinking protocol; never infer adaptive support from a display name. */
+  thinkingMode: z.enum(["adaptive", "budget"]).optional(),
+  /** Some current models always reason, even when the UI toggle is off. */
+  requiresThinking: z.boolean().optional(),
   /** Whether the model supports function/tool calling */
   supportsTools: z.boolean().default(true),
   /** Whether the model can process images */
@@ -70,9 +86,9 @@ export const modelInfoSchema = z.object({
   /** Whether the model supports prompt caching */
   supportsPromptCache: z.boolean().default(false),
   /** Price per million input tokens (USD) */
-  inputPrice: z.number().nonnegative(),
+  inputPrice: z.number().nonnegative().optional(),
   /** Price per million output tokens (USD) */
-  outputPrice: z.number().nonnegative(),
+  outputPrice: z.number().nonnegative().optional(),
   /** Price per million cache write tokens (USD) */
   cacheWritesPrice: z.number().nonnegative().optional(),
   /** Price per million cache read tokens (USD) */

@@ -235,6 +235,7 @@ export {
   NoOpActivityTracker,
   type NormalizationResult,
   normalizeMode,
+  ORCH_MODE,
   type PendingTool,
   type PhaseValidationResult,
   PLAN_AGENT,

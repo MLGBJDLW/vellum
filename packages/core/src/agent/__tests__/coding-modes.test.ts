@@ -83,8 +83,9 @@ describe("CodingMode type", () => {
 });
 
 describe("CODING_MODES constant", () => {
-  it("should contain all three modes", () => {
-    expect(CODING_MODES).toHaveLength(3);
+  it("should contain orch and the three legacy workflows", () => {
+    expect(CODING_MODES).toHaveLength(4);
+    expect(CODING_MODES[0]).toBe("orch");
     expect(CODING_MODES).toContain("vibe");
     expect(CODING_MODES).toContain("plan");
     expect(CODING_MODES).toContain("spec");
@@ -423,8 +424,8 @@ describe("SPEC_MODE", () => {
 // ============================================
 
 describe("BUILTIN_CODING_MODES", () => {
-  it("should contain exactly 3 modes", () => {
-    expect(Object.keys(BUILTIN_CODING_MODES)).toHaveLength(3);
+  it("should contain orch and the legacy workflows", () => {
+    expect(Object.keys(BUILTIN_CODING_MODES)).toHaveLength(4);
   });
 
   it("should have vibe, plan, and spec keys", () => {

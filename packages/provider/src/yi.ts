@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
 /**
  * Yi Provider (零一万物)
  *
@@ -61,6 +62,6 @@ export class YiProvider extends OpenAICompatibleProvider {
    * @returns Default model ID
    */
   getDefaultModel(): string {
-    return "yi-large";
+    return DEFAULT_MODEL_IDS.yi;
   }
 }

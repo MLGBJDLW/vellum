@@ -1,6 +1,6 @@
 # @vellum/cli
 
-> Command-line interface for the Vellum AI coding agent
+> Terminal interface for your Vellum personal assistant
 
 ## Installation
 
@@ -15,10 +15,10 @@ npm install -g @butlerw/vellum
 vellum
 
 # Run with a specific prompt
-vellum "Create a React component"
+vellum run "Summarize these research notes"
 
-# Run with a configuration file
-vellum --config vellum.config.json
+# Select a provider and configure a missing key in a masked form
+vellum chat --provider openai
 ```
 
 ## TUI System

@@ -238,8 +238,8 @@ export class AgentTerminationManager {
    *
    * @param tokens - Token usage from LLM response
    */
-  recordTokenUsage(tokens: TokenUsage): void {
-    this.lastAssistantTokens = tokens;
+  recordTokenUsage(tokens: TokenUsage, updateLastAssistant = true): void {
+    if (updateLastAssistant) this.lastAssistantTokens = tokens;
 
     // Update termination context token tracking
     this.terminationContext.tokenUsage.inputTokens += tokens.inputTokens ?? 0;
@@ -309,6 +309,20 @@ export class AgentTerminationManager {
     this.recordToolCall(tool.id, tool.name, tool.input);
   }
 
+  /** Include observed output in repetition checks without retaining large receipts. */
+  recordToolResult(id: string, result: string): void {
+    const call = this.recentToolCalls
+      .slice()
+      .reverse()
+      .find((item) => item.id === id);
+    if (!call) return;
+    let hash = 2166136261;
+    for (let index = 0; index < result.length; index++) {
+      hash = Math.imul(hash ^ result.charCodeAt(index), 16777619);
+    }
+    call.resultFingerprint = `${result.length}:${hash >>> 0}`;
+  }
+
   // ===========================================================================
   // Response Tracking (Stuck Detection)
   // ===========================================================================
@@ -362,6 +376,18 @@ export class AgentTerminationManager {
     }
 
     return result;
+  }
+
+  /** Inspect budgets without counting another step or applying completion/progress guards. */
+  checkResourceLimits(): TerminationResult {
+    return this.terminationChecker.shouldTerminate({
+      ...this.terminationContext,
+      isCancelled: this.isCancelled(),
+      hasNaturalStop: false,
+      hasTextOnly: false,
+      recentToolCalls: [],
+      recentResponses: [],
+    });
   }
 
   /**

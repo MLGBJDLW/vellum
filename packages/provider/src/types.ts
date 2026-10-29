@@ -134,11 +134,22 @@ export type ContentPart =
 /**
  * Message in a conversation
  */
+export interface ProviderResponseMetadata {
+  /** Only replay with the same provider and model that produced this data. */
+  provider: string;
+  model: string;
+  /** Opaque signed/encrypted provider items; never display as user-facing text. */
+  replay?: Record<string, unknown>[];
+  /** Reasoning required by OpenAI-compatible thinking tool-call histories. */
+  reasoningContent?: string;
+}
+
 export interface CompletionMessage {
   /** Role of the message sender */
   role: MessageRole;
   /** Content of the message (string for simple text, array for multi-part) */
   content: string | ContentPart[];
+  providerMetadata?: ProviderResponseMetadata;
 }
 
 /**
@@ -179,6 +190,8 @@ export interface ThinkingConfig {
  * ```
  */
 export interface CompletionParams {
+  /** Cancel the underlying request and stream, including while waiting for tokens. */
+  abortSignal?: AbortSignal;
   /** Model identifier to use for completion */
   model: string;
   /** Conversation messages */
@@ -293,6 +306,7 @@ export interface CompletionResult {
   thinking?: string;
   /** Tool calls requested by the model */
   toolCalls?: ToolCall[];
+  providerMetadata?: ProviderResponseMetadata;
 }
 
 // =============================================================================
@@ -546,6 +560,7 @@ export interface StreamDoneEvent {
  * ```
  */
 export type StreamEvent =
+  | { type: "provider_metadata"; metadata: ProviderResponseMetadata }
   | StreamTextEvent
   | StreamReasoningEvent
   | StreamToolCallStartEvent
@@ -778,6 +793,8 @@ export interface Provider {
   createModel(modelId: string): LanguageModel;
   listModels(): string[];
   getDefaultModel(): string;
+  /** Explicit, read-only discovery; never invoked on every completion. */
+  refreshModels?(): Promise<import("./models/types.js").ModelInfo[]>;
 
   /**
    * Initialize the provider with configuration options

@@ -27,6 +27,7 @@ import type { AgentLoopConfig } from "./loop.js";
  * Can be overridden by explicitly passing `role` in options.
  */
 const MODE_DEFAULT_ROLE: Partial<Record<CodingMode, string>> = {
+  orch: "orchestrator",
   vibe: "coder", // Implementation-focused
   plan: "coder", // Planning for implementation
   spec: "orchestrator", // Multi-agent coordination

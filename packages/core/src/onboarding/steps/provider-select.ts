@@ -7,6 +7,7 @@
  * @module onboarding/steps/provider-select
  */
 
+import { DEFAULT_MODEL_IDS } from "@vellum/provider";
 import type { ProviderName } from "../../config/schema.js";
 import {
   ONBOARDING_PROVIDERS,
@@ -172,25 +173,5 @@ export function formatProviderList(providers: ProviderInfo[]): string {
  * Get default model for a provider
  */
 export function getDefaultModelForProvider(provider: OnboardingProvider): string {
-  const models: Record<OnboardingProvider, string> = {
-    anthropic: "claude-sonnet-4-6",
-    openai: "gpt-5.4",
-    google: "gemini-3.1-flash-preview",
-    mistral: "mistral-large-latest",
-    groq: "llama-3.3-70b-versatile",
-    openrouter: "anthropic/claude-3.5-sonnet",
-    xai: "grok-2",
-    deepseek: "deepseek-chat",
-    qwen: "qwen-plus",
-    moonshot: "kimi-k2.5",
-    zhipu: "glm-4",
-    yi: "yi-large",
-    baichuan: "baichuan4",
-    doubao: "doubao-1-5-pro-256k-250115",
-    minimax: "MiniMax-M2",
-    ollama: "llama3.2",
-    lmstudio: "local-model",
-  };
-
-  return models[provider];
+  return DEFAULT_MODEL_IDS[provider];
 }

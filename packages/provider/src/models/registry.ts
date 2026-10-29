@@ -166,7 +166,7 @@ export class ModelRegistry {
 
     if (criteria.maxInputPrice !== undefined) {
       const maxInputPrice = criteria.maxInputPrice;
-      results = results.filter((m) => m.inputPrice <= maxInputPrice);
+      results = results.filter((m) => m.inputPrice !== undefined && m.inputPrice <= maxInputPrice);
     }
 
     return results;

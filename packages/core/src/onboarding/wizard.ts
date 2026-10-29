@@ -292,6 +292,7 @@ export class OnboardingWizard {
 
     if (result.success && result.data) {
       this.state.selectedProvider = result.data.provider as string | undefined;
+      this.state.credentialConfigured = false;
     }
 
     if (result.back) {
@@ -311,32 +312,64 @@ export class OnboardingWizard {
     source: CredentialSource = "keychain"
   ): Promise<StepResult> {
     const provider = this.state.selectedProvider as OnboardingProvider;
+    if (!apiKey.trim() && this.credentialManager) {
+      const existing = await this.credentialManager.resolve(provider);
+      if (existing.ok && existing.value?.value.trim()) {
+        this.state.credentialConfigured = true;
+        this.state.selectedMode = "orch";
+        await this.goToStep("complete");
+        return {
+          success: true,
+          next: true,
+          back: false,
+          skip: false,
+          data: { provider, saved: true, source: existing.value.source },
+        };
+      }
+    }
     const result = await this.credentialStep.execute(this.state, provider, apiKey, source);
-    this.events.onStepComplete?.("credential-setup", result);
 
-    if (result.success && result.data?.saved && this.credentialManager) {
+    if (result.success && result.data?.saved) {
       // Save credential using credential manager
       const credentialInput = result.data.credentialInput as
         | import("../credentials/types.js").CredentialInput
         | undefined;
-      if (credentialInput) {
+      if (credentialInput && this.credentialManager) {
         const saveResult = await this.credentialManager.store(credentialInput);
         if (saveResult.ok) {
           this.state.credentialConfigured = true;
         } else {
-          // Warn but don't fail - user can configure later
           this.events.onError?.({
             code: "CREDENTIAL_SAVE_FAILED",
             message: saveResult.error.message,
           });
+          return {
+            success: false,
+            next: false,
+            back: false,
+            skip: false,
+            error:
+              "Unable to save the API key. Check credential storage and try again, or choose skip.",
+          };
         }
+      } else {
+        return {
+          success: false,
+          next: false,
+          back: false,
+          skip: false,
+          error: "Credential storage is not ready. Try again shortly.",
+        };
       }
     }
+
+    this.events.onStepComplete?.("credential-setup", result);
 
     if (result.back) {
       await this.goToStep("provider-select");
     } else if (result.next) {
-      await this.goToStep("mode-select");
+      this.state.selectedMode = "orch";
+      await this.goToStep("complete");
     }
 
     return result;
@@ -435,7 +468,7 @@ export class OnboardingWizard {
     mode: CodingMode;
   } {
     const provider = (this.state.selectedProvider as OnboardingProvider) || "anthropic";
-    const mode = (this.state.selectedMode as CodingMode) || "vibe";
+    const mode = (this.state.selectedMode as CodingMode) || "orch";
 
     return {
       provider: toProviderName(provider),

@@ -82,6 +82,8 @@ interface OpenAIAssistantMessage {
   role: "assistant";
   content?: string | null;
   tool_calls?: OpenAIToolCall[];
+  reasoning_content?: string;
+  reasoning_details?: Record<string, unknown>[];
   /** Legacy function_call format (deprecated but still supported) */
   function_call?: {
     name: string;
@@ -205,7 +207,7 @@ export class OpenAITransform extends AbstractProviderTransform<
    */
   transformMessages(
     messages: CompletionMessage[],
-    _config: TransformConfig
+    config: TransformConfig
   ): TransformResult<OpenAIMessage[]> {
     const warnings: TransformWarning[] = [];
 
@@ -216,6 +218,17 @@ export class OpenAITransform extends AbstractProviderTransform<
 
     for (const message of normalized) {
       const transformed = this.transformMessage(message, warnings);
+      const metadata = message.providerMetadata;
+      if (metadata?.provider === config.provider && metadata.model === config.modelId) {
+        for (const item of transformed) {
+          if (item.role !== "assistant") continue;
+          if (config.provider === "openrouter" && metadata.replay?.length) {
+            item.reasoning_details = metadata.replay;
+          } else if (metadata.reasoningContent !== undefined) {
+            item.reasoning_content = metadata.reasoningContent;
+          }
+        }
+      }
       result.push(...transformed);
     }
 

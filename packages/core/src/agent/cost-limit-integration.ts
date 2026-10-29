@@ -112,10 +112,11 @@ export interface CostCheckResult {
 export class CostLimitIntegration {
   private readonly handler: CostLimitHandler;
   private readonly costService: CostService;
-  private readonly providerType: string;
-  private readonly model: string;
+  private providerType: string;
+  private model: string;
   private readonly logger?: Logger;
   private readonly listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
+  private approvalAnnounced = false;
 
   constructor(config: CostLimitIntegrationConfig) {
     this.costService = config.costService;
@@ -155,18 +156,27 @@ export class CostLimitIntegration {
    * @param usage - Token usage from LLM
    * @returns Result indicating whether to continue
    */
-  trackUsage(usage: TokenUsage): CostCheckResult {
+  trackUsage(
+    usage: TokenUsage,
+    source?: { providerType: string; model: string },
+    requestCounted = false
+  ): CostCheckResult {
     // Track usage with cost service
-    this.costService.trackUsage(usage, this.model, this.providerType);
+    this.costService.trackUsage(
+      usage,
+      source?.model ?? this.model,
+      source?.providerType ?? this.providerType
+    );
 
     // Increment request count
-    this.handler.incrementRequestCount();
+    if (!requestCounted) this.handler.incrementRequestCount();
 
     // Check limits
     const limits = this.handler.checkLimits();
     const awaitingApproval = this.handler.shouldPauseForApproval();
 
-    if (awaitingApproval) {
+    if (awaitingApproval && !this.approvalAnnounced) {
+      this.approvalAnnounced = true;
       this.emit("cost:awaitingApproval", limits);
     }
 
@@ -175,6 +185,17 @@ export class CostLimitIntegration {
       awaitingApproval,
       limits,
     };
+  }
+
+  /** Reserve the request before dispatch so concurrent workers share the same limit. */
+  startRequest(): void {
+    this.handler.incrementRequestCount();
+  }
+
+  /** Model selection changes pricing attribution, not existing session usage. */
+  setModel(providerType: string, model: string): void {
+    this.providerType = providerType;
+    this.model = model;
   }
 
   /**
@@ -199,6 +220,11 @@ export class CostLimitIntegration {
    * @returns Promise resolving to true if approved
    */
   async waitForApproval(): Promise<boolean> {
+    this.handler.prepareApproval();
+    if (this.handler.isAwaitingApproval() && !this.approvalAnnounced) {
+      this.approvalAnnounced = true;
+      this.emit("cost:awaitingApproval", this.handler.checkLimits());
+    }
     return this.handler.waitForApproval();
   }
 
@@ -209,6 +235,7 @@ export class CostLimitIntegration {
    */
   grantApproval(extendLimit?: { cost?: number; requests?: number }): void {
     this.handler.grantApproval(extendLimit);
+    this.approvalAnnounced = false;
   }
 
   /**
@@ -216,6 +243,7 @@ export class CostLimitIntegration {
    */
   denyApproval(): void {
     this.handler.denyApproval();
+    this.approvalAnnounced = false;
   }
 
   /**
@@ -243,6 +271,7 @@ export class CostLimitIntegration {
    * Reset the integration state.
    */
   reset(): void {
+    this.approvalAnnounced = false;
     this.handler.reset();
     this.costService.reset();
   }

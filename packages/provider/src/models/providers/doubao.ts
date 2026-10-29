@@ -1,84 +1,69 @@
 /**
- * Doubao (ByteDance) model definitions
- * @module models/providers/doubao
+ * doubao text/tool model catalog, audited 2026-10-29.
+ * Sources, exclusions and endpoint constraints: docs/research/provider-model-audit.md.
+ * Account/region availability still requires provider discovery; missing prices are unknown.
  */
-
 import type { ModelInfo } from "../types.js";
 
-/**
- * Doubao (ByteDance) model catalog
- * Pricing: https://www.volcengine.com/docs/82379/1099320
- * Models: https://www.volcengine.com/docs/82379/1099334
- */
 export const DOUBAO_MODELS: ModelInfo[] = [
-  // ==========================================================================
-  // Doubao Seed Series
-  // ==========================================================================
   {
-    id: "doubao-seed-code-preview-latest",
-    name: "Doubao Seed Code Preview",
+    id: "doubao-seed-evolving",
+    name: "doubao-seed-evolving",
     provider: "doubao",
-    contextWindow: 256_000,
-    maxOutputTokens: 32_768,
+    contextWindow: 1048576,
     supportsTools: true,
     supportsVision: true,
-    supportsReasoning: false,
+    supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: true,
-    inputPrice: 0.17,
-    outputPrice: 1.12,
     deprecated: false,
-    description: "ByteDance's Doubao Seed coding model",
+    maxOutputTokens: 262144,
+    reasoningEfforts: ["minimal", "low", "medium", "high"],
+    defaultReasoningEffort: "high",
   },
   {
-    id: "doubao-seed-1-6-250615",
-    name: "Doubao Seed 1.6",
+    id: "doubao-seed-2-1-pro-260915",
+    name: "doubao-seed-2-1-pro-260915",
     provider: "doubao",
-    contextWindow: 128_000,
-    maxOutputTokens: 32_768,
+    contextWindow: 1048576,
     supportsTools: true,
     supportsVision: true,
-    supportsReasoning: false,
+    supportsReasoning: true,
     supportsStreaming: true,
-    supportsPromptCache: false,
-    inputPrice: 0.0001,
-    outputPrice: 0.0004,
+    supportsPromptCache: true,
     deprecated: false,
-    description: "ByteDance's Doubao Seed 1.6 model",
-  },
-  // ==========================================================================
-  // Doubao Pro Series
-  // ==========================================================================
-  {
-    id: "doubao-1-5-pro-256k-250115",
-    name: "Doubao 1.5 Pro 256K",
-    provider: "doubao",
-    contextWindow: 256_000,
-    maxOutputTokens: 16_384,
-    supportsTools: true,
-    supportsVision: false,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    supportsPromptCache: false,
-    inputPrice: 0.07,
-    outputPrice: 0.14,
-    deprecated: false,
-    description: "ByteDance's Doubao 1.5 Pro 256K model",
+    maxOutputTokens: 262144,
+    reasoningEfforts: ["minimal", "low", "medium", "high"],
+    defaultReasoningEffort: "high",
   },
   {
-    id: "doubao-1-5-vision-pro-256k-250328",
-    name: "Doubao 1.5 Vision Pro 256K",
+    id: "doubao-seed-2-1-lite-260915",
+    name: "doubao-seed-2-1-lite-260915",
     provider: "doubao",
-    contextWindow: 256_000,
-    maxOutputTokens: 16_384,
+    contextWindow: 1048576,
     supportsTools: true,
     supportsVision: true,
-    supportsReasoning: false,
+    supportsReasoning: true,
     supportsStreaming: true,
-    supportsPromptCache: false,
-    inputPrice: 0.14,
-    outputPrice: 0.28,
+    supportsPromptCache: true,
     deprecated: false,
-    description: "ByteDance's Doubao 1.5 Vision Pro model",
+    maxOutputTokens: 262144,
+    reasoningEfforts: ["minimal", "low", "medium", "high"],
+    defaultReasoningEffort: "high",
+  },
+  {
+    id: "doubao-seed-2-1-turbo-260628",
+    name: "doubao-seed-2-1-turbo-260628",
+    provider: "doubao",
+    contextWindow: 262144,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    deprecated: false,
+    maxOutputTokens: 262144,
+    reasoningEfforts: ["minimal", "low", "medium", "high"],
+    defaultReasoningEffort: "high",
   },
 ];

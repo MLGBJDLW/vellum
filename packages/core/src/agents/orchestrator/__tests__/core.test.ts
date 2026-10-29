@@ -11,6 +11,15 @@ import type { SubsessionManager } from "../../session/subsession-manager.js";
 import type { OrchestratorEvent } from "../core.js";
 import { createOrchestrator, type OrchestratorConfig, type OrchestratorCore } from "../core.js";
 
+vi.mock("../../workers/worker-executor.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../workers/worker-executor.js")>()),
+  executeWorkerTask: vi
+    .fn()
+    .mockResolvedValue({ success: true, data: { output: "Completed by worker" } }),
+}));
+
+import { executeWorkerTask } from "../../workers/worker-executor.js";
+
 // ============================================
 // Mock Factories
 // ============================================
@@ -183,6 +192,10 @@ describe("OrchestratorCore", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.mocked(executeWorkerTask).mockResolvedValue({
+      success: true,
+      data: { output: "Completed by worker" },
+    });
     modes = createDefaultModes();
     mockRegistry = createMockModeRegistry(modes);
     mockSubsessionManager = createMockSubsessionManager();
@@ -377,11 +390,9 @@ describe("OrchestratorCore", () => {
       const emptyRegistry = createMockModeRegistry(emptyModes);
       const emptyOrchestrator = createOrchestrator({ modeRegistry: emptyRegistry });
 
-      // When no worker is found, the task should fail
-      // The implementation throws when agentSlug is empty
-      await expect(
-        emptyOrchestrator.executeTask("do something", AgentLevel.worker)
-      ).rejects.toThrow();
+      const result = await emptyOrchestrator.executeTask("do something", AgentLevel.worker);
+      expect(result.overallStatus).toBe("failure");
+      expect(result.results[0]?.error?.message).toContain("No subsession runtime");
     });
 
     it("should analyze task complexity via decomposer", () => {
@@ -497,7 +508,7 @@ describe("OrchestratorCore", () => {
 
     it("should handle errors and report failure", async () => {
       // Force coder mode to be unavailable
-      modes.delete("coder");
+      vi.mocked(executeWorkerTask).mockRejectedValueOnce(new Error("Worker failed"));
 
       const packet: SpecHandoffPacket = {
         type: "spec_handoff",
@@ -890,17 +901,12 @@ describe("OrchestratorCore", () => {
 
     it("should reset aggregator before new task execution", async () => {
       // First execution with valid task
-      await orchestrator.executeTask("coder task 1", AgentLevel.worker);
-
-      const result1 = orchestrator.aggregator.aggregate();
+      const result1 = await orchestrator.executeTask("coder task 1", AgentLevel.worker);
       const count1 = result1.totalTasks;
       expect(count1).toBeGreaterThanOrEqual(1);
 
       // Reset and second execution
-      orchestrator.aggregator.reset();
-      await orchestrator.executeTask("coder task 2", AgentLevel.worker);
-
-      const result2 = orchestrator.aggregator.aggregate();
+      const result2 = await orchestrator.executeTask("coder task 2", AgentLevel.worker);
       expect(result2.totalTasks).toBeGreaterThanOrEqual(1);
     });
 

@@ -117,11 +117,11 @@ describe("ZhipuProvider", () => {
       const provider = new ZhipuProvider();
       const models = provider.listModels();
 
-      expect(models).toContain("glm-4");
-      expect(models).toContain("glm-4-plus");
-      expect(models).toContain("glm-4-flash");
-      expect(models).toContain("glm-4v");
-      expect(models).toContain("glm-4v-plus");
+      expect(models).toContain("glm-5.3");
+      expect(models).toContain("glm-4.7");
+      expect(models).toContain("glm-4.7-flash");
+      expect(models).toContain("glm-5.3-flash");
+      expect(models).toContain("glm-5.3-flashx");
     });
   });
 
@@ -130,10 +130,10 @@ describe("ZhipuProvider", () => {
       const provider = new ZhipuProvider();
       const models = await provider.listModelsAsync();
 
-      const glm4 = models.find((m) => m.id === "glm-4");
+      const glm4 = models.find((m) => m.id === "glm-5.3");
       expect(glm4).toBeDefined();
       expect(glm4?.provider).toBe("zhipu");
-      expect(glm4?.contextWindow).toBe(128000);
+      expect(glm4?.contextWindow).toBe(1000000);
       expect(glm4?.supportsTools).toBe(true);
       expect(glm4?.supportsStreaming).toBe(true);
     });
@@ -142,7 +142,7 @@ describe("ZhipuProvider", () => {
       const provider = new ZhipuProvider();
       const models = await provider.listModelsAsync();
 
-      const glm4v = models.find((m) => m.id === "glm-4v");
+      const glm4v = models.find((m) => m.id === "glm-5.3-flash");
       expect(glm4v).toBeDefined();
       expect(glm4v?.supportsVision).toBe(true);
     });
@@ -151,7 +151,7 @@ describe("ZhipuProvider", () => {
       const provider = new ZhipuProvider();
       const models = await provider.listModelsAsync();
 
-      const glm4Plus = models.find((m) => m.id === "glm-4-plus");
+      const glm4Plus = models.find((m) => m.id === "glm-4.7");
       expect(glm4Plus).toBeDefined();
       expect(glm4Plus?.supportsReasoning).toBe(true);
     });
@@ -160,7 +160,7 @@ describe("ZhipuProvider", () => {
   describe("getDefaultModel", () => {
     it("should return glm-4 as default", () => {
       const provider = new ZhipuProvider();
-      expect(provider.getDefaultModel()).toBe("glm-4");
+      expect(provider.getDefaultModel()).toBe("glm-5.3");
     });
   });
 
@@ -170,11 +170,10 @@ describe("ZhipuProvider", () => {
       await expect(provider.initialize({})).rejects.toThrow("Zhipu API key is required");
     });
 
-    it("should throw error for invalid API key format", async () => {
+    it("accepts direct Bearer keys without forcing the legacy id.secret format", async () => {
       const provider = new ZhipuProvider();
-      await expect(provider.initialize({ apiKey: "invalid-key-no-dot" })).rejects.toThrow(
-        "Invalid Zhipu API key format"
-      );
+      await provider.initialize({ apiKey: "fixture-key-without-dot" });
+      expect(provider.isInitialized()).toBe(true);
     });
 
     it("should initialize successfully with valid API key format", async () => {
@@ -208,10 +207,10 @@ describe("MoonshotProvider", () => {
       const provider = new MoonshotProvider();
       const models = provider.listModels();
 
-      expect(models).toContain("moonshot-v1-8k");
-      expect(models).toContain("moonshot-v1-32k");
-      expect(models).toContain("moonshot-v1-128k");
-      expect(models).toContain("kimi-k2-thinking");
+      expect(models).toContain("kimi-k2.6");
+      expect(models).toContain("kimi-k3.1-pro");
+      expect(models).toContain("kimi-k3");
+      expect(models).toContain("kimi-k2.7-code");
     });
   });
 
@@ -220,16 +219,16 @@ describe("MoonshotProvider", () => {
       const provider = new MoonshotProvider();
       const models = await provider.listModelsAsync();
 
-      const model8k = models.find((m) => m.id === "moonshot-v1-8k");
-      expect(model8k?.contextWindow).toBe(8000);
+      const model8k = models.find((m) => m.id === "kimi-k2.6");
+      expect(model8k?.contextWindow).toBe(262144);
 
-      const model32k = models.find((m) => m.id === "moonshot-v1-32k");
-      expect(model32k?.contextWindow).toBe(32000);
+      const model32k = models.find((m) => m.id === "kimi-k3.1-pro");
+      expect(model32k?.contextWindow).toBe(1048576);
 
-      const model128k = models.find((m) => m.id === "moonshot-v1-128k");
-      expect(model128k?.contextWindow).toBe(128000);
+      const model128k = models.find((m) => m.id === "kimi-k3");
+      expect(model128k?.contextWindow).toBe(1048576);
 
-      const thinkingModel = models.find((m) => m.id === "kimi-k2-thinking");
+      const thinkingModel = models.find((m) => m.id === "kimi-k2.7-code");
       expect(thinkingModel?.supportsReasoning).toBe(true);
     });
 
@@ -252,7 +251,7 @@ describe("MoonshotProvider", () => {
   describe("getDefaultModel", () => {
     it("should return moonshot-v1-32k as default", () => {
       const provider = new MoonshotProvider();
-      expect(provider.getDefaultModel()).toBe("moonshot-v1-32k");
+      expect(provider.getDefaultModel()).toBe("kimi-k3.1-pro");
     });
   });
 
@@ -287,9 +286,9 @@ describe("MiniMaxProvider", () => {
       const provider = new MiniMaxProvider();
       const models = provider.listModels();
 
-      expect(models).toContain("MiniMax-M2");
-      expect(models).toContain("MiniMax-M2.1");
-      expect(models).toContain("MiniMax-Text-01");
+      expect(models).toContain("MiniMax-M3.1-Flash");
+      expect(models).toContain("MiniMax-M3");
+      expect(models).not.toContain("MiniMax-Text-01");
     });
   });
 
@@ -298,7 +297,7 @@ describe("MiniMaxProvider", () => {
       const provider = new MiniMaxProvider();
       const models = await provider.listModelsAsync();
 
-      const minimax = models.find((m) => m.id === "MiniMax-M2");
+      const minimax = models.find((m) => m.id === "MiniMax-M3.1-Flash");
       expect(minimax).toBeDefined();
       expect(minimax?.provider).toBe("minimax");
       expect(minimax?.supportsReasoning).toBe(true);
@@ -308,7 +307,7 @@ describe("MiniMaxProvider", () => {
   describe("getDefaultModel", () => {
     it("should return MiniMax-M2 as default", () => {
       const provider = new MiniMaxProvider();
-      expect(provider.getDefaultModel()).toBe("MiniMax-M2");
+      expect(provider.getDefaultModel()).toBe("MiniMax-M3.1-Flash");
     });
   });
 
@@ -320,7 +319,7 @@ describe("MiniMaxProvider", () => {
           buildExtraBody: (params: CompletionParams) => Record<string, unknown> | undefined;
         }
       ).buildExtraBody({
-        model: "MiniMax-M2",
+        model: "MiniMax-M3.1-Flash",
         messages: [{ role: "user", content: "Hello" }],
         thinking: { enabled: true },
       });
@@ -335,7 +334,7 @@ describe("MiniMaxProvider", () => {
           buildExtraBody: (params: CompletionParams) => Record<string, unknown> | undefined;
         }
       ).buildExtraBody({
-        model: "MiniMax-M2",
+        model: "MiniMax-M3.1-Flash",
         messages: [{ role: "user", content: "Hello" }],
         thinking: { enabled: true },
         extraBody: { trace_id: "abc" },
@@ -515,9 +514,9 @@ describe("MistralProvider", () => {
       const provider = new MistralProvider();
       const models = provider.listModels();
 
-      expect(models).toContain("mistral-large-latest");
-      expect(models).toContain("mistral-small-latest");
-      expect(models).toContain("codestral-latest");
+      expect(models).toContain("mistral-large-4");
+      expect(models).toContain("mistral-small-2603");
+      expect(models).toContain("codestral-2508");
     });
   });
 
@@ -526,18 +525,18 @@ describe("MistralProvider", () => {
       const provider = new MistralProvider();
       const models = await provider.listModelsAsync();
 
-      const mistralLarge = models.find((m) => m.id === "mistral-large-latest");
+      const mistralLarge = models.find((m) => m.id === "mistral-large-4");
       expect(mistralLarge).toBeDefined();
       expect(mistralLarge?.provider).toBe("mistral");
-      expect(mistralLarge?.contextWindow).toBe(128000);
-      expect(mistralLarge?.supportsReasoning).toBe(true);
+      expect(mistralLarge?.contextWindow).toBe(1000000);
+      expect(mistralLarge?.supportsTools).toBe(true);
     });
 
     it("should include code-specialized model", async () => {
       const provider = new MistralProvider();
       const models = await provider.listModelsAsync();
 
-      const codestral = models.find((m) => m.id === "codestral-latest");
+      const codestral = models.find((m) => m.id === "codestral-2508");
       expect(codestral).toBeDefined();
       expect(codestral?.supportsTools).toBe(true);
     });
@@ -546,16 +545,16 @@ describe("MistralProvider", () => {
       const provider = new MistralProvider();
       const models = await provider.listModelsAsync();
 
-      const mistralSmall = models.find((m) => m.id === "mistral-small-latest");
-      expect(mistralSmall?.inputPrice).toBe(0.1);
-      expect(mistralSmall?.outputPrice).toBe(0.3);
+      const mistralSmall = models.find((m) => m.id === "mistral-small-2603");
+      expect(mistralSmall?.inputPrice).toBe(0.15);
+      expect(mistralSmall?.outputPrice).toBe(0.6);
     });
   });
 
   describe("getDefaultModel", () => {
     it("should return mistral-large-latest as default", () => {
       const provider = new MistralProvider();
-      expect(provider.getDefaultModel()).toBe("mistral-large-latest");
+      expect(provider.getDefaultModel()).toBe("mistral-large-4");
     });
   });
 

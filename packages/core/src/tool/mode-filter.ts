@@ -77,6 +77,7 @@ export interface ToolValidationParams {
  * - spec: Restricted editing until implementation phase
  */
 export const MODE_TOOL_GROUPS: Record<CodingMode, readonly ToolGroupEntry[]> = {
+  orch: ["read", "edit", "execute", "browser", "mcp", "agent", "git", "lsp"],
   vibe: ["read", "edit", "execute", "browser", "mcp", "modes", "agent", "git", "lsp"],
   plan: ["read", "edit", "execute", "modes", "agent", "git", "lsp"],
   spec: [

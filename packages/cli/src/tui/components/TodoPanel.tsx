@@ -9,11 +9,10 @@
 
 import { Box, Text, useInput } from "ink";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { isEndKey, isHomeKey } from "../types/ink-extended.js";
-import { HotkeyHints } from "./common/HotkeyHints.js";
 import { TodoItem, type TodoItemData } from "./TodoItem.js";
 
 // =============================================================================
@@ -33,6 +32,7 @@ export interface TodoPanelProps {
   readonly items: readonly TodoItemData[];
   /** Maximum height in lines */
   readonly maxHeight?: number;
+  readonly width?: number;
   /** Whether the panel is focused for keyboard input */
   readonly isFocused?: boolean;
   /** Initial filter status */
@@ -167,6 +167,7 @@ function ProgressBar({ percentage, width }: ProgressBarProps): React.JSX.Element
 export function TodoPanel({
   items,
   maxHeight = DEFAULT_MAX_HEIGHT,
+  width = 80,
   isFocused = true,
   initialFilter = "all",
   onSelectItem,
@@ -176,20 +177,6 @@ export function TodoPanel({
 }: TodoPanelProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
-
-  const hints = useMemo(
-    () => [
-      { keys: "Alt+K", label: "Sidebar" },
-      { keys: "Alt+G", label: "Tools" },
-      { keys: "Alt+O", label: "MCP" },
-      { keys: "Alt+P", label: "Memory" },
-      { keys: "Alt+T", label: "Todo" },
-      { keys: "Ctrl+S", label: "Sessions" },
-      { keys: "Ctrl+Z", label: "Undo" },
-      { keys: "Ctrl+Y", label: "Redo" },
-    ],
-    []
-  );
 
   // Track selection, scroll, filter, and expansion
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -202,6 +189,11 @@ export function TodoPanel({
 
   // Calculate visible items (account for header and footer)
   const maxVisible = Math.max(1, maxHeight - 6);
+
+  useEffect(() => {
+    setSelectedIndex((index) => Math.min(index, Math.max(0, filteredItems.length - 1)));
+    setScrollOffset((offset) => Math.min(offset, Math.max(0, filteredItems.length - maxVisible)));
+  }, [filteredItems.length, maxVisible]);
 
   // Get visible entries
   const visibleEntries = useMemo(
@@ -332,7 +324,7 @@ export function TodoPanel({
   );
 
   // Estimate terminal width (fallback)
-  const estimatedWidth = 80;
+  const estimatedWidth = width;
 
   // Empty state
   if (items.length === 0) {
@@ -392,7 +384,10 @@ export function TodoPanel({
 
         {/* Progress bar */}
         <Box marginTop={0}>
-          <ProgressBar percentage={progress.percentage} width={40} />
+          <ProgressBar
+            percentage={progress.percentage}
+            width={Math.max(6, Math.min(40, width - 16))}
+          />
           <Text dimColor>
             {" "}
             ({progress.completed}/{progress.total} done)
@@ -402,17 +397,23 @@ export function TodoPanel({
 
       {/* Filter tabs */}
       <Box paddingX={1} marginBottom={1}>
-        {FILTER_CYCLE.map((f, i) => (
-          <Box key={f}>
-            {i > 0 && <Text dimColor> │ </Text>}
-            <Text
-              color={f === filter ? theme.colors.primary : theme.colors.muted}
-              bold={f === filter}
-            >
-              {FILTER_LABELS[f]}
-            </Text>
-          </Box>
-        ))}
+        {width < 60 ? (
+          <Text dimColor wrap="truncate">
+            {FILTER_LABELS[filter]} · Tab to filter
+          </Text>
+        ) : (
+          FILTER_CYCLE.map((f, i) => (
+            <Box key={f}>
+              {i > 0 && <Text dimColor> │ </Text>}
+              <Text
+                color={f === filter ? theme.colors.primary : theme.colors.muted}
+                bold={f === filter}
+              >
+                {FILTER_LABELS[f]}
+              </Text>
+            </Box>
+          ))
+        )}
       </Box>
 
       {/* Scroll indicator - up */}
@@ -446,7 +447,6 @@ export function TodoPanel({
       {isFocused && (
         <Box marginTop={1} paddingX={1} flexDirection="column">
           <Text dimColor>{t("todo.keybindings")}</Text>
-          <HotkeyHints hints={hints} />
         </Box>
       )}
     </Box>

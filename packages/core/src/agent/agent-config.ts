@@ -234,6 +234,13 @@ export const SPEC_ORCHESTRATOR: AgentConfig = {
  * ```
  */
 export const BUILT_IN_AGENTS = {
+  "orch-agent": {
+    name: "orch-agent",
+    level: 0,
+    canSpawnAgents: true,
+    maxConcurrentSubagents: 3,
+    description: "Personal assistant coordinating and completing tasks",
+  } satisfies AgentConfig,
   "vibe-agent": VIBE_AGENT,
   "plan-agent": PLAN_AGENT,
   "spec-orchestrator": SPEC_ORCHESTRATOR,

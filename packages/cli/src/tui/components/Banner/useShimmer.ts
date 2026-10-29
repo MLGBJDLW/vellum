@@ -189,7 +189,7 @@ export function useShimmer(config: ShimmerConfig = {}): ShimmerState {
   }, [useGlobalClock, isActive, isComplete, timestamp, advancePosition]);
 
   useEffect(() => {
-    if (useGlobalClock || !isActive || isComplete) return;
+    if (useGlobalClock || !isActive || isComplete || isPaused) return;
 
     lastTickRef.current = Date.now();
 
@@ -202,7 +202,7 @@ export function useShimmer(config: ShimmerConfig = {}): ShimmerState {
     }, updateInterval);
 
     return () => clearInterval(timer);
-  }, [useGlobalClock, isActive, isComplete, updateInterval, advancePosition]);
+  }, [useGlobalClock, isActive, isComplete, isPaused, updateInterval, advancePosition]);
 
   useEffect(() => {
     if (enabled && !isComplete) {

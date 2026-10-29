@@ -16,37 +16,21 @@ import type { OnboardingState, StepResult } from "../types.js";
 /**
  * Welcome message displayed to new users
  */
-export const WELCOME_MESSAGE = `
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║   👋  Welcome to Vellum!                                     ║
-║                                                              ║
-║   Vellum is an AI-powered coding assistant that helps        ║
-║   you write, refactor, and understand code faster.           ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
-`;
+export const WELCOME_MESSAGE =
+  "Welcome to Vellum, your personal AI assistant.\nResearch, write, organize, analyze, and code in one conversation.";
 
 /**
  * Setup overview displayed after welcome
  */
-export const SETUP_OVERVIEW = `
-This quick setup will help you:
-
-  1. 🤖  Select your AI provider (Anthropic, OpenAI, etc.)
-  2. 🔐  Configure your API credentials securely
-  3. ⚡  Choose your preferred coding mode
-
-It only takes a minute!
-`;
+export const SETUP_OVERVIEW =
+  "Choose a provider and configure its API key.\nYour assistant will choose planning and delegation as needed.";
 
 /**
  * Tips displayed at the end of welcome
  */
 export const QUICK_TIPS = [
   "Press Enter to continue, Esc to skip setup",
-  "You can run 'vellum onboard' anytime to restart this wizard",
-  "Check 'vellum --help' for all available commands",
+  "Use /onboard to revisit setup, or /auth set <provider> to add a key",
 ];
 
 // =============================================================================

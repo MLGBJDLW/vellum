@@ -8,6 +8,7 @@
  * @module @vellum/core/agent/context-integration
  */
 
+import { getContextWindow } from "@vellum/provider";
 import {
   AutoContextManager,
   type AutoContextManagerConfig,
@@ -20,7 +21,7 @@ import {
   MessagePriority,
 } from "../context/index.js";
 import type { Logger } from "../logger/logger.js";
-import type { SessionMessage } from "../session/index.js";
+import type { SessionMessage, SessionMessagePart } from "../session/index.js";
 
 // ============================================================================
 // Types
@@ -46,6 +47,7 @@ export interface ContextManageResult {
 export interface ContextIntegrationConfig {
   /** Model identifier for token calculation */
   model: string;
+  providerType?: string;
   /** Optional LLM client for compression */
   compressionClient?: CompressionLLMClient;
   /** Logger for state change logging */
@@ -86,6 +88,8 @@ export interface ContextIntegration {
    * Reset the context manager
    */
   reset(): void;
+  /** Reconfigure the same integration for a newly selected model. */
+  updateModel?(model: string, providerType?: string): void;
 }
 
 // ============================================================================
@@ -100,7 +104,9 @@ export function sessionToContext(message: SessionMessage): ContextMessage {
   const content = extractContentFromParts(message.parts);
 
   // Map role - SessionMessage uses 'user' | 'assistant', ContextMessage uses same
-  const role = message.role as "user" | "assistant";
+  const role = message.role === "tool_result" ? "user" : message.role;
+  const state = message.metadata.extra?._context;
+  const saved = state && typeof state === "object" ? (state as Record<string, unknown>) : {};
 
   // Determine priority based on role and recency (basic heuristic)
   // Use RECENT for user messages, NORMAL for assistant
@@ -111,9 +117,18 @@ export function sessionToContext(message: SessionMessage): ContextMessage {
     role,
     content,
     priority,
-    tokens: message.metadata.tokens
-      ? message.metadata.tokens.input + message.metadata.tokens.output
-      : undefined,
+    // API input usage measures the whole request, not the size of this message.
+    // Let the existing content tokenizer estimate the retained message instead.
+    isSummary: saved.isSummary === true,
+    condenseId: typeof saved.condenseId === "string" ? saved.condenseId : undefined,
+    condenseParent: typeof saved.condenseParent === "string" ? saved.condenseParent : undefined,
+    truncationParent:
+      typeof saved.truncationParent === "string" ? saved.truncationParent : undefined,
+    reasoningContent:
+      message.parts
+        .filter((part) => part.type === "reasoning")
+        .map((part) => part.text)
+        .join("\n") || undefined,
     createdAt: message.metadata.createdAt,
     metadata: message.metadata.extra,
   };
@@ -127,22 +142,77 @@ export function contextToSession(
   message: ContextMessage,
   original?: SessionMessage
 ): SessionMessage {
-  // Use original parts if available and content hasn't changed
-  const content = typeof message.content === "string" ? message.content : "";
+  const originalContent = original ? extractContentFromParts(original.parts) : undefined;
+  const unchanged = original && JSON.stringify(message.content) === JSON.stringify(originalContent);
+  const parts: SessionMessagePart[] = unchanged
+    ? original.parts
+    : typeof message.content === "string"
+      ? [{ type: "text", text: message.content }]
+      : message.content.map((block): SessionMessagePart => {
+          switch (block.type) {
+            case "text":
+              return { type: "text", text: block.text };
+            case "tool_use":
+              return {
+                type: "tool",
+                id: block.id,
+                name: block.name,
+                input:
+                  block.input && typeof block.input === "object"
+                    ? (block.input as Record<string, unknown>)
+                    : {},
+              };
+            case "tool_result":
+              return {
+                type: "tool_result",
+                toolId: block.tool_use_id,
+                content: block.content,
+                isError: block.is_error,
+              };
+            case "image": {
+              const prior = original?.parts.find(
+                (part) => part.type === "image" && part.source === block.source.data
+              );
+              if (prior) return prior;
+              const mimeType = block.mediaType;
+              if (
+                mimeType === "image/png" ||
+                mimeType === "image/jpeg" ||
+                mimeType === "image/gif" ||
+                mimeType === "image/webp"
+              ) {
+                return { type: "image", source: block.source.data, mimeType };
+              }
+              return { type: "text", text: "[Image omitted: unsupported media type]" };
+            }
+          }
+          throw new Error("Unsupported context message block");
+        });
+  if (!unchanged && message.reasoningContent)
+    parts.unshift({ type: "reasoning", text: message.reasoningContent });
 
   return {
     id: message.id,
-    role: message.role,
-    parts: original?.parts ?? [{ type: "text", text: content }],
+    role: message.isSummary ? message.role : (original?.role ?? message.role),
+    parts,
     metadata: {
       createdAt: message.createdAt ?? Date.now(),
-      ...original?.metadata,
+      ...(message.isSummary ? undefined : original?.metadata),
+      ...(original?.metadata.providerMetadata?.provider === "google" && !unchanged
+        ? { providerMetadata: undefined }
+        : {}),
       extra: {
         ...original?.metadata?.extra,
         ...message.metadata,
         // Mark context management metadata
         _contextManaged: true,
         _contextState: message.isSummary ? "summary" : "original",
+        _context: {
+          isSummary: message.isSummary,
+          condenseId: message.condenseId,
+          condenseParent: message.condenseParent,
+          truncationParent: message.truncationParent,
+        },
       },
     },
   };
@@ -158,33 +228,41 @@ function extractContentFromParts(
   const textParts = parts.filter((p) => p.type === "text");
   const toolParts = parts.filter((p) => p.type === "tool" || p.type === "tool_result");
 
-  if (toolParts.length === 0 && textParts.length > 0) {
+  if (toolParts.length === 0 && textParts.length === parts.length) {
     return textParts.map((p) => (p as { text: string }).text).join("\n");
   }
 
   // For complex messages with tool calls, convert to content blocks
-  return parts.map((part) => {
-    switch (part.type) {
-      case "text":
-        return { type: "text" as const, text: (part as { text: string }).text };
-      case "tool":
-        return {
-          type: "tool_use" as const,
-          id: (part as { id: string }).id,
-          name: (part as { name: string }).name,
-          input: (part as { input: Record<string, unknown> }).input,
-        };
-      case "tool_result":
-        return {
-          type: "tool_result" as const,
-          tool_use_id: (part as { toolId: string }).toolId,
-          content: String((part as { content: unknown }).content ?? ""),
-          is_error: (part as { isError?: boolean }).isError ?? false,
-        };
-      default:
-        return { type: "text" as const, text: JSON.stringify(part) };
-    }
-  });
+  return parts
+    .filter((part) => part.type !== "reasoning")
+    .map((part) => {
+      switch (part.type) {
+        case "text":
+          return { type: "text" as const, text: (part as { text: string }).text };
+        case "image":
+          return {
+            type: "image" as const,
+            source: { type: "base64", data: part.source },
+            mediaType: part.mimeType,
+          };
+        case "tool":
+          return {
+            type: "tool_use" as const,
+            id: (part as { id: string }).id,
+            name: (part as { name: string }).name,
+            input: (part as { input: Record<string, unknown> }).input,
+          };
+        case "tool_result":
+          return {
+            type: "tool_result" as const,
+            tool_use_id: (part as { toolId: string }).toolId,
+            content: String((part as { content: unknown }).content ?? ""),
+            is_error: (part as { isError?: boolean }).isError ?? false,
+          };
+        default:
+          return { type: "text" as const, text: JSON.stringify(part) };
+      }
+    });
 }
 
 /**
@@ -229,17 +307,28 @@ export function contextsToSessions(
  * ```
  */
 export function createContextIntegration(config: ContextIntegrationConfig): ContextIntegration {
-  const { model, compressionClient, logger, enabled = true, configOverrides } = config;
+  const {
+    model,
+    providerType,
+    compressionClient,
+    logger,
+    enabled = true,
+    configOverrides,
+  } = config;
+  const modelConfig = (selectedModel: string, selectedProvider?: string) => ({
+    ...createDefaultConfig(selectedModel, compressionClient),
+    ...(selectedProvider
+      ? { contextWindow: getContextWindow(selectedProvider, selectedModel) }
+      : {}),
+    ...configOverrides,
+  });
 
   // Create manager only if enabled
   let manager: AutoContextManager | null = null;
   let currentState: ContextState = "healthy";
 
   if (enabled) {
-    const managerConfig = createDefaultConfig(model, compressionClient);
-    // Apply any config overrides
-    const finalConfig = configOverrides ? { ...managerConfig, ...configOverrides } : managerConfig;
-    manager = new AutoContextManager(finalConfig);
+    manager = new AutoContextManager(modelConfig(model, providerType));
   }
 
   return {
@@ -249,6 +338,12 @@ export function createContextIntegration(config: ContextIntegrationConfig): Cont
 
     get enabled() {
       return enabled && manager !== null;
+    },
+
+    updateModel(nextModel: string, nextProvider?: string): void {
+      if (!enabled) return;
+      manager = new AutoContextManager(modelConfig(nextModel, nextProvider));
+      currentState = "healthy";
     },
 
     async beforeApiCall(messages: SessionMessage[]): Promise<ContextManageResult> {
@@ -264,7 +359,7 @@ export function createContextIntegration(config: ContextIntegrationConfig): Cont
 
       try {
         // Convert to context messages
-        const contextMessages = sessionsToContexts(messages);
+        const contextMessages = getEffectiveApiHistory(sessionsToContexts(messages)).messages;
 
         // Run context management
         const result: AutoManageResult = await manager.manage(contextMessages);
@@ -283,7 +378,10 @@ export function createContextIntegration(config: ContextIntegrationConfig): Cont
         }
 
         // Convert back to session messages
-        const managedMessages = contextsToSessions(result.messages, messages);
+        const managedMessages = contextsToSessions(
+          getEffectiveApiHistory(result.messages).messages,
+          messages
+        );
 
         return {
           messages: managedMessages,
@@ -347,10 +445,12 @@ export interface ContextManagerConfig {
 export function createContextIntegrationFromLoopConfig(
   model: string,
   config?: ContextManagerConfig["contextManagement"],
-  logger?: Logger
+  logger?: Logger,
+  providerType?: string
 ): ContextIntegration {
   return createContextIntegration({
     model,
+    providerType,
     enabled: config?.enabled ?? false,
     compressionClient: config?.compressionClient,
     configOverrides: config?.configOverrides,

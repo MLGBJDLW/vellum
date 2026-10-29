@@ -105,7 +105,7 @@ describe("attemptCompletionTool", () => {
       if (result.success) {
         expect(result.output.verified).toBe(true);
         expect((result.output as { verificationPassed?: boolean }).verificationPassed).toBe(false);
-        expect(result.output.completed).toBe(true);
+        expect(result.output.completed).toBe(false);
       }
     });
 

@@ -160,7 +160,7 @@ describe("Legacy Mode Mapping", () => {
     it("should emit deprecation warning for legacy modes", () => {
       normalizeMode("code");
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "⚠️ 'code' mode is deprecated. Use 'vibe' instead."
+        "! 'code' mode is deprecated. Use 'vibe' instead."
       );
     });
 
@@ -190,7 +190,7 @@ describe("Legacy Mode Mapping", () => {
     it("should log deprecation warning by default", () => {
       emitDeprecationWarning("code", "vibe");
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "⚠️ 'code' mode is deprecated. Use 'vibe' instead."
+        "! 'code' mode is deprecated. Use 'vibe' instead."
       );
     });
 
@@ -215,17 +215,17 @@ describe("Legacy Mode Mapping", () => {
     it("should format warning message correctly for all legacy modes", () => {
       emitDeprecationWarning("draft", "vibe");
       expect(consoleWarnSpy).toHaveBeenLastCalledWith(
-        "⚠️ 'draft' mode is deprecated. Use 'vibe' instead."
+        "! 'draft' mode is deprecated. Use 'vibe' instead."
       );
 
       emitDeprecationWarning("debug", "vibe");
       expect(consoleWarnSpy).toHaveBeenLastCalledWith(
-        "⚠️ 'debug' mode is deprecated. Use 'vibe' instead."
+        "! 'debug' mode is deprecated. Use 'vibe' instead."
       );
 
       emitDeprecationWarning("ask", "plan");
       expect(consoleWarnSpy).toHaveBeenLastCalledWith(
-        "⚠️ 'ask' mode is deprecated. Use 'plan' instead."
+        "! 'ask' mode is deprecated. Use 'plan' instead."
       );
     });
   });
