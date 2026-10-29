@@ -246,7 +246,7 @@ function HeaderRegion({
   deletions,
 }: HeaderRegionProps): React.JSX.Element {
   return (
-    <Box flexDirection="column" width="100%">
+    <Box flexDirection="column" width="100%" flexShrink={0}>
       <Box paddingX={1}>{children}</Box>
       <Separator
         color={borderColor}

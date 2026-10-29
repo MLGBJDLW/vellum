@@ -21,17 +21,26 @@ export interface ClickRegion {
   /** Unique identifier for this region */
   readonly id: string;
   /** Top edge, 1-based row */
-  readonly top: number;
+  readonly top?: number;
   /** Left edge, 1-based column */
-  readonly left: number;
+  readonly left?: number;
   /** Bottom edge, 1-based row (inclusive) */
-  readonly bottom: number;
+  readonly bottom?: number;
   /** Right edge, 1-based column (inclusive) */
-  readonly right: number;
+  readonly right?: number;
+  /** Live measured bounds; null means hidden or detached. Evaluated at dispatch. */
+  readonly getBounds?: () => ClickRegionEdges | null;
   /** Handler called when region is clicked */
   readonly onClick: (event: MouseEvent) => void;
   /** Priority for overlapping regions (higher wins, default: 0) */
   readonly priority?: number;
+}
+
+export interface ClickRegionEdges {
+  readonly top: number;
+  readonly left: number;
+  readonly bottom: number;
+  readonly right: number;
 }
 
 // =============================================================================
@@ -46,6 +55,7 @@ export interface ClickRegion {
  */
 export class ClickRegionRegistry {
   readonly #regions = new Map<string, ClickRegion>();
+  #pressed: { region: ClickRegion; col: number; row: number; moved: boolean } | null = null;
 
   /**
    * Register a click region.
@@ -59,43 +69,73 @@ export class ClickRegionRegistry {
       // Only delete if the region hasn't been replaced
       if (this.#regions.get(region.id) === region) {
         this.#regions.delete(region.id);
+        if (this.#pressed?.region === region) this.cancelGesture();
       }
     };
   }
 
   /**
-   * Dispatch a click event at the given terminal coordinates.
-   * Finds all regions containing (col, row), sorts by priority descending,
-   * and calls the highest-priority handler.
-   *
-   * @returns true if a handler was called.
+   * Find the highest-priority visible target at terminal coordinates.
    */
-  dispatch(col: number, row: number, event: MouseEvent): boolean {
+  hitTest(col: number, row: number): ClickRegion | undefined {
     const hits: ClickRegion[] = [];
 
     for (const region of this.#regions.values()) {
-      if (col >= region.left && col <= region.right && row >= region.top && row <= region.bottom) {
+      const bounds = region.getBounds ? region.getBounds() : region;
+      if (
+        bounds?.left !== undefined &&
+        bounds.right !== undefined &&
+        bounds.top !== undefined &&
+        bounds.bottom !== undefined &&
+        col >= bounds.left &&
+        col <= bounds.right &&
+        row >= bounds.top &&
+        row <= bounds.bottom
+      ) {
         hits.push(region);
       }
     }
-
-    if (hits.length === 0) return false;
-
-    // Sort by priority descending (higher priority first)
     hits.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+    return hits[0];
+  }
 
-    const winner = hits[0];
-    if (winner) {
-      winner.onClick(event);
+  /** Primary press/release on the same live target activates once; motion cancels. */
+  dispatch(col: number, row: number, event: MouseEvent): boolean {
+    if (event.action === "press") {
+      this.cancelGesture();
+      const region = event.button === "left" ? this.hitTest(col, row) : undefined;
+      if (region) this.#pressed = { region, col, row, moved: false };
+      return region !== undefined;
     }
-
+    const pressed = this.#pressed;
+    if (event.action === "move") {
+      if (pressed && (pressed.col !== col || pressed.row !== row)) pressed.moved = true;
+      return pressed !== null;
+    }
+    if (event.action !== "release") return false;
+    this.cancelGesture();
+    if (
+      !pressed ||
+      pressed.moved ||
+      pressed.col !== col ||
+      pressed.row !== row ||
+      (event.button !== "left" && event.button !== "none") ||
+      this.hitTest(col, row) !== pressed.region
+    )
+      return false;
+    pressed.region.onClick(event);
     return true;
+  }
+
+  cancelGesture(): void {
+    this.#pressed = null;
   }
 
   /**
    * Remove all registered regions.
    */
   clear(): void {
+    this.cancelGesture();
     this.#regions.clear();
   }
 

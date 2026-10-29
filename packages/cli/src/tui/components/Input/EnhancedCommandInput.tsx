@@ -17,7 +17,7 @@ import type { AutocompleteOption } from "./Autocomplete.js";
 import { Autocomplete } from "./Autocomplete.js";
 import { MentionAutocomplete } from "./MentionAutocomplete.js";
 import { parseSlashCommand, type SlashCommand } from "./slash-command-utils.js";
-import { TextInput } from "./TextInput.js";
+import { TextInput, type TextInputHandle } from "./TextInput.js";
 
 // =============================================================================
 // Types
@@ -118,8 +118,7 @@ export function EnhancedCommandInput({
 }: EnhancedCommandInputProps): React.ReactElement {
   const [value, setValue] = useState("");
 
-  // Track when autocomplete just completed (to suppress Enter and move cursor)
-  const [autocompleteJustCompleted, setAutocompleteJustCompleted] = useState(false);
+  const [dismissedAutocompleteValue, setDismissedAutocompleteValue] = useState<string | null>(null);
 
   // Refs to track current autocomplete selection (avoids state delay on Enter/Tab)
   const slashSelectionRef = useRef<{
@@ -136,8 +135,8 @@ export function EnhancedCommandInput({
     hasOptions: false,
   });
 
-  // Ref for TextInput to manage focus
-  const inputRef = useRef<{ focus: () => void } | null>(null);
+  // The editor owns its synchronous value/cursor, including completion edits.
+  const inputRef = useRef<TextInputHandle>(null);
 
   // Slash autocomplete state
   const slashAutocomplete = useMemo(() => {
@@ -246,6 +245,7 @@ export function EnhancedCommandInput({
 
   // Determine which autocomplete is active (priority: slash > mention)
   const activeAutocomplete = useMemo(() => {
+    if (dismissedAutocompleteValue === value) return null;
     // Only consider slash active if there are actually options to show
     if (slashAutocomplete.visible && slashAutocomplete.active) {
       // Level 1 always shows command list, level 2/3 need actual subcommands
@@ -257,7 +257,14 @@ export function EnhancedCommandInput({
       return "mention" as const;
     }
     return null;
-  }, [slashAutocomplete, slashOptions.length, mentionAutocomplete.state, enableMentions]);
+  }, [
+    slashAutocomplete,
+    slashOptions.length,
+    mentionAutocomplete.state,
+    enableMentions,
+    dismissedAutocompleteValue,
+    value,
+  ]);
 
   // History navigation
   const originalInputRef = useRef<string | null>(null);
@@ -334,16 +341,16 @@ export function EnhancedCommandInput({
     (selected: string) => {
       if (slashAutocomplete.level === 1) {
         // Level 1: selected is command name
-        setValue(`/${selected} `);
+        inputRef.current?.replaceValue(`/${selected} `);
       } else if (slashAutocomplete.level === 2) {
         // Level 2: selected is subcommand name, preserve command
-        setValue(`/${slashAutocomplete.commandName} ${selected} `);
+        inputRef.current?.replaceValue(`/${slashAutocomplete.commandName} ${selected} `);
       } else {
         // Level 3: selected is third-level item (e.g., provider), preserve command and arg1
-        setValue(`/${slashAutocomplete.commandName} ${slashAutocomplete.arg1} ${selected} `);
+        inputRef.current?.replaceValue(
+          `/${slashAutocomplete.commandName} ${slashAutocomplete.arg1} ${selected} `
+        );
       }
-      setAutocompleteJustCompleted(true);
-      inputRef.current?.focus();
     },
     [slashAutocomplete.level, slashAutocomplete.commandName, slashAutocomplete.arg1]
   );
@@ -370,17 +377,15 @@ export function EnhancedCommandInput({
   const handleMentionSelect = useCallback(
     (selectedValue: string, mode: "type" | "value") => {
       const newValue = mentionAutocomplete.handleSelect(selectedValue, mode);
-      setValue(newValue);
-      setAutocompleteJustCompleted(true);
-      inputRef.current?.focus();
+      inputRef.current?.replaceValue(newValue);
     },
     [mentionAutocomplete]
   );
 
   // Handle autocomplete cancel
   const handleAutocompleteCancel = useCallback(() => {
-    inputRef.current?.focus();
-  }, []);
+    setDismissedAutocompleteValue(value);
+  }, [value]);
 
   // Track slash autocomplete selection state
   const handleSlashSelectionChange = useCallback(
@@ -395,11 +400,6 @@ export function EnhancedCommandInput({
     mentionSelectionRef.current = { index, hasOptions };
   }, []);
 
-  // Callback when cursor has been moved to end
-  const handleCursorMoved = useCallback(() => {
-    setAutocompleteJustCompleted(false);
-  }, []);
-
   // Determine what to show
   const showSlashAutocomplete = activeAutocomplete === "slash" && slashOptions.length > 0;
   const showMentionAutocomplete =
@@ -410,6 +410,7 @@ export function EnhancedCommandInput({
   return (
     <Box flexDirection="column">
       <TextInput
+        ref={inputRef}
         value={value}
         onChange={handleChange}
         onSubmit={handleSubmit}
@@ -417,10 +418,8 @@ export function EnhancedCommandInput({
         disabled={disabled}
         focused={focused}
         multiline={multiline}
-        suppressEnter={autocompleteJustCompleted || activeAutocomplete !== null}
+        suppressEnter={activeAutocomplete !== null}
         suppressTab={activeAutocomplete !== null}
-        cursorToEnd={autocompleteJustCompleted}
-        onCursorMoved={handleCursorMoved}
       />
 
       {/* Slash command autocomplete */}
@@ -432,7 +431,7 @@ export function EnhancedCommandInput({
           onCancel={handleAutocompleteCancel}
           onSelectionChange={handleSlashSelectionChange}
           visible={slashAutocomplete.visible}
-          active={slashAutocomplete.active}
+          active={focused && !disabled && slashAutocomplete.active}
           grouped={slashAutocomplete.level === 1 && groupedCommands}
           categoryOrder={slashAutocomplete.level === 1 ? categoryOrder : undefined}
           categoryLabels={slashAutocomplete.level === 1 ? categoryLabels : undefined}
@@ -450,7 +449,7 @@ export function EnhancedCommandInput({
           onCancel={handleAutocompleteCancel}
           onSelectionChange={handleMentionSelectionChange}
           visible={mentionAutocomplete.state.visible}
-          active={mentionAutocomplete.state.active}
+          active={focused && !disabled && mentionAutocomplete.state.active}
         />
       )}
     </Box>

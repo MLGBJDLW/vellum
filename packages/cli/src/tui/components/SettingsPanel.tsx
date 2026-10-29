@@ -1,7 +1,7 @@
 /**
  * SettingsPanel Component
  *
- * Interactive TUI component for viewing and modifying application settings.
+ * Interactive TUI component for viewing and saving default preferences.
  * Provides category-based navigation with keyboard controls.
  *
  * @module tui/components/SettingsPanel
@@ -9,9 +9,10 @@
 
 import type { CodingMode } from "@vellum/core";
 import { loadConfig } from "@vellum/core";
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import { useInput } from "../hooks/useTerminalInput.js";
 import {
   type DiffViewMode,
@@ -30,6 +31,7 @@ import {
   type ThinkingSettings,
 } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { Clickable, getVisibleClickBounds } from "./common/Clickable.js";
 import { TextInput } from "./Input/TextInput.js";
 
 // =============================================================================
@@ -113,7 +115,8 @@ const CATEGORY_LABELS: Record<SettingCategory, string> = {
 /**
  * Get settings items for a category.
  */
-function useSettingsItems(category: SettingCategory): SettingItem[] {
+function useSettingsItems(category: SettingCategory, revision: number): SettingItem[] {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Reload persisted values after a successful settings edit.
   return useMemo(() => {
     // Load config
     const configResult = loadConfig({ suppressDeprecationWarnings: true });
@@ -207,9 +210,9 @@ function useSettingsItems(category: SettingCategory): SettingItem[] {
           {
             key: "codingMode",
             label: "Coding Mode",
-            value: modeFromSettings ?? "vibe",
+            value: modeFromSettings ?? "orch",
             type: "select",
-            options: ["vibe", "plan", "spec"],
+            options: ["orch", "vibe", "plan", "spec"],
             editable: true,
             onChange: (v) => setModeInSettings(v as CodingMode),
           },
@@ -292,7 +295,7 @@ function useSettingsItems(category: SettingCategory): SettingItem[] {
       default:
         return [];
     }
-  }, [category]);
+  }, [category, revision]);
 }
 
 // =============================================================================
@@ -361,14 +364,14 @@ function SettingRow({
   const editableIndicator = item.editable ? " ✏️" : "";
 
   return (
-    <Box paddingY={0}>
-      <Box width={24}>
+    <Box paddingY={0} width="100%">
+      <Box width={24} flexShrink={0}>
         <Text color={isSelected ? theme.colors.primary : theme.colors.muted} bold={isSelected}>
           {isSelected ? "▶ " : "  "}
           {item.label}
         </Text>
       </Box>
-      <Box flexGrow={1}>
+      <Box flexGrow={1} flexShrink={1} minWidth={0}>
         {isEditing ? (
           <TextInput
             value={editValue ?? ""}
@@ -378,7 +381,7 @@ function SettingRow({
             showBorder={false}
           />
         ) : (
-          <Text color={theme.colors.muted}>
+          <Text color={theme.colors.muted} wrap="truncate">
             {displayValue}
             {editableIndicator}
           </Text>
@@ -400,7 +403,7 @@ function SettingRow({
  * - Setting navigation with up/down arrows or j/k
  * - Enter to edit (for editable settings)
  * - Esc to close panel or cancel edit
- * - Real-time setting updates
+ * - Saved defaults for future sessions; current session controls remain in the footer
  *
  * @example
  * ```tsx
@@ -434,9 +437,21 @@ export function SettingsPanel({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
+  const [settingsRevision, refreshSettings] = useState(0);
+  const listRef = useRef<DOMElement>(null);
 
   const currentCategory = CATEGORIES[categoryIndex] ?? "general";
-  const items = useSettingsItems(currentCategory);
+  const items = useSettingsItems(currentCategory, settingsRevision);
+  useMouseScroll({
+    enabled: isActive && !isEditing,
+    scrollSpeed: 1,
+    bounds: () => {
+      const bounds = getVisibleClickBounds(listRef.current);
+      return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+    },
+    onScroll: (delta) =>
+      setSelectedIndex((index) => Math.max(0, Math.min(index + delta, items.length - 1))),
+  });
 
   // Navigation handlers
   const navigateCategory = useCallback((direction: 1 | -1) => {
@@ -504,6 +519,7 @@ export function SettingsPanel({
       }
 
       item.onChange(newValue);
+      refreshSettings((revision) => revision + 1);
       setIsEditing(false);
     },
     [items, selectedIndex]
@@ -513,21 +529,25 @@ export function SettingsPanel({
     setIsEditing(false);
   }, []);
 
-  const cycleValue = useCallback(() => {
-    const item = items[selectedIndex];
-    if (!item?.editable || !item.onChange) return;
+  const cycleValue = useCallback(
+    (index = selectedIndex) => {
+      const item = items[index];
+      if (!item?.editable || !item.onChange) return;
 
-    if (item.type === "boolean") {
-      item.onChange(!item.value);
-    } else if (item.type === "select" && item.options) {
-      const currentIdx = item.options.indexOf(String(item.value));
-      const nextIdx = (currentIdx + 1) % item.options.length;
-      const nextValue = item.options[nextIdx];
-      if (nextValue !== undefined) {
-        item.onChange(nextValue);
+      if (item.type === "boolean") {
+        item.onChange(!item.value);
+      } else if (item.type === "select" && item.options) {
+        const currentIdx = item.options.indexOf(String(item.value));
+        const nextIdx = (currentIdx + 1) % item.options.length;
+        const nextValue = item.options[nextIdx];
+        if (nextValue !== undefined) {
+          item.onChange(nextValue);
+        }
       }
-    }
-  }, [items, selectedIndex]);
+      refreshSettings((revision) => revision + 1);
+    },
+    [items, selectedIndex]
+  );
 
   // Keyboard input
   useInput(
@@ -596,6 +616,8 @@ export function SettingsPanel({
 
   return (
     <Box
+      width="100%"
+      maxWidth={80}
       flexDirection="column"
       borderStyle="round"
       borderColor={theme.semantic.border.default}
@@ -605,34 +627,73 @@ export function SettingsPanel({
       {/* Header */}
       <Box marginBottom={1}>
         <Text bold color={theme.colors.primary}>
-          ⚙️ Settings
+          ⚙️ Settings · saved defaults
         </Text>
         <Box flexGrow={1} />
-        <Text color={theme.colors.muted} dimColor>
-          Esc to close
-        </Text>
+        <Clickable
+          id="settings-close"
+          width="auto"
+          enabled={isActive && !!onClose}
+          onClick={() => onClose?.()}
+        >
+          <Text color={theme.colors.muted} dimColor>
+            Esc to close
+          </Text>
+        </Clickable>
+      </Box>
+
+      <Box flexDirection="column" marginBottom={1}>
+        <Text color={theme.colors.muted}>Edits save defaults for the next session.</Text>
+        <Text color={theme.colors.muted}>Current mode and Thinking: use footer controls.</Text>
       </Box>
 
       {/* Category Tabs */}
-      <Box flexDirection="row" marginBottom={1}>
+      <Box flexDirection="row" marginBottom={1} flexWrap="wrap">
         {CATEGORIES.map((cat, idx) => (
-          <CategoryTab key={cat} category={cat} isSelected={idx === categoryIndex} />
+          <Clickable
+            key={cat}
+            id={`settings-category-${cat}`}
+            width="auto"
+            enabled={isActive}
+            onClick={() => {
+              setCategoryIndex(idx);
+              setSelectedIndex(0);
+              setIsEditing(false);
+            }}
+          >
+            <CategoryTab category={cat} isSelected={idx === categoryIndex} />
+          </Clickable>
         ))}
       </Box>
 
       {/* Settings List */}
-      <Box flexDirection="column" paddingLeft={1}>
+      <Box ref={listRef} flexDirection="column" paddingLeft={1}>
         {items.map((item, idx) => (
-          <SettingRow
+          <Clickable
             key={item.key}
-            item={item}
-            isSelected={idx === selectedIndex}
-            isEditing={isEditing && idx === selectedIndex}
-            editValue={isEditing && idx === selectedIndex ? editValue : undefined}
-            isActive={isActive}
-            onEditChange={setEditValue}
-            onEditSubmit={confirmEdit}
-          />
+            id={`settings-item-${item.key}`}
+            enabled={isActive && !isEditing}
+            onClick={() => {
+              setSelectedIndex(idx);
+              if (!item.editable) return;
+              if (item.type === "boolean" || item.type === "select") {
+                cycleValue(idx);
+              } else {
+                setEditValue(String(item.value));
+                setIsEditing(true);
+              }
+            }}
+          >
+            <SettingRow
+              item={item}
+              isSelected={idx === selectedIndex}
+              isEditing={isEditing && idx === selectedIndex}
+              editValue={isEditing && idx === selectedIndex ? editValue : undefined}
+              isActive={isActive}
+              onEditChange={setEditValue}
+              onEditSubmit={confirmEdit}
+            />
+          </Clickable>
         ))}
       </Box>
 
@@ -646,11 +707,43 @@ export function SettingsPanel({
         borderRight={false}
         borderColor={theme.semantic.border.default}
       >
-        <Text color={theme.colors.muted} dimColor>
-          {isEditing
-            ? "Enter: confirm | Esc: cancel"
-            : "←/→: category | ↑/↓: navigate | Enter: edit | Space: toggle"}
-        </Text>
+        {isEditing ? (
+          <Box gap={1}>
+            <Clickable
+              id="settings-confirm"
+              width="auto"
+              enabled={isActive}
+              onClick={() => confirmEdit(editValue)}
+            >
+              <Text color={theme.colors.muted}>Enter: confirm</Text>
+            </Clickable>
+            <Clickable id="settings-cancel" width="auto" enabled={isActive} onClick={cancelEdit}>
+              <Text color={theme.colors.muted}>Esc: cancel</Text>
+            </Clickable>
+          </Box>
+        ) : (
+          <Box gap={1} flexWrap="wrap">
+            <Text color={theme.colors.muted} dimColor>
+              ←/→: category | ↑/↓: navigate
+            </Text>
+            <Clickable
+              id="settings-edit"
+              width="auto"
+              enabled={isActive && !!items[selectedIndex]?.editable}
+              onClick={startEdit}
+            >
+              <Text color={theme.colors.muted}>Enter: edit</Text>
+            </Clickable>
+            <Clickable
+              id="settings-toggle"
+              width="auto"
+              enabled={isActive && !!items[selectedIndex]?.editable}
+              onClick={() => cycleValue()}
+            >
+              <Text color={theme.colors.muted}>Space: toggle</Text>
+            </Clickable>
+          </Box>
+        )}
       </Box>
     </Box>
   );

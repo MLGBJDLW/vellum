@@ -7,13 +7,15 @@
  * @module tui/components/TodoPanel
  */
 
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import { useInput } from "../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { isEndKey, isHomeKey } from "../types/ink-extended.js";
+import { Clickable, getVisibleClickBounds } from "./common/Clickable.js";
 import { TodoItem, type TodoItemData } from "./TodoItem.js";
 
 // =============================================================================
@@ -36,6 +38,8 @@ export interface TodoPanelProps {
   readonly width?: number;
   /** Whether the panel is focused for keyboard input */
   readonly isFocused?: boolean;
+  /** Allow visible sidebar mouse actions without claiming keyboard focus. */
+  readonly mouseEnabled?: boolean;
   /** Initial filter status */
   readonly initialFilter?: TodoFilterStatus;
   /** Callback when a todo item is selected */
@@ -170,6 +174,7 @@ export function TodoPanel({
   maxHeight = DEFAULT_MAX_HEIGHT,
   width = 80,
   isFocused = true,
+  mouseEnabled = isFocused,
   initialFilter = "all",
   onSelectItem,
   onActivateItem,
@@ -178,9 +183,17 @@ export function TodoPanel({
 }: TodoPanelProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
+  const panelId = useId();
+  const panelNode = useRef<DOMElement>(null);
+  const getBounds = useCallback(() => {
+    const bounds = getVisibleClickBounds(panelNode.current);
+    return bounds && { ...bounds, left: bounds.left - 1, top: bounds.top - 1 };
+  }, []);
 
   // Track selection, scroll, filter, and expansion
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
   const [scrollOffset, setScrollOffset] = useState(0);
   const [filter, setFilter] = useState<TodoFilterStatus>(initialFilter);
   const [expandedId, setExpandedId] = useState<string | number | null>(null);
@@ -219,36 +232,58 @@ export function TodoPanel({
     (newIndex: number) => {
       const maxIndex = Math.max(0, filteredItems.length - 1);
       const clampedIndex = Math.max(0, Math.min(newIndex, maxIndex));
+      selectedIndexRef.current = clampedIndex;
       setSelectedIndex(clampedIndex);
 
       // Adjust scroll to keep selection visible
-      if (clampedIndex < scrollOffset) {
-        setScrollOffset(clampedIndex);
-      } else if (clampedIndex >= scrollOffset + maxVisible) {
-        setScrollOffset(clampedIndex - maxVisible + 1);
-      }
+      setScrollOffset((offset) =>
+        clampedIndex < offset
+          ? clampedIndex
+          : clampedIndex >= offset + maxVisible
+            ? clampedIndex - maxVisible + 1
+            : offset
+      );
 
       // Notify parent
       if (onSelectItem && filteredItems[clampedIndex]) {
         onSelectItem(filteredItems[clampedIndex]);
       }
     },
-    [filteredItems, scrollOffset, maxVisible, onSelectItem]
+    [filteredItems, maxVisible, onSelectItem]
   );
 
   /**
    * Cycle to next filter.
    */
+  const selectFilter = useCallback(
+    (nextFilter: TodoFilterStatus) => {
+      setFilter(nextFilter);
+      selectedIndexRef.current = 0;
+      setSelectedIndex(0);
+      setScrollOffset(0);
+      setExpandedId(null);
+      onFilterChange?.(nextFilter);
+    },
+    [onFilterChange]
+  );
   const cycleFilter = useCallback(() => {
     const currentIdx = FILTER_CYCLE.indexOf(filter);
     const nextIdx = (currentIdx + 1) % FILTER_CYCLE.length;
     const nextFilter = FILTER_CYCLE[nextIdx] ?? "all";
-    setFilter(nextFilter);
-    setSelectedIndex(0);
-    setScrollOffset(0);
-    setExpandedId(null);
-    onFilterChange?.(nextFilter);
-  }, [filter, onFilterChange]);
+    selectFilter(nextFilter);
+  }, [filter, selectFilter]);
+  const activateItem = useCallback(
+    (item: TodoItemData) => {
+      if (expandedId === item.id) onActivateItem?.(item);
+      else setExpandedId(item.id);
+    },
+    [expandedId, onActivateItem]
+  );
+  useMouseScroll({
+    enabled: mouseEnabled,
+    bounds: getBounds,
+    onScroll: (delta) => navigateToIndex(selectedIndexRef.current + delta),
+  });
 
   // Handle keyboard input
   useInput(
@@ -299,13 +334,7 @@ export function TodoPanel({
 
       // Enter to toggle expand or activate
       if (key.return && selectedItem) {
-        if (expandedId === selectedItem.id) {
-          // Already expanded - activate
-          onActivateItem?.(selectedItem);
-        } else {
-          // Expand this item
-          setExpandedId(selectedItem.id);
-        }
+        activateItem(selectedItem);
         return;
       }
 
@@ -338,6 +367,11 @@ export function TodoPanel({
         </Box>
         <Text dimColor>{t("todo.empty")}</Text>
         <Text dimColor>{t("todo.emptyHint")}</Text>
+        {onRefresh && (
+          <Clickable id={`${panelId}-refresh`} enabled={mouseEnabled} onClick={onRefresh}>
+            <Text dimColor>[r] Refresh</Text>
+          </Clickable>
+        )}
       </Box>
     );
   }
@@ -357,19 +391,31 @@ export function TodoPanel({
         {/* Filter indicator */}
         <Box marginBottom={1}>
           <Text dimColor>{t("todo.filter")}</Text>
-          <Text color={theme.colors.accent} bold>
-            {FILTER_LABELS[filter]}
-          </Text>
+          <Clickable
+            id={`${panelId}-filter`}
+            width="auto"
+            enabled={mouseEnabled}
+            onClick={cycleFilter}
+          >
+            <Text color={theme.colors.accent} bold>
+              {FILTER_LABELS[filter]}
+            </Text>
+          </Clickable>
         </Box>
 
         <Text dimColor>{t("todo.noMatch", { filter })}</Text>
         <Text dimColor>{t("todo.changeFilter")}</Text>
+        {onRefresh && (
+          <Clickable id={`${panelId}-refresh`} enabled={mouseEnabled} onClick={onRefresh}>
+            <Text dimColor>[r] Refresh</Text>
+          </Clickable>
+        )}
       </Box>
     );
   }
 
   return (
-    <Box flexDirection="column">
+    <Box ref={panelNode} flexDirection="column">
       {/* Header with progress */}
       <Box marginBottom={1} paddingX={1} flexDirection="column">
         <Box>
@@ -399,19 +445,28 @@ export function TodoPanel({
       {/* Filter tabs */}
       <Box paddingX={1} marginBottom={1}>
         {width < 60 ? (
-          <Text dimColor wrap="truncate">
-            {FILTER_LABELS[filter]} · Tab to filter
-          </Text>
+          <Clickable id={`${panelId}-filter`} enabled={mouseEnabled} onClick={cycleFilter}>
+            <Text dimColor wrap="truncate">
+              {FILTER_LABELS[filter]} · Tab to filter
+            </Text>
+          </Clickable>
         ) : (
           FILTER_CYCLE.map((f, i) => (
             <Box key={f}>
               {i > 0 && <Text dimColor> │ </Text>}
-              <Text
-                color={f === filter ? theme.colors.primary : theme.colors.muted}
-                bold={f === filter}
+              <Clickable
+                id={`${panelId}-filter-${f}`}
+                width="auto"
+                enabled={mouseEnabled}
+                onClick={() => selectFilter(f)}
               >
-                {FILTER_LABELS[f]}
-              </Text>
+                <Text
+                  color={f === filter ? theme.colors.primary : theme.colors.muted}
+                  bold={f === filter}
+                >
+                  {FILTER_LABELS[f]}
+                </Text>
+              </Clickable>
             </Box>
           ))
         )}
@@ -420,29 +475,72 @@ export function TodoPanel({
       {/* Scroll indicator - up */}
       {canScrollUp && (
         <Box paddingX={1}>
-          <Text dimColor>↑ {scrollOffset} more above</Text>
+          <Clickable
+            id={`${panelId}-previous`}
+            enabled={mouseEnabled}
+            onClick={() => navigateToIndex(selectedIndex - PAGE_SIZE)}
+          >
+            <Text dimColor>↑ {scrollOffset} more above</Text>
+          </Clickable>
         </Box>
       )}
 
       {/* Todo list */}
       <Box flexDirection="column" paddingX={1}>
         {visibleEntries.map((item, i) => (
-          <TodoItem
+          <Clickable
             key={item.id}
-            item={item}
-            isSelected={scrollOffset + i === selectedIndex}
-            width={estimatedWidth}
-            isExpanded={expandedId === item.id}
-          />
+            id={`${panelId}-item-${item.id}`}
+            enabled={mouseEnabled}
+            onClick={() => {
+              navigateToIndex(scrollOffset + i);
+              activateItem(item);
+            }}
+          >
+            <TodoItem
+              item={item}
+              isSelected={scrollOffset + i === selectedIndex}
+              width={estimatedWidth}
+              isExpanded={expandedId === item.id}
+            />
+          </Clickable>
         ))}
       </Box>
 
       {/* Scroll indicator - down */}
       {canScrollDown && (
         <Box paddingX={1}>
-          <Text dimColor>↓ {filteredItems.length - scrollOffset - maxVisible} more below</Text>
+          <Clickable
+            id={`${panelId}-next`}
+            enabled={mouseEnabled}
+            onClick={() => navigateToIndex(selectedIndex + PAGE_SIZE)}
+          >
+            <Text dimColor>↓ {filteredItems.length - scrollOffset - maxVisible} more below</Text>
+          </Clickable>
         </Box>
       )}
+      <Box paddingX={1} gap={2}>
+        {onRefresh && (
+          <Clickable
+            id={`${panelId}-refresh`}
+            width="auto"
+            enabled={mouseEnabled}
+            onClick={onRefresh}
+          >
+            <Text dimColor>[r] Refresh</Text>
+          </Clickable>
+        )}
+        {expandedId !== null && (
+          <Clickable
+            id={`${panelId}-collapse`}
+            width="auto"
+            enabled={mouseEnabled}
+            onClick={() => setExpandedId(null)}
+          >
+            <Text dimColor>[Esc] Collapse</Text>
+          </Clickable>
+        )}
+      </Box>
 
       {/* Help hint */}
       {isFocused && (

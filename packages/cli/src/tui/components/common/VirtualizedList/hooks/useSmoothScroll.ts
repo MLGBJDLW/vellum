@@ -151,6 +151,7 @@ export function useSmoothScroll(options: UseSmoothScrollOptions): UseSmoothScrol
   const targetRef = useRef(targetScrollTop);
   const currentRef = useRef(currentScrollTop);
   const onScrollUpdateRef = useRef(onScrollUpdate);
+  const previouslyEnabled = useRef(enabled);
 
   // Keep callback ref fresh
   useEffect(() => {
@@ -176,12 +177,16 @@ export function useSmoothScroll(options: UseSmoothScrollOptions): UseSmoothScrol
     if (!enabled) {
       const clampedTarget = clampScrollTop(targetScrollTop, maxScroll);
       currentRef.current = clampedTarget;
-      setCurrentScrollTop(clampedTarget);
-      onScrollUpdateRef.current(clampedTarget);
-      setIsAnimating(false);
+      // The target already belongs to the caller. Echoing it back here can
+      // overwrite a newer anchor queued by a layout measurement in this commit.
+      // Its derived value also avoids a second React state update for each token.
+      if (previouslyEnabled.current) setIsAnimating(false);
+      previouslyEnabled.current = false;
       clearAnimationInterval();
       return;
     }
+    if (!previouslyEnabled.current) setCurrentScrollTop(currentRef.current);
+    previouslyEnabled.current = true;
 
     const animate = () => {
       const diff = targetRef.current - currentRef.current;
@@ -253,11 +258,11 @@ export function useSmoothScroll(options: UseSmoothScrollOptions): UseSmoothScrol
 
   return useMemo(
     () => ({
-      currentScrollTop,
+      currentScrollTop: enabled ? currentScrollTop : clampScrollTop(targetScrollTop, maxScroll),
       isAnimating,
       jumpTo,
       stop,
     }),
-    [currentScrollTop, isAnimating, jumpTo, stop]
+    [currentScrollTop, isAnimating, jumpTo, stop, enabled, targetScrollTop, maxScroll]
   );
 }

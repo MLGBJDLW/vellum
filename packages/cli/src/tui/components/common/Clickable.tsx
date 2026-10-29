@@ -1,111 +1,88 @@
-/**
- * Clickable Wrapper Component
- *
- * Wraps children with an invisible click region that responds to mouse clicks.
- * Automatically computes absolute terminal coordinates using LayoutPositionContext
- * and VirtualizedList item position data.
- *
- * Works with or without LayoutPositionContext (graceful degradation).
- *
- * @module tui/components/common/Clickable
- */
-
-import { Box } from "ink";
+/** Clickable Ink box measured at event time, including ancestor scroll clipping. */
+import { Box, type BoxProps, type DOMElement, getBoundingBox } from "ink";
 import type React from "react";
-import { useMemo } from "react";
-
+import { useCallback, useRef } from "react";
+import {
+  useMouseInteractionActivate,
+  useMouseInteractionEnabled,
+} from "../../context/MouseContext.js";
 import { type ClickRegionBounds, useClickRegion } from "../../hooks/useClickRegion.js";
-import { useLayoutPosition } from "../../hooks/useLayoutPosition.js";
 import type { MouseEvent } from "../../utils/mouse-parser.js";
-import { useVirtualizedItemPosition } from "./VirtualizedList/ItemPositionContext.js";
 
-// =============================================================================
-// Types
-// =============================================================================
-
-/**
- * Props for the Clickable component.
- */
 export interface ClickableProps {
-  /** Unique ID for this clickable region */
   readonly id: string;
-  /** Click handler */
   readonly onClick: (event: MouseEvent) => void;
-  /** Whether clickable behavior is active (default: true) */
   readonly enabled?: boolean;
-  /** Children to render */
   readonly children: React.ReactNode;
-  /** Position within parent — rows from top of content area (when inside VirtualizedList) */
+  /** @deprecated Bounds are measured from the rendered box. */
   readonly relativeTop?: number;
-  /** Height of this component in rows (default: 1) */
+  /** @deprecated Bounds are measured from the rendered box. */
   readonly height?: number;
-  /** Click priority for overlapping regions (higher wins) */
   readonly priority?: number;
+  /** Use "auto" for adjacent inline controls; defaults to the full row. */
+  readonly width?: BoxProps["width"];
 }
 
-// =============================================================================
-// Component
-// =============================================================================
+/** Ink geometry is zero-based; terminal reports and click regions are one-based. */
+export function getVisibleClickBounds(node: DOMElement | null): ClickRegionBounds | null {
+  if (!node?.yogaNode) return null;
+  const box = getBoundingBox(node);
+  let left = Math.max(0, box.x);
+  let top = Math.max(0, box.y);
+  let right = Math.min(process.stdout.columns || Infinity, box.x + box.width);
+  let bottom = Math.min(process.stdout.rows || Infinity, box.y + box.height);
+  let current: DOMElement | undefined = node;
+  let rooted = false;
+  while (current) {
+    if (current.style.display === "none" || current.isYogaTreeDetached) return null;
+    if (current.nodeName === "ink-root") rooted = true;
+    if (current !== node && current.yogaNode) {
+      const bounds = getBoundingBox(current);
+      const overflow = current.style.overflow ?? "visible";
+      const overflowX = current.style.overflowX ?? overflow;
+      const overflowY = current.style.overflowY ?? overflow;
+      // Yoga's physical edge enum: left=0, top=1, right=2, bottom=3.
+      if (overflowX === "hidden" || overflowX === "scroll") {
+        left = Math.max(left, bounds.x + current.yogaNode.getComputedBorder(0));
+        right = Math.min(right, bounds.x + bounds.width - current.yogaNode.getComputedBorder(2));
+      }
+      if (overflowY === "hidden" || overflowY === "scroll") {
+        top = Math.max(top, bounds.y + current.yogaNode.getComputedBorder(1));
+        bottom = Math.min(bottom, bounds.y + bounds.height - current.yogaNode.getComputedBorder(3));
+      }
+    }
+    current = current.parentNode;
+  }
+  if (!rooted || right <= left || bottom <= top) return null;
+  return { left: left + 1, top: top + 1, width: right - left, height: bottom - top };
+}
 
-/**
- * Clickable wrapper that registers a click region for its children.
- *
- * Automatically resolves position from:
- * 1. Explicit `relativeTop` / `height` props (highest priority)
- * 2. VirtualizedItemPositionContext (when inside a VirtualizedList)
- * 3. Falls back to no registration when position is unknown
- *
- * @example
- * ```tsx
- * // Inside a VirtualizedList renderItem
- * <Clickable id={`msg-${item.id}`} onClick={() => selectMessage(item.id)}>
- *   <MessageBubble message={item} />
- * </Clickable>
- *
- * // With explicit position
- * <Clickable id="header-btn" relativeTop={0} height={1} onClick={handleClick}>
- *   <Text>Click me</Text>
- * </Clickable>
- * ```
- */
 export function Clickable({
   id,
   onClick,
   enabled = true,
   children,
-  relativeTop,
-  height,
   priority,
+  width = "100%",
 }: ClickableProps): React.JSX.Element {
-  // Try to get position from VirtualizedList item context
-  const itemPosition = useVirtualizedItemPosition();
-
-  // Resolve effective position: explicit props > item context > unknown
-  const effectiveTop = relativeTop ?? itemPosition?.relativeTop ?? 0;
-  const effectiveHeight = height ?? itemPosition?.height ?? 1;
-  const hasPosition = relativeTop !== undefined || itemPosition !== null;
-
-  // Compute absolute bounds via LayoutPositionContext
-  const { absoluteBounds } = useLayoutPosition({
-    id,
-    relativeTop: effectiveTop,
-    height: effectiveHeight,
-    visible: enabled && hasPosition,
-  });
-
-  // Convert to ClickRegionBounds (useClickRegion expects 1-based coords)
-  const clickBounds = useMemo<ClickRegionBounds | null>(() => {
-    if (!absoluteBounds) return null;
-    return {
-      top: absoluteBounds.top,
-      left: absoluteBounds.left,
-      width: absoluteBounds.width,
-      height: absoluteBounds.height,
-    };
-  }, [absoluteBounds]);
-
-  // Register click region
-  useClickRegion({ id, onClick, priority, enabled }, clickBounds);
-
-  return <Box width="100%">{children}</Box>;
+  const node = useRef<DOMElement>(null);
+  const interactionEnabled = useMouseInteractionEnabled();
+  const activate = useMouseInteractionActivate();
+  const handleClick = useCallback(
+    (event: MouseEvent) => {
+      activate?.();
+      onClick(event);
+    },
+    [activate, onClick]
+  );
+  const measure = useCallback(() => getVisibleClickBounds(node.current), []);
+  useClickRegion(
+    { id, onClick: handleClick, enabled: enabled && interactionEnabled, priority },
+    measure
+  );
+  return (
+    <Box ref={node} width={width}>
+      {children}
+    </Box>
+  );
 }

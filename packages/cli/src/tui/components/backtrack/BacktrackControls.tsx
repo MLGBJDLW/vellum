@@ -7,13 +7,16 @@
  * @module tui/components/backtrack/BacktrackControls
  */
 
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
+import { useMouseInteractionEnabled } from "../../context/MouseContext.js";
 import type { BacktrackState, Branch } from "../../hooks/useBacktrack.js";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { Clickable, getVisibleClickBounds } from "../common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -37,6 +40,10 @@ export interface BacktrackControlsProps {
   readonly onSwitchBranch: (branchId: string) => void;
   /** Whether the component is focused for input */
   readonly isFocused?: boolean;
+  /** Enable pointer actions without registering header keyboard shortcuts. */
+  readonly mouseEnabled?: boolean;
+  /** Notify the application so it can suspend background input while the popup is open. */
+  readonly onOpenChange?: (open: boolean) => void;
   /** Whether to show in compact mode */
   readonly compact?: boolean;
   /** Whether to show keyboard hints */
@@ -51,7 +58,9 @@ interface BranchSelectorProps {
   readonly currentBranch: string;
   readonly onSelect: (branchId: string) => void;
   readonly onClose: () => void;
+  readonly onCreateBranch: () => void;
   readonly isFocused: boolean;
+  readonly mouseEnabled: boolean;
 }
 
 // =============================================================================
@@ -66,14 +75,33 @@ function BranchSelector({
   currentBranch,
   onSelect,
   onClose,
+  onCreateBranch,
   isFocused,
+  mouseEnabled,
 }: BranchSelectorProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
+  const selectorId = useId();
+  const selectorNode = useRef<DOMElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(() => {
     const index = branches.findIndex((b) => b.name === currentBranch);
-    return index >= 0 ? index : 0;
+    return Math.max(0, index);
   });
+  const getBounds = useCallback(() => {
+    const bounds = getVisibleClickBounds(selectorNode.current);
+    return bounds && { ...bounds, left: bounds.left - 1, top: bounds.top - 1 };
+  }, []);
+  useMouseScroll({
+    enabled: mouseEnabled,
+    bounds: getBounds,
+    scrollSpeed: 1,
+    onScroll: (delta) =>
+      setSelectedIndex((index) => Math.max(0, Math.min(branches.length - 1, index + delta))),
+  });
+  useEffect(() => {
+    setSelectedIndex((index) => Math.min(index, Math.max(0, branches.length - 1)));
+  }, [branches.length]);
+  const startIndex = Math.max(0, selectedIndex - 7);
 
   useInput(
     (input, key) => {
@@ -87,8 +115,7 @@ function BranchSelector({
         const branch = branches[selectedIndex];
         if (branch) {
           onSelect(branch.id);
-        }
-        onClose();
+        } else onClose();
       } else if (key.escape || input === "q") {
         onClose();
       }
@@ -97,25 +124,49 @@ function BranchSelector({
   );
 
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={theme.colors.muted} paddingX={1}>
+    <Box
+      ref={selectorNode}
+      flexDirection="column"
+      borderStyle="single"
+      borderColor={theme.colors.muted}
+      paddingX={1}
+    >
       <Text bold color={theme.colors.primary}>
         {t("backtrack.selectBranch")}
       </Text>
       <Box marginTop={1} flexDirection="column">
-        {branches.map((branch, index) => {
-          const isSelected = index === selectedIndex;
+        {branches.slice(startIndex, startIndex + 8).map((branch, index) => {
+          const isSelected = startIndex + index === selectedIndex;
           const isCurrent = branch.name === currentBranch;
 
           return (
-            <Box key={branch.id}>
+            <Clickable
+              key={branch.id}
+              id={`${selectorId}-${branch.id}`}
+              enabled={mouseEnabled}
+              onClick={() => onSelect(branch.id)}
+            >
               <Text color={isSelected ? theme.colors.primary : undefined} inverse={isSelected}>
                 {isSelected ? "▸ " : "  "}
                 {branch.name}
                 {isCurrent ? ` ${t("backtrack.current")}` : ""}
               </Text>
-            </Box>
+            </Clickable>
           );
         })}
+      </Box>
+      <Box marginTop={1} gap={2}>
+        <Clickable
+          id={`${selectorId}-new`}
+          width="auto"
+          enabled={mouseEnabled}
+          onClick={onCreateBranch}
+        >
+          <Text color={theme.colors.primary}>[+] {t("backtrack.newBranch")}</Text>
+        </Clickable>
+        <Clickable id={`${selectorId}-close`} width="auto" enabled={mouseEnabled} onClick={onClose}>
+          <Text dimColor>[Esc] Close</Text>
+        </Clickable>
       </Box>
       <Box marginTop={1}>
         <Text dimColor>{t("backtrack.keybindings")}</Text>
@@ -132,31 +183,47 @@ function StatusIndicator({
   canRedo,
   compact,
   t,
+  id,
+  enabled,
+  onUndo,
+  onRedo,
 }: {
   canUndo: boolean;
   canRedo: boolean;
   compact: boolean;
   t: (key: string) => string;
+  id: string;
+  enabled: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }): React.JSX.Element {
   const { theme } = useTheme();
 
   if (compact) {
     return (
       <Box>
-        <Text color={canUndo ? theme.colors.success : theme.colors.muted}>◀</Text>
-        <Text color={canRedo ? theme.colors.success : theme.colors.muted}>▶</Text>
+        <Clickable id={`${id}-undo`} width="auto" enabled={enabled && canUndo} onClick={onUndo}>
+          <Text color={canUndo ? theme.colors.success : theme.colors.muted}>◀</Text>
+        </Clickable>
+        <Clickable id={`${id}-redo`} width="auto" enabled={enabled && canRedo} onClick={onRedo}>
+          <Text color={canRedo ? theme.colors.success : theme.colors.muted}>▶</Text>
+        </Clickable>
       </Box>
     );
   }
 
   return (
     <Box gap={1}>
-      <Text color={canUndo ? theme.colors.success : theme.colors.muted}>
-        {"[<]"} {t("backtrack.undo")} {canUndo ? "+" : "x"}
-      </Text>
-      <Text color={canRedo ? theme.colors.success : theme.colors.muted}>
-        {"[>]"} {t("backtrack.redo")} {canRedo ? "+" : "x"}
-      </Text>
+      <Clickable id={`${id}-undo`} width="auto" enabled={enabled && canUndo} onClick={onUndo}>
+        <Text color={canUndo ? theme.colors.success : theme.colors.muted}>
+          {"[<]"} {t("backtrack.undo")} {canUndo ? "+" : "x"}
+        </Text>
+      </Clickable>
+      <Clickable id={`${id}-redo`} width="auto" enabled={enabled && canRedo} onClick={onRedo}>
+        <Text color={canRedo ? theme.colors.success : theme.colors.muted}>
+          {"[>]"} {t("backtrack.redo")} {canRedo ? "+" : "x"}
+        </Text>
+      </Clickable>
     </Box>
   );
 }
@@ -169,32 +236,39 @@ function BranchIndicator({
   forkCount,
   compact,
   t,
+  id,
+  enabled,
+  onClick,
 }: {
   currentBranch: string;
   forkCount: number;
   compact: boolean;
-  onClick?: () => void;
+  id: string;
+  enabled: boolean;
+  onClick: () => void;
   t: (key: string) => string;
 }): React.JSX.Element {
   const { theme } = useTheme();
 
   if (compact) {
     return (
-      <Box>
+      <Clickable id={id} width="auto" enabled={enabled} onClick={onClick}>
         <Text color={theme.colors.info}>⎇{forkCount > 0 ? `+${forkCount}` : ""}</Text>
-      </Box>
+      </Clickable>
     );
   }
 
   return (
-    <Box gap={1}>
-      <Text color={theme.colors.info}>⎇ {currentBranch}</Text>
-      {forkCount > 0 && (
-        <Text dimColor>
-          ({forkCount} {forkCount !== 1 ? t("backtrack.forks") : t("backtrack.fork")})
-        </Text>
-      )}
-    </Box>
+    <Clickable id={id} width="auto" enabled={enabled} onClick={onClick}>
+      <Box gap={1}>
+        <Text color={theme.colors.info}>⎇ {currentBranch}</Text>
+        {forkCount > 0 && (
+          <Text dimColor>
+            ({forkCount} {forkCount !== 1 ? t("backtrack.forks") : t("backtrack.fork")})
+          </Text>
+        )}
+      </Box>
+    </Clickable>
   );
 }
 
@@ -262,11 +336,30 @@ export const BacktrackControls = memo(function BacktrackControls({
   onCreateBranch,
   onSwitchBranch,
   isFocused = false,
+  mouseEnabled = isFocused,
+  onOpenChange,
   compact = false,
   showHints = true,
 }: BacktrackControlsProps): React.JSX.Element {
   const { t } = useTUITranslation();
   const [showBranchSelector, setShowBranchSelector] = useState(false);
+  const controlsId = useId();
+  const interactionEnabled = useMouseInteractionEnabled();
+  const popupOpen = useRef(false);
+  const openChangeRef = useRef(onOpenChange);
+  openChangeRef.current = onOpenChange;
+  const setPopupOpen = useCallback((open: boolean) => {
+    if (popupOpen.current === open) return;
+    popupOpen.current = open;
+    setShowBranchSelector(open);
+    openChangeRef.current?.(open);
+  }, []);
+  useEffect(
+    () => () => {
+      if (popupOpen.current) openChangeRef.current?.(false);
+    },
+    []
+  );
 
   const { canUndo, canRedo, forkCount, currentBranch, currentIndex, historyLength } =
     backtrackState;
@@ -278,20 +371,20 @@ export const BacktrackControls = memo(function BacktrackControls({
 
       // Ctrl+Z for undo
       if (key.ctrl && input === "z") {
-        onUndo();
+        if (canUndo) onUndo();
         return;
       }
 
       // Ctrl+Y for redo
       if (key.ctrl && input === "y") {
-        onRedo();
+        if (canRedo) onRedo();
         return;
       }
 
       // Ctrl+B for branch selector or create branch
       if (key.ctrl && input === "b") {
         if (branches.length > 1) {
-          setShowBranchSelector(true);
+          setPopupOpen(true);
         } else {
           onCreateBranch();
         }
@@ -304,20 +397,26 @@ export const BacktrackControls = memo(function BacktrackControls({
         return;
       }
     },
-    { isActive: isFocused && !showBranchSelector }
+    { isActive: isFocused && interactionEnabled && !showBranchSelector }
   );
 
   const handleBranchSelect = useCallback(
     (branchId: string) => {
+      if (!popupOpen.current) return;
+      setPopupOpen(false);
       onSwitchBranch(branchId);
-      setShowBranchSelector(false);
     },
-    [onSwitchBranch]
+    [onSwitchBranch, setPopupOpen]
   );
 
   const handleBranchClose = useCallback(() => {
-    setShowBranchSelector(false);
-  }, []);
+    setPopupOpen(false);
+  }, [setPopupOpen]);
+  const handleBranchCreate = useCallback(() => {
+    if (!popupOpen.current) return;
+    setPopupOpen(false);
+    onCreateBranch();
+  }, [onCreateBranch, setPopupOpen]);
 
   // Branch selector overlay
   if (showBranchSelector) {
@@ -327,7 +426,9 @@ export const BacktrackControls = memo(function BacktrackControls({
         currentBranch={currentBranch}
         onSelect={handleBranchSelect}
         onClose={handleBranchClose}
-        isFocused={isFocused}
+        onCreateBranch={handleBranchCreate}
+        isFocused={(isFocused || mouseEnabled) && interactionEnabled}
+        mouseEnabled={mouseEnabled}
       />
     );
   }
@@ -336,12 +437,23 @@ export const BacktrackControls = memo(function BacktrackControls({
   if (compact) {
     return (
       <Box gap={1}>
-        <StatusIndicator canUndo={canUndo} canRedo={canRedo} compact={true} t={t} />
+        <StatusIndicator
+          canUndo={canUndo}
+          canRedo={canRedo}
+          compact={true}
+          t={t}
+          id={controlsId}
+          enabled={mouseEnabled}
+          onUndo={onUndo}
+          onRedo={onRedo}
+        />
         <BranchIndicator
           currentBranch={currentBranch}
           forkCount={forkCount}
           compact={true}
-          onClick={() => setShowBranchSelector(true)}
+          id={`${controlsId}-branches`}
+          enabled={mouseEnabled}
+          onClick={() => setPopupOpen(true)}
           t={t}
         />
         <HistoryIndicator currentIndex={currentIndex} historyLength={historyLength} />
@@ -353,13 +465,24 @@ export const BacktrackControls = memo(function BacktrackControls({
   return (
     <Box flexDirection="column">
       <Box gap={2}>
-        <StatusIndicator canUndo={canUndo} canRedo={canRedo} compact={false} t={t} />
+        <StatusIndicator
+          canUndo={canUndo}
+          canRedo={canRedo}
+          compact={false}
+          t={t}
+          id={controlsId}
+          enabled={mouseEnabled}
+          onUndo={onUndo}
+          onRedo={onRedo}
+        />
         <Text dimColor>│</Text>
         <BranchIndicator
           currentBranch={currentBranch}
           forkCount={forkCount}
           compact={false}
-          onClick={() => setShowBranchSelector(true)}
+          id={`${controlsId}-branches`}
+          enabled={mouseEnabled}
+          onClick={() => setPopupOpen(true)}
           t={t}
         />
         <Text dimColor>│</Text>

@@ -14,7 +14,7 @@
 
 import { getIcons, type IconSet } from "@vellum/shared";
 import { Box, Text } from "ink";
-import { render } from "ink-testing-library";
+import { cleanup, render } from "ink-testing-library";
 import type React from "react";
 import { act, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,6 +38,10 @@ let icons: IconSet;
 beforeEach(() => {
   // Get icons after setup has configured Unicode mode
   icons = getIcons();
+});
+
+afterEach(async () => {
+  await act(async () => cleanup());
 });
 
 import {

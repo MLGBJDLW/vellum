@@ -9,10 +9,11 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { memo } from "react";
+import { memo, useId } from "react";
 import type { Tip } from "../../onboarding/index.js";
 import { useInput } from "../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../i18n/index.js";
+import { Clickable } from "./common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -51,6 +52,7 @@ export const TipBanner = memo(function TipBanner({
   compact = false,
 }: TipBannerProps): React.JSX.Element | null {
   const { t } = useTUITranslation();
+  const bannerId = useId();
 
   // Handle dismiss key press
   useInput(
@@ -73,8 +75,10 @@ export const TipBanner = memo(function TipBanner({
       <Box>
         <Text color="cyan">
           {tip.icon ?? "[i]"} {tip.title}: {tip.content}
-          <Text color="gray"> [d] {t("tip.dismiss")}</Text>
         </Text>
+        <Clickable id={`${bannerId}-dismiss`} width="auto" onClick={onDismiss}>
+          <Text color="gray"> [d] {t("tip.dismiss")}</Text>
+        </Clickable>
       </Box>
     );
   }
@@ -107,9 +111,11 @@ export const TipBanner = memo(function TipBanner({
       )}
 
       <Box marginTop={1}>
-        <Text color="gray" dimColor>
-          [d] {t("tip.dismiss")} | [Esc] {t("tip.dismiss")}
-        </Text>
+        <Clickable id={`${bannerId}-dismiss`} width="auto" onClick={onDismiss}>
+          <Text color="gray" dimColor>
+            [d] {t("tip.dismiss")} | [Esc] {t("tip.dismiss")}
+          </Text>
+        </Clickable>
       </Box>
     </Box>
   );

@@ -1,218 +1,119 @@
-/**
- * useMouse Hook
- *
- * React hook for mouse event management in the TUI.
- * Handles SGR/X10 mouse tracking lifecycle: enable on mount, disable on unmount,
- * parse incoming stdin data, and dispatch to registered callbacks.
- *
- * Intercepts mouse escape sequences from stdin BEFORE Ink processes them,
- * preventing garbage text from appearing in the input.
- *
- * @module tui/hooks/useMouse
- */
-
+/** Shared terminal-input mouse subscription and terminal-mode lifecycle. */
 import { useStdin } from "ink";
-import { useCallback, useEffect, useRef, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { getEffectiveMouseMode, subscribeMouseModeChange } from "../../commands/mouse.js";
 import {
   disableMouseTracking,
   enableMouseTracking,
   type MouseEvent,
 } from "../utils/mouse-parser.js";
-import { getNoFlickerConfig } from "../utils/no-flicker.js";
 import { subscribeTerminalInput } from "../utils/terminal-input.js";
 
-// =============================================================================
-// Types
-// =============================================================================
-
-/**
- * Options for the useMouse hook.
- */
 export interface UseMouseOptions {
-  /** 'full' enables click+drag+wheel, 'wheel-only' just wheel events */
   readonly mode?: "full" | "wheel-only";
-  /** Override: force enable/disable regardless of terminal detection */
   readonly enabled?: boolean;
-  /** Called on any mouse event */
+  /** Raw pointer events, before gesture activation. Wheel-only filters other reports. */
   readonly onMouseEvent?: (event: MouseEvent) => void;
-  /** Called specifically on wheel events */
   readonly onWheel?: (event: MouseEvent) => void;
-  /** Called specifically on click events */
+  /** A completed primary click, called once on release without intervening motion. */
   readonly onClick?: (event: MouseEvent) => void;
-  /** Called specifically on mouse move events */
   readonly onMove?: (event: MouseEvent) => void;
+  /** Cancels any captured gesture before modes change, tracking stops, or unmount. */
+  readonly onTrackingEnd?: () => void;
 }
 
-/**
- * Return value of useMouse hook.
- */
 export interface UseMouseReturn {
-  /** Whether mouse tracking is currently active */
   readonly isActive: boolean;
-  /** Last mouse position */
+  /** Read on demand; pointer motion does not rerender the provider tree. */
   readonly lastPosition: { col: number; row: number } | null;
-  /** Manually enable/disable mouse tracking */
   readonly setEnabled: (enabled: boolean) => void;
 }
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/**
- * Check if stdout is a TTY (safe to write escape sequences).
- */
 function isTTY(): boolean {
-  return process.stdout.isTTY === true;
+  return process.stdout.isTTY === true && process.env.TERM !== "dumb";
 }
 
-/**
- * Determine effective mouse mode considering config overrides.
- */
-function resolveMode(
-  requestedMode: "full" | "wheel-only",
-  clicksDisabled: boolean
-): "full" | "wheel-only" {
-  if (clicksDisabled) return "wheel-only";
-  return requestedMode;
-}
-
-// =============================================================================
-// Hook
-// =============================================================================
-
-/**
- * React hook for mouse event management.
- *
- * Enables SGR mouse tracking on the terminal, intercepts mouse escape sequences
- * from stdin before Ink's input handler, parses them, and dispatches to callbacks.
- *
- * @example
- * ```tsx
- * const { isActive, lastPosition } = useMouse({
- *   mode: 'full',
- *   onWheel: (e) => scrollBy(e.action === 'wheeldown' ? 3 : -3),
- *   onClick: (e) => handleClick(e.col, e.row),
- * });
- * ```
- */
 export function useMouse(options: UseMouseOptions = {}): UseMouseReturn {
   const { stdin } = useStdin();
-  const {
-    mode: requestedMode = "full",
-    enabled: enabledOverride,
-    onMouseEvent,
-    onWheel,
-    onClick,
-    onMove,
-  } = options;
-
-  // ── State ──────────────────────────────────────────────────────────────
+  const mode = useSyncExternalStore(
+    subscribeMouseModeChange,
+    getEffectiveMouseMode,
+    getEffectiveMouseMode
+  );
   const [isActive, setIsActive] = useState(false);
-  const [lastPosition, setLastPosition] = useState<{ col: number; row: number } | null>(null);
-  const [manualEnabled, setManualEnabled] = useState<boolean | undefined>(undefined);
+  const [manualEnabled, setManualEnabled] = useState<boolean>();
+  const lastPosition = useRef<{ col: number; row: number } | null>(null);
+  const callbacks = useRef(options);
+  callbacks.current = options;
+  const isEnabled = manualEnabled ?? options.enabled ?? mode !== "disabled";
+  const effectiveMode = options.mode ?? (mode === "disabled" ? "full" : mode);
+  const setEnabled = useCallback((value: boolean) => setManualEnabled(value), []);
 
-  // ── Refs for stable callback access ────────────────────────────────────
-  const callbacksRef = useRef({ onMouseEvent, onWheel, onClick, onMove });
-  callbacksRef.current = { onMouseEvent, onWheel, onClick, onMove };
-
-  const configRef = useRef(getNoFlickerConfig());
-  const cleanupDoneRef = useRef(false);
-
-  // ── Resolve whether mouse should be enabled ────────────────────────────
-  const config = configRef.current;
-  const isEnabled = (() => {
-    // Manual override from setEnabled() takes priority
-    if (manualEnabled !== undefined) return manualEnabled;
-    // Props override
-    if (enabledOverride !== undefined) return enabledOverride;
-    // Config says disabled entirely
-    if (config.mouseDisabled) return false;
-    // TTY check
-    return isTTY();
-  })();
-
-  const effectiveMode = resolveMode(requestedMode, config.mouseClicksDisabled);
-
-  // ── setEnabled exposed to consumer ─────────────────────────────────────
-  const setEnabled = useCallback((value: boolean) => {
-    setManualEnabled(value);
-  }, []);
-
-  // ── Main effect: stdin listener + mouse enable/disable ─────────────────
   useEffect(() => {
-    if (!isEnabled) {
+    if (!isEnabled || !isTTY()) {
       setIsActive(false);
       return;
     }
-
-    if (!isTTY()) {
-      setIsActive(false);
-      return;
-    }
-
-    // Enable mouse tracking
-    cleanupDoneRef.current = false;
     enableMouseTracking(process.stdout, effectiveMode);
     setIsActive(true);
-
+    let pressed: { col: number; row: number; moved: boolean } | null = null;
+    let ended = false;
     const onMouse = (event: MouseEvent): void => {
-      // Update position
-      setLastPosition({ col: event.col, row: event.row });
-
-      // Dispatch to generic handler
-      callbacksRef.current.onMouseEvent?.(event);
-
-      // Dispatch to specific handlers
-      switch (event.action) {
-        case "wheelup":
-        case "wheeldown":
-          callbacksRef.current.onWheel?.(event);
-          break;
-        case "press":
-        case "release":
-          // In wheel-only mode, suppress click events
-          if (effectiveMode !== "wheel-only") {
-            callbacksRef.current.onClick?.(event);
-          }
-          break;
-        case "move":
-          if (effectiveMode !== "wheel-only") {
-            callbacksRef.current.onMove?.(event);
-          }
-          break;
+      if (ended) return;
+      const wheel = event.action === "wheelup" || event.action === "wheeldown";
+      if (!wheel && effectiveMode === "wheel-only") return;
+      lastPosition.current = { col: event.col, row: event.row };
+      callbacks.current.onMouseEvent?.(event);
+      if (wheel) {
+        callbacks.current.onWheel?.(event);
+      } else if (event.action === "press") {
+        pressed = event.button === "left" ? { col: event.col, row: event.row, moved: false } : null;
+      } else if (event.action === "move") {
+        if (pressed && (event.col !== pressed.col || event.row !== pressed.row))
+          pressed.moved = true;
+        callbacks.current.onMove?.(event);
+      } else if (event.action === "release") {
+        const start = pressed;
+        pressed = null;
+        if (
+          start &&
+          !start.moved &&
+          (event.button === "left" || event.button === "none") &&
+          start.col === event.col &&
+          start.row === event.row
+        )
+          callbacks.current.onClick?.(event);
       }
     };
-
     const unsubscribe = subscribeTerminalInput(stdin, { onMouse });
-
-    // ── Process exit cleanup ─────────────────────────────────────────────
     const onExit = (): void => {
-      if (!cleanupDoneRef.current && isTTY()) {
-        disableMouseTracking(process.stdout);
-        cleanupDoneRef.current = true;
-      }
+      if (ended) return;
+      ended = true;
+      pressed = null;
+      callbacks.current.onTrackingEnd?.();
+      if (isTTY()) disableMouseTracking(process.stdout);
     };
-
     process.on("exit", onExit);
     process.on("SIGINT", onExit);
     process.on("SIGTERM", onExit);
-
-    // ── Teardown ─────────────────────────────────────────────────────────
     return () => {
       unsubscribe();
       process.removeListener("exit", onExit);
       process.removeListener("SIGINT", onExit);
       process.removeListener("SIGTERM", onExit);
-
-      if (!cleanupDoneRef.current && isTTY()) {
-        disableMouseTracking(process.stdout);
-        cleanupDoneRef.current = true;
-      }
+      onExit();
       setIsActive(false);
     };
   }, [isEnabled, effectiveMode, stdin]);
 
-  return { isActive, lastPosition, setEnabled };
+  return useMemo(
+    () => ({
+      isActive,
+      get lastPosition() {
+        return lastPosition.current;
+      },
+      setEnabled,
+    }),
+    [isActive, setEnabled]
+  );
 }

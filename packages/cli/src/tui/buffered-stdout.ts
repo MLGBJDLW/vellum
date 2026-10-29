@@ -8,8 +8,8 @@
  * @module tui/buffered-stdout
  */
 
-import fs from "node:fs";
 import { Writable } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
 import { isCursorHidden, isCursorLocked } from "./utils/cursor-state.js";
 import { globalFrameMonitor } from "./utils/frame-monitor.js";
 import { isNoFlickerEnabled } from "./utils/no-flicker.js";
@@ -66,18 +66,6 @@ const CURSOR_HOME = "\x1b[H";
 const DEFAULT_FRAME_INTERVAL_MS = 16;
 
 // =============================================================================
-// Atomic Write Helper
-// =============================================================================
-
-/**
- * Writes a string synchronously to stdout (fd=1).
- * This bypasses Node's async buffering for atomic output.
- */
-function atomicWrite(s: string): void {
-  fs.writeSync(1, Buffer.from(s, "utf8"));
-}
-
-// =============================================================================
 // BufferedStdout Class
 // =============================================================================
 
@@ -90,6 +78,11 @@ function atomicWrite(s: string): void {
  */
 export class BufferedStdout extends Writable {
   private buf = "";
+  private readonly decoder = new StringDecoder("utf8");
+  // Capture the TTY writer before Ink/console guards are installed. Raw fs writes
+  // bypass libuv's UTF-8 -> WriteConsoleW path and corrupt Windows CP936 output,
+  // including ESC bytes immediately after a multibyte character.
+  private readonly writeFrame = process.stdout.write.bind(process.stdout);
   private scheduled = false;
   private readonly onResize: () => void;
 
@@ -151,6 +144,7 @@ export class BufferedStdout extends Writable {
       this.frameStatsTimer = null;
     }
     // Best-effort flush to avoid losing a last frame.
+    this.buf += this.decoder.end();
     this.flush();
   }
 
@@ -162,7 +156,7 @@ export class BufferedStdout extends Writable {
     _encoding: BufferEncoding,
     callback: (error?: Error | null) => void
   ): void {
-    this.buf += chunk.toString("utf8");
+    this.buf += typeof chunk === "string" ? chunk : this.decoder.write(chunk);
 
     if (!this.scheduled) {
       this.scheduled = true;
@@ -228,7 +222,7 @@ export class BufferedStdout extends Writable {
     // 4. Write the actual frame content
     // 5. End synchronized update (terminal renders atomically)
     // 6. Show cursor again
-    atomicWrite(cursorPark + HIDE_CURSOR + BSU + frame + ESU + cursorSuffix);
+    this.writeFrame(cursorPark + HIDE_CURSOR + BSU + frame + ESU + cursorSuffix);
 
     globalFrameMonitor.frameEnd();
   }

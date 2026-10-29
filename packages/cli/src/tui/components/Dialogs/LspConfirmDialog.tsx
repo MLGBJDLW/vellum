@@ -10,7 +10,9 @@
 import type { ConfirmationRequest } from "@vellum/lsp";
 import { Box, Text } from "ink";
 import type React from "react";
+import { useCallback, useId, useRef } from "react";
 import { useInput } from "../../hooks/useTerminalInput.js";
+import { Clickable } from "../common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -56,12 +58,22 @@ export function LspConfirmDialog({
   onConfirm,
   isFocused = true,
 }: LspConfirmDialogProps): React.JSX.Element {
+  const dialogId = useId();
+  const resolved = useRef<ConfirmationRequest | null>(null);
+  const confirm = useCallback(
+    (approved: boolean) => {
+      if (!isFocused || resolved.current === request) return;
+      resolved.current = request;
+      onConfirm(approved);
+    },
+    [isFocused, request, onConfirm]
+  );
   useInput(
     (input, key) => {
       if (input.toLowerCase() === "y" || key.return) {
-        onConfirm(true);
+        confirm(true);
       } else if (input.toLowerCase() === "n" || key.escape) {
-        onConfirm(false);
+        confirm(false);
       }
     },
     { isActive: isFocused }
@@ -75,8 +87,23 @@ export function LspConfirmDialog({
         [LSP] {actionText} {request.serverId}?
       </Text>
       <Text dimColor>{request.message}</Text>
-      <Box marginTop={1}>
-        <Text>[Y] Yes [N] No</Text>
+      <Box marginTop={1} gap={1}>
+        <Clickable
+          id={`${dialogId}-yes`}
+          width="auto"
+          enabled={isFocused}
+          onClick={() => confirm(true)}
+        >
+          <Text>[Y] Yes</Text>
+        </Clickable>
+        <Clickable
+          id={`${dialogId}-no`}
+          width="auto"
+          enabled={isFocused}
+          onClick={() => confirm(false)}
+        >
+          <Text>[N] No</Text>
+        </Clickable>
       </Box>
     </Box>
   );

@@ -13,7 +13,6 @@ import type React from "react";
 import type { ReactNode } from "react";
 
 import { ThemeProvider } from "../theme/provider.js";
-import { getNoFlickerConfig } from "../utils/no-flicker.js";
 import { AnimationProvider } from "./AnimationContext.js";
 import { AppProvider, type AppState } from "./AppContext.js";
 import { BracketedPasteProvider } from "./BracketedPasteContext.js";
@@ -112,16 +111,12 @@ export function RootProvider({
   toolRegistry,
   toolExecutor,
 }: RootProviderProps): React.JSX.Element {
-  // Resolve mouse mode from config (env vars > settings file > defaults)
-  const { mouseMode } = getNoFlickerConfig();
-  const resolvedMouseMode = mouseMode === "disabled" ? undefined : mouseMode;
-
   return (
     <ThemeProvider theme={theme}>
       <AnimationProvider>
         <BracketedPasteProvider>
           <OverflowProvider>
-            <MouseProvider mode={resolvedMouseMode} enabled={mouseMode !== "disabled"}>
+            <MouseProvider>
               <AppProvider initialState={initialAppState}>
                 <ResilienceProvider>
                   <ToolTimeoutProvider>

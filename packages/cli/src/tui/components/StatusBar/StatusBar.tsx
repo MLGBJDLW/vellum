@@ -9,14 +9,13 @@
 
 import type { CodingMode, SandboxPolicy } from "@vellum/core";
 import { Box, Text } from "ink";
-import { useCallback, useMemo } from "react";
+import { useId, useMemo } from "react";
 import { version } from "../../../version.js";
 import { useResilienceOptional } from "../../context/ResilienceContext.js";
 import { useToolTimeoutOptional } from "../../context/ToolTimeoutContext.js";
-import { useClickRegion } from "../../hooks/useClickRegion.js";
-import { useTerminalDimensions } from "../../hooks/useTerminalSize.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
+import { Clickable } from "../common/Clickable.js";
 import { GradientText } from "../common/GradientText.js";
 import type { AgentLevel } from "./AgentModeIndicator.js";
 import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
@@ -74,6 +73,12 @@ export interface StatusBarProps {
   readonly showAllModes?: boolean;
   /** Callback when mode section is clicked (for mode cycling) */
   readonly onModeClick?: (currentMode: CodingMode) => void;
+  /** Open the model picker from the displayed model. */
+  readonly onModelClick?: () => void;
+  /** Open Thinking controls from the displayed status. */
+  readonly onThinkingClick?: () => void;
+  /** Open approval controls from the displayed trust mode. */
+  readonly onApprovalClick?: () => void;
   /** Persistence status for session save indicator */
   readonly persistence?: Pick<
     PersistenceStatusIndicatorProps,
@@ -141,7 +146,7 @@ function ResilienceSegmentWithSeparator({
   const context = useResilienceOptional();
 
   // Same visibility logic as ResilienceStatusSegment
-  if (!context || !context.feedbackEnabled || context.status.type === "idle") {
+  if (!context?.feedbackEnabled || context.status.type === "idle") {
     return null;
   }
 
@@ -168,7 +173,7 @@ function ToolTimeoutSegmentWithSeparator({
   const context = useToolTimeoutOptional();
 
   // Same visibility logic as ToolTimeoutStatusSegment
-  if (!context || !context.feedbackEnabled || !context.status.active) {
+  if (!context?.feedbackEnabled || !context.status.active) {
     return null;
   }
 
@@ -236,37 +241,19 @@ export function StatusBar({
   showBorder = false,
   showAllModes = false,
   onModeClick,
+  onModelClick,
+  onThinkingClick,
+  onApprovalClick,
   // NOTE: persistence prop kept for API compatibility but no longer rendered in footer
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   persistence: _persistence,
 }: StatusBarProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
-  const { height: terminalHeight } = useTerminalDimensions();
+  const clickId = useId();
 
   // Use primary/accent color for status bar border
   const borderColor = theme.colors.primary;
-
-  // ── Click region for mode selector ─────────────────────────────────────
-  // StatusBar renders at the bottom row of the terminal.
-  // Mode section is at the far left. Approximate width from visible modes.
-  const modeClickHandler = useCallback(() => {
-    onModeClick?.(mode);
-  }, [onModeClick, mode]);
-
-  // Each mode label is "◐ vibe" (6 chars) + 1 space separator
-  const visibleModeCount = showAllModes ? MODES_CONFIG.length : 1;
-  const modeSectionWidth = visibleModeCount * 6 + Math.max(0, visibleModeCount - 1);
-
-  useClickRegion(
-    {
-      id: "statusbar-mode",
-      onClick: modeClickHandler,
-      priority: 10,
-      enabled: !!onModeClick,
-    },
-    onModeClick ? { top: terminalHeight, left: 1, width: modeSectionWidth, height: 1 } : null
-  );
 
   // Get agent abbreviation for display (fallback: first 5 chars)
   const agentAbbrev = agentName
@@ -290,36 +277,43 @@ export function StatusBar({
   );
 
   const modeSection = (
-    <Box key="modes" flexDirection="row" alignItems="center">
-      {visibleModes.map((modeConfig, index) => {
-        const isActive = modeConfig.mode === mode;
-        const modeText = `${modeConfig.icon} ${modeConfig.label}`;
+    <Clickable
+      id={`statusbar-mode-${clickId}`}
+      width="auto"
+      enabled={!!onModeClick}
+      onClick={() => onModeClick?.(mode)}
+    >
+      <Box key="modes" flexDirection="row" alignItems="center">
+        {visibleModes.map((modeConfig, index) => {
+          const isActive = modeConfig.mode === mode;
+          const modeText = `${modeConfig.icon} ${modeConfig.label}`;
 
-        return (
-          <Text key={modeConfig.mode}>
-            {index > 0 && " "}
-            {isActive ? (
-              <GradientText text={modeText} colors={modeGradients[modeConfig.mode]} bold />
-            ) : (
-              <Text color={theme.semantic.text.muted} dimColor>
-                {modeText}
-              </Text>
-            )}
+          return (
+            <Text key={modeConfig.mode}>
+              {index > 0 && " "}
+              {isActive ? (
+                <GradientText text={modeText} colors={modeGradients[modeConfig.mode]} bold />
+              ) : (
+                <Text color={theme.semantic.text.muted} dimColor>
+                  {modeText}
+                </Text>
+              )}
+            </Text>
+          );
+        })}
+        {/* Agent level indicator: │Orch·L0 */}
+        {agentAbbrev !== undefined && agentLevel !== undefined && (
+          <Text>
+            <Text color={theme.semantic.border.muted}>│</Text>
+            <GradientText
+              text={`${agentAbbrev}·L${agentLevel}`}
+              colors={[theme.brand.primary, theme.brand.secondary]}
+              bold
+            />
           </Text>
-        );
-      })}
-      {/* Agent level indicator: │Orch·L0 */}
-      {agentAbbrev !== undefined && agentLevel !== undefined && (
-        <Text>
-          <Text color={theme.semantic.border.muted}>│</Text>
-          <GradientText
-            text={`${agentAbbrev}·L${agentLevel}`}
-            colors={[theme.brand.primary, theme.brand.secondary]}
-            bold
-          />
-        </Text>
-      )}
-    </Box>
+        )}
+      </Box>
+    </Clickable>
   );
 
   // Collect right-side indicators
@@ -331,7 +325,17 @@ export function StatusBar({
 
   // Model indicator (compact, name only)
   if (modelName) {
-    rightIndicators.push(<ModelIndicator key="model" model={modelName} compact />);
+    rightIndicators.push(
+      <Clickable
+        key="model"
+        id={`statusbar-model-${clickId}`}
+        width="auto"
+        enabled={!!onModelClick}
+        onClick={() => onModelClick?.()}
+      >
+        <ModelIndicator model={modelName} compact />
+      </Clickable>
+    );
   }
 
   // Sandbox policy indicator (shows file access boundaries)
@@ -368,18 +372,35 @@ export function StatusBar({
 
   // Trust mode (if provided)
   if (trustMode) {
-    rightIndicators.push(<TrustModeIndicator key="trust" mode={trustMode} />);
+    rightIndicators.push(
+      <Clickable
+        key="trust"
+        id={`statusbar-approval-${clickId}`}
+        width="auto"
+        enabled={!!onApprovalClick}
+        onClick={() => onApprovalClick?.()}
+      >
+        <TrustModeIndicator mode={trustMode} />
+      </Clickable>
+    );
   }
 
   // Thinking mode (if provided)
   if (thinking) {
     rightIndicators.push(
-      <ThinkingModeIndicator
+      <Clickable
         key="thinking"
-        active={thinking.active}
-        budget={thinking.budget}
-        used={thinking.used}
-      />
+        id={`statusbar-thinking-${clickId}`}
+        width="auto"
+        enabled={!!onThinkingClick}
+        onClick={() => onThinkingClick?.()}
+      >
+        <ThinkingModeIndicator
+          active={thinking.active}
+          budget={thinking.budget}
+          used={thinking.used}
+        />
+      </Clickable>
     );
   }
 
@@ -440,7 +461,7 @@ export function StatusBar({
   }
 
   // Empty state
-  if (!modelName && !tokens && !cost) {
+  if (!modelName && !tokens && !cost && !trustMode && !thinking && !sandboxPolicy) {
     return (
       <Box flexDirection="row" justifyContent="space-between" width="100%">
         {modeSection}

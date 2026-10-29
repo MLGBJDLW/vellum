@@ -8,12 +8,13 @@
  */
 
 import type { SnapshotInfo } from "@vellum/core";
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTheme } from "../../theme/index.js";
-import { truncateToDisplayWidth } from "../../utils/index.js";
+import { Clickable, getVisibleClickBounds } from "../common/Clickable.js";
 import { HotkeyHints } from "../common/HotkeyHints.js";
 
 // =============================================================================
@@ -34,8 +35,12 @@ export interface SnapshotCheckpointPanelProps {
   readonly isInitialized: boolean;
   /** Maximum height in lines */
   readonly maxHeight?: number;
+  /** Available sidebar width in terminal columns. Defaults to the parent width. */
+  readonly width?: number;
   /** Whether the panel is focused for keyboard input */
   readonly isFocused?: boolean;
+  /** Whether the visible sidebar accepts mouse actions independently of keyboard focus. */
+  readonly mouseEnabled?: boolean;
   /** Callback when restore is requested */
   readonly onRestore?: (hash: string) => void;
   /** Callback when diff is requested */
@@ -87,13 +92,6 @@ function formatRelativeTime(date: Date): string {
 }
 
 /**
- * Truncate text to max width.
- */
-function truncate(text: string, maxLength: number): string {
-  return truncateToDisplayWidth(text, maxLength);
-}
-
-/**
  * Get visible entries based on scroll position.
  */
 function getVisibleEntries<T>(
@@ -112,7 +110,6 @@ interface SnapshotItemProps {
   readonly snapshot: SnapshotInfo;
   readonly index: number;
   readonly isSelected: boolean;
-  readonly width: number;
   readonly primaryColor: string;
   readonly mutedColor: string;
   readonly textColor: string;
@@ -122,7 +119,6 @@ function SnapshotItem({
   snapshot,
   index,
   isSelected,
-  width,
   primaryColor,
   mutedColor,
   textColor,
@@ -133,32 +129,19 @@ function SnapshotItem({
   const message = snapshot.message ?? "(no message)";
   const fileCount = snapshot.files.length;
 
-  // Calculate available width for message
-  const fixedWidth = 5 + 8 + 3 + 10 + 3; // indicator + hash + spacing + time + spacing
-  const messageWidth = Math.max(width - fixedWidth - 4, 10);
-
   return (
-    <Box flexDirection="column" paddingLeft={1}>
-      <Box flexDirection="row">
+    <Box flexDirection="column" width="100%" height={2} flexShrink={0}>
+      <Text wrap="truncate">
         <Text color={isSelected ? primaryColor : mutedColor} bold={isSelected}>
-          {indicator}
+          {indicator}{" "}
         </Text>
-        <Text> </Text>
-        <Text color={isSelected ? primaryColor : textColor} bold={isSelected}>
-          {hashShort}
+        <Text color={isSelected ? textColor : mutedColor} bold={isSelected}>
+          {message}
         </Text>
-        <Text color={mutedColor}> - </Text>
-        <Text color={mutedColor}>{timeStr}</Text>
-        <Text color={mutedColor}> - </Text>
-        <Text color={isSelected ? textColor : mutedColor} dimColor={!isSelected}>
-          "{truncate(message, messageWidth)}"
-        </Text>
-      </Box>
-      <Box paddingLeft={5}>
-        <Text color={mutedColor} dimColor>
-          Files: {fileCount} changed
-        </Text>
-      </Box>
+      </Text>
+      <Text color={mutedColor} dimColor wrap="truncate">
+        {hashShort} • {fileCount} file{fileCount === 1 ? "" : "s"} • {timeStr}
+      </Text>
     </Box>
   );
 }
@@ -198,7 +181,9 @@ export function SnapshotCheckpointPanel({
   error,
   isInitialized,
   maxHeight = DEFAULT_MAX_HEIGHT,
+  width,
   isFocused = true,
+  mouseEnabled = isFocused,
   onRestore,
   onDiff,
   onTakeCheckpoint,
@@ -210,6 +195,7 @@ export function SnapshotCheckpointPanel({
   // State
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
+  const listRef = useRef<DOMElement>(null);
 
   // Colors from theme
   const primaryColor = theme.brand.primary;
@@ -218,8 +204,37 @@ export function SnapshotCheckpointPanel({
   const borderColor = theme.semantic.border.default;
   const errorColor = theme.colors.error;
 
-  // Calculate visible items (account for header and hints)
-  const maxVisible = Math.max(1, Math.floor((maxHeight - 5) / 2)); // Each item takes 2 lines
+  // Reserve both borders, two header lines, and the fixed three-line action bar.
+  const panelHeight = Math.max(1, Math.floor(maxHeight));
+  const listHeight = Math.max(0, panelHeight - 7);
+  const maxVisible = Math.max(1, Math.floor(listHeight / 2));
+  const canUseSnapshots = !isLoading && !error && isInitialized && snapshots.length > 0;
+  const maxOffset = Math.max(0, snapshots.length - maxVisible);
+  useEffect(() => {
+    setSelectedIndex((index) => Math.min(index, Math.max(0, snapshots.length - 1)));
+    setScrollOffset((offset) => Math.min(offset, maxOffset));
+  }, [snapshots.length, maxOffset]);
+  useEffect(() => {
+    setScrollOffset((offset) =>
+      Math.min(
+        maxOffset,
+        selectedIndex < offset
+          ? selectedIndex
+          : selectedIndex >= offset + maxVisible
+            ? selectedIndex - maxVisible + 1
+            : offset
+      )
+    );
+  }, [selectedIndex, maxVisible, maxOffset]);
+  useMouseScroll({
+    enabled: mouseEnabled && !isLoading && !error && isInitialized,
+    bounds: () => {
+      const bounds = getVisibleClickBounds(listRef.current);
+      return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+    },
+    onScroll: (delta) =>
+      setScrollOffset((offset) => Math.max(0, Math.min(offset + delta, maxOffset))),
+  });
 
   // Get visible snapshots
   const visibleSnapshots = useMemo(
@@ -231,15 +246,15 @@ export function SnapshotCheckpointPanel({
   const canScrollUp = scrollOffset > 0;
   const canScrollDown = scrollOffset + maxVisible < snapshots.length;
 
-  // Hotkey hints
-  const hints = useMemo(
-    () => [
-      { keys: "j/k", label: "navigate" },
-      { keys: "r", label: "restore" },
-      { keys: "d", label: "diff" },
-      { keys: "n", label: "new" },
-    ],
-    []
+  const newCheckpoint = (
+    <Clickable
+      id="snapshot-new"
+      width="auto"
+      enabled={mouseEnabled && !isLoading && !!onTakeCheckpoint}
+      onClick={() => onTakeCheckpoint?.()}
+    >
+      <HotkeyHints hints={[{ keys: "n", label: "new" }]} />
+    </Clickable>
   );
 
   /**
@@ -268,7 +283,16 @@ export function SnapshotCheckpointPanel({
   // Handle keyboard input
   useInput(
     (input, key) => {
-      if (!isFocused) return;
+      if (!isFocused || isLoading) return;
+      if (input === "n") {
+        onTakeCheckpoint?.();
+        return;
+      }
+      if (input === "R") {
+        onRefresh?.();
+        return;
+      }
+      if (!canUseSnapshots) return;
 
       // Navigation down
       if (input === "j" || key.downArrow) {
@@ -311,127 +335,129 @@ export function SnapshotCheckpointPanel({
         }
         return;
       }
-
-      // New checkpoint
-      if (input === "n") {
-        onTakeCheckpoint?.();
-        return;
-      }
-
-      // Refresh
-      if (input === "R") {
-        onRefresh?.();
-        return;
-      }
     },
     { isActive: isFocused }
   );
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <Box flexDirection="column" borderStyle="single" borderColor={borderColor} paddingX={1}>
-        <Box>
-          <Text color={primaryColor} bold>
-            [*] Checkpoints
-          </Text>
-        </Box>
-        <Box paddingY={1}>
-          <Text color={mutedColor}>Loading...</Text>
-        </Box>
-      </Box>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <Box flexDirection="column" borderStyle="single" borderColor={borderColor} paddingX={1}>
-        <Box>
-          <Text color={primaryColor} bold>
-            [*] Checkpoints
-          </Text>
-        </Box>
-        <Box paddingY={1}>
-          <Text color={errorColor}>Error: {error}</Text>
-        </Box>
-        <HotkeyHints hints={[{ keys: "n", label: "initialize" }]} />
-      </Box>
-    );
-  }
-
-  // Not initialized state
-  if (!isInitialized) {
-    return (
-      <Box flexDirection="column" borderStyle="single" borderColor={borderColor} paddingX={1}>
-        <Box>
-          <Text color={primaryColor} bold>
-            [*] Checkpoints
-          </Text>
-        </Box>
-        <Box paddingY={1}>
-          <Text color={mutedColor}>Not initialized. Press 'n' to create first checkpoint.</Text>
-        </Box>
-        <HotkeyHints hints={[{ keys: "n", label: "new checkpoint" }]} />
-      </Box>
-    );
-  }
-
-  // Empty state
-  if (snapshots.length === 0) {
-    return (
-      <Box flexDirection="column" borderStyle="single" borderColor={borderColor} paddingX={1}>
-        <Box>
-          <Text color={primaryColor} bold>
-            [*] Checkpoints (0)
-          </Text>
-        </Box>
-        <Box paddingY={1}>
-          <Text color={mutedColor}>No checkpoints yet. Press 'n' to create one.</Text>
-        </Box>
-        <HotkeyHints hints={[{ keys: "n", label: "new checkpoint" }]} />
-      </Box>
-    );
-  }
-
+  const statusMessage = isLoading
+    ? "Loading..."
+    : error
+      ? `Error: ${error}`
+      : !isInitialized
+        ? "Not initialized. Press n to create a checkpoint."
+        : snapshots.length === 0
+          ? "No checkpoints yet. Press n to create one."
+          : null;
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={borderColor} paddingX={1}>
+    <Box
+      flexDirection="column"
+      width={width ?? "100%"}
+      maxWidth="100%"
+      height={panelHeight}
+      flexShrink={0}
+      overflow="hidden"
+      borderStyle="single"
+      borderColor={borderColor}
+      paddingX={1}
+    >
       {/* Header */}
-      <Box marginBottom={1}>
-        <Text color={primaryColor} bold>
+      <Box height={1} flexShrink={0}>
+        <Text color={primaryColor} bold wrap="truncate">
           [*] Checkpoints ({snapshots.length})
         </Text>
-        {canScrollUp && <Text color={mutedColor}> [-] more above</Text>}
-        {canScrollDown && <Text color={mutedColor}> [+] more below</Text>}
       </Box>
-
-      {/* Separator */}
-      <Box>
-        <Text color={borderColor}>{"─".repeat(40)}</Text>
+      <Box height={1} flexShrink={0}>
+        <Text color={mutedColor} wrap="truncate">
+          j/k navigate{" "}
+          {canUseSnapshots
+            ? `${scrollOffset + 1}-${Math.min(scrollOffset + maxVisible, snapshots.length)}/${snapshots.length}`
+            : ""}{" "}
+          {canScrollUp ? "↑" : ""}
+          {canScrollDown ? "↓" : ""}
+        </Text>
       </Box>
 
       {/* Snapshot list */}
-      <Box flexDirection="column">
-        {visibleSnapshots.map((snapshot, visibleIdx) => {
-          const actualIndex = scrollOffset + visibleIdx;
-          return (
-            <SnapshotItem
-              key={snapshot.hash}
-              snapshot={snapshot}
-              index={actualIndex}
-              isSelected={actualIndex === selectedIndex}
-              width={60}
-              primaryColor={primaryColor}
-              mutedColor={mutedColor}
-              textColor={textColor}
-            />
-          );
-        })}
+      <Box
+        ref={listRef}
+        flexDirection="column"
+        height={listHeight}
+        flexShrink={0}
+        overflow="hidden"
+      >
+        {statusMessage ? (
+          <Text color={error ? errorColor : mutedColor}>{statusMessage}</Text>
+        ) : (
+          visibleSnapshots.map((snapshot, visibleIdx) => {
+            const actualIndex = scrollOffset + visibleIdx;
+            return (
+              <Clickable
+                key={snapshot.hash}
+                id={`snapshot-${snapshot.hash}`}
+                enabled={mouseEnabled}
+                onClick={() => navigateToIndex(actualIndex)}
+              >
+                <SnapshotItem
+                  snapshot={snapshot}
+                  index={actualIndex}
+                  isSelected={actualIndex === selectedIndex}
+                  primaryColor={primaryColor}
+                  mutedColor={mutedColor}
+                  textColor={textColor}
+                />
+              </Clickable>
+            );
+          })
+        )}
       </Box>
 
       {/* Hints */}
-      <Box marginTop={1}>
-        <HotkeyHints hints={hints} />
+      <Box
+        flexDirection="column"
+        height={3}
+        flexShrink={0}
+        borderStyle="single"
+        borderTop
+        borderBottom={false}
+        borderLeft={false}
+        borderRight={false}
+        borderColor={borderColor}
+      >
+        <Box height={1} flexShrink={0} gap={2}>
+          <Clickable
+            id="snapshot-restore"
+            width="auto"
+            enabled={mouseEnabled && canUseSnapshots && !!onRestore}
+            onClick={() => {
+              const snapshot = snapshots[selectedIndex];
+              if (snapshot) onRestore?.(snapshot.hash);
+            }}
+          >
+            <HotkeyHints hints={[{ keys: "r", label: "restore" }]} />
+          </Clickable>
+          <Clickable
+            id="snapshot-diff"
+            width="auto"
+            enabled={mouseEnabled && canUseSnapshots && !!onDiff}
+            onClick={() => {
+              const snapshot = snapshots[selectedIndex];
+              if (snapshot) onDiff?.(snapshot.hash);
+            }}
+          >
+            <HotkeyHints hints={[{ keys: "d", label: "diff" }]} />
+          </Clickable>
+        </Box>
+        <Box height={1} flexShrink={0} gap={2}>
+          {newCheckpoint}
+          <Clickable
+            id="snapshot-refresh"
+            width="auto"
+            enabled={mouseEnabled && !isLoading && !!onRefresh}
+            onClick={() => onRefresh?.()}
+          >
+            <HotkeyHints hints={[{ keys: "R", label: "refresh" }]} />
+          </Clickable>
+        </Box>
       </Box>
     </Box>
   );

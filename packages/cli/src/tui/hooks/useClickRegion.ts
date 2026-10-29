@@ -2,13 +2,13 @@
  * useClickRegion Hook
  *
  * Registers a rectangular click region in the global ClickRegionRegistry.
- * Updates the region on each render and unregisters on unmount.
+ * Reads current bounds and handlers at dispatch, and unregisters on unmount.
  *
  * @module tui/hooks/useClickRegion
  */
 
 import { useEffect, useRef } from "react";
-import { globalClickRegistry } from "../utils/click-region.js";
+import { type ClickRegionEdges, globalClickRegistry } from "../utils/click-region.js";
 import type { MouseEvent } from "../utils/mouse-parser.js";
 
 // =============================================================================
@@ -50,8 +50,8 @@ export interface UseClickRegionOptions {
 /**
  * Register a click region that responds to mouse clicks.
  *
- * The region is registered/updated on each render and unregistered on unmount.
- * Pass `null` for bounds to skip registration (e.g., when position is unknown).
+ * Registration stays stable across renders; bounds and callbacks are read live.
+ * Pass `null` for bounds to make the region non-interactive until layout is known.
  *
  * @example
  * ```tsx
@@ -63,38 +63,34 @@ export interface UseClickRegionOptions {
  */
 export function useClickRegion(
   options: UseClickRegionOptions,
-  bounds: ClickRegionBounds | null
+  bounds: ClickRegionBounds | null | (() => ClickRegionBounds | null)
 ): void {
-  const unregisterRef = useRef<(() => void) | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  const boundsRef = useRef(bounds);
+  boundsRef.current = bounds;
+  const { id, enabled = true } = options;
 
   useEffect(() => {
-    // Clean up previous registration
-    unregisterRef.current?.();
-    unregisterRef.current = null;
-
-    const { id, onClick, priority, enabled = true } = optionsRef.current;
-
-    // Skip if disabled or no bounds
-    if (!enabled || !bounds) return;
-
-    // Validate bounds
-    if (bounds.width <= 0 || bounds.height <= 0) return;
-
-    unregisterRef.current = globalClickRegistry.register({
+    if (!enabled) return;
+    return globalClickRegistry.register({
       id,
-      top: bounds.top,
-      left: bounds.left,
-      bottom: bounds.top + bounds.height - 1,
-      right: bounds.left + bounds.width - 1,
-      onClick,
-      priority,
+      getBounds: (): ClickRegionEdges | null => {
+        if (optionsRef.current.enabled === false) return null;
+        const current =
+          typeof boundsRef.current === "function" ? boundsRef.current() : boundsRef.current;
+        if (!current || current.width <= 0 || current.height <= 0) return null;
+        return {
+          top: current.top,
+          left: current.left,
+          bottom: current.top + current.height - 1,
+          right: current.left + current.width - 1,
+        };
+      },
+      onClick: (event) => optionsRef.current.onClick(event),
+      get priority() {
+        return optionsRef.current.priority;
+      },
     });
-
-    return () => {
-      unregisterRef.current?.();
-      unregisterRef.current = null;
-    };
-  }, [bounds]);
+  }, [id, enabled]);
 }

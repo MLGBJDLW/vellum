@@ -8,12 +8,14 @@
  */
 
 import { getIcons } from "@vellum/shared";
-import { Box, Text } from "ink";
+import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMouseScroll } from "../../hooks/useMouseScroll.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTheme } from "../../theme/index.js";
 import { truncateToDisplayWidth } from "../../utils/index.js";
+import { Clickable, getVisibleClickBounds } from "../common/Clickable.js";
 import { SessionPreview } from "./SessionPreview.js";
 import type { SessionMetadata, SessionPickerProps, SessionPreviewMessage } from "./types.js";
 
@@ -178,12 +180,17 @@ export function SessionPicker({
 
   // Track scroll offset
   const [scrollOffset, setScrollOffset] = useState(0);
+  const listRef = useRef<DOMElement>(null);
 
   // Prevent double-handling of input
   const handledRef = useRef(false);
 
   // Calculate visible sessions
   const maxVisible = LIST_MAX_HEIGHT - 4; // Account for header, footer, borders
+  useEffect(() => {
+    setSelectedIndex((index) => Math.min(index, Math.max(0, sessions.length - 1)));
+    setScrollOffset((offset) => Math.min(offset, Math.max(0, sessions.length - maxVisible)));
+  }, [sessions.length, maxVisible]);
 
   const visibleSessions = useMemo(
     () => sessions.slice(scrollOffset, scrollOffset + maxVisible),
@@ -270,6 +277,18 @@ export function SessionPicker({
     [sessions.length, scrollOffset, maxVisible]
   );
 
+  useMouseScroll({
+    enabled: isOpen,
+    bounds: () => {
+      const bounds = getVisibleClickBounds(listRef.current);
+      return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+    },
+    onScroll: (delta) =>
+      setScrollOffset((offset) =>
+        Math.max(0, Math.min(offset + delta, Math.max(0, sessions.length - maxVisible)))
+      ),
+  });
+
   /**
    * Handle close action with double-handling prevention.
    */
@@ -286,15 +305,18 @@ export function SessionPicker({
   /**
    * Handle select action with double-handling prevention.
    */
-  const handleSelect = useCallback(() => {
-    if (handledRef.current || !selectedSession) return false;
-    handledRef.current = true;
-    onSelect(selectedSession.id);
-    setTimeout(() => {
-      handledRef.current = false;
-    }, 0);
-    return true;
-  }, [onSelect, selectedSession]);
+  const handleSelect = useCallback(
+    (session = selectedSession) => {
+      if (handledRef.current || !session) return false;
+      handledRef.current = true;
+      onSelect(session.id);
+      setTimeout(() => {
+        handledRef.current = false;
+      }, 0);
+      return true;
+    },
+    [onSelect, selectedSession]
+  );
 
   /**
    * Check navigation direction from key input.
@@ -372,9 +394,11 @@ export function SessionPicker({
             No sessions available
           </Text>
         </Box>
-        <Text color={mutedColor} dimColor>
-          Press <Text bold>Esc</Text> or <Text bold>q</Text> to close
-        </Text>
+        <Clickable id="session-picker-empty-close" onClick={handleClose} enabled={isOpen}>
+          <Text color={mutedColor} dimColor>
+            Press <Text bold>Esc</Text> or <Text bold>q</Text> to close
+          </Text>
+        </Clickable>
       </Box>
     );
   }
@@ -401,20 +425,29 @@ export function SessionPicker({
         </Box>
 
         {/* Session list */}
-        <Box flexDirection="column">
+        <Box ref={listRef} flexDirection="column">
           {visibleSessions.map((session, visibleIndex) => {
             const actualIndex = scrollOffset + visibleIndex;
             return (
-              <PickerItem
+              <Clickable
                 key={session.id}
-                session={session}
-                isSelected={actualIndex === selectedIndex}
-                isActive={session.id === activeSessionId}
-                primaryColor={primaryColor}
-                textColor={textColor}
-                mutedColor={mutedColor}
-                successColor={successColor}
-              />
+                id={`session-picker-${session.id}`}
+                enabled={isOpen}
+                onClick={() => {
+                  navigateToIndex(actualIndex);
+                  handleSelect(session);
+                }}
+              >
+                <PickerItem
+                  session={session}
+                  isSelected={actualIndex === selectedIndex}
+                  isActive={session.id === activeSessionId}
+                  primaryColor={primaryColor}
+                  textColor={textColor}
+                  mutedColor={mutedColor}
+                  successColor={successColor}
+                />
+              </Clickable>
             );
           })}
         </Box>
@@ -424,12 +457,21 @@ export function SessionPicker({
           <Text color={mutedColor} dimColor>
             <Text bold>j/k</Text> navigate
           </Text>
-          <Text color={mutedColor} dimColor>
-            <Text bold>Enter</Text> select
-          </Text>
-          <Text color={mutedColor} dimColor>
-            <Text bold>Esc/q</Text> close
-          </Text>
+          <Clickable
+            id="session-picker-select"
+            width="auto"
+            enabled={isOpen && !!selectedSession}
+            onClick={() => handleSelect()}
+          >
+            <Text color={mutedColor} dimColor>
+              <Text bold>Enter</Text> select
+            </Text>
+          </Clickable>
+          <Clickable id="session-picker-close" width="auto" enabled={isOpen} onClick={handleClose}>
+            <Text color={mutedColor} dimColor>
+              <Text bold>Esc/q</Text> close
+            </Text>
+          </Clickable>
         </Box>
       </Box>
 

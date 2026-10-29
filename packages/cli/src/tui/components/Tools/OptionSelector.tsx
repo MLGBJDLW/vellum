@@ -9,7 +9,8 @@
 
 import { Box, Text } from "ink";
 import type React from "react";
-import { useCallback, useId, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
+import { useMouseInteractionEnabled } from "../../context/MouseContext.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTheme } from "../../theme/index.js";
 import { Clickable } from "../common/Clickable.js";
@@ -76,20 +77,38 @@ export function OptionSelector({
   const { theme } = useTheme();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const selectorId = useId();
+  const interactionEnabled = useMouseInteractionEnabled();
+  const active = isFocused && interactionEnabled;
+  const requestKey = JSON.stringify([question, options]);
+  const decision = useRef({ requestKey, handled: false });
+  if (decision.current.requestKey !== requestKey) {
+    decision.current = { requestKey, handled: false };
+  }
+  const selectOption = useCallback(
+    (index: number) => {
+      const option = options[index];
+      if (!active || decision.current.handled || option === undefined) return;
+      decision.current.handled = true;
+      onSelect(option, index);
+    },
+    [active, options, onSelect]
+  );
+  const cancel = useCallback(() => {
+    if (!active || decision.current.handled || !onCancel) return;
+    decision.current.handled = true;
+    onCancel();
+  }, [active, onCancel]);
 
   // Handle keyboard input
   useInput(
     useCallback(
       (input: string, key) => {
-        if (!isFocused) return;
+        if (!active || decision.current.handled) return;
 
         // Number key shortcuts (1-9)
         const num = Number.parseInt(input, 10);
         if (!Number.isNaN(num) && num >= 1 && num <= Math.min(options.length, 9)) {
-          const selectedOption = options[num - 1];
-          if (selectedOption !== undefined) {
-            onSelect(selectedOption, num - 1);
-          }
+          selectOption(num - 1);
           return;
         }
 
@@ -106,21 +125,18 @@ export function OptionSelector({
 
         // Enter to confirm
         if (key.return) {
-          const selected = options[selectedIndex];
-          if (selected !== undefined) {
-            onSelect(selected, selectedIndex);
-          }
+          selectOption(selectedIndex);
           return;
         }
 
         // Esc to cancel
-        if (key.escape && onCancel) {
-          onCancel();
+        if (key.escape) {
+          cancel();
         }
       },
-      [isFocused, options, selectedIndex, onSelect, onCancel]
+      [active, options, selectedIndex, selectOption, cancel]
     ),
-    { isActive: isFocused }
+    { isActive: active }
   );
 
   const maxShortcut = Math.min(options.length, 9);
@@ -141,8 +157,9 @@ export function OptionSelector({
             <Clickable
               key={`opt-${option}`}
               id={`option-${selectorId}-${index}`}
-              onClick={() => onSelect(option, index)}
+              onClick={() => selectOption(index)}
               height={1}
+              enabled={active}
             >
               <Text color={isSelected ? theme.colors.primary : undefined} bold={isSelected}>
                 {prefix} [{shortcut}] {option}
@@ -155,9 +172,19 @@ export function OptionSelector({
       {/* Help text */}
       {showHelpText && (
         <Box marginTop={1}>
-          <Text dimColor>
-            ↑↓: Navigate | 1-{maxShortcut}: Quick select | Enter: Confirm | Esc: Skip
-          </Text>
+          <Text dimColor>↑↓: Navigate | 1-{maxShortcut}: Quick select | Enter: Confirm</Text>
+        </Box>
+      )}
+      {onCancel && (
+        <Box marginTop={showHelpText ? 0 : 1}>
+          <Clickable
+            id={`option-${selectorId}-skip`}
+            width="auto"
+            enabled={active}
+            onClick={cancel}
+          >
+            <Text dimColor>Esc: Skip</Text>
+          </Clickable>
         </Box>
       )}
     </Box>

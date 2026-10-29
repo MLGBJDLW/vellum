@@ -9,9 +9,9 @@
 
 import { getProviderModels, getSupportedProviders, type ModelInfo } from "@vellum/provider";
 import { getIcons } from "@vellum/shared";
-import { Box, Text, useStdin } from "ink";
+import { Box, type DOMElement, Text, useStdin } from "ink";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   getThinkingDisplayMode,
   getThinkingState,
@@ -21,12 +21,15 @@ import {
   type ThinkingDisplayMode,
   toggleThinking,
 } from "../../commands/think.js";
+import { useMouseInteractionEnabled } from "../context/MouseContext.js";
+import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import { useInput } from "../hooks/useTerminalInput.js";
 import { useTerminalDimensions } from "../hooks/useTerminalSize.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { isEndKey, isHomeKey } from "../types/ink-extended.js";
 import { getCurrentTerminalKey } from "../utils/terminal-input.js";
+import { Clickable, getVisibleClickBounds } from "./common/Clickable.js";
 
 // =============================================================================
 // Types
@@ -176,6 +179,9 @@ export function ModelSelector({
   const icons = getIcons();
   const { width, height, isNarrow } = useTerminalDimensions();
   const { stdin } = useStdin();
+  const selectorId = useId();
+  const modelListRef = useRef<DOMElement>(null);
+  const mouseInteractionEnabled = useMouseInteractionEnabled();
 
   // Thinking state management
   const [thinkingEnabled, setThinkingEnabled] = useState(() => getThinkingState().enabled);
@@ -263,6 +269,20 @@ export function ModelSelector({
   const visibleModels = modelOptions.slice(startIndex, startIndex + visibleCount);
   const focusedModel = modelOptions[focusedIndex];
 
+  const getModelListBounds = useCallback(() => {
+    const bounds = getVisibleClickBounds(modelListRef.current);
+    return bounds ? { ...bounds, top: bounds.top - 1, left: bounds.left - 1 } : null;
+  }, []);
+  useMouseScroll({
+    enabled: isActive && mouseInteractionEnabled && modelOptions.length > 0,
+    scrollSpeed: 1,
+    bounds: getModelListBounds,
+    onScroll: useCallback(
+      (delta: number) => focusModel(focusedIndexRef.current + delta),
+      [focusModel]
+    ),
+  });
+
   // Handle keyboard input
   useInput(
     useCallback(
@@ -342,36 +362,64 @@ export function ModelSelector({
         {modelOptions[currentIndex]?.model.name ?? currentModel}
       </Text>
       <Box marginBottom={1}>
-        <Text wrap="truncate">
-          Thinking:{" "}
-          <Text color={thinkingEnabled ? "green" : "gray"}>
-            {thinkingEnabled ? "◆ On" : "◇ Off"}
-          </Text>{" "}
-          [T]
-          {thinkingEnabled ? `  Display: ${displayMode === "full" ? "Full" : "Compact"} [D]` : ""}
-        </Text>
+        <Clickable
+          id={`${selectorId}-thinking`}
+          onClick={handleThinkingToggle}
+          enabled={isActive}
+          width="auto"
+        >
+          <Text wrap="truncate">
+            Thinking:{" "}
+            <Text color={thinkingEnabled ? "green" : "gray"}>
+              {thinkingEnabled ? "◆ On" : "◇ Off"}
+            </Text>{" "}
+            [T]
+          </Text>
+        </Clickable>
+        {thinkingEnabled && (
+          <>
+            <Text>{"  "}</Text>
+            <Clickable
+              id={`${selectorId}-display`}
+              onClick={handleDisplayModeToggle}
+              enabled={isActive}
+              width="auto"
+            >
+              <Text wrap="truncate">{`Display: ${displayMode === "full" ? "Full" : "Compact"} [D]`}</Text>
+            </Clickable>
+          </>
+        )}
       </Box>
-      <Box flexDirection="column" height={visibleCount} flexShrink={0}>
+      <Box ref={modelListRef} flexDirection="column" height={visibleCount} flexShrink={0}>
         {visibleModels.map((option, offset) => {
           const selected = startIndex + offset === focusedIndex;
           const current = option.provider === currentProvider && option.model.id === currentModel;
           return (
-            <Text
+            <Clickable
               key={`${option.provider}/${option.model.id}`}
-              wrap="truncate"
-              color={
-                selected && isActive
-                  ? theme.colors.info
-                  : current
-                    ? theme.colors.success
-                    : undefined
-              }
-              bold={current}
+              id={`${selectorId}-${option.provider}/${option.model.id}`}
+              enabled={isActive}
+              onClick={() => {
+                focusModel(startIndex + offset);
+                onSelect(option.provider, option.model.id);
+              }}
             >
-              {selected && isActive ? "❯ " : "  "}
-              {current ? "✓ " : "  "}
-              {getProviderInfo(option.provider).name}: {option.model.name}
-            </Text>
+              <Text
+                wrap="truncate"
+                color={
+                  selected && isActive
+                    ? theme.colors.info
+                    : current
+                      ? theme.colors.success
+                      : undefined
+                }
+                bold={current}
+              >
+                {selected && isActive ? "❯ " : "  "}
+                {current ? "✓ " : "  "}
+                {getProviderInfo(option.provider).name}: {option.model.name}
+              </Text>
+            </Clickable>
           );
         })}
         {modelOptions.length === 0 && <Text dimColor>No models available</Text>}

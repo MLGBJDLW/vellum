@@ -12,7 +12,11 @@
 
 import { useCallback, useEffect } from "react";
 import type { ContentBounds } from "../context/LayoutPositionContext.js";
-import { useMouseContextOptional } from "../context/MouseContext.js";
+import {
+  useMouseContextOptional,
+  useMouseInteractionActivate,
+  useMouseInteractionEnabled,
+} from "../context/MouseContext.js";
 import type { MouseEvent } from "../utils/mouse-parser.js";
 
 // =============================================================================
@@ -29,8 +33,12 @@ export interface UseMouseScrollOptions {
   readonly enabled?: boolean;
   /** Callback when scroll position changes */
   readonly onScroll?: (delta: number) => void;
-  /** Route wheel input only to this zero-based terminal region. */
-  readonly bounds?: ContentBounds;
+  /** Route wheel input only to this zero-based terminal region. A live resolver
+   * is measured for each event; null means hidden or not yet laid out.
+   */
+  readonly bounds?: ContentBounds | (() => ContentBounds | null);
+  /** Menus consume wheel input before background history (default: 10). */
+  readonly priority?: number;
 }
 
 // =============================================================================
@@ -53,33 +61,45 @@ const DEFAULT_SCROLL_SPEED = 3;
  * If no `MouseProvider` is in the tree, the hook is a no-op.
  */
 export function useMouseScroll(options: UseMouseScrollOptions = {}): void {
-  const { scrollSpeed = DEFAULT_SCROLL_SPEED, enabled = true, onScroll, bounds } = options;
+  const {
+    scrollSpeed = DEFAULT_SCROLL_SPEED,
+    enabled = true,
+    onScroll,
+    bounds,
+    priority = 10,
+  } = options;
 
   const mouseCtx = useMouseContextOptional();
+  const interactionEnabled = useMouseInteractionEnabled();
+  const activate = useMouseInteractionActivate();
 
   const handleWheel = useCallback(
     (event: MouseEvent) => {
-      if (!enabled || !onScroll) return;
+      if (!enabled || !interactionEnabled || !onScroll) return false;
+      const currentBounds = typeof bounds === "function" ? bounds() : bounds;
+      if (currentBounds === null) return false;
       if (
-        bounds &&
-        (event.col - 1 < bounds.left ||
-          event.col - 1 >= bounds.left + bounds.width ||
-          event.row - 1 < bounds.top ||
-          event.row - 1 >= bounds.top + bounds.height)
+        currentBounds &&
+        (event.col - 1 < currentBounds.left ||
+          event.col - 1 >= currentBounds.left + currentBounds.width ||
+          event.row - 1 < currentBounds.top ||
+          event.row - 1 >= currentBounds.top + currentBounds.height)
       )
-        return;
+        return false;
 
       const delta = event.action === "wheelup" ? -scrollSpeed : scrollSpeed;
 
+      activate?.();
       onScroll(delta);
+      return true;
     },
-    [enabled, onScroll, scrollSpeed, bounds]
+    [enabled, interactionEnabled, activate, onScroll, scrollSpeed, bounds]
   );
 
   useEffect(() => {
-    if (!mouseCtx || !enabled) return;
+    if (!mouseCtx || !enabled || !interactionEnabled) return;
 
-    const unsubscribe = mouseCtx.onWheel(handleWheel);
+    const unsubscribe = mouseCtx.onWheel(handleWheel, priority);
     return unsubscribe;
-  }, [mouseCtx, enabled, handleWheel]);
+  }, [mouseCtx, enabled, interactionEnabled, handleWheel, priority]);
 }

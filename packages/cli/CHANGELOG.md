@@ -1,5 +1,13 @@
 # @butlerw/vellum
 
+## 0.5.2
+
+### Patch Changes
+
+- Complete mouse navigation across terminal menus, status controls, sidebars, session management, and confirmation dialogs while preserving keyboard shortcuts and modal focus. Keep slash and mention completion synchronized with the input cursor, and connect language-server setup to real detection and installation.
+
+  Support history scrollbar dragging and local wheel routing, preserve reading position during streaming, and expand Thinking content without truncation. Fix Windows console encoding and nested React updates during streamed output.
+
 ## 0.5.1
 
 ### Patch Changes
@@ -28,14 +36,14 @@
   current values when submitting forms, and remove conflicting persistence shortcuts.
   Paint dialogs above the conversation, restore Escape dismissal, and hydrate saved
   session timestamps before rendering the session manager.
-  
+
   Refresh supported provider catalogs and discovery, preserve current model
   capabilities and reasoning transport, and share catalog updates with adapter
   model lists. Discover native local model capabilities without dropping tools or
   configured authentication, and retain SDK request timeouts for long reasoning.
   Remove implicit per-role worker limits while retaining explicit
   budgets, task deadlines, cancellation, and repetition detection.
-  
+
   Upgrade the dependency graph and terminal runtime, remove obsolete dependencies
   and CI caches, and require Node.js 22.22.1+ or 24.11.0+ on their respective release
   lines. Release jobs publish and tag the exact reviewed merge commit.

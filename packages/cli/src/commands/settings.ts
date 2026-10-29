@@ -9,7 +9,7 @@
  * @module cli/commands/settings
  */
 
-import { loadConfig } from "@vellum/core";
+import { CodingModeSchema, loadConfig } from "@vellum/core";
 import {
   type DiffViewMode,
   getAlternateBufferEnabled,
@@ -65,6 +65,16 @@ const VALID_CATEGORIES: readonly SettingsCategory[] = [
   "mcp",
 ] as const;
 
+/** Categories with an existing interactive saved-preferences panel. */
+const PANEL_CATEGORIES: Partial<Record<SettingsCategory, string>> = {
+  general: "general",
+  model: "model",
+  mode: "mode",
+  theme: "theme",
+  diff: "diff",
+  think: "thinking",
+};
+
 /**
  * Category display names and descriptions.
  */
@@ -116,7 +126,7 @@ function getAllSettings(): Record<SettingsCategory, Record<string, unknown>> {
       temperature: config?.llm?.temperature ?? 0.7,
     },
     mode: {
-      codingMode: modeFromSettings ?? "vibe",
+      codingMode: modeFromSettings ?? "orch",
     },
     theme: {
       theme: themeFromSettings ?? config?.theme ?? "dark",
@@ -204,10 +214,14 @@ const SETTABLE_KEYS: Record<string, (value: string) => CommandResult> = {
     return success(`Theme set to: ${value}`);
   },
   mode: (value: string) => {
-    if (!["vibe", "plan", "spec"].includes(value)) {
-      return error("INVALID_ARGUMENT", `Invalid mode: ${value}. Valid modes: vibe, plan, spec`);
+    const mode = CodingModeSchema.safeParse(value);
+    if (!mode.success) {
+      return error(
+        "INVALID_ARGUMENT",
+        `Invalid mode: ${value}. Valid modes: orch, vibe, plan, spec`
+      );
     }
-    setModeInSettings(value as "vibe" | "plan" | "spec");
+    setModeInSettings(mode.data);
     return success(`Coding mode set to: ${value}`);
   },
   "diff-mode": (value: string) => {
@@ -321,13 +335,16 @@ export const settingsCommand: SlashCommand = {
     // No arguments - show all settings
     if (!keyOrCategory) {
       const allSettings = getAllSettings();
+      ctx.emit("settings:open", { category: "general" });
       return success(formatAllSettings(allSettings));
     }
 
     // Check if it's a category
-    if (VALID_CATEGORIES.includes(keyOrCategory as SettingsCategory) && !value) {
+    if (VALID_CATEGORIES.includes(keyOrCategory as SettingsCategory) && value === undefined) {
       const allSettings = getAllSettings();
       const categorySettings = allSettings[keyOrCategory as SettingsCategory];
+      const panelCategory = PANEL_CATEGORIES[keyOrCategory as SettingsCategory];
+      if (panelCategory) ctx.emit("settings:open", { category: panelCategory });
       return success(formatSettingsDisplay(categorySettings, keyOrCategory));
     }
 
