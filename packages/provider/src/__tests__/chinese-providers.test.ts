@@ -167,7 +167,12 @@ describe("ZhipuProvider", () => {
   describe("initialize", () => {
     it("should throw error when no API key provided", async () => {
       const provider = new ZhipuProvider();
-      await expect(provider.initialize({})).rejects.toThrow("Zhipu API key is required");
+      for (const name of ["ZHIPU_API_KEY", "ZHIPUAI_API_KEY", "ZAI_API_KEY"]) vi.stubEnv(name, "");
+      try {
+        await expect(provider.initialize({})).rejects.toMatchObject({ retryable: false });
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
 
     it("accepts direct Bearer keys without forcing the legacy id.secret format", async () => {

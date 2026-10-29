@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { ToolContext } from "../../types/tool.js";
+import { configureWebTools } from "../web/config.js";
 import { webSearchTool } from "../web-search.js";
 
 // Mock fetchWithPool from @vellum/shared
@@ -18,11 +19,47 @@ vi.mock("@vellum/shared", async (importOriginal) => {
 import { fetchWithPool } from "@vellum/shared";
 
 const mockFetchWithPool = fetchWithPool as Mock;
+function useFetchMock(fetchMock: Mock) {
+  mockFetchWithPool.mockImplementation(async (...args: unknown[]) => {
+    const response = (await fetchMock(...args)) as
+      | Response
+      | {
+          ok: boolean;
+          status?: number;
+          text?: () => Promise<string>;
+          json?: () => Promise<unknown>;
+        };
+    if (response instanceof Response) return response;
+    const body = response.text
+      ? await response.text()
+      : response.json
+        ? JSON.stringify(await response.json())
+        : "";
+    return new Response(body, {
+      status: response.status ?? (response.ok ? 200 : 500),
+      headers: { "content-type": response.json ? "application/json" : "text/html" },
+    });
+  });
+}
 
 describe("webSearchTool", () => {
   let ctx: ToolContext;
 
   beforeEach(() => {
+    configureWebTools();
+    for (const key of [
+      "DEEPSEEK_API_KEY",
+      "BRAVE_SEARCH_API_KEY",
+      "BRAVE_API_KEY",
+      "TAVILY_API_KEY",
+      "EXA_API_KEY",
+      "SERPER_API_KEY",
+      "SERPAPI_KEY",
+      "SERPAPI_API_KEY",
+      "ANYSEARCH_API_KEY",
+      "SEARXNG_BASE_URL",
+    ])
+      vi.stubEnv(key, "");
     ctx = {
       workingDir: "/test",
       sessionId: "test-session",
@@ -34,6 +71,8 @@ describe("webSearchTool", () => {
   });
 
   afterEach(() => {
+    configureWebTools();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -57,7 +96,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve("<html></html>"),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       await webSearchTool.execute({ query: "test", maxResults: 10, engine: "duckduckgo" }, ctx);
 
@@ -103,7 +142,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve("<html></html>"),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       await webSearchTool.execute(
         { query: "test query", maxResults: 10, engine: "duckduckgo" },
@@ -120,7 +159,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve("<html></html>"),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       await webSearchTool.execute(
         { query: "typescript tutorials", maxResults: 10, engine: "duckduckgo" },
@@ -142,7 +181,7 @@ describe("webSearchTool", () => {
             </html>
           `),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "duckduckgo" },
@@ -158,7 +197,7 @@ describe("webSearchTool", () => {
 
     it("should handle fetch errors", async () => {
       const fetchMock = vi.fn().mockRejectedValue(new Error("Network error"));
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "duckduckgo" },
@@ -176,7 +215,7 @@ describe("webSearchTool", () => {
         ok: false,
         status: 429,
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "duckduckgo" },
@@ -223,7 +262,7 @@ describe("webSearchTool", () => {
             ],
           }),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "google" },
@@ -260,7 +299,7 @@ describe("webSearchTool", () => {
             ],
           }),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", engine: "google", maxResults: 2 },
@@ -289,7 +328,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve(altPatternHtml),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test alt", maxResults: 10, engine: "duckduckgo" },
@@ -315,7 +354,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve(genericLinksHtml),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test generic", maxResults: 10, engine: "duckduckgo" },
@@ -344,7 +383,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve(htmlWithEntities),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "entities test", maxResults: 10, engine: "duckduckgo" },
@@ -373,7 +412,7 @@ describe("webSearchTool", () => {
         ok: true,
         text: () => Promise.resolve(htmlWithNumericEntities),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "numeric entities", maxResults: 10, engine: "duckduckgo" },
@@ -422,7 +461,7 @@ describe("webSearchTool", () => {
         error.name = "AbortError";
         return Promise.reject(error);
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "mid-flight abort", maxResults: 10, engine: "duckduckgo" },
@@ -449,7 +488,7 @@ describe("webSearchTool", () => {
             ],
           }),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "bing test", maxResults: 5, engine: "bing" },
@@ -514,7 +553,7 @@ describe("webSearchTool", () => {
             `),
         });
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const resultPromise = webSearchTool.execute(
         { query: "retry test", maxResults: 10, engine: "duckduckgo" },
@@ -549,7 +588,7 @@ describe("webSearchTool", () => {
             `),
         });
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const resultPromise = webSearchTool.execute(
         { query: "server error test", maxResults: 10, engine: "duckduckgo" },
@@ -567,7 +606,7 @@ describe("webSearchTool", () => {
 
     it("should fail after max retries exhausted", async () => {
       const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 429 });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const resultPromise = webSearchTool.execute(
         { query: "always rate limited", maxResults: 10, engine: "duckduckgo" },
@@ -581,8 +620,8 @@ describe("webSearchTool", () => {
 
       const result = await resultPromise;
 
-      // Should have tried initial + 3 retries = 4 total calls
-      expect(fetchMock).toHaveBeenCalledTimes(4);
+      // The shared transport bounds each service to three total attempts.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error).toContain("429");
@@ -591,7 +630,7 @@ describe("webSearchTool", () => {
 
     it("should not retry on HTTP 4xx client errors (except 429)", async () => {
       const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "not found", maxResults: 10, engine: "duckduckgo" },
@@ -637,7 +676,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test query", maxResults: 10, engine: "tavily" },
@@ -673,7 +712,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test query", maxResults: 10, engine: "auto" },
@@ -705,13 +744,15 @@ describe("webSearchTool", () => {
       const fetchMock = vi
         .fn()
         // First call (Tavily) fails
-        .mockRejectedValueOnce(new Error("Tavily API error"))
+        .mockResolvedValueOnce({ ok: false, status: 503 })
+        .mockResolvedValueOnce({ ok: false, status: 503 })
+        .mockResolvedValueOnce({ ok: false, status: 503 })
         // Second call (DuckDuckGo fallback) succeeds
         .mockResolvedValueOnce({
           ok: true,
           text: () => Promise.resolve(duckDuckGoHtml),
         });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test query", maxResults: 10, engine: "auto" },
@@ -730,7 +771,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "tavily" },
@@ -749,7 +790,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       await webSearchTool.execute(
         {
@@ -770,10 +811,10 @@ describe("webSearchTool", () => {
       expect(body.search_depth).toBe("advanced");
       expect(body.include_domains).toContain("example.com");
       expect(body.exclude_domains).toContain("spam.com");
-      expect(body.time_range).toBe("w"); // "week" maps to "w"
+      expect(body.time_range).toBe("week");
     });
 
-    it("should handle Tavily API HTTP errors", async () => {
+    it("should report Tavily authentication errors without falling back", async () => {
       process.env.TAVILY_API_KEY = "test-tavily-key";
 
       const duckDuckGoHtml = `
@@ -795,18 +836,17 @@ describe("webSearchTool", () => {
           ok: true,
           text: () => Promise.resolve(duckDuckGoHtml),
         });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       const result = await webSearchTool.execute(
         { query: "test", maxResults: 10, engine: "auto" },
         ctx
       );
 
-      // Should fallback successfully
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.output.engineUsed).toContain("fallback");
-      }
+      // Authentication failures are actionable and must not silently switch services.
+      expect(result.success).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      if (!result.success) expect(result.error).toContain("401");
     });
 
     it("should respect maxResults limit", async () => {
@@ -825,7 +865,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(manyResults),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       await webSearchTool.execute({ query: "test", maxResults: 3, engine: "tavily" }, ctx);
 
@@ -841,7 +881,7 @@ describe("webSearchTool", () => {
         ok: true,
         json: () => Promise.resolve(mockTavilyResponse),
       });
-      mockFetchWithPool.mockImplementation(fetchMock);
+      useFetchMock(fetchMock);
 
       await webSearchTool.execute({ query: "test", maxResults: 10, engine: "tavily" }, ctx);
 

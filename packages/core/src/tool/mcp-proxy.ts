@@ -608,6 +608,7 @@ class MCPProxyImpl implements MCPProxy {
       name: prefixedName,
       description: mcpTool.description ?? `MCP tool: ${mcpTool.name}`,
       parameters,
+      inputSchema: mcpTool.inputSchema ? { ...mcpTool.inputSchema } : undefined,
       kind: "mcp",
       execute: async (input: unknown, _ctx: ToolContext): Promise<ToolResult<unknown>> => {
         try {

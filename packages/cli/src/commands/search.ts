@@ -1,431 +1,265 @@
-/**
- * Web Search Slash Commands
- *
- * Provides slash commands for configuring web search settings:
- * - /websearch - Interactive configuration menu (when no args)
- * - /websearch engine <name> - Set default search engine
- * - /websearch key <provider> <key> - Set API key for search provider
- * - /websearch depth <level> - Set search depth
- * - /websearch test - Test current configuration
- * - /websearch show - Show current configuration
- *
- * @module cli/commands/web-search
- */
-
-import { loadSettings, saveSettings } from "../tui/i18n/index.js";
+/** Live configuration for search_tool and fetch_tool; secrets use the credential store. */
+import {
+  resolveWebProvider,
+  WEB_PROVIDER_IDS,
+  type WebProviderId,
+  type WebToolSettings,
+} from "@vellum/core";
+import { loadSettings, saveSettings } from "../tui/i18n/settings-integration.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, interactive, success } from "./types.js";
+import { configureWebToolsForCli } from "./web-tools-runtime.js";
 
-// =============================================================================
-// Types
-// =============================================================================
+const SEARCH_ENGINES = [
+  "auto",
+  "deepseek",
+  "tavily",
+  "brave",
+  "exa",
+  "serper",
+  "anysearch",
+  "searxng",
+  "google",
+  "bing",
+  "duckduckgo",
+] as const;
+const FETCH_PROVIDERS = ["auto", "deepseek", "jina", "firecrawl", "direct"] as const;
+const KEY_PROVIDERS = WEB_PROVIDER_IDS.filter(
+  (provider) => provider !== "direct" && provider !== "duckduckgo"
+);
 
-/**
- * Search settings interface for web search configuration
- */
-interface SearchSettings {
-  engine?: "auto" | "tavily" | "duckduckgo" | "google" | "bing";
-  tavilyApiKey?: string;
-  serpApiKey?: string;
-  defaultMaxResults?: number;
-  searchDepth?: "basic" | "advanced";
+function updateSettings(update: (settings: WebToolSettings) => void): CommandResult {
+  const settings = loadSettings();
+  const search = structuredClone(settings.search ?? {});
+  update(search);
+  if (!saveSettings({ ...settings, search }))
+    return error("INTERNAL_ERROR", "Could not save web tool settings.");
+  return success("Web tool settings saved and active for the next request.");
 }
 
-// =============================================================================
-// Constants
-// =============================================================================
-
-const VALID_ENGINES = ["auto", "tavily", "duckduckgo", "google", "bing"] as const;
-const VALID_DEPTHS = ["basic", "advanced"] as const;
-const VALID_KEY_PROVIDERS = ["tavily", "serpapi"] as const;
-
-/**
- * Provider-specific API key format hints for search providers
- */
-const SEARCH_PROVIDER_HINTS: Record<
-  string,
-  { formatHint: string; helpText: string; documentationUrl?: string }
-> = {
-  tavily: {
-    formatHint: "tvly-...",
-    helpText: "Your Tavily key starts with tvly-",
-    documentationUrl: "https://tavily.com/",
-  },
-  serpapi: {
-    formatHint: "...",
-    helpText: "Your SerpAPI key",
-    documentationUrl: "https://serpapi.com/dashboard",
-  },
-};
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/**
- * Mask an API key to show only last 4 characters
- */
-function maskKey(key: string | undefined): string {
-  if (!key) return "(not set)";
-  return `***${key.slice(-4)}`;
+function isProvider(value: string): value is WebProviderId {
+  return WEB_PROVIDER_IDS.some((provider) => provider === value);
 }
 
-/**
- * Get search settings from loaded settings
- */
-function getSearchSettings(settings: Record<string, unknown>): SearchSettings {
-  return (settings as { search?: SearchSettings }).search || {};
+async function setKey(
+  ctx: CommandContext,
+  provider: string,
+  value: string
+): Promise<CommandResult> {
+  if (!isProvider(provider) || provider === "direct" || provider === "duckduckgo")
+    return error("INVALID_ARGUMENT", `Choose: ${KEY_PROVIDERS.join(", ")}`);
+  if (!value.trim()) return error("INVALID_ARGUMENT", "API key cannot be empty.");
+  const saved = await ctx.credentials.store({
+    provider: `web:${provider}`,
+    type: "api_key",
+    value: value.trim(),
+    metadata: {},
+  });
+  if (!saved.ok)
+    return error("INTERNAL_ERROR", "Could not save the API key in the credential store.");
+  const result = updateSettings((search) => {
+    if (search.providers?.[provider]) delete search.providers[provider]?.apiKey;
+    if (provider === "tavily") delete search.tavilyApiKey;
+    if (provider === "serpapi") delete search.serpApiKey;
+  });
+  if (result.kind === "error") return result;
+  return success(`${provider} web API key saved. Existing model credentials were not changed.`);
 }
 
-// =============================================================================
-// Command Implementation
-// =============================================================================
+function keyPrompt(ctx: CommandContext, provider?: string): CommandResult {
+  if (!provider)
+    return interactive({
+      inputType: "select",
+      title: "Web API key",
+      message: "Choose a provider",
+      options: [...KEY_PROVIDERS],
+      handler: async (choice) => keyPrompt(ctx, choice),
+    });
+  if (!isProvider(provider))
+    return error("INVALID_ARGUMENT", `Choose: ${KEY_PROVIDERS.join(", ")}`);
+  return interactive({
+    inputType: "password",
+    title: `${provider} web API key`,
+    message: "API key:",
+    helpText:
+      provider === "deepseek"
+        ? "Optional: an existing DeepSeek model key is reused automatically."
+        : "Saved in the existing credential store.",
+    handler: async (value) => setKey(ctx, provider, value),
+  });
+}
+
+function selectSetting(setting: "engine" | "fetch" | "depth"): CommandResult {
+  const options =
+    setting === "engine"
+      ? SEARCH_ENGINES
+      : setting === "fetch"
+        ? FETCH_PROVIDERS
+        : ["basic", "advanced"];
+  return interactive({
+    inputType: "select",
+    title: "Web tool settings",
+    message: `Choose ${setting}`,
+    options: [...options],
+    handler: async (choice) => setChoice(setting, choice),
+  });
+}
+
+function setChoice(setting: "engine" | "fetch" | "depth", value: string): CommandResult {
+  if (setting === "engine" && SEARCH_ENGINES.some((item) => item === value)) {
+    return updateSettings((search) => {
+      search.engine = value as WebToolSettings["engine"];
+    });
+  }
+  if (setting === "fetch" && FETCH_PROVIDERS.some((item) => item === value)) {
+    return updateSettings((search) => {
+      search.fetchProvider = value as WebToolSettings["fetchProvider"];
+    });
+  }
+  if (setting === "depth" && (value === "basic" || value === "advanced")) {
+    return updateSettings((search) => {
+      search.searchDepth = value;
+    });
+  }
+  return error(
+    "INVALID_ARGUMENT",
+    `Invalid ${setting}. Choose: ${(setting === "engine" ? SEARCH_ENGINES : setting === "fetch" ? FETCH_PROVIDERS : ["basic", "advanced"]).join(", ")}`
+  );
+}
+
+async function showConfiguration(): Promise<CommandResult> {
+  const search = loadSettings().search ?? {};
+  const statuses = await Promise.all(
+    KEY_PROVIDERS.map(async (provider) => {
+      const resolved = await resolveWebProvider(provider);
+      return `${provider}: ${!resolved.enabled ? "disabled" : resolved.apiKey ? "key configured" : provider === "searxng" && resolved.baseUrl ? "endpoint configured" : "no key configured"}`;
+    })
+  );
+  return success(
+    [
+      "**Web tool configuration**",
+      `Search: ${search.engine ?? "auto"}; fetch: ${search.fetchProvider ?? "auto"}`,
+      `Results: ${search.defaultMaxResults ?? 10}; depth: ${search.searchDepth ?? "basic"}; timeout: ${search.timeout ? `${search.timeout} ms` : "tool default"}; auto fallback: ${search.fallback !== false ? "on" : "off"}`,
+      ...statuses,
+      "Auto mode prefers an available DeepSeek key, then configured alternatives. DuckDuckGo/direct fetch are available without a key unless disabled.",
+      "Configuration checked only; no network probe was sent.",
+    ].join("\n")
+  );
+}
+
+function mainMenu(ctx: CommandContext): CommandResult {
+  return interactive({
+    inputType: "select",
+    title: "Search & Fetch",
+    message: "What would you like to configure?",
+    options: ["Search provider", "Fetch provider", "API key", "Search depth", "Show configuration"],
+    handler: async (choice) => {
+      if (choice === "Search provider") return selectSetting("engine");
+      if (choice === "Fetch provider") return selectSetting("fetch");
+      if (choice === "API key") return keyPrompt(ctx);
+      if (choice === "Search depth") return selectSetting("depth");
+      return showConfiguration();
+    },
+  });
+}
 
 export const webSearchCommand: SlashCommand = {
   name: "websearch",
-  description: "Configure web search settings",
+  aliases: ["ws", "webtools"],
+  description: "Configure search_tool and fetch_tool providers, keys and defaults",
   kind: "builtin",
   category: "config",
-  aliases: ["ws"],
   positionalArgs: [
     {
       name: "action",
       type: "string",
-      description: "Action: show, engine, key, depth, test",
+      description:
+        "show, engine, fetch, key, endpoint, enable, disable, fallback, results, timeout, depth, test",
       required: false,
     },
-    {
-      name: "value",
-      type: "string",
-      description: "Value to set",
-      required: false,
-    },
+    { name: "value", type: "string", description: "Setting value", required: false },
   ],
   examples: [
-    "/websearch                    - Interactive configuration menu",
-    "/websearch show               - Show current search config",
-    "/websearch engine tavily      - Set default engine",
-    "/websearch key tavily <key>   - Set Tavily API key",
-    "/websearch key serpapi <key>  - Set SerpAPI key",
-    "/websearch depth advanced     - Set search depth",
-    "/websearch test               - Test current configuration",
+    "/websearch",
+    "/websearch engine auto",
+    "/websearch fetch deepseek",
+    "/websearch key brave",
+    "/websearch endpoint searxng https://search.example.com",
+    "/websearch disable deepseek",
+    "/websearch show",
   ],
-  execute: async (ctx: CommandContext): Promise<CommandResult> => {
-    const positional = ctx.parsedArgs.positional as string[];
-    const [action, ...args] = positional;
-    const settings = loadSettings();
-    const search = getSearchSettings(settings);
-
-    // Interactive menu when no arguments provided
-    if (!action) {
-      return showMainMenu(settings, search);
-    }
-
-    // Show current configuration
-    if (action === "show") {
-      return showConfiguration(search);
-    }
-
-    // Set search engine
-    if (action === "engine") {
-      const engine = args[0];
-      if (!engine) {
-        return showEngineMenu(settings, search);
+  execute: async (ctx) => {
+    configureWebToolsForCli(ctx.credentials);
+    const [action, value, extra] = ctx.parsedArgs.positional.map((arg) =>
+      arg === undefined ? undefined : String(arg)
+    );
+    if (!action) return mainMenu(ctx);
+    if (action === "show" || action === "test") return showConfiguration();
+    if (action === "engine" || action === "fetch" || action === "depth")
+      return value ? setChoice(action, value) : selectSetting(action);
+    if (action === "key") return value && extra ? setKey(ctx, value, extra) : keyPrompt(ctx, value);
+    if (action === "endpoint") {
+      if (!value || !isProvider(value) || !extra)
+        return error(
+          "INVALID_ARGUMENT",
+          "Usage: /websearch endpoint <provider> <https://endpoint|default>"
+        );
+      if (extra !== "default") {
+        try {
+          const url = new URL(extra);
+          if (
+            !["https:", "http:"].includes(url.protocol) ||
+            url.username ||
+            url.password ||
+            url.search ||
+            url.hash
+          )
+            throw new Error("Invalid endpoint");
+        } catch {
+          return error(
+            "INVALID_ARGUMENT",
+            "Endpoint must be an HTTP(S) URL without credentials, query parameters, or fragment."
+          );
+        }
       }
-      return setEngine(settings, search, engine);
+      return updateSettings((search) => {
+        search.providers ??= {};
+        search.providers[value] = {
+          ...search.providers[value],
+          baseUrl: extra === "default" ? undefined : extra,
+        };
+      });
     }
-
-    // Set API key
-    if (action === "key") {
-      const provider = args[0];
-      const key = args[1];
-      if (!provider) {
-        return showKeyProviderMenu(settings);
-      }
-      if (!key) {
-        return showKeyInputPrompt(settings, provider);
-      }
-      return setApiKey(settings, search, provider, key);
+    if (action === "enable" || action === "disable") {
+      if (!value || !isProvider(value))
+        return error("INVALID_ARGUMENT", "Choose a configured search/fetch provider.");
+      return updateSettings((search) => {
+        search.providers ??= {};
+        search.providers[value] = { ...search.providers[value], enabled: action === "enable" };
+      });
     }
-
-    // Set search depth
-    if (action === "depth") {
-      const depth = args[0];
-      if (!depth) {
-        return showDepthMenu(settings, search);
-      }
-      return setDepth(settings, search, depth);
+    if (action === "fallback") {
+      if (value !== "on" && value !== "off")
+        return error("INVALID_ARGUMENT", "Usage: /websearch fallback on|off");
+      return updateSettings((search) => {
+        search.fallback = value === "on";
+      });
     }
-
-    // Test configuration
-    if (action === "test") {
-      return testConfiguration(search);
+    if (action === "results" || action === "timeout") {
+      const count = Number(value);
+      const max = action === "results" ? 50 : 120000;
+      if (!Number.isInteger(count) || count < 1 || count > max)
+        return error("INVALID_ARGUMENT", `${action} must be an integer between 1 and ${max}.`);
+      return updateSettings((search) => {
+        if (action === "results") search.defaultMaxResults = count;
+        else search.timeout = count;
+      });
     }
-
     return error(
       "INVALID_ARGUMENT",
-      `Unknown action: ${action}. Use: show, engine, key, depth, test`
+      "Use: show, engine, fetch, key, endpoint, enable, disable, fallback, results, timeout, depth, test"
     );
   },
 };
 
-// =============================================================================
-// Interactive Menus
-// =============================================================================
-
-/**
- * Show main configuration menu
- */
-function showMainMenu(settings: Record<string, unknown>, search: SearchSettings): CommandResult {
-  return interactive({
-    inputType: "select",
-    message: "What would you like to configure?",
-    title: "🔍 Web Search Configuration",
-    options: [
-      "Set search engine",
-      "Set API key (secure)",
-      "Set search depth",
-      "Test configuration",
-      "Show current settings",
-    ],
-    handler: async (choice: string): Promise<CommandResult> => {
-      switch (choice) {
-        case "Set search engine":
-          return showEngineMenu(settings, search);
-        case "Set API key (secure)":
-          return showKeyProviderMenu(settings);
-        case "Set search depth":
-          return showDepthMenu(settings, search);
-        case "Test configuration":
-          return testConfiguration(search);
-        case "Show current settings":
-          return showConfiguration(search);
-        default:
-          return error("INVALID_ARGUMENT", `Unknown option: ${choice}`);
-      }
-    },
-    onCancel: () => success("Configuration cancelled"),
-  });
-}
-
-/**
- * Show search engine selection menu
- */
-function showEngineMenu(settings: Record<string, unknown>, search: SearchSettings): CommandResult {
-  const currentEngine = search.engine || "auto";
-  return interactive({
-    inputType: "select",
-    message: `Select search engine (current: ${currentEngine})`,
-    title: "🔍 Search Engine",
-    options: VALID_ENGINES.map((e) => (e === currentEngine ? `${e} ✓` : e)),
-    handler: async (choice: string): Promise<CommandResult> => {
-      // Remove the checkmark if present
-      const engine = choice.replace(" ✓", "");
-      return setEngine(settings, search, engine);
-    },
-    onCancel: () => success("Engine selection cancelled"),
-  });
-}
-
-/**
- * Show API key provider selection menu
- */
-function showKeyProviderMenu(settings: Record<string, unknown>): CommandResult {
-  return interactive({
-    inputType: "select",
-    message: "Select provider to configure API key",
-    title: "🔑 API Key Provider",
-    options: ["Tavily", "SerpAPI"],
-    handler: async (choice: string): Promise<CommandResult> => {
-      const provider = choice.toLowerCase();
-      return showKeyInputPrompt(settings, provider);
-    },
-    onCancel: () => success("API key setup cancelled"),
-  });
-}
-
-/**
- * Show API key input prompt (password masked)
- */
-function showKeyInputPrompt(settings: Record<string, unknown>, provider: string): CommandResult {
-  const normalizedProvider = provider.toLowerCase();
-
-  if (!VALID_KEY_PROVIDERS.includes(normalizedProvider as (typeof VALID_KEY_PROVIDERS)[number])) {
-    return error(
-      "INVALID_ARGUMENT",
-      `Unknown provider: ${provider}. Use: ${VALID_KEY_PROVIDERS.join(" or ")}`
-    );
-  }
-
-  const hints = SEARCH_PROVIDER_HINTS[normalizedProvider];
-  const displayName = normalizedProvider.charAt(0).toUpperCase() + normalizedProvider.slice(1);
-
-  return interactive({
-    inputType: "password",
-    message: `${displayName} API Key:`,
-    title: `🔑 Set ${displayName} API Key`,
-    placeholder: hints?.formatHint,
-    helpText: hints?.helpText,
-    formatHint: hints?.formatHint,
-    documentationUrl: hints?.documentationUrl,
-    handler: async (value: string): Promise<CommandResult> => {
-      if (!value.trim()) {
-        return error("INVALID_ARGUMENT", "❌ API key cannot be empty");
-      }
-
-      const search = getSearchSettings(settings);
-      if (normalizedProvider === "tavily") {
-        search.tavilyApiKey = value.trim();
-      } else if (normalizedProvider === "serpapi") {
-        search.serpApiKey = value.trim();
-      }
-      saveSettings({ ...settings, search });
-      return success(`✅ ${displayName} API key saved`);
-    },
-    onCancel: () => ({
-      kind: "error" as const,
-      code: "COMMAND_ABORTED" as const,
-      message: "API key setup cancelled",
-    }),
-  });
-}
-
-/**
- * Show search depth selection menu
- */
-function showDepthMenu(settings: Record<string, unknown>, search: SearchSettings): CommandResult {
-  const currentDepth = search.searchDepth || "basic";
-  return interactive({
-    inputType: "select",
-    message: `Select search depth (current: ${currentDepth})`,
-    title: "📊 Search Depth",
-    options: VALID_DEPTHS.map((d) => (d === currentDepth ? `${d} ✓` : d)),
-    handler: async (choice: string): Promise<CommandResult> => {
-      // Remove the checkmark if present
-      const depth = choice.replace(" ✓", "");
-      return setDepth(settings, search, depth);
-    },
-    onCancel: () => success("Depth selection cancelled"),
-  });
-}
-
-// =============================================================================
-// Direct Action Handlers
-// =============================================================================
-
-/**
- * Show current configuration
- */
-function showConfiguration(search: SearchSettings): CommandResult {
-  const display = {
-    engine: search.engine || "auto",
-    tavilyApiKey: maskKey(search.tavilyApiKey),
-    serpApiKey: maskKey(search.serpApiKey),
-    defaultMaxResults: search.defaultMaxResults || 10,
-    searchDepth: search.searchDepth || "basic",
-    envTavily: process.env.TAVILY_API_KEY ? "set" : "not set",
-    envSerpApi: process.env.SERPAPI_KEY ? "set" : "not set",
-  };
-  return success(
-    `**Search Configuration**\n\`\`\`json\n${JSON.stringify(display, null, 2)}\n\`\`\``
-  );
-}
-
-/**
- * Set search engine
- */
-function setEngine(
-  settings: Record<string, unknown>,
-  search: SearchSettings,
-  engine: string
-): CommandResult {
-  if (!VALID_ENGINES.includes(engine as (typeof VALID_ENGINES)[number])) {
-    return error(
-      "INVALID_ARGUMENT",
-      `Invalid engine: ${engine}. Valid: ${VALID_ENGINES.join(", ")}`
-    );
-  }
-  search.engine = engine as SearchSettings["engine"];
-  saveSettings({ ...settings, search });
-  return success(`✅ Search engine set to: ${engine}`);
-}
-
-/**
- * Set API key directly (for backward compatibility)
- */
-function setApiKey(
-  settings: Record<string, unknown>,
-  search: SearchSettings,
-  provider: string,
-  key: string
-): CommandResult {
-  if (provider === "tavily") {
-    search.tavilyApiKey = key;
-    // Ensure the web_search tool, which reads from environment variables,
-    // can see this key immediately.
-    process.env.TAVILY_API_KEY = key;
-    saveSettings({ ...settings, search });
-    return success("✅ Tavily API key saved");
-  }
-  if (provider === "serpapi") {
-    search.serpApiKey = key;
-    // Ensure the web_search tool, which reads from environment variables,
-    // can see this key immediately.
-    process.env.SERPAPI_KEY = key;
-    saveSettings({ ...settings, search });
-    return success("✅ SerpAPI key saved");
-  }
-  return error(
-    "INVALID_ARGUMENT",
-    `Unknown provider: ${provider}. Use: ${VALID_KEY_PROVIDERS.join(" or ")}`
-  );
-}
-
-/**
- * Set search depth
- */
-function setDepth(
-  settings: Record<string, unknown>,
-  search: SearchSettings,
-  depth: string
-): CommandResult {
-  if (!VALID_DEPTHS.includes(depth as (typeof VALID_DEPTHS)[number])) {
-    return error("INVALID_ARGUMENT", `Invalid depth: ${depth}. Valid: ${VALID_DEPTHS.join(", ")}`);
-  }
-  search.searchDepth = depth as "basic" | "advanced";
-  saveSettings({ ...settings, search });
-  return success(`✅ Search depth set to: ${depth}`);
-}
-
-/**
- * Test current configuration
- */
-function testConfiguration(search: SearchSettings): CommandResult {
-  const tavilyKey = search.tavilyApiKey || process.env.TAVILY_API_KEY;
-  const serpApiKey = search.serpApiKey || process.env.SERPAPI_KEY;
-
-  const engines: string[] = [];
-  if (tavilyKey) {
-    engines.push("✅ Tavily (key configured)");
-  } else {
-    engines.push("❌ Tavily (no key)");
-  }
-  if (serpApiKey) {
-    engines.push("✅ SerpAPI (key configured)");
-  } else {
-    engines.push("❌ SerpAPI (no key)");
-  }
-  engines.push("✅ DuckDuckGo (always available, free)");
-
-  const activeEngine = tavilyKey ? "Tavily" : serpApiKey ? "SerpAPI" : "DuckDuckGo";
-
-  return success(
-    `**Search Engine Status**\n${engines.join("\n")}\n\n**Active Engine (auto mode):** ${activeEngine}`
-  );
-}
-
-// =============================================================================
-// Export
-// =============================================================================
-
-export const webSearchSlashCommands: readonly SlashCommand[] = [webSearchCommand] as const;
+export const webSearchSlashCommands: readonly SlashCommand[] = [webSearchCommand];

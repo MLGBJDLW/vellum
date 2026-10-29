@@ -25,6 +25,7 @@ import type {
   SlashCommand as EnhancedSlashCommand,
 } from "./types.js";
 import { error, interactive, success } from "./types.js";
+import { configureWebToolsForCli } from "./web-tools-runtime.js";
 
 // =============================================================================
 // Types
@@ -111,6 +112,7 @@ export async function createCredentialManager(): Promise<CredentialManager> {
     }
   });
   sharedCredentialManager = manager;
+  configureWebToolsForCli(manager);
   return manager;
 }
 

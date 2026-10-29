@@ -212,7 +212,7 @@ export class OpenAITransform extends AbstractProviderTransform<
     const warnings: TransformWarning[] = [];
 
     // Normalize empty content
-    const normalized = this.normalizeEmptyContent(messages);
+    const normalized = this.normalizeEmptyContent(messages, config);
 
     const result: OpenAIMessage[] = [];
 

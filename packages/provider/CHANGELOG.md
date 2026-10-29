@@ -1,5 +1,22 @@
 # @vellum/provider
 
+## 0.4.1
+
+### Patch Changes
+
+- Repair JSON Schema compatibility for tool parameters, including numeric bounds
+  and nested schemas. Preserve provider-specific reasoning and streamed tool calls
+  across tool-result continuations.
+- Use Google's native JSON Schema field, including tuple and reference preservation,
+  and honor endpoint, header, and timeout settings in inference and credential checks.
+- Apply Mistral/local message rules to actual requests; retain DeepSeek cache and
+  reasoning usage, supported low effort, and its 393216-token output limit.
+- Reject invalid tool arguments and incomplete/interrupted streams. Credential
+  probes use the configured provider endpoint and its own default model.
+- Keep environment credentials and account headers scoped to their provider.
+  Normalize legacy tuples without breaking references and require real completion
+  markers from Chat, Responses, Anthropic and Google streaming APIs.
+
 ## 0.4.0
 
 ### Minor Changes

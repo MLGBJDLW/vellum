@@ -103,6 +103,13 @@ export {
 } from "./doc-lookup.js";
 // Example tools (for demonstration)
 export { exampleReadFileTool, exampleWriteFileTool } from "./example-tools.js";
+// Network tools
+export {
+  type FetchToolOutput,
+  type FetchToolParams,
+  fetchTool,
+  fetchToolParamsSchema,
+} from "./fetch-tool.js";
 // File management tools (move, copy, delete, mkdir)
 export {
   type CopyFileOutput,
@@ -270,7 +277,15 @@ export {
   todoWriteParamsSchema,
   todoWriteTool,
 } from "./todo-write.js";
-// Network tools
+export {
+  configureWebTools,
+  getWebToolSettings,
+  resolveWebProvider,
+  WEB_PROVIDER_IDS,
+  type WebProviderId,
+  type WebProviderSettings,
+  type WebToolSettings,
+} from "./web/config.js";
 export {
   type WebFetchOutput,
   type WebFetchParams,
@@ -279,6 +294,7 @@ export {
 } from "./web-fetch.js";
 export {
   type SearchResult,
+  searchTool,
   type WebSearchOutput,
   type WebSearchParams,
   webSearchParamsSchema,
@@ -327,6 +343,7 @@ export const ALL_BUILTIN_TOOLS = [
   delegateAgentTool,
   deleteFileTool,
   docLookupTool,
+  fetchTool,
   globTool,
   insertAtLineTool,
   listDirTool,
@@ -338,6 +355,7 @@ export const ALL_BUILTIN_TOOLS = [
   saveMemoryTool,
   searchAndReplaceTool,
   searchFilesTool,
+  searchTool,
   shellTool,
   skillTool,
   smartEditTool,
@@ -384,6 +402,7 @@ import { browserTool } from "./browser.js";
 import { codebaseSearchTool } from "./codebase-search.js";
 import { delegateAgentTool } from "./delegate-agent.js";
 import { docLookupTool } from "./doc-lookup.js";
+import { fetchTool } from "./fetch-tool.js";
 import {
   copyFileTool,
   createDirectoryTool,
@@ -406,5 +425,5 @@ import { smartEditTool } from "./smart-edit-tool.js";
 import { todoManageTool } from "./todo-manage.js";
 import { todoWriteTool } from "./todo-write.js";
 import { webFetchTool } from "./web-fetch.js";
-import { webSearchTool } from "./web-search.js";
+import { searchTool, webSearchTool } from "./web-search.js";
 import { writeFileTool } from "./write-file.js";

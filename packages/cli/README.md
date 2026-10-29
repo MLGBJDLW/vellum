@@ -115,9 +115,12 @@ The CLI provides a powerful slash command system for quick actions and configura
 | `/login [provider]` | `/signin` | Add credential for a provider |
 | `/logout [provider]` | `/signout` | Remove credential for a provider |
 | `/credentials` | | Show credential status |
+| `/websearch` | `/ws`, `/webtools` | Configure search/fetch services, keys and defaults |
 | `/language [code]` | `/lang` | Show or change UI language |
 
 ### Command Syntax
+
+Search and page extraction can reuse an existing DeepSeek credential. See [web tool configuration](../../docs/tools/web.md) for supported services, masked key setup and provider selection.
 
 ```bash
 # Basic command

@@ -1,5 +1,23 @@
 # @butlerw/vellum
 
+## 0.5.1
+
+### Patch Changes
+
+- Add configurable `search_tool` and `fetch_tool`, automatically reusing an existing
+  DeepSeek API credential. Support multiple search/extraction services through
+  `/websearch` (`/webtools`), with dedicated web keys in the existing credential store.
+- Repair JSON Schema compatibility for tool parameters, including numeric bounds,
+  optional defaults, and nested schemas. Preserve provider-specific reasoning and
+  streamed tool calls across tool-result continuations.
+- Preserve MCP schemas and map provider-incompatible tool names without changing
+  registry identities. Use Google's native JSON Schema transport and honor its
+  configured endpoint, headers, and timeout.
+- Preserve error codes and retry decisions through the agent loop. Reject malformed
+  tool arguments and interrupted streams instead of reporting successful completion.
+- Normalize tuple schemas and reference scopes, isolate provider credentials and
+  endpoints, and verify native stream termination before releasing tool calls.
+
 ## 0.5.0
 
 ### Minor Changes

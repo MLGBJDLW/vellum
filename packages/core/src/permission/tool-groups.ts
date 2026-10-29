@@ -142,7 +142,7 @@ export const PERMISSION_TOOL_GROUPS: Record<PermissionToolGroupName, ToolGroupDe
 
   web: {
     name: "web",
-    tools: ["browser", "web_fetch", "web_search"],
+    tools: ["browser", "fetch_tool", "search_tool", "web_fetch", "web_search"],
     description: "Web browsing and HTTP operations",
   },
 

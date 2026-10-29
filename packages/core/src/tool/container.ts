@@ -3,7 +3,7 @@
 // ============================================
 
 import type { ToolDefinition as ProviderToolDefinition } from "@vellum/provider";
-import { z } from "zod";
+import type { z } from "zod";
 
 import { ALL_BUILTIN_TOOLS } from "../builtin/index.js";
 import type { EventBus } from "../events/bus.js";
@@ -13,6 +13,7 @@ import { ToolExecutor } from "./executor.js";
 import type { LoadToolsResult } from "./loader.js";
 import { loadCustomTools } from "./loader.js";
 import type { GetDefinitionsFilter, LLMToolDefinition } from "./registry.js";
+import { getToolInputSchema } from "./schema.js";
 
 // =============================================================================
 // ToolContainerConfig Interface
@@ -280,11 +281,7 @@ export class UnifiedToolContainer {
         continue;
       }
 
-      // Convert Zod schema to JSON Schema using Zod v4 native function
-      const jsonSchema = z.toJSONSchema(tool.definition.parameters, {
-        target: "openapi-3.0",
-        unrepresentable: "any",
-      });
+      const jsonSchema = getToolInputSchema(tool.definition);
 
       definitions.push({
         name: tool.definition.name,
@@ -332,11 +329,7 @@ export class UnifiedToolContainer {
         continue;
       }
 
-      // Convert Zod schema to JSON Schema using Zod v4 native function
-      const jsonSchema = z.toJSONSchema(tool.definition.parameters, {
-        target: "openapi-3.0",
-        unrepresentable: "any",
-      });
+      const jsonSchema = getToolInputSchema(tool.definition);
 
       definitions.push({
         name: tool.definition.name,

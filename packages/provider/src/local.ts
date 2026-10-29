@@ -12,6 +12,7 @@
  */
 
 import { fetchWithPool } from "@vellum/shared";
+import { getCredentialEnvVars } from "./credential-env.js";
 
 import { getProviderModels } from "./models/catalog.js";
 import { normalizeDiscoveredModels } from "./models/discovery.js";
@@ -98,16 +99,23 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
   async initialize(options: ProviderOptions): Promise<void> {
     // For local providers, we don't require an API key
     // Pass a placeholder if none provided to satisfy parent class
+    const apiKey =
+      options.apiKey ??
+      getCredentialEnvVars(this.providerName)
+        .map((name) => process.env[name]?.trim())
+        .find(Boolean);
     const finalOptions: ProviderOptions = {
       ...options,
-      apiKey: options.apiKey ?? "local-no-key-required",
-      baseUrl: options.baseUrl ?? this.defaultBaseUrl,
+      apiKey: apiKey || "local-no-key-required",
+      baseUrl:
+        options.baseUrl ??
+        (process.env[`${this.providerName.toUpperCase()}_BASE_URL`]?.trim() || this.defaultBaseUrl),
     };
     await super.initialize(finalOptions);
     this.configuredBaseUrl = finalOptions.baseUrl;
     const headers = new Headers(options.headers);
-    if (options.apiKey && !headers.has("authorization")) {
-      headers.set("authorization", `Bearer ${options.apiKey}`);
+    if (apiKey && !headers.has("authorization")) {
+      headers.set("authorization", `Bearer ${apiKey}`);
     }
     this.discoveryHeaders = Object.fromEntries(headers);
   }

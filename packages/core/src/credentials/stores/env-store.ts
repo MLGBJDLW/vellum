@@ -7,7 +7,13 @@
  * @module credentials/stores/env-store
  */
 
+import {
+  getCredentialEnvVars,
+  PROVIDER_CREDENTIAL_ENV_VARS as PROVIDER_ENV_VARS,
+} from "@vellum/provider";
 import { Err, Ok, type Result } from "../../types/result.js";
+
+export { getCredentialEnvVars };
 
 import {
   type Credential,
@@ -16,40 +22,6 @@ import {
   type CredentialStoreError,
   createStoreError,
 } from "../types.js";
-
-// =============================================================================
-// Environment Variable Mappings
-// =============================================================================
-
-/**
- * Standard environment variable names for LLM providers
- */
-const PROVIDER_ENV_VARS: Record<string, readonly string[]> = {
-  anthropic: ["ANTHROPIC_API_KEY"],
-  openai: ["OPENAI_API_KEY"],
-  google: ["GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY"],
-  azure: ["AZURE_OPENAI_API_KEY", "AZURE_API_KEY"],
-  mistral: ["MISTRAL_API_KEY"],
-  cohere: ["COHERE_API_KEY"],
-  groq: ["GROQ_API_KEY"],
-  together: ["TOGETHER_API_KEY"],
-  perplexity: ["PERPLEXITY_API_KEY"],
-  fireworks: ["FIREWORKS_API_KEY"],
-  replicate: ["REPLICATE_API_TOKEN", "REPLICATE_API_KEY"],
-  huggingface: ["HUGGINGFACE_API_KEY", "HF_TOKEN", "HF_API_KEY"],
-  deepseek: ["DEEPSEEK_API_KEY"],
-  xai: ["XAI_API_KEY"],
-  openrouter: ["OPENROUTER_API_KEY"],
-  qwen: ["QWEN_API_KEY", "DASHSCOPE_API_KEY"],
-  moonshot: ["MOONSHOT_API_KEY", "MOONSHOTAI_API_KEY"],
-  zhipu: ["ZHIPU_API_KEY", "ZHIPUAI_API_KEY", "ZAI_API_KEY"],
-  yi: ["YI_API_KEY"],
-  baichuan: ["BAICHUAN_API_KEY"],
-  doubao: ["DOUBAO_API_KEY", "ARK_API_KEY"],
-  minimax: ["MINIMAX_API_KEY"],
-  ollama: ["OLLAMA_API_KEY"],
-  lmstudio: ["LMSTUDIO_API_KEY"],
-} as const;
 
 /**
  * Generate a masked hint from a credential value
@@ -67,11 +39,6 @@ function generateMaskedHint(value: string): string {
  */
 function normalizeProvider(provider: string): string {
   return provider.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-/** Environment names used by credential discovery and user-facing setup hints. */
-export function getCredentialEnvVars(provider: string): readonly string[] {
-  return PROVIDER_ENV_VARS[normalizeProvider(provider)] ?? [`${provider.toUpperCase()}_API_KEY`];
 }
 
 // =============================================================================

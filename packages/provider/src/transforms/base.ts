@@ -195,9 +195,23 @@ export abstract class AbstractProviderTransform<
    * // Messages with empty string or [] content are removed
    * ```
    */
-  protected normalizeEmptyContent(messages: CompletionMessage[]): CompletionMessage[] {
+  protected normalizeEmptyContent(
+    messages: CompletionMessage[],
+    config?: TransformConfig
+  ): CompletionMessage[] {
     return messages.filter((message) => {
       const { content } = message;
+
+      const metadata = message.providerMetadata;
+      if (
+        message.role === "assistant" &&
+        config &&
+        config.provider !== "groq" &&
+        metadata?.provider === config.provider &&
+        metadata.model === config.modelId &&
+        (metadata.reasoningContent !== undefined || metadata.replay?.length)
+      )
+        return true;
 
       // Empty string content
       if (typeof content === "string") {

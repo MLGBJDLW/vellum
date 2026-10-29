@@ -31,18 +31,13 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          # Check if this is a Version PR merge push (commit message contains "chore: release")
-          if [[ "$COMMIT_MSG" == *"chore: release"* ]] && [[ "$EVENT_NAME" == "push" ]]; then
-            echo "skip-full-ci=true" >> $GITHUB_OUTPUT
-            echo "::notice::Skipping full CI - Version PR merge detected"
-          else
-            echo "skip-full-ci=false" >> $GITHUB_OUTPUT
-          fi
+          # Release titles must never bypass the full validation matrix.
+          echo "skip-full-ci=false" >> $GITHUB_OUTPUT
 
           # Check if this is a Version PR
           if [[ "$PR_TITLE" == "chore: release"* ]]; then
             echo "is-version-pr=true" >> $GITHUB_OUTPUT
-            echo "::notice::Version PR detected - will run quick check only"
+            echo "::notice::Version PR detected - only the changeset reminder is skipped"
           else
             echo "is-version-pr=false" >> $GITHUB_OUTPUT
           fi
@@ -52,7 +47,7 @@ jobs:
     needs: should-skip
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
+    if: needs.should-skip.outputs.skip-full-ci != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -79,7 +74,7 @@ jobs:
     needs: should-skip
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
+    if: needs.should-skip.outputs.skip-full-ci != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -110,7 +105,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     # 45 min timeout for 12k+ tests across matrix combinations
     timeout-minutes: 45
-    if: needs.should-skip.outputs.skip-full-ci != 'true' && needs.should-skip.outputs.is-version-pr != 'true'
+    if: needs.should-skip.outputs.skip-full-ci != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -137,21 +132,14 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Test release gate
+        run: node --test scripts/__tests__/verify-release-ci.test.mjs
+
       - name: Run tests
         run: pnpm test:run
         env:
           # Extra memory for large test suites
           NODE_OPTIONS: "--max-old-space-size=8192"
-
-  # Quick check for Version PRs (fast pass)
-  quick-check:
-    name: Quick Check (Version PR)
-    needs: should-skip
-    if: needs.should-skip.outputs.is-version-pr == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Version PR Quick Pass
-        run: echo "✅ Version PR detected - skipping full CI"
 
   # Non-blocking check for changeset presence on PRs
   changeset-check:

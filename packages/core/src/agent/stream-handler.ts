@@ -17,10 +17,28 @@
 
 import type { ProviderResponseMetadata, StreamEvent } from "@vellum/provider";
 import type { TokenUsage } from "@vellum/shared";
+import { ErrorCode, VellumError } from "../errors/index.js";
 import type { Logger } from "../logger/logger.js";
 import type { LLMStreamEvent } from "../session/index.js";
 import type { StreamProcessor, UiEvent } from "../streaming/processor.js";
 import type { Result } from "../types/result.js";
+
+/** Preserve the provider decision through the stream processor and retry manager. */
+function streamEventError(event: {
+  code: string;
+  message: string;
+  retryable: boolean;
+}): VellumError {
+  const numericCode = Number(event.code);
+  const code =
+    Number.isInteger(numericCode) && typeof ErrorCode[numericCode] === "string"
+      ? (numericCode as ErrorCode)
+      : ErrorCode.API_ERROR;
+  return new VellumError(`[${event.code}] ${event.message}`, code, {
+    isRetryable: event.retryable,
+    context: { providerCode: event.code },
+  });
+}
 
 // ============================================================================
 // Types
@@ -288,7 +306,7 @@ export class AgentStreamHandler {
       }
 
       case "error":
-        throw new Error(`[${event.code}] ${event.message}`);
+        throw streamEventError(event);
 
       case "done":
         // Stream complete - handled by caller after loop exits
@@ -402,7 +420,9 @@ export class AgentStreamHandler {
         break;
 
       case "error":
-        this.deps.emitError(new Error(`[${event.error.code}] ${event.error.message}`));
+        // processWithStreamProcessor rethrows this error to the agent's retry
+        // owner. Emitting a terminal error here would report failure before a
+        // successful retry and duplicate the final error when retries exhaust.
         break;
 
       case "citation":
@@ -451,6 +471,15 @@ export class AgentStreamHandler {
       if (hasThinkingPart) {
         this.state.hasThinking = true;
       }
+
+      // The collector owns processor-mode text. Copy its successful result for
+      // AgentLoop's canonical history without emitting the visible chunks again.
+      this.state.accumulatedText = result.value.parts
+        .flatMap((part) => (part.type === "text" ? [part.content] : []))
+        .join("");
+      this.state.accumulatedReasoning = result.value.parts
+        .flatMap((part) => (part.type === "reasoning" ? [part.content] : []))
+        .join("");
 
       // Collect tool calls from parts
       for (const part of result.value.parts) {
@@ -528,7 +557,7 @@ export class AgentStreamHandler {
         if (event.type === "error") {
           yield {
             ok: false as const,
-            error: new Error(`[${event.code}] ${event.message}`),
+            error: streamEventError(event),
           };
           return;
         }

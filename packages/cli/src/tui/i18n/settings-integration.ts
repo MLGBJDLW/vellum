@@ -10,6 +10,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { WebToolSettings } from "@vellum/core";
 import { isConptyTerminal } from "../utils/detectTerminal.js";
 import { isLocaleSupported, type LocaleCode } from "./language-config.js";
 
@@ -83,6 +84,7 @@ export interface VellumSettings {
   mode?: string; // "vibe" | "plan" | "spec"
   diffViewMode?: DiffViewMode;
   noFlicker?: NoFlickerSettings;
+  search?: WebToolSettings;
   [key: string]: unknown;
 }
 

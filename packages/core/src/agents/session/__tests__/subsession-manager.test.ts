@@ -92,7 +92,7 @@ function createMockRegistry(
 /**
  * Creates a fully configured SubsessionManager for testing.
  */
-function createTestManager(): SubsessionManager {
+function createTestManager(resourceQuotaManager = createResourceQuotaManager()): SubsessionManager {
   const testTools = [
     createMockTool("read_file", "read"),
     createMockTool("write_file", "write"),
@@ -105,7 +105,7 @@ function createTestManager(): SubsessionManager {
   return createSubsessionManager({
     contextIsolator: createContextIsolator(),
     permissionInheritance: createPermissionInheritance(),
-    resourceQuotaManager: createResourceQuotaManager(),
+    resourceQuotaManager,
     baseToolRegistry: createMockRegistry(testTools),
   });
 }
@@ -603,34 +603,50 @@ describe("SubsessionManager", () => {
     });
 
     it("should track duration across multiple executions", async () => {
-      const manager = createTestManager();
+      // Wall-clock scheduling can turn a 20 ms sleep into more than the whole
+      // 50 ms quota on a loaded runner. Advance only Date, not real timers.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      try {
+        const quotaManager = createResourceQuotaManager();
+        const manager = createTestManager(quotaManager);
+        const subsession = manager.create({
+          agentSlug: "ouroboros",
+          level: AgentLevel.orchestrator,
+          quota: {
+            maxTokens: 100000,
+            maxDurationMs: 50,
+            maxSubagents: 3,
+            maxFileOps: 50,
+          },
+        });
 
-      const subsession = manager.create({
-        agentSlug: "ouroboros",
-        level: AgentLevel.orchestrator,
-        quota: {
-          maxTokens: 100000,
-          maxDurationMs: 50, // Very low duration limit
-          maxSubagents: 3,
-          maxFileOps: 50,
-        },
-      });
+        let total = 0;
+        for (const elapsed of [20, 10, 20]) {
+          await manager.execute(subsession.id, async () => {
+            vi.setSystemTime(Date.now() + elapsed);
+            return true;
+          });
+          total += elapsed;
+          expect(quotaManager.getStatus(subsession.id)?.usage.durationMs).toBe(total);
+          expect(subsession.status).toBe("active");
+        }
 
-      // First execution
-      await manager.execute(subsession.id, async () => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        return true;
-      });
-
-      // Second execution - should work if under limit
-      await manager.execute(subsession.id, async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        return true;
-      });
-
-      // Continue executing until duration limit exceeded
-      // The status will be set to suspended after the quota is consumed
-      expect(["active", "suspended"]).toContain(subsession.status);
+        await manager.execute(subsession.id, async () => {
+          vi.setSystemTime(Date.now() + 1);
+          return true;
+        });
+        // Rejected consumption does not mutate the quota counter.
+        expect(quotaManager.getStatus(subsession.id)?.usage.durationMs).toBe(50);
+        expect(subsession.status).toBe("suspended");
+        const nextOperation = vi.fn(async () => true);
+        await expect(manager.execute(subsession.id, nextOperation)).rejects.toThrow(
+          "Subsession is not active"
+        );
+        expect(nextOperation).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("should propagate errors from executed function", async () => {

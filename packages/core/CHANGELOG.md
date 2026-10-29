@@ -1,5 +1,20 @@
 # @vellum/core
 
+## 0.2.2
+
+### Patch Changes
+
+- Add shared search/fetch configuration, DeepSeek Search/Fetch and other configurable
+  web services, with bounded requests and provider fallback that preserves filters,
+  permissions and cancellation. Keep existing web tools compatible.
+- Generate JSON Schema input definitions for tools, preserving numeric constraints
+  and optional defaulted parameters across registry, container, and worker paths.
+- Preserve original MCP schemas and restore tool identities after provider-safe
+  name encoding. Carry typed provider failures through stream processing and retry
+  decisions, so schema errors stop and transient failures retain bounded retries.
+- Updated dependencies:
+  - @vellum/provider@0.4.1
+
 ## 0.2.1
 
 ### Patch Changes

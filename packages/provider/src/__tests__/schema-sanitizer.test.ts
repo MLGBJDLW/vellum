@@ -398,8 +398,8 @@ describe("sanitizeJsonSchema (generic)", () => {
 
     const result = sanitizeJsonSchema(schema, "openai");
 
-    expect(result).not.toHaveProperty("$id");
-    // OpenAI has better support, so propertyNames might be preserved
+    expect(result).toHaveProperty("$id", "test");
+    // Preserve reference scopes and property constraints for JSON Schema transports.
     expect(result).toHaveProperty("propertyNames");
   });
 });

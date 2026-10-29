@@ -17,14 +17,17 @@ import {
   type GenerateContentConfig,
   type GenerateContentResponse,
   GoogleGenAI,
+  type HttpOptions,
   type ThinkingConfig,
   ThinkingLevel,
   type Tool,
 } from "@google/genai";
 import { ErrorCode } from "@vellum/shared";
+import { getCredentialEnvVars } from "./credential-env.js";
 import { createProviderError, ProviderError } from "./errors.js";
 import type { ReasoningEffort } from "./models/index.js";
 import { getModelInfo } from "./models/index.js";
+import { validateToolArguments } from "./tool-arguments.js";
 import { googleTransform } from "./transforms/google.js";
 import type { TransformConfig } from "./transforms/types.js";
 import type {
@@ -62,6 +65,29 @@ import type {
  * Format: AIza*
  */
 const GOOGLE_KEY_PATTERN = /^AIza/;
+
+function googleEnvironmentKey(): string | undefined {
+  return getCredentialEnvVars("google")
+    .map((key) => process.env[key])
+    .find(Boolean);
+}
+
+function normalizeGoogleUsage(
+  metadata: GenerateContentResponse["usageMetadata"],
+  previous: TokenUsage = { inputTokens: 0, outputTokens: 0 }
+): TokenUsage {
+  return {
+    ...previous,
+    inputTokens: metadata?.promptTokenCount ?? previous.inputTokens,
+    outputTokens: metadata?.candidatesTokenCount ?? previous.outputTokens,
+    ...(metadata?.thoughtsTokenCount !== undefined && {
+      thinkingTokens: metadata.thoughtsTokenCount,
+    }),
+    ...(metadata?.cachedContentTokenCount !== undefined && {
+      cacheReadTokens: metadata.cachedContentTokenCount,
+    }),
+  };
+}
 
 /**
  * Default maximum tokens for completions
@@ -135,6 +161,7 @@ export class GoogleProvider implements Provider {
   private initialized = false;
   private apiKey: string | undefined;
   private configured = false;
+  private httpOptions: HttpOptions = {};
 
   /**
    * Create a new GoogleProvider
@@ -145,7 +172,7 @@ export class GoogleProvider implements Provider {
     this.apiKey = options?.apiKey;
     // If apiKey is provided, mark as configured
     // If not provided, SDK will use GOOGLE_GENERATIVE_AI_API_KEY env var
-    this.configured = !!this.apiKey || !!process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    this.configured = !!this.apiKey || !!googleEnvironmentKey();
   }
 
   // ===========================================================================
@@ -190,7 +217,7 @@ export class GoogleProvider implements Provider {
    * @returns true if configured with credentials
    */
   isConfigured(): boolean {
-    return this.configured;
+    return this.configured || !!googleEnvironmentKey();
   }
 
   /**
@@ -231,10 +258,10 @@ export class GoogleProvider implements Provider {
       );
     }
     try {
-      const apiKey = options.apiKey ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+      const apiKey = options.apiKey ?? this.apiKey ?? googleEnvironmentKey();
       if (process.env.VELLUM_DEBUG) {
         console.log(
-          `[GoogleProvider] Resolved apiKey from env: ${process.env.GOOGLE_GENERATIVE_AI_API_KEY ? "set" : "undefined"}`
+          `[GoogleProvider] Resolved apiKey from env: ${googleEnvironmentKey() ? "set" : "undefined"}`
         );
       }
 
@@ -249,7 +276,13 @@ export class GoogleProvider implements Provider {
         });
       }
 
-      this.client = new GoogleGenAI({ apiKey });
+      const httpOptions: HttpOptions = {
+        ...(options.baseUrl !== undefined && { baseUrl: options.baseUrl }),
+        ...(options.timeout !== undefined && { timeout: options.timeout }),
+        ...(options.headers !== undefined && { headers: { ...options.headers } }),
+      };
+      this.client = new GoogleGenAI({ apiKey, httpOptions });
+      this.httpOptions = httpOptions;
 
       this.apiKey = apiKey;
       this.initialized = true;
@@ -453,9 +486,9 @@ export class GoogleProvider implements Provider {
 
     // Make a test API call to verify the key works
     try {
-      const testClient = new GoogleGenAI({ apiKey });
+      const testClient = new GoogleGenAI({ apiKey, httpOptions: this.httpOptions });
       await testClient.models.generateContent({
-        model: "gemini-1.5-flash-8b",
+        model: this.getDefaultModel(),
         contents: [{ role: "user", parts: [{ text: "test" }] }],
         config: { maxOutputTokens: 1 },
       });
@@ -695,6 +728,7 @@ export class GoogleProvider implements Provider {
    */
   private normalizeResponse(response: GenerateContentResponse): CompletionResult {
     let content = "";
+    let thinking = "";
     const toolCalls: ToolCall[] = [];
 
     // Process candidates
@@ -702,37 +736,41 @@ export class GoogleProvider implements Provider {
     if (candidate?.content?.parts) {
       for (const part of candidate.content.parts) {
         if ("text" in part && part.text) {
-          content += part.text;
+          if (part.thought === true) thinking += part.text;
+          else content += part.text;
         } else if ("functionCall" in part && part.functionCall) {
           toolCalls.push({
             id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
             name: part.functionCall.name ?? "",
-            input: (part.functionCall.args ?? {}) as Record<string, unknown>,
+            input: validateToolArguments(
+              part.functionCall.args === undefined ? {} : part.functionCall.args
+            ),
           });
         }
       }
     }
 
     // Map finish reason to stop reason
-    const stopReason = this.mapFinishReason(candidate?.finishReason);
+    let stopReason = response.promptFeedback?.blockReason
+      ? ("content_filter" as StopReason)
+      : this.mapFinishReason(candidate?.finishReason);
+    if (toolCalls.length > 0 && stopReason === "end_turn") stopReason = "tool_use";
+    if (toolCalls.length > 0 && stopReason !== "tool_use") {
+      throw new ProviderError(`Google tool response did not complete: ${stopReason}`, {
+        code: ErrorCode.API_ERROR,
+        category: "api_error",
+        retryable: false,
+      });
+    }
 
     // Build token usage
-    const usage: TokenUsage = {
-      inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
-      outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
-    };
-
-    // Add thinking tokens if present (for 2.5 models with thinking)
-    if (response.usageMetadata && "thoughtsTokenCount" in response.usageMetadata) {
-      usage.thinkingTokens = (
-        response.usageMetadata as { thoughtsTokenCount?: number }
-      ).thoughtsTokenCount;
-    }
+    const usage = normalizeGoogleUsage(response.usageMetadata);
 
     return {
       content,
       usage,
       stopReason,
+      ...(thinking && { thinking }),
       ...(toolCalls.length > 0 && { toolCalls }),
     };
   }
@@ -745,14 +783,19 @@ export class GoogleProvider implements Provider {
     model: string
   ): AsyncIterable<StreamEvent> {
     // Track state for tool calls
-    let inputTokens = 0;
-    let outputTokens = 0;
+    let usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
     let stopReason: StopReason = "end_turn";
+    let finished = false;
     let toolCallIndex = 0;
     const replay: Record<string, unknown>[] = [];
+    const completedTools: StreamEvent[] = [];
 
     for await (const chunk of stream) {
       const candidate = chunk.candidates?.[0];
+      if (chunk.promptFeedback?.blockReason) {
+        stopReason = "content_filter";
+        finished = true;
+      }
 
       // Process content parts
       if (candidate?.content?.parts) {
@@ -794,7 +837,9 @@ export class GoogleProvider implements Provider {
           } else if ("functionCall" in part && part.functionCall) {
             const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             const name = part.functionCall.name ?? "";
-            const args = part.functionCall.args ?? {};
+            const args = validateToolArguments(
+              part.functionCall.args === undefined ? {} : part.functionCall.args
+            );
             const currentIndex = toolCallIndex++;
 
             // Emit new format tool_call_start event
@@ -830,7 +875,7 @@ export class GoogleProvider implements Provider {
               id: callId,
               index: currentIndex,
             };
-            yield endEvent;
+            completedTools.push(endEvent);
 
             // Also emit legacy toolCall for backward compatibility
             const toolCallEvent: StreamToolCallEvent = {
@@ -839,7 +884,7 @@ export class GoogleProvider implements Provider {
               name,
               input: args as Record<string, unknown>,
             };
-            yield toolCallEvent;
+            completedTools.push(toolCallEvent);
           }
         }
       }
@@ -847,13 +892,31 @@ export class GoogleProvider implements Provider {
       // Track finish reason
       if (candidate?.finishReason) {
         stopReason = this.mapFinishReason(candidate.finishReason);
+        finished = true;
       }
 
       // Track usage metadata
       if (chunk.usageMetadata) {
-        inputTokens = chunk.usageMetadata.promptTokenCount ?? 0;
-        outputTokens = chunk.usageMetadata.candidatesTokenCount ?? 0;
+        usage = normalizeGoogleUsage(chunk.usageMetadata, usage);
       }
+    }
+
+    if (!finished) {
+      throw new ProviderError("Google stream ended before a finish reason was received", {
+        code: ErrorCode.API_ERROR,
+        category: "network_error",
+        retryable: true,
+      });
+    }
+    if (completedTools.length > 0 && (stopReason === "end_turn" || stopReason === "tool_use")) {
+      stopReason = "tool_use";
+      yield* completedTools;
+    } else if (completedTools.length > 0) {
+      throw new ProviderError(`Google tool response did not complete: ${stopReason}`, {
+        code: ErrorCode.API_ERROR,
+        category: "api_error",
+        retryable: false,
+      });
     }
 
     if (replay.length > 0)
@@ -862,8 +925,7 @@ export class GoogleProvider implements Provider {
     // Emit usage event with new flat structure
     const usageEvent: StreamUsageEvent = {
       type: "usage",
-      inputTokens,
-      outputTokens,
+      ...usage,
     };
     yield usageEvent;
 
@@ -894,6 +956,13 @@ export class GoogleProvider implements Provider {
       case "BLOCKLIST":
       case "PROHIBITED_CONTENT":
         return "content_filter";
+      case "MALFORMED_FUNCTION_CALL":
+      case "UNEXPECTED_TOOL_CALL":
+        throw new ProviderError(`Google generation failed: ${reason}`, {
+          code: ErrorCode.API_ERROR,
+          category: "api_error",
+          retryable: false,
+        });
       default:
         return "end_turn";
     }

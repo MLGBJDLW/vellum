@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { z } from "zod";
 import type { ToolContext } from "../../types/tool.js";
+import { UnifiedToolContainer } from "../container.js";
 import {
   _internal,
   createMCPProxy,
@@ -725,6 +726,19 @@ describe("MCPProxy Tool Discovery", () => {
       const invalidParams = { limit: 5 };
       const failResult = searchTool.definition.parameters.safeParse(invalidParams);
       expect(failResult.success).toBe(false);
+    });
+
+    it("preserves the server input schema when publishing discovered tools", async () => {
+      const tools = await proxy.discoverTools();
+      const container = new UnifiedToolContainer();
+      container.registerTools(tools);
+      const exported = container.getProviderToolDefinitions()[0]?.inputSchema;
+      expect(exported).toEqual(sampleTools[0]?.inputSchema);
+      expect(exported).not.toBe(sampleTools[0]?.inputSchema);
+      if (exported) exported.required = [];
+      expect(container.getProviderToolDefinitions()[0]?.inputSchema).toEqual(
+        sampleTools[0]?.inputSchema
+      );
     });
 
     it("should handle tools without inputSchema", async () => {

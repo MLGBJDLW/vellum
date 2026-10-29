@@ -192,7 +192,7 @@ export class AnthropicTransform extends AbstractProviderTransform<
     const warnings: TransformWarning[] = [];
 
     // Normalize empty content
-    let normalized = this.normalizeEmptyContent(messages);
+    let normalized = this.normalizeEmptyContent(messages, config);
 
     // Apply caching if enabled
     if (config.enableCaching) {
@@ -223,8 +223,10 @@ export class AnthropicTransform extends AbstractProviderTransform<
             result.content = [
               ...replay,
               ...(typeof result.content === "string"
-                ? [{ type: "text" as const, text: result.content }]
-                : result.content),
+                ? result.content.length > 0
+                  ? [{ type: "text" as const, text: result.content }]
+                  : []
+                : result.content.filter((part) => part.type !== "text" || part.text.length > 0)),
             ];
         }
         return result;

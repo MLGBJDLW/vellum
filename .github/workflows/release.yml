@@ -7,6 +7,16 @@ on:
     types: [closed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the already-versioned main commit after full CI passes"
+        type: boolean
+        required: true
+        default: false
+      version:
+        description: "Exact CLI version to publish (required when publish is true)"
+        type: string
+        required: false
 
 env:
   NODE_VERSION: "24"
@@ -23,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch'
+      (github.event_name == 'workflow_dispatch' && !inputs.publish)
     permissions:
       contents: write
       pull-requests: write
@@ -64,27 +74,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Job 2: Publish packages when Version PR is merged
+  # Job 2: Publish an already-versioned main commit after exact-commit full CI.
   publish:
     name: Publish to npm
-    timeout-minutes: 30
+    timeout-minutes: 60
     concurrency:
-      group: publish-${{ github.ref }}
+      group: publish
       cancel-in-progress: false
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true &&
-      startsWith(github.event.pull_request.title, 'chore: release packages')
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.merged == true &&
+       startsWith(github.event.pull_request.title, 'chore: release packages')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish)
     permissions:
       contents: write
+      actions: read
       id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
         with:
           # Publish and tag the reviewed merge, even if main advances while queued.
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -99,6 +111,34 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      - name: Verify immutable release target and full CI
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          CI_WAIT_SECONDS: "2400"
+        run: |
+          set -euo pipefail
+          TARGET_SHA=$(git rev-parse HEAD)
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          TAG_NAME="v${CLI_VERSION}"
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
+            [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo 'Publishing is only allowed from main'; exit 1; }
+            [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" == "$CLI_VERSION" ]] || { echo 'Requested version must match the already-versioned CLI package'; exit 1; }
+          fi
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG_NAME" >/dev/null; then
+            git fetch origin "refs/tags/$TAG_NAME"
+            [[ "$(git rev-parse 'FETCH_HEAD^{commit}')" == "$TARGET_SHA" ]] || { echo "Existing $TAG_NAME points to a different commit"; exit 1; }
+          else
+            TAG_STATUS=$?
+            [[ "$TAG_STATUS" == 2 ]] || { echo 'Could not verify the remote release tag'; exit "$TAG_STATUS"; }
+          fi
+          RELEASE_SHA="$TARGET_SHA" node scripts/verify-release-ci.mjs
+          echo "sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
+          echo "cli_version=$CLI_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -112,37 +152,27 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create tags for published versions
+      - name: Ensure tag for the published version
         id: create-tags
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+          TAG_NAME: ${{ steps.target.outputs.tag }}
+          CLI_VERSION: ${{ steps.target.outputs.cli_version }}
         run: |
-          # Read version from CLI package (the only public package)
-          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
-          TAG_NAME="v${CLI_VERSION}"
-          echo "Package version: $CLI_VERSION"
-          echo "Tag name: $TAG_NAME"
-
-          # Always output cli_version for use in later steps
-          echo "cli_version=$CLI_VERSION" >> $GITHUB_OUTPUT
-
-          # Check if tag already exists on remote
-          if git ls-remote --tags origin | grep -q "refs/tags/${TAG_NAME}$"; then
-            echo "Tag $TAG_NAME already exists on remote, skipping"
-            echo "has_new_tags=false" >> $GITHUB_OUTPUT
-            echo "latest_tag=" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG_NAME" >/dev/null; then
+            git fetch origin "refs/tags/$TAG_NAME"
+            [[ "$(git rev-parse 'FETCH_HEAD^{commit}')" == "$TARGET_SHA" ]] || { echo "Existing $TAG_NAME points to a different commit"; exit 1; }
           else
-            # Create tag locally
-            git tag "$TAG_NAME"
-            echo "Created tag: $TAG_NAME"
-            echo "has_new_tags=true" >> $GITHUB_OUTPUT
-            echo "latest_tag=$TAG_NAME" >> $GITHUB_OUTPUT
+            TAG_STATUS=$?
+            [[ "$TAG_STATUS" == 2 ]] || { echo 'Could not verify the remote release tag'; exit "$TAG_STATUS"; }
+            git tag "$TAG_NAME" "$TARGET_SHA"
+            git push origin "refs/tags/$TAG_NAME"
           fi
-
-      - name: Push tags
-        if: steps.create-tags.outputs.has_new_tags == 'true'
-        run: git push --tags
+          echo "cli_version=$CLI_VERSION" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes from commits
-        if: steps.create-tags.outputs.has_new_tags == 'true'
         run: |
           set -euo pipefail
 
@@ -150,7 +180,7 @@ jobs:
 
           CURRENT_TAG="${{ steps.create-tags.outputs.latest_tag }}"
           CLI_VERSION="${{ steps.create-tags.outputs.cli_version }}"
-          PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | sed -n '2p' || true)
+          PREV_TAG=$(git tag --merged HEAD --list 'v*' --sort=-v:refname | grep -Fxv "$CURRENT_TAG" | head -n 1 || true)
 
           echo "# vellum v${CLI_VERSION}" > dist/release-notes.md
           echo "" >> dist/release-notes.md
@@ -160,7 +190,7 @@ jobs:
           if [ -n "$PREV_TAG" ]; then
             RANGE="$PREV_TAG..$CURRENT_TAG"
           else
-            RANGE="HEAD~50..HEAD"
+            RANGE="$CURRENT_TAG"
           fi
 
           FILTER_CMD="grep -Ev 'by (github-actions\[bot\]|dependabot\[bot\]|renovate\[bot\])$'"
@@ -204,41 +234,25 @@ jobs:
             echo "https://github.com/${GITHUB_REPOSITORY}/commits/${CURRENT_TAG}" >> dist/release-notes.md
           fi
 
-      - name: Create GitHub Release
-        if: steps.create-tags.outputs.has_new_tags == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.create-tags.outputs.latest_tag }}
-          generate_release_notes: false
-          body_path: dist/release-notes.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create zip archive
-        if: steps.create-tags.outputs.has_new_tags == 'true'
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
         run: |
           mkdir -p dist
-          # Exclude all node_modules (recursive), build artifacts, and dev files
-          zip -r dist/vellum.zip . \
-            -x "**/node_modules/*" \
-            -x ".git/*" \
-            -x ".turbo/*" \
-            -x "dist/*" \
-            -x "**/.turbo/*" \
-            -x "**/dist/*" \
-            -x "*.log" \
-            -x "*.tsbuildinfo" \
-            -x ".env*" \
-            -x "coverage/*" \
-            -x "**/coverage/*" \
-            -x ".changeset/*" \
-            -x "*.zip"
+          # Archive only the exact reviewed source tree, never runner-local files.
+          git archive --format=zip --output=dist/vellum.zip "$TARGET_SHA"
 
-      - name: Upload assets to Release
-        if: steps.create-tags.outputs.has_new_tags == 'true'
+      - name: Create or update GitHub Release and assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.create-tags.outputs.latest_tag }}
+          target_commitish: ${{ steps.target.outputs.sha }}
+          generate_release_notes: false
+          body_path: dist/release-notes.md
+          draft: false
+          prerelease: false
+          make_latest: legacy
           files: dist/vellum.zip
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

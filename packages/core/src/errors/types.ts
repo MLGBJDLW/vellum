@@ -156,6 +156,11 @@ export class VellumError extends Error {
     return this.severity === ErrorSeverity.RECOVERABLE;
   }
 
+  /** Explicit transport/caller decision, before code-based retry defaults. */
+  get retryabilityOverride(): boolean | undefined {
+    return this._isRetryable;
+  }
+
   /**
    * The suggested delay before retry in milliseconds.
    * Returns undefined if not retryable or not set.
