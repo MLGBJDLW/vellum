@@ -305,8 +305,8 @@ describe("Icon Tokens", () => {
     it("should have all status icons", () => {
       expect(icons.success).toBe("✓");
       expect(icons.error).toBe("✗");
-      expect(icons.warning).toBe("⚠");
-      expect(icons.info).toBe("ℹ");
+      expect(icons.warning).toBe("!");
+      expect(icons.info).toBe("i");
       expect(icons.pending).toBe("○");
     });
 
