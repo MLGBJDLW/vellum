@@ -36,6 +36,8 @@ OpenRouter's [`reasoning_details` contract](https://openrouter.ai/docs/guides/be
 
 Explicit output budgets can use the selected model's documented limit; the default remains practical. Cancellation reaches SDK requests. Unknown model prices display as `Unknown`, and cost estimates do not present unpriced work as free. Catalog prices are snapshot estimates; promotions, context tiers, caching, regional rates and provider charges can change the actual bill.
 
+The core cost service reads current prices from this same provider-scoped catalog, including explicit model refreshes. Historical exact-ID rates remain only for models absent from the current catalog; unpriced current entries never borrow a legacy price or another provider's rate.
+
 ## Verification boundary
 
 SDK request/response fixtures verify Responses tool IDs, adaptive Claude requests, reasoning continuity, Gemini thinking levels, cancellation forwarding, provider isolation, catalog validation and session serialization. These checks do not establish paid inference success, account entitlements, or every provider's live availability. Only OpenRouter's public discovery endpoint was queried live in this audit; no paid completion was sent. Image/audio/video generation and vendor-hosted computer-use protocols are not added merely because a model family offers them.
