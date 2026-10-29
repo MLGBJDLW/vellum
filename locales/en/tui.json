@@ -162,7 +162,7 @@
     "providerNav": "Use ↑/↓ to navigate, Enter to select",
     "apiKeyRequired": "(requires API key)",
     "noApiKeyNeeded": "(local, no key needed)",
-    "selectMode": "Select your coding mode:",
+    "selectMode": "Your personal assistant:",
     "modeNav": "Use ↑/↓ to navigate, Enter to select",
     "modeSwitchHint": "You can change this anytime with /mode"
   },
@@ -291,9 +291,9 @@
     "keybindings": "↑↓ navigate • Enter select"
   },
   "modeSelector": {
-    "title": "Select Mode:",
+    "title": "Personal Assistant:",
     "current": "(current)",
-    "keybindings": "↑↓ navigate • Enter select • 1-3 quick select"
+    "keybindings": "Enter return to orch • Legacy workflows available through /mode"
   },
   "session": {
     "closeHint": "Press Esc or q to close",

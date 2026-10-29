@@ -18,7 +18,6 @@ import type {
 } from "@vellum/core";
 import {
   BUILTIN_CODING_MODES,
-  OnboardingWizard as CoreOnboardingWizard,
   createCostService,
   createModeManager,
   createRoleManager,
@@ -36,6 +35,7 @@ import {
   setBatchToolRegistry,
   setTuiModeActive,
   shouldRunOnboarding,
+  TerminationReason,
   updateSessionMetadata,
 } from "@vellum/core";
 import { getProviderModels } from "@vellum/provider";
@@ -117,6 +117,7 @@ import {
   workflowCommands,
 } from "./commands/index.js";
 import { modeSlashCommands } from "./commands/mode.js";
+import { switchToModel } from "./commands/model.js";
 import { mouseSlashCommands } from "./commands/mouse.js";
 import { roleSlashCommands } from "./commands/role.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
@@ -147,7 +148,7 @@ import { EnhancedCommandInput } from "./tui/components/Input/EnhancedCommandInpu
 import type { SlashCommand } from "./tui/components/Input/slash-command-utils.js";
 import { TextInput } from "./tui/components/Input/TextInput.js";
 import { InitErrorBanner, LspSetupPanel, McpPanel } from "./tui/components/index.js";
-import { Layout } from "./tui/components/Layout.js";
+import { getSidebarWidth, Layout } from "./tui/components/Layout.js";
 import { MemoryPanel, type MemoryPanelProps } from "./tui/components/MemoryPanel.js";
 import { MessageList } from "./tui/components/Messages/MessageList.js";
 import { ModelSelector } from "./tui/components/ModelSelector.js";
@@ -155,6 +156,7 @@ import { ModeSelector } from "./tui/components/ModeSelector.js";
 import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
 import { AdaptiveLayout } from "./tui/components/ScreenReaderLayout.js";
+import { SIDEBAR_PANELS, SidebarHeader } from "./tui/components/Sidebar/SidebarHeader.js";
 import { SystemStatusPanel } from "./tui/components/Sidebar/SystemStatusPanel.js";
 import { ModelStatusBar } from "./tui/components/Status/ModelStatusBar.js";
 import { FileChangesIndicator } from "./tui/components/StatusBar/FileChangesIndicator.js";
@@ -172,6 +174,7 @@ import { PermissionDialog } from "./tui/components/Tools/PermissionDialog.js";
 import { ToolsPanel } from "./tui/components/Tools/ToolsPanel.js";
 import { UpdateBanner } from "./tui/components/UpdateBanner.js";
 import { VimModeIndicator } from "./tui/components/VimModeIndicator.js";
+import { useApp as useApplicationState } from "./tui/context/AppContext.js";
 import { useLsp } from "./tui/context/LspContext.js";
 import { useMcp } from "./tui/context/McpContext.js";
 import type { Message } from "./tui/context/MessagesContext.js";
@@ -291,6 +294,8 @@ function approvalPolicyToTrustMode(policy: ApprovalPolicy): TrustMode {
 
 function getDefaultApprovalPolicyForMode(mode: CodingMode): ApprovalPolicy {
   switch (mode) {
+    case "orch":
+      return "auto-edit";
     case "vibe":
       return "full-auto";
     case "plan":
@@ -349,6 +354,8 @@ interface CancellationController {
  */
 function mapCodingModeToSessionMode(mode: CodingMode): SessionMode {
   switch (mode) {
+    case "orch":
+      return "chat";
     case "vibe":
       return "code";
     case "plan":
@@ -647,7 +654,7 @@ function registerPluginCommands(registry: CommandRegistry, pluginResult: PluginI
 export function App({
   model,
   provider,
-  mode: _mode = "vibe",
+  mode: _mode = "orch",
   approval: _approval,
   sandbox: _sandbox,
   agentLoop: agentLoopProp,
@@ -712,7 +719,7 @@ export function App({
 function AppContent({
   model,
   provider,
-  mode: _mode = "vibe",
+  mode: _mode = "orch",
   approval: _approval,
   sandbox: _sandbox,
   agentLoop: agentLoopProp,
@@ -722,6 +729,7 @@ function AppContent({
   initError,
 }: AppContentProps) {
   const { exit } = useInkApp();
+  const { state: applicationState, dispatch: dispatchApplication } = useApplicationState();
   const themeContext = useTheme();
   const { messages, addMessage, clearMessages, setMessages, pendingMessage } = useMessages();
   const [isLoading, setIsLoading] = useState(false);
@@ -1263,8 +1271,10 @@ function AppContent({
   // Current coding mode state
   const [currentMode, setCurrentMode] = useState<CodingMode>(_mode);
   const modeManager = useMemo(
-    () => createModeManager({ initialMode: _mode, requireSpecConfirmation: true }),
-    [_mode]
+    () =>
+      agentLoopProp?.getModeManager() ??
+      createModeManager({ initialMode: _mode, requireSpecConfirmation: true }),
+    [_mode, agentLoopProp]
   );
   const currentModeRef = useRef<CodingMode>(_mode);
 
@@ -1308,12 +1318,12 @@ function AppContent({
   // Role Manager (Specialist Roles)
   // ==========================================================================
   const [currentRole, setCurrentRole] = useState<AgentRole>(
-    (effectiveRole as AgentRole) ?? "coder"
+    (effectiveRole as AgentRole) ?? "orchestrator"
   );
   const roleManager = useMemo(
     () =>
       createRoleManager({
-        initialRole: (effectiveRole as AgentRole) ?? "coder",
+        initialRole: (effectiveRole as AgentRole) ?? "orchestrator",
         onRoleChange: (newRole) => setCurrentRole(newRole),
       }),
     // effectiveRole is static prop, safe to depend on
@@ -1373,24 +1383,8 @@ function AppContent({
   // Check onboarding completion status on mount and load saved config
   useEffect(() => {
     const checkOnboarding = async () => {
-      const [completed, needsOnboarding] = await Promise.all([
-        CoreOnboardingWizard.isCompleted(),
-        shouldRunOnboarding(),
-      ]);
+      const needsOnboarding = await shouldRunOnboarding();
       setIsFirstRun(needsOnboarding);
-
-      // Issue 2 Fix: Load saved config if onboarding was completed
-      if (completed && !needsOnboarding) {
-        const wizard = new CoreOnboardingWizard();
-        const loadResult = await wizard.loadState();
-        if (loadResult.ok) {
-          const config = wizard.generateConfig();
-          if (config.provider && config.model) {
-            setCurrentProvider(config.provider);
-            setCurrentModel(config.model);
-          }
-        }
-      }
     };
     void checkOnboarding();
   }, []);
@@ -1400,7 +1394,7 @@ function AppContent({
 
   // Sidebar visibility states
   const [showSidebar, setShowSidebar] = useState(true);
-  const [sidebarContent, setSidebarContent] = useState<SidebarContent>("memory");
+  const [sidebarContent, setSidebarContent] = useState<SidebarContent>("todo");
 
   // Warning ref for thinking mode (used for model capability warnings)
   const thinkingWarningRef = useRef<Set<string>>(new Set());
@@ -1420,7 +1414,7 @@ function AppContent({
     thinkingTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
-    totalCost: 0,
+    totalCost: 0 as number | undefined,
   });
   const [tokenUsage, setTokenUsage] = useState({
     inputTokens: 0,
@@ -1428,7 +1422,7 @@ function AppContent({
     thinkingTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
-    totalCost: 0,
+    totalCost: 0 as number | undefined,
   });
   // Per-turn token usage for granular display
   const [turnUsage, setTurnUsage] = useState({
@@ -1989,9 +1983,13 @@ function AppContent({
 
   // Update cost warning based on token usage
   useEffect(() => {
-    const costLimit = 10; // Default $10 limit
-    const requestLimit = 100;
-    const percentUsed = costLimit > 0 ? (tokenUsage.totalCost / costLimit) * 100 : 0;
+    const limits = agentLoopProp?.getConfig().costLimits;
+    const costLimit = limits?.maxCostPerSession ?? 0;
+    const requestLimit = limits?.maxRequestsPerSession ?? 0;
+    const percentUsed =
+      costLimit > 0 && tokenUsage.totalCost !== undefined
+        ? (tokenUsage.totalCost / costLimit) * 100
+        : 0;
     const showWarning = percentUsed >= 80; // Show when 80%+ of limit used
     const limitReached = percentUsed >= 100;
 
@@ -2002,7 +2000,7 @@ function AppContent({
       costLimit,
       requestLimit,
     });
-  }, [tokenUsage.totalCost]);
+  }, [agentLoopProp, tokenUsage.totalCost]);
 
   // ==========================================================================
   // FIX 3: Permission System Integration
@@ -2042,17 +2040,6 @@ function AppContent({
   // ==========================================================================
   // FIX 5: Mode & Theme Persistence
   // ==========================================================================
-
-  // Load persisted mode and theme on mount
-  useEffect(() => {
-    // Note: In terminal environment, we use process.env or config files
-    // For now, we can use a simple in-memory approach or file-based config
-    // This demonstrates the persistence pattern
-    const savedMode = process.env.VELLUM_MODE as CodingMode | undefined;
-    if (savedMode && ["vibe", "plan", "spec"].includes(savedMode)) {
-      setCurrentMode(savedMode);
-    }
-  }, []);
 
   // Show onboarding wizard on first run
   useEffect(() => {
@@ -2223,7 +2210,7 @@ function AppContent({
     setPromptValue("");
     setInteractivePrompt({
       inputType: "confirm",
-      message: "⚠️ Switch to spec mode? This enables a 6-phase structured workflow.",
+      message: "! Switch to spec mode? This enables a 6-phase structured workflow.",
       defaultValue: "n",
       handler: async (value: string): Promise<CommandResult> => {
         const confirmed = value.toLowerCase() === "y" || value.toLowerCase() === "yes";
@@ -2253,6 +2240,9 @@ function AppContent({
   useEffect(() => {
     const handleModeChanged = (event: { currentMode: CodingMode }) => {
       setCurrentMode(event.currentMode);
+      roleManager.switchRole(
+        event.currentMode === "orch" || event.currentMode === "spec" ? "orchestrator" : "coder"
+      );
     };
 
     const handleSpecRequired = () => {
@@ -2266,7 +2256,7 @@ function AppContent({
       modeManager.off("mode-changed", handleModeChanged);
       modeManager.off("spec-confirmation-required", handleSpecRequired);
     };
-  }, [modeManager, openSpecConfirmation]);
+  }, [modeManager, openSpecConfirmation, roleManager]);
 
   // Hotkeys hook for global keyboard shortcuts
   const hotkeyDefinitions: HotkeyDefinition[] = useMemo(() => {
@@ -2281,10 +2271,42 @@ function AppContent({
       {
         key: "k",
         alt: true,
-        handler: () => setShowSidebar((prev) => !prev),
+        handler: () => {
+          setShowSidebar((prev) => !prev);
+          dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
+        },
         description: "Toggle sidebar",
         scope: "global",
       },
+      {
+        key: "b",
+        alt: true,
+        handler: () => {
+          setShowSidebar(true);
+          dispatchApplication({
+            type: "SET_FOCUSED_AREA",
+            focusedArea: applicationState.focusedArea === "tools" ? "input" : "tools",
+          });
+        },
+        description: "Focus sidebar / return to chat",
+        scope: "global",
+      },
+      ...([-1, 1] as const).map((direction) => ({
+        key: direction < 0 ? "left" : "right",
+        alt: true,
+        handler: () => {
+          if (applicationState.focusedArea !== "tools") return;
+          setSidebarContent((current) => {
+            const index = SIDEBAR_PANELS.indexOf(current);
+            return (
+              SIDEBAR_PANELS[(index + direction + SIDEBAR_PANELS.length) % SIDEBAR_PANELS.length] ??
+              "todo"
+            );
+          });
+        },
+        description: direction < 0 ? "Previous sidebar panel" : "Next sidebar panel",
+        scope: "global" as const,
+      })),
       {
         key: "t",
         ctrl: true,
@@ -2302,6 +2324,7 @@ function AppContent({
         handler: () => {
           setShowSidebar(true);
           setSidebarContent("todo");
+          dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "tools" });
         },
         description: "Show todo panel (Alt)",
         scope: "global",
@@ -2312,6 +2335,7 @@ function AppContent({
         handler: () => {
           setShowSidebar(true);
           setSidebarContent("memory");
+          dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "tools" });
         },
         description: "Show memory panel",
         scope: "global",
@@ -2322,6 +2346,7 @@ function AppContent({
         handler: () => {
           setShowSidebar(true);
           setSidebarContent("tools");
+          dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "tools" });
         },
         description: "Show tools panel",
         scope: "global",
@@ -2332,6 +2357,7 @@ function AppContent({
         handler: () => {
           setShowSidebar(true);
           setSidebarContent("mcp");
+          dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "tools" });
         },
         description: "Show MCP panel",
         scope: "global",
@@ -2343,6 +2369,7 @@ function AppContent({
         handler: () => {
           setShowSidebar(true);
           setSidebarContent("snapshots");
+          dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "tools" });
         },
         description: "Show snapshots panel",
         scope: "global",
@@ -2354,6 +2381,7 @@ function AppContent({
         handler: () => {
           setShowSidebar(true);
           setSidebarContent("lsp");
+          dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "tools" });
         },
         description: "Show LSP setup panel",
         scope: "global",
@@ -2492,6 +2520,8 @@ function AppContent({
     alternateBufferEnabled,
     showModelSelector,
     themeContext,
+    applicationState.focusedArea,
+    dispatchApplication,
   ]);
 
   useHotkeys(hotkeyDefinitions, {
@@ -2625,7 +2655,7 @@ function AppContent({
         const result = await initializeLsp({
           workspaceRoot: process.cwd(),
           toolRegistry: toolRegistry as LspIntegrationOptions["toolRegistry"],
-          autoInstall: true, // Auto-install missing language servers
+          autoInstall: false,
           logger: isDebug
             ? {
                 debug: (msg) => console.debug(`[lsp] ${msg}`),
@@ -2995,6 +3025,11 @@ function AppContent({
       return;
     }
 
+    if (applicationState.focusedArea === "tools" && key.escape) {
+      dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
+      return;
+    }
+
     // Handle vim mode key processing
     if (vimEnabled && vim.enabled) {
       const vimAction = vim.handleKey(inputChar, { ctrl: key.ctrl, shift: key.shift });
@@ -3125,7 +3160,7 @@ function AppContent({
 
   // Handle message submission (for CommandInput onMessage)
   const handleMessage = useCallback(
-    async (text: string) => {
+    async function sendMessage(text: string) {
       if (!text.trim()) return;
 
       if (followupPrompt && agentLoopProp) {
@@ -3136,6 +3171,45 @@ function AppContent({
         announce(`You said: ${response}`);
         agentLoopProp.submitUserResponse(response);
         return;
+      }
+
+      if (agentLoopProp) {
+        if (!credentialManager) {
+          addMessage({
+            role: "assistant",
+            content: "Credential storage is still initializing. Try again shortly.",
+          });
+          return;
+        }
+        const readiness = await switchToModel(
+          `${currentProvider}/${currentModel}`,
+          credentialManager
+        );
+        if (readiness.kind !== "success") {
+          if (readiness.kind === "interactive") {
+            addToHistory(text);
+            const saveCredential = readiness.prompt.handler;
+            await handleCommandResult({
+              ...readiness,
+              prompt: {
+                ...readiness.prompt,
+                handler: async (value: string) => {
+                  const saved = await saveCredential(value);
+                  if (saved.kind !== "success") return saved;
+                  await sendMessage(text);
+                  return { kind: "success" };
+                },
+                onCancel: () => ({
+                  kind: "success",
+                  message: "Credential setup cancelled. Your task is in input history (↑).",
+                }),
+              },
+            });
+            return;
+          }
+          await handleCommandResult(readiness);
+          return;
+        }
       }
 
       // Fix 4: Reset turn usage when a new turn starts
@@ -3226,7 +3300,7 @@ function AppContent({
           addMessage({
             role: "assistant",
             content:
-              `⚠️ Thinking mode is enabled, but ${currentProvider}/${modelInfo.name} ` +
+              `! Thinking mode is enabled, but ${currentProvider}/${modelInfo.name} ` +
               "does not support reasoning. Running this request without thinking.",
           });
           thinkingWarningRef.current.add(warningKey);
@@ -3239,6 +3313,14 @@ function AppContent({
 
       // Use AgentLoop if available
       if (agentLoopProp) {
+        // Start the fresh turn before asynchronous preparation so Stop cannot be reset.
+        agentLoopProp.addMessage(createUserMessage([SessionParts.text(processedText)]));
+        let interrupted = false;
+        const observeTermination = (reason: TerminationReason) => {
+          if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
+            interrupted = true;
+        };
+        agentLoopProp.on("terminated", observeTermination);
         // Wire cancellation to AgentLoop
         cancellationRef.current = {
           cancel: (reason) => agentLoopProp.cancel(reason),
@@ -3249,7 +3331,13 @@ function AppContent({
         };
 
         try {
-          agentLoopProp.addMessage(createUserMessage([SessionParts.text(processedText)]));
+          // Refresh the existing builder so mode/role changes affect the next request
+          // without accumulating old prompts or creating another watcher.
+          await agentLoopProp
+            .getConfig()
+            .promptBuilder?.replaceExternalWorkflow(currentRole, currentMode);
+          if (interrupted) return;
+          agentLoopProp.updateRuntimeConfig({ mode: modeManager.getModeConfig(currentMode) });
 
           // Wrap agentLoop.run() with resilience (circuit breaker + rate limiter)
           if (resilientProvider) {
@@ -3262,7 +3350,7 @@ function AppContent({
               if (circuitState === "OPEN") {
                 addMessage({
                   role: "assistant",
-                  content: `⚠️ Provider ${currentProvider} circuit breaker is open. Too many failures recently.`,
+                  content: `! Provider ${currentProvider} circuit breaker is open. Too many failures recently.`,
                 });
               }
               throw result.error;
@@ -3275,8 +3363,10 @@ function AppContent({
           // Messages are synced via AgentLoop adapter event handlers (handleText)
           // User message was already added via addMessage() above
           // Notify on completion
-          notifyTaskComplete("Response received");
-          announce("Response received");
+          if (!interrupted) {
+            notifyTaskComplete("Response received");
+            announce("Response received");
+          }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           // Log resilience metrics for debugging
@@ -3287,6 +3377,7 @@ function AppContent({
           notifyError(errorMsg);
           addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
         } finally {
+          agentLoopProp.off("terminated", observeTermination);
           setIsLoading(false);
           cancellationRef.current = null;
         }
@@ -3342,7 +3433,10 @@ function AppContent({
       agentLoopProp,
       currentModel,
       currentMode,
+      currentRole,
       currentProvider,
+      credentialManager,
+      handleCommandResult,
       followupPrompt,
       modeManager,
       notifyTaskComplete,
@@ -3610,19 +3704,42 @@ function AppContent({
   );
 
   // Handle model selection
-  const handleModelSelect = useCallback(
+  const applyModelSelection = useCallback(
     (selectedProvider: string, selectedModel: string) => {
+      agentLoopProp?.setModel(selectedProvider, selectedModel);
       setCurrentProvider(selectedProvider);
       setCurrentModel(selectedModel);
       setShowModelSelector(false);
       announce(`Model changed to ${selectedModel} (${selectedProvider})`);
     },
-    [announce]
+    [agentLoopProp, announce]
   );
 
   useEffect(() => {
-    setModelCommandConfig(currentProvider, currentModel, handleModelSelect);
-  }, [currentProvider, currentModel, handleModelSelect]);
+    setModelCommandConfig(currentProvider, currentModel, applyModelSelection);
+  }, [currentProvider, currentModel, applyModelSelection]);
+
+  const handleModelSelect = useCallback(
+    (selectedProvider: string, selectedModel: string) => {
+      setShowModelSelector(false);
+      if (!credentialManager) {
+        addMessage({
+          role: "assistant",
+          content: "Credential storage is still initializing. Try again shortly.",
+        });
+        return;
+      }
+      void switchToModel(`${selectedProvider}/${selectedModel}`, credentialManager)
+        .then(handleCommandResult)
+        .catch(() =>
+          addMessage({
+            role: "assistant",
+            content: "Unable to read credentials. Use /auth set to configure the provider.",
+          })
+        );
+    },
+    [credentialManager, handleCommandResult, addMessage]
+  );
 
   // Handle onboarding completion
   const handleOnboardingComplete = useCallback(
@@ -3630,10 +3747,9 @@ function AppContent({
       // Note: OnboardingWizard.saveConfig() already persists completed state
       setIsFirstRun(false);
       setShowOnboarding(false);
-      setCurrentProvider(result.provider);
       // Task 4: Sync model with provider selection
       const defaultModel = getDefaultModelForProvider(result.provider);
-      setCurrentModel(defaultModel);
+      applyModelSelection(result.provider, defaultModel);
       setCurrentMode(result.mode as CodingMode);
       void modeManager.forceSwitch(result.mode as CodingMode);
       // Task 5: Persist configuration (environment-based for now, config file in production)
@@ -3642,7 +3758,7 @@ function AppContent({
       process.env.VELLUM_MODE = result.mode;
       announce("Welcome to Vellum! Onboarding complete.");
     },
-    [announce, modeManager]
+    [announce, modeManager, applyModelSelection]
   );
 
   // Get context window for the current model
@@ -3678,18 +3794,22 @@ function AppContent({
 
       // Update cumulative usage
       setTokenUsage((prev) => {
+        const turnCost = calculateCost(
+          currentProvider,
+          currentModel,
+          usage.inputTokens,
+          usage.outputTokens
+        );
         const newUsage = {
           inputTokens: prev.inputTokens + usage.inputTokens,
           outputTokens: prev.outputTokens + usage.outputTokens,
           thinkingTokens: prev.thinkingTokens + (usage.thinkingTokens ?? 0),
           cacheReadTokens: prev.cacheReadTokens + (usage.cacheReadTokens ?? 0),
           cacheWriteTokens: prev.cacheWriteTokens + (usage.cacheWriteTokens ?? 0),
-          totalCost: calculateCost(
-            currentProvider,
-            currentModel,
-            prev.inputTokens + usage.inputTokens,
-            prev.outputTokens + usage.outputTokens
-          ),
+          totalCost:
+            prev.totalCost === undefined || turnCost === undefined
+              ? undefined
+              : prev.totalCost + turnCost,
         };
         tokenUsageRef.current = newUsage;
         return newUsage;
@@ -3859,7 +3979,8 @@ function AppContent({
   const modeAgentName = BUILTIN_CODING_MODES[currentMode].agentName;
   const activeWorkerAgent = currentTaskId && taskChain?.nodes.get(currentTaskId)?.agentSlug;
   const agentName = activeWorkerAgent ?? currentRole ?? modeAgentName;
-  const agentLevel = currentMode === "spec" ? 0 : currentMode === "plan" ? 1 : 2;
+  const agentLevel =
+    currentMode === "orch" || currentMode === "spec" ? 0 : currentMode === "plan" ? 1 : 2;
 
   return (
     <AppContentView
@@ -4090,7 +4211,7 @@ interface AppContentViewProps {
     thinkingTokens: number;
     cacheReadTokens: number;
     cacheWriteTokens: number;
-    totalCost: number;
+    totalCost: number | undefined;
   };
   readonly turnUsage: {
     inputTokens: number;
@@ -4152,6 +4273,9 @@ interface AppContentViewProps {
 function renderSidebarContent({
   announce,
   showSidebar,
+  isFocused,
+  panelWidth,
+  panelHeight,
   sidebarContent,
   todoItems,
   refreshTodos,
@@ -4165,6 +4289,9 @@ function renderSidebarContent({
 }: {
   readonly announce: (message: string) => void;
   readonly showSidebar: boolean;
+  readonly isFocused: boolean;
+  readonly panelWidth: number;
+  readonly panelHeight: number;
   readonly sidebarContent: SidebarContent;
   readonly todoItems: readonly TodoItemData[];
   readonly refreshTodos: () => void;
@@ -4188,8 +4315,9 @@ function renderSidebarContent({
     panelContent = (
       <TodoPanel
         items={todoItems}
-        isFocused={showSidebar}
-        maxHeight={20}
+        isFocused={isFocused}
+        maxHeight={panelHeight}
+        width={panelWidth}
         onRefresh={refreshTodos}
         onActivateItem={(item) => {
           announce(`Selected: ${item.title}`);
@@ -4197,9 +4325,9 @@ function renderSidebarContent({
       />
     );
   } else if (sidebarContent === "tools") {
-    panelContent = <ToolsPanel isFocused={showSidebar} maxItems={20} />;
+    panelContent = <ToolsPanel isFocused={isFocused} maxItems={Math.max(2, panelHeight - 7)} />;
   } else if (sidebarContent === "mcp") {
-    panelContent = <McpPanel isFocused={showSidebar} toolRegistry={toolRegistry} />;
+    panelContent = <McpPanel isFocused={isFocused} toolRegistry={toolRegistry} />;
   } else if (sidebarContent === "snapshots") {
     panelContent = (
       <SnapshotCheckpointPanel
@@ -4207,8 +4335,8 @@ function renderSidebarContent({
         isLoading={snapshots.isLoading}
         error={snapshots.error}
         isInitialized={snapshots.isInitialized}
-        isFocused={showSidebar}
-        maxHeight={20}
+        isFocused={isFocused}
+        maxHeight={panelHeight}
         onRestore={async (hash) => {
           const result = await snapshots.restore(hash);
           if (result.success) {
@@ -4235,15 +4363,25 @@ function renderSidebarContent({
     );
   } else if (sidebarContent === "lsp") {
     panelContent = (
-      <LspSetupPanel isActive={showSidebar} onClose={() => announce("LSP panel closed")} />
+      <LspSetupPanel isActive={isFocused} onClose={() => announce("LSP panel closed")} />
     );
   } else {
-    panelContent = <MemoryPanel entries={memoryEntries} isFocused={showSidebar} maxHeight={20} />;
+    panelContent = (
+      <MemoryPanel
+        entries={memoryEntries}
+        isFocused={isFocused}
+        maxHeight={panelHeight}
+        width={panelWidth}
+      />
+    );
   }
 
   return (
     <Box flexDirection="column" height="100%">
-      <Box flexGrow={1}>{panelContent}</Box>
+      <SidebarHeader panel={sidebarContent} isFocused={isFocused} />
+      <Box flexGrow={1} minHeight={0} overflow="hidden">
+        {panelContent}
+      </Box>
       {taskChain && taskChain.nodes.size > 0 && (
         <Box marginTop={1}>
           <MaxSizedBox maxHeight={12} truncationIndicator="... (more tasks)">
@@ -4256,7 +4394,11 @@ function renderSidebarContent({
           </MaxSizedBox>
         </Box>
       )}
-      <SystemStatusPanel compact={false} persistence={persistence} />
+      <SystemStatusPanel
+        compact={panelHeight < 14}
+        persistence={persistence}
+        snapshotCount={snapshots.snapshots.length}
+      />
     </Box>
   );
 }
@@ -4344,16 +4486,7 @@ function useOverlayPositioning(showSidebar: boolean): {
     if (!showSidebar || isNarrow) {
       return width - 2; // -2 for margins
     }
-    // Sidebar width calculation (matching Layout.tsx)
-    const baseWidth = Math.floor(width * 0.25); // SIDEBAR_WIDTH_PERCENT = 25
-    let sidebarWidth: number;
-    if (width < 80) {
-      sidebarWidth = Math.max(baseWidth, 20); // SIDEBAR_MIN_WIDTH = 20
-    } else if (width < 120) {
-      sidebarWidth = Math.min(baseWidth, 35);
-    } else {
-      sidebarWidth = Math.min(baseWidth, 45); // SIDEBAR_MAX_WIDTH = 45
-    }
+    const sidebarWidth = getSidebarWidth(width);
     return width - sidebarWidth - 2; // -2 for borders/margins
   })();
 
@@ -4803,10 +4936,31 @@ function AppContentView({
 }: AppContentViewProps): React.JSX.Element {
   // LSP Confirm Dialog State (exposed from LspContext)
   const { currentConfirmRequest, respondToConfirmation } = useLsp();
+  const { state: applicationState } = useApplicationState();
+  const terminalSize = useTerminalDimensions();
+  const sidebarFocused =
+    showSidebar &&
+    applicationState.focusedArea === "tools" &&
+    !showOnboarding &&
+    !showModeSelector &&
+    !showModelSelector &&
+    !showSessionManager &&
+    !showHelpModal &&
+    !activeApproval &&
+    !interactivePrompt &&
+    !pendingOperation &&
+    !currentConfirmRequest;
+  const sidebarWidth = getSidebarWidth(terminalSize.width) || terminalSize.width;
 
   const sidebar = renderSidebarContent({
     announce,
     showSidebar,
+    isFocused: sidebarFocused,
+    panelWidth: Math.max(12, sidebarWidth - 3),
+    panelHeight: Math.max(
+      6,
+      terminalSize.height - (taskChain && taskChain.nodes.size > 0 ? 20 : 13)
+    ),
     sidebarContent,
     todoItems,
     refreshTodos,
@@ -4856,7 +5010,7 @@ function AppContentView({
   const extendedFooter = (
     <Box flexDirection="column">
       {/* Cost warning - show above status bar when approaching/exceeding limit */}
-      {costWarningState.show && (
+      {costWarningState.show && tokenUsage.totalCost !== undefined && (
         <CostWarning
           costUsed={tokenUsage.totalCost}
           costLimit={costWarningState.costLimit}
@@ -4907,6 +5061,7 @@ function AppContentView({
     (isLoading && !followupPrompt) || !!interactivePrompt || !!pendingOperation;
 
   const commandInputFocused =
+    !sidebarFocused &&
     (!isLoading || !!followupPrompt) &&
     !showModeSelector &&
     !showModelSelector &&
@@ -4943,10 +5098,11 @@ function AppContentView({
           isLoading={isLoading}
           estimatedItemHeight={4}
           scrollKeyMode={commandInputFocused ? "page" : "all"}
-          forceFollowOnInput={true}
+          forceFollowOnInput={false}
           useAltBuffer={alternateBufferEnabled}
           enableScroll={!alternateBufferEnabled}
           isFocused={
+            !sidebarFocused &&
             !showModeSelector &&
             !showModelSelector &&
             !showSessionManager &&
@@ -5199,6 +5355,7 @@ function AppContentView({
                 header={headerContent}
                 footer={extendedFooter}
                 sidebar={sidebar}
+                sidebarFocused={sidebarFocused}
                 showSidebar={showSidebar}
                 workspace={workspace}
                 branch={branch ?? undefined}

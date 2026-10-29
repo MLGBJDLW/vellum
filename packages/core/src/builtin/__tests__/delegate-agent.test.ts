@@ -79,12 +79,12 @@ describe("delegateAgentTool", () => {
       }
     });
 
-    it("should use default maxTurns when not specified", async () => {
-      const result = await delegateAgentTool.execute({ task: "Simple task", maxTurns: 10 }, ctx);
+    it("does not silently impose a turn budget when none was requested", async () => {
+      const result = await delegateAgentTool.execute({ task: "Simple task" }, ctx);
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.output.signal.maxTurns).toBe(10);
+        expect(result.output.signal.maxTurns).toBeUndefined();
       }
     });
 

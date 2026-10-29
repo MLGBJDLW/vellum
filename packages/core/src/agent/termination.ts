@@ -24,6 +24,8 @@ export enum TerminationReason {
   MAX_TOKENS = "max_tokens",
   /** Maximum execution time exceeded */
   MAX_TIME = "max_time",
+  /** An explicit cost or request budget needs approval to continue. */
+  COST_LIMIT = "cost_limit",
   /** Natural completion (end_turn signal) */
   NATURAL_STOP = "natural_stop",
   /** Response contains only text (no tool calls) */
@@ -66,6 +68,8 @@ export interface ToolCallInfo {
   name: string;
   /** Tool input parameters */
   input: Record<string, unknown>;
+  /** Bounded fingerprint of observed output, to distinguish productive polling. */
+  resultFingerprint?: string;
 }
 
 /**
@@ -151,9 +155,8 @@ export interface TerminationLimits {
  * Default termination limits.
  */
 export const DEFAULT_TERMINATION_LIMITS: TerminationLimits = {
-  maxSteps: 100,
-  maxTokens: 100000,
-  maxTimeMs: 30 * 60 * 1000, // 30 minutes
+  // Budgets are opt-in. Cumulative input usage grows with every context replay
+  // and is not a context-window limit. Keep progress guards enabled instead.
   terminateOnTextOnly: true,
   doomLoop: {
     enabled: true,
@@ -403,7 +406,7 @@ export class TerminationChecker {
 
     // Compare by serializing to JSON (excluding id which is always unique)
     const serialized = recentCalls.map((call) =>
-      JSON.stringify({ name: call.name, input: call.input })
+      JSON.stringify({ name: call.name, input: call.input, result: call.resultFingerprint })
     );
 
     // Check if all are identical

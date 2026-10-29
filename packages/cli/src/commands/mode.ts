@@ -90,7 +90,7 @@ function formatModeInfo(mode: CodingMode, isCurrent: boolean): string {
  */
 export const modeCommand: SlashCommand = {
   name: "mode",
-  description: "Show current coding mode and options",
+  description: "Show the assistant workflow (orch by default)",
   kind: "builtin",
   category: "workflow",
   aliases: ["modes"],
@@ -98,17 +98,19 @@ export const modeCommand: SlashCommand = {
     {
       name: "mode",
       type: "string",
-      description: "Mode to switch to (vibe, plan, spec)",
+      description: "Use orch; vibe, plan, and spec remain legacy workflow overrides",
       required: false,
     },
   ],
   examples: [
+    "/orch        - Return to the personal assistant",
     "/mode        - Show current mode and options",
     "/mode vibe   - Switch to vibe mode",
     "/mode plan   - Switch to plan mode",
     "/mode spec   - Switch to spec mode",
   ],
   subcommands: [
+    { name: "orch", description: "Personal assistant with adaptive planning and delegation" },
     { name: "vibe", description: "Quick autonomous mode" },
     { name: "plan", description: "Plan before execute mode" },
     { name: "spec", description: "Full specification workflow" },
@@ -126,28 +128,28 @@ export const modeCommand: SlashCommand = {
     if (!modeManager) {
       // No manager available - show static info
       const lines = [
-        "Coding Modes",
+        "Assistant workflow",
         "",
         "Available modes:",
-        ...CODING_MODES.map((m) => formatModeInfo(m, m === "vibe")),
+        formatModeInfo("orch", true),
         "",
-        "Mode system not yet initialized. Using default: vibe",
+        "Mode system not yet initialized. Using default: orch",
         "",
-        "Use /vibe, /plan, or /spec to switch modes.",
+        "Use /orch for adaptive assistance. Legacy overrides: /vibe, /plan, /spec.",
       ];
       return success(lines.join("\n"));
     }
 
     const currentMode = modeManager.getCurrentMode();
     const lines = [
-      "Coding Modes",
+      "Assistant workflow",
       "",
       `Current mode: ${getModeIndicator(currentMode)} ${currentMode}`,
       "",
       "Available modes:",
       ...CODING_MODES.map((m) => formatModeInfo(m, m === currentMode)),
       "",
-      "Use /vibe, /plan, or /spec to switch modes.",
+      "Use /orch for adaptive assistance. Legacy overrides: /vibe, /plan, /spec.",
     ];
 
     return success(lines.join("\n"));
@@ -323,7 +325,16 @@ export const specCommand: SlashCommand = {
 /**
  * All mode-related slash commands for registration.
  */
+export const orchCommand: SlashCommand = {
+  name: "orch",
+  description: "Use the personal assistant with adaptive planning and delegation",
+  kind: "builtin",
+  category: "workflow",
+  execute: (ctx) => switchToMode("orch", ctx),
+};
+
 export const modeSlashCommands: SlashCommand[] = [
+  orchCommand,
   modeCommand,
   vibeCommand,
   planCommand,

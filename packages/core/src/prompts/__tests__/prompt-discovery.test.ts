@@ -203,7 +203,7 @@ describe("PromptDiscovery", () => {
       const rolePrompts = await discovery.discoverByCategory("role");
 
       // Should only have one coder prompt (deduplicated)
-      const coderPrompts = rolePrompts.filter((p) => p.path.includes("coder"));
+      const coderPrompts = rolePrompts.filter((p) => /[/\\]coder\.md$/.test(p.path));
       expect(coderPrompts.length).toBe(1);
       expect(coderPrompts[0]?.path).toContain(".vellum");
     });

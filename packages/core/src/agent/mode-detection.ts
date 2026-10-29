@@ -43,7 +43,7 @@ export interface DetectionResult {
  * Zod schema for DetectionResult validation.
  */
 export const DetectionResultSchema = z.object({
-  suggestedMode: z.enum(["vibe", "plan", "spec"]),
+  suggestedMode: z.enum(["orch", "vibe", "plan", "spec"]),
   confidence: z.number().min(0).max(1),
   keywords: z.array(z.string()),
   reasoning: z.string(),
@@ -397,6 +397,8 @@ export class ModeDetector {
     const confidencePercent = (confidence * 100).toFixed(0);
 
     switch (mode) {
+      case "orch":
+        return "The assistant chooses planning, execution, and delegation according to the task";
       case "vibe":
         return `Keywords [${keywordList}] suggest a quick task suitable for autonomous execution (${confidencePercent}% confidence)`;
       case "plan":

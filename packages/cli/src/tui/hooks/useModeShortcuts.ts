@@ -51,6 +51,7 @@ export interface UseModeShortcutsReturn {
  * Alt+1 = vibe, Alt+2 = plan, Alt+3 = spec
  */
 const MODE_SHORTCUTS: Record<string, CodingMode> = {
+  "0": "orch",
   "1": "vibe",
   "2": "plan",
   "3": "spec",
@@ -60,6 +61,7 @@ const MODE_SHORTCUTS: Record<string, CodingMode> = {
  * Reverse mapping: mode to shortcut key.
  */
 const SHORTCUT_FOR_MODE: Record<CodingMode, string> = {
+  orch: "Alt+0",
   vibe: "Alt+1",
   plan: "Alt+2",
   spec: "Alt+3",

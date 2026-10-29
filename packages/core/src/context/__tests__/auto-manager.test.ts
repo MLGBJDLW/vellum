@@ -94,11 +94,11 @@ describe("AutoContextManager", () => {
 
     it("should auto-detect context window from model", () => {
       const manager = new AutoContextManager({
-        model: "claude-3-5-sonnet",
+        model: "claude-sonnet-4-6",
       });
 
       const budget = manager.getBudget();
-      expect(budget.totalWindow).toBe(200_000);
+      expect(budget.totalWindow).toBe(1_000_000);
     });
 
     it("should use custom context window when provided", () => {

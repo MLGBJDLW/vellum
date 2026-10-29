@@ -5,7 +5,7 @@
 import { EventEmitter } from "node:events";
 import type { StreamEvent, ToolDefinition } from "@vellum/provider";
 import type { TokenUsage } from "@vellum/shared";
-import type { OrchestratorCore, SubagentHandle } from "../agents/orchestrator/core.js";
+import type { OrchestratorCore } from "../agents/orchestrator/core.js";
 import type { SubsessionManager } from "../agents/session/subsession-manager.js";
 import type { UserPromptSignal } from "../builtin/ask-followup.js";
 import type { AttemptCompletionOutput } from "../builtin/attempt-completion.js";
@@ -63,6 +63,7 @@ import { AgentCostManager } from "./cost-manager.js";
 import type { AgentLevel } from "./level.js";
 import type { LLMLoopVerifier } from "./llm-loop-verifier.js";
 import type { CombinedLoopResult } from "./loop-detection.js";
+import { SimpleActivityTracker } from "./mode-switching.js";
 import type { ModeConfig } from "./modes.js";
 import { fromPromptBuilder } from "./prompt.js";
 import { AgentRetryManager } from "./retry-manager.js";
@@ -183,7 +184,7 @@ export interface AgentLoopConfig {
    * - This limit is reached
    * - Cancellation is requested
    * - Permission is blocked
-   * @default 50
+   * Omit to continue until completion, cancellation, or a progress/resource guard fires.
    */
   maxIterations?: number;
   /**
@@ -455,6 +456,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
   /** Current iteration count for the agentic loop (T058) */
   private iterationCount = 0;
+  private activeRun: Promise<void> | undefined;
+  private nextIterationRequested = false;
+  private interactionQueue: Promise<void> = Promise.resolve();
+  private costApprovalDenied = false;
 
   /** Pending user prompt awaiting response (GAP 1 fix) */
   private pendingUserPrompt: {
@@ -498,7 +503,16 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.cancellation = new CancellationToken();
 
     // Initialize agentic loop settings (T058)
-    this.maxIterations = config.maxIterations ?? 50;
+    this.maxIterations = config.maxIterations ?? Number.POSITIVE_INFINITY;
+    if (this.maxIterations <= 0 || Number.isNaN(this.maxIterations)) {
+      throw new Error("maxIterations must be a positive number");
+    }
+    if (
+      config.maxToolConcurrency !== undefined &&
+      (!Number.isInteger(config.maxToolConcurrency) || config.maxToolConcurrency < 1)
+    ) {
+      throw new Error("maxToolConcurrency must be a positive integer");
+    }
     this.continueAfterTools = config.continueAfterTools ?? true;
 
     // Initialize tool executor (T014)
@@ -656,6 +670,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     if (this.modeManager) {
       // Listen for mode changes to update internal state
       this.modeManager.on("mode-changed", (event) => {
+        if (!this.activeRun)
+          this.config.mode = this.modeManager?.getModeConfig(event.currentMode) ?? this.config.mode;
         this.logger?.debug("Mode changed via ModeManager", {
           previousMode: event.previousMode,
           currentMode: event.currentMode,
@@ -668,7 +684,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       this.contextIntegration = createContextIntegrationFromLoopConfig(
         config.model,
         config.contextManagement,
-        this.logger
+        this.logger,
+        config.providerType
       );
       this.logger?.debug("Context management integration initialized", {
         model: config.model,
@@ -742,6 +759,30 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     return this.config;
   }
 
+  /** Update the existing idle runtime without discarding history or budgets. */
+  updateRuntimeConfig(
+    update: Partial<Pick<AgentLoopConfig, "providerType" | "model" | "mode" | "promptBuilder">>
+  ): void {
+    if (this.activeRun || !["idle", "terminated", "recovering"].includes(this.state)) {
+      throw new Error(
+        "Cannot change the assistant configuration while a task is running. Stop or finish the current task first."
+      );
+    }
+    const providerType = update.providerType ?? this.config.providerType;
+    const model = update.model ?? this.config.model;
+    if (!providerType.trim() || !model.trim())
+      throw new Error("Provider and model must not be empty");
+    if (model !== this.config.model || providerType !== this.config.providerType) {
+      this.contextIntegration?.updateModel?.(model, providerType);
+      this.costManager.getIntegration()?.setModel(providerType, model);
+    }
+    Object.assign(this.config, update, { providerType, model });
+  }
+
+  setModel(providerType: string, model: string): void {
+    this.updateRuntimeConfig({ providerType, model });
+  }
+
   /**
    * Returns the conversation messages.
    */
@@ -761,6 +802,13 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // Reset auto-approval counters on user message for safety
     if (message.role === "user") {
       this.resetAutoApprovalCounters();
+      if (!this.activeRun && this.state !== "shutdown") {
+        this.resetIterationCount();
+        this.resetTerminationTracking();
+        this.resetRetryCounter();
+        if (this.cancellation.isCancelled) this.cancellation = new CancellationToken();
+        if (this.state !== "idle") this.transitionTo("idle");
+      }
     }
   }
 
@@ -871,23 +919,28 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return undefined;
     }
 
-    // No ModeManager, return all tools (backward compatibility)
+    const currentMode =
+      this.modeManager?.getCurrentMode() ??
+      ("codingMode" in this.config.mode ? this.config.mode.codingMode : undefined);
+    const configuredTools = this.config.tools.filter(
+      (tool) =>
+        (tool.name !== "attempt_completion" || currentMode === "orch") &&
+        (tool.name !== "ask_followup_question" || this.config.interactive === true)
+    );
+
+    // No ModeManager, use the configured workflow and tools.
     if (!this.modeManager) {
-      return this.config.tools;
+      return configuredTools;
     }
 
     // Get current mode and allowed tools
-    const currentMode = this.modeManager.getCurrentMode();
+    const managedMode = this.modeManager.getCurrentMode();
     const interactive = this.config.interactive ?? false;
-    const allowedToolNames = new Set(getToolsForMode(currentMode, { interactive }));
+    const allowedToolNames = new Set(getToolsForMode(managedMode, { interactive }));
 
     // Filter tools by allowed names and session capabilities
-    const filtered = this.config.tools.filter((tool) => {
+    const filtered = configuredTools.filter((tool) => {
       if (!allowedToolNames.has(tool.name)) {
-        return false;
-      }
-
-      if (tool.name === "attempt_completion") {
         return false;
       }
 
@@ -1011,6 +1064,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     const metadata: Partial<Omit<SessionMessageMetadata, "createdAt">> = {
       model: this.config.model,
       provider: this.config.providerType,
+      providerMetadata: this.streamHandler.getState().providerMetadata,
     };
 
     if (this.lastTurnUsage) {
@@ -1376,6 +1430,17 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @returns true if error was handled (retried or terminated), false if should rethrow
    */
   private async handleRunError(error: unknown): Promise<boolean> {
+    if (this.cancellation.isCancelled) {
+      const partial = this.streamHandler.getState();
+      const parts: import("../session/index.js").SessionMessagePart[] = [];
+      if (partial.accumulatedReasoning.trim())
+        parts.push(SessionParts.reasoning(partial.accumulatedReasoning));
+      if (partial.accumulatedText.trim()) parts.push(SessionParts.text(partial.accumulatedText));
+      if (parts.length > 0)
+        this.messages.push(createAssistantMessage(parts, this.buildAssistantMetadata()));
+      this.transitionTo("terminated");
+      return true;
+    }
     const err = error instanceof Error ? error : new Error(String(error));
     const durationMs = this.llmRequestStartTime ? Date.now() - this.llmRequestStartTime : 0;
 
@@ -1415,7 +1480,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
       try {
         await this.retryManager.waitForRetry(result.delay);
-        await this.run();
+        this.nextIterationRequested = true;
         return true;
       } catch (retryError) {
         if (retryError instanceof RetryAbortedError) {
@@ -1452,6 +1517,29 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * Integrates with Logger (T041) and TelemetryInstrumentor (T042).
    */
   async run(): Promise<void> {
+    if (this.activeRun) return this.activeRun;
+    if (this.modeManager) {
+      this.config.mode = this.modeManager.getModeConfig(this.modeManager.getCurrentMode());
+      this.config.agentLevel = this.modeManager.getEffectiveAgentLevel();
+    }
+    const activity = this.modeManager?.getActivityTracker();
+    if (activity instanceof SimpleActivityTracker) activity.startOperation("agent-run");
+    const pump = async () => {
+      do {
+        this.nextIterationRequested = false;
+        await this.runIteration();
+      } while (this.nextIterationRequested && !this.cancellation.isCancelled);
+    };
+    this.activeRun = pump();
+    try {
+      await this.activeRun;
+    } finally {
+      this.activeRun = undefined;
+      if (activity instanceof SimpleActivityTracker) activity.endOperation("agent-run");
+    }
+  }
+
+  private async runIteration(): Promise<void> {
     // Check for cancellation before starting
     if (this.cancellation.isCancelled) {
       this.logger?.debug("Run cancelled before start");
@@ -1459,9 +1547,36 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return;
     }
 
+    const costIntegration = this.costManager.getIntegration();
+    if (costIntegration?.shouldPauseForApproval()) {
+      const unregister = this.cancellation.onCancel(() => costIntegration.denyApproval());
+      let approved = false;
+      try {
+        approved =
+          !this.costApprovalDenied &&
+          this.listenerCount("cost:awaitingApproval") > 0 &&
+          (await costIntegration.waitForApproval());
+      } finally {
+        unregister();
+      }
+      if (this.cancellation.isCancelled) return;
+      if (!approved) {
+        this.emit("terminated", TerminationReason.COST_LIMIT, {
+          shouldTerminate: true,
+          reason: TerminationReason.COST_LIMIT,
+          metadata: { stepsExecuted: this.iterationCount },
+        });
+        this.transitionTo("idle");
+        this.emit("complete");
+        return;
+      }
+    }
+
     // Reset stream state for this run
     this.streamHandler.resetState();
     this.lastTurnUsage = null;
+    this.terminationManager.setTextOnly(false);
+    this.terminationManager.setNaturalStop(false);
 
     // Check max iterations limit (T058)
     if (this.iterationCount >= this.maxIterations) {
@@ -1516,28 +1631,28 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       iteration: this.iterationCount,
     });
 
+    let unregisterCancellation: (() => void) | undefined;
     try {
       const systemPrompt = await this.buildSystemPromptForRun();
 
       // Create abort controller for this stream
       this.abortController = new AbortController();
-      this.cancellation.onCancel(() => this.abortController?.abort());
+      const controller = this.abortController;
+      unregisterCancellation = this.cancellation.onCancel(() => controller.abort());
 
-      // Apply context management before converting to provider format (T403)
-      let messagesToSend = this.messages;
-      if (this.contextIntegration?.enabled) {
-        const contextResult = await this.contextIntegration.beforeApiCall(this.messages);
-        if (contextResult.modified) {
-          messagesToSend = contextResult.messages;
-          this.emit("contextManaged", contextResult);
-          this.logger?.debug("Context management applied", {
-            originalCount: this.messages.length,
-            newCount: contextResult.messages.length,
-            state: contextResult.state,
-            actions: contextResult.actions,
-          });
-        }
+      // The existing context owner retains compaction metadata/history once;
+      // only effective messages (not shadowed originals) are sent to the model.
+      const contextResult = await this.contextManager.compactContext();
+      if (contextResult?.state === "overflow") {
+        throw new VellumError(
+          "The retained context still exceeds this model's window. Select a larger-context model or reduce the current input before retrying.",
+          ErrorCode.LLM_CONTEXT_LENGTH,
+          { isRetryable: false }
+        );
       }
+      const messagesToSend = this.contextIntegration?.enabled
+        ? this.contextIntegration.getApiMessages(this.messages)
+        : this.messages;
 
       // Convert session messages to provider format
       const providerMessages = toModelMessages(messagesToSend);
@@ -1601,11 +1716,22 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         }
 
         this.transitionTo("idle");
+        this.emit("terminated", TerminationReason.LLM_STUCK, {
+          shouldTerminate: true,
+          reason: TerminationReason.LLM_STUCK,
+          metadata: { stepsExecuted: this.iterationCount },
+        });
         this.emit("complete");
         return;
       }
 
       const streamState = this.streamHandler.getState();
+      if (pendingToolCalls.length === 0) {
+        this.terminationManager.recordResponse(streamState.accumulatedText);
+      }
+      for (const call of pendingToolCalls) {
+        this.terminationManager.recordToolCall(call.id, call.name, call.input);
+      }
       if (
         !this.cancellation.isCancelled &&
         pendingToolCalls.length === 0 &&
@@ -1632,6 +1758,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       }
 
       // Calculate duration (T041)
+      this.retryManager.resetRetryCounter();
       const durationMs = this.llmRequestStartTime ? Date.now() - this.llmRequestStartTime : 0;
 
       // Get token usage from termination manager
@@ -1665,6 +1792,20 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
       // Determine next state based on stream completion
       if (this.cancellation.isCancelled) {
+        const partial: import("../session/index.js").SessionMessagePart[] = [];
+        if (streamState.accumulatedReasoning.trim())
+          partial.push(SessionParts.reasoning(streamState.accumulatedReasoning));
+        if (streamState.accumulatedText.trim())
+          partial.push(SessionParts.text(streamState.accumulatedText));
+        partial.push(
+          ...pendingToolCalls.map((call) => SessionParts.tool(call.id, call.name, call.input))
+        );
+        if (partial.length > 0)
+          this.messages.push(createAssistantMessage(partial, this.buildAssistantMetadata()));
+        for (const call of pendingToolCalls)
+          this.messages.push(
+            createToolResultMessage(call.id, "Operation cancelled before tool dispatch", true)
+          );
         this.transitionTo("terminated");
       } else if (pendingToolCalls.length > 0) {
         this.transitionTo("tool_executing");
@@ -1696,6 +1837,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         throw error;
       }
     } finally {
+      unregisterCancellation?.();
       this.abortController = null;
     }
   }
@@ -1765,11 +1907,24 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @returns Result of the tool execution
    * @internal
    */
-  private async executeSingleToolCall(call: {
-    id: string;
-    name: string;
-    input: Record<string, unknown>;
-  }): Promise<SingleToolCallResult> {
+  private async executeSingleToolCall(
+    call: {
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+    },
+    allowCompletion = true
+  ): Promise<SingleToolCallResult> {
+    if (call.name === "attempt_completion" && !allowCompletion) {
+      return {
+        id: call.id,
+        name: call.name,
+        result:
+          "Finish the other tool actions first, then call attempt_completion alone so verification covers the final state.",
+        isError: true,
+        permissionBlocked: false,
+      };
+    }
     // Check for unknown tool marker from repairToolCall
     if (call.name.startsWith("__unknown_")) {
       const originalName = call.name.replace(/^__unknown_|__$/g, "");
@@ -1864,22 +2019,36 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         };
       }
 
-      if (permission === "ask") {
-        // Handle wait_permission state (T015)
-        // Note: Permission blocking stops auto-continuation
-        await this.handlePermissionRequired(call.id, call.name, call.input);
+      if (
+        permission === "ask" &&
+        !(await this.requestToolApproval(call.id, call.name, call.input))
+      ) {
         return {
           id: call.id,
           name: call.name,
-          result: "",
-          isError: false,
+          result: "Permission denied by user",
+          isError: true,
+          permissionBlocked: true,
+        };
+      }
+      if (this.cancellation.isCancelled) {
+        return {
+          id: call.id,
+          name: call.name,
+          result: "Operation cancelled",
+          isError: true,
           permissionBlocked: true,
         };
       }
 
       // Permission allowed - now we can emit toolStart and execute
       this.emit("toolStart", call.id, call.name, call.input);
-      const executionResult = await this.toolExecutor.execute(call.name, call.input, toolContext);
+      const executionResult = await this.toolExecutor.execute(
+        call.name,
+        call.input,
+        toolContext,
+        permission === "ask" ? { permissionOverride: "allow" } : undefined
+      );
       this.emit("toolEnd", call.id, call.name, executionResult);
 
       // Process tool result through unified signal dispatcher (GAP 1, 2, 5 fix)
@@ -2019,17 +2188,15 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
             return;
           }
 
-          const result = await this.executeSingleToolCall(call);
+          const result = await this.executeSingleToolCall(call, toolCalls.length === 1);
 
           // Collect result (thread-safe - push is atomic in JS)
-          if (!result.permissionBlocked) {
-            toolResults.push({
-              id: result.id,
-              name: result.name,
-              result: result.result,
-              isError: result.isError,
-            });
-          }
+          toolResults.push({
+            id: result.id,
+            name: result.name,
+            result: result.result,
+            isError: result.isError,
+          });
 
           if (result.permissionBlocked) {
             permissionBlocked = true;
@@ -2049,16 +2216,14 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           break;
         }
 
-        const result = await this.executeSingleToolCall(call);
+        const result = await this.executeSingleToolCall(call, toolCalls.length === 1);
 
-        if (!result.permissionBlocked) {
-          toolResults.push({
-            id: result.id,
-            name: result.name,
-            result: result.result,
-            isError: result.isError,
-          });
-        }
+        toolResults.push({
+          id: result.id,
+          name: result.name,
+          result: result.result,
+          isError: result.isError,
+        });
 
         if (result.permissionBlocked) {
           permissionBlocked = true;
@@ -2066,28 +2231,53 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       }
     }
 
-    // After all tools executed, handle state transition and auto-continuation (T058)
-    if (this.cancellation.isCancelled) {
-      this.transitionTo("terminated");
-      this.emit("complete");
-      return;
-    }
-
     // Add assistant message with tool calls to history (T058)
-    const assistantParts = toolCalls.map((call) =>
-      SessionParts.tool(call.id, call.name, call.input)
+    const response = this.streamHandler.getState();
+    const assistantParts: import("../session/index.js").SessionMessagePart[] = [];
+    if (response.accumulatedReasoning.trim())
+      assistantParts.push(SessionParts.reasoning(response.accumulatedReasoning));
+    if (response.accumulatedText.trim())
+      assistantParts.push(SessionParts.text(response.accumulatedText));
+    assistantParts.push(
+      ...toolCalls.map((call) => SessionParts.tool(call.id, call.name, call.input))
     );
     const assistantMessage = createAssistantMessage(assistantParts, this.buildAssistantMetadata());
     this.messages.push(assistantMessage);
 
+    // Record cancelled/unstarted calls too, preserving valid call/result pairing.
+    for (const call of toolCalls) {
+      if (!toolResults.some((result) => result.id === call.id)) {
+        toolResults.push({
+          id: call.id,
+          name: call.name,
+          result: "Operation cancelled before tool completed",
+          isError: true,
+        });
+      }
+    }
+
     // Add tool results to message history (T058)
     for (const toolResult of toolResults) {
+      this.terminationManager.recordToolResult(toolResult.id, toolResult.result);
       const resultMessage = createToolResultMessage(
         toolResult.id,
         toolResult.result,
         toolResult.isError
       );
       this.messages.push(resultMessage);
+    }
+
+    if (this.cancellation.isCancelled) {
+      this.transitionTo("terminated");
+      return;
+    }
+
+    // Run the existing progress/resource guards on the real execution path.
+    // Keep tool receipts in history before stopping so the run can be resumed.
+    if (!this.completionAttempted && this.terminationManager.checkTermination().shouldTerminate) {
+      if (this.state === "tool_executing") this.transitionTo("idle");
+      this.emit("complete");
+      return;
     }
 
     // Check if we should auto-continue (T058)
@@ -2097,7 +2287,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       !permissionBlocked &&
       !this.completionAttempted &&
       toolResults.length > 0 &&
-      this.iterationCount < this.maxIterations &&
       this.state === "tool_executing"
     ) {
       this.logger?.debug("Auto-continuing agentic loop after tool execution", {
@@ -2112,7 +2301,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       this.transitionTo("idle");
 
       // Auto-continue: re-invoke the LLM to continue reasoning
-      await this.run();
+      this.nextIterationRequested = true;
       return;
     }
 
@@ -2132,10 +2321,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private createToolContext(callId: string): ToolContext {
     const trustPreset = this.getTrustPreset();
     const checkPermission = async (action: string, resource?: string): Promise<boolean> => {
-      if (!this.config.permissionChecker) {
-        return true;
-      }
-
       const lowerAction = action.toLowerCase();
       const params: Record<string, unknown> = { action };
 
@@ -2158,7 +2343,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         }
       }
 
-      const decision = await this.config.permissionChecker.checkPermission(action, params, {
+      const decision = await this.toolExecutor.checkPermission(action, params, {
         workingDir: this.config.cwd,
         sessionId: this.config.sessionId,
         messageId: this.context.messageId,
@@ -2170,7 +2355,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         orchestrator: this.config.orchestrator,
       });
 
-      return decision !== "deny";
+      return decision === "ask"
+        ? this.requestToolApproval(callId, action, params)
+        : decision === "allow";
     };
 
     return {
@@ -2231,8 +2418,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     }
 
     const signal = this.extractDelegationSignal(output);
-    // Use explicit targetAgent if provided, fallback to first word of task for backward compat
-    const agent = signal.targetAgent ?? signal.task.split(" ")[0] ?? "subagent";
+    const agent = signal.targetAgent ?? "auto";
+    const task = signal.context
+      ? `${signal.task}\n\nAdditional context:\n${signal.context}`
+      : signal.task;
 
     // Emit delegation start event
     this.emit("delegationStart", signal.delegationId, agent, signal.task);
@@ -2254,14 +2443,37 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     }
 
     try {
-      // Spawn subagent through orchestrator
-      const handle = await this.spawnSubagentWithEvents(signal, agent);
-
-      // Wait for subagent completion
-      await this.waitForSubagentCompletion(handle, signal.delegationId, agent);
-
-      // Emit delegation complete event
-      const result = `Subagent ${agent} completed task: ${signal.task}`;
+      const delegated = await this.config.orchestrator.executeTask(task, 2, {
+        targetAgent: signal.targetAgent,
+        signal: this.cancellation.signal,
+        providerType: this.config.providerType,
+        model: signal.model ?? this.config.model,
+        maxIterations: signal.maxTurns,
+        cwd: this.config.cwd,
+        permissionChecker: {
+          checkPermission: async (name, input, context) => {
+            const decision = await this.toolExecutor.checkPermission(name, input, context);
+            if (decision !== "ask") return decision;
+            return (await this.requestToolApproval(
+              context.callId,
+              name,
+              input as Record<string, unknown>
+            ))
+              ? "allow"
+              : "deny";
+          },
+        },
+      });
+      const result = JSON.stringify({
+        status: delegated.overallStatus,
+        results: delegated.results.map(({ taskId, agentSlug, status, data, error }) => ({
+          taskId,
+          agent: agentSlug,
+          status,
+          data,
+          error: error?.message,
+        })),
+      });
       this.emit("delegationComplete", signal.delegationId, agent, result);
 
       return result;
@@ -2351,13 +2563,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       hasSuggestions: !!prompt.suggestions?.length,
     });
 
-    // Emit event for TUI/CLI to handle
-    this.emit("userPrompt:required", {
-      question: prompt.question,
-      suggestions: prompt.suggestions,
-    });
-
-    // Wait for user response via event
     const userResponse = await this.waitForUserInput(prompt.question, prompt.suggestions);
 
     return userResponse;
@@ -2371,20 +2576,30 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @param suggestions - Optional suggestions
    * @returns Promise resolving to user's response
    */
-  private waitForUserInput(_question: string, _suggestions?: string[]): Promise<string> {
-    return new Promise((resolve) => {
-      this.pendingUserPrompt = {
-        question: _question,
-        suggestions: _suggestions,
-        resolve,
-      };
-
-      // Listen for user response
-      this.once("userPrompt:response", (response: string) => {
-        this.pendingUserPrompt = null;
-        resolve(response);
+  private waitForUserInput(question: string, suggestions?: string[]): Promise<string> {
+    const request = this.interactionQueue.then(() => {
+      if (this.cancellation.isCancelled) return "Operation cancelled";
+      if (this.listenerCount("userPrompt:required") === 0)
+        return "User input is required but no interactive input handler is available.";
+      return new Promise<string>((resolve) => {
+        let unregisterCancellation = () => {};
+        const finish = (response: string) => {
+          this.off("userPrompt:response", finish);
+          unregisterCancellation();
+          this.pendingUserPrompt = null;
+          resolve(response);
+        };
+        this.pendingUserPrompt = { question, suggestions, resolve: finish };
+        this.once("userPrompt:response", finish);
+        unregisterCancellation = this.cancellation.onCancel(() => finish("Operation cancelled"));
+        this.emit("userPrompt:required", { question, suggestions });
       });
     });
+    this.interactionQueue = request.then(
+      () => undefined,
+      () => undefined
+    );
+    return request;
   }
 
   /**
@@ -2436,7 +2651,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     }
 
     const maybeCompletion = output as Record<string, unknown>;
-    return maybeCompletion.completed === true && typeof maybeCompletion.result === "string";
+    return (
+      typeof maybeCompletion.completed === "boolean" && typeof maybeCompletion.result === "string"
+    );
   }
 
   /**
@@ -2452,11 +2669,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       verificationPassed: output.verificationPassed,
     });
 
-    // Set completion flag - this will prevent auto-continuation
-    this.completionAttempted = true;
+    // Verification failure is feedback for the next repair iteration, never success.
+    this.completionAttempted = output.completed && output.verificationPassed !== false;
 
     // Set termination flags for the termination checker
-    this.terminationManager.setNaturalStop(true);
+    this.terminationManager.setNaturalStop(this.completionAttempted);
 
     // Emit event for TUI/CLI to display completion
     this.emit("completion:attempted", {
@@ -2505,153 +2722,34 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     toolName: string
   ): Promise<string> {
     // 1. Check for delegation signal (handled first as it spawns subagent)
-    const delegationResult = await this.handleDelegationSignal(output, callId, toolName);
+    const delegationResult =
+      toolName === "delegate_agent"
+        ? await this.handleDelegationSignal(output, callId, toolName)
+        : null;
     if (delegationResult !== null) {
       return delegationResult;
     }
 
     // 2. Check for user prompt signal
-    if (this.isUserPromptSignal(output)) {
+    if (toolName === "ask_followup_question" && this.isUserPromptSignal(output)) {
       return await this.handleUserPromptSignal(output);
     }
 
     // 3. Check for completion signal
-    if (this.isCompletionSignal(output)) {
+    if (toolName === "attempt_completion" && this.isCompletionSignal(output)) {
       this.handleCompletionSignal(output);
-      return output.result;
+      return this.completionAttempted
+        ? output.result
+        : JSON.stringify({
+            ...output,
+            completed: false,
+            nextAction:
+              "Inspect the verification evidence, repair the remaining issue, and verify again. If blocked, report the blocker accurately.",
+          });
     }
 
     // 4. Default: stringify and return
     return typeof output === "string" ? output : JSON.stringify(output);
-  }
-
-  /**
-   * Spawn subagent and wire up event forwarding (GAP 2 fix - T059).
-   * Uses executeTask to actually run the delegated work (Issue A fix).
-   *
-   * @param signal - Delegation signal with task details
-   * @param agentSlug - Agent slug to spawn
-   * @returns Subagent handle
-   */
-  private async spawnSubagentWithEvents(
-    signal: DelegateAgentSignal,
-    agentSlug: string
-  ): Promise<SubagentHandle> {
-    const orchestrator = this.config.orchestrator;
-    if (!orchestrator) {
-      throw new Error("Orchestrator not configured for delegation");
-    }
-
-    // Get agent level for executeTask (default to worker level 2)
-    const level = 2 as import("./level.js").AgentLevel;
-
-    // Use executeTask to spawn AND execute the task (Issue A fix)
-    // This ensures runWorkerTask is called and work actually executes
-    const result = await orchestrator.executeTask(signal.task, level);
-
-    // Get the handle from the orchestrator's active subagents or create a synthetic one
-    // for compatibility with waitForSubagentCompletion
-    const activeSubagents = orchestrator.getActiveSubagents();
-    let handle = activeSubagents.find((h) => h.agentSlug === agentSlug);
-
-    // If no active handle (task already completed), create a completed handle for the flow
-    if (!handle) {
-      // Create a synthetic completed handle to maintain API compatibility
-      handle = {
-        id: `handle-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        agentSlug,
-        taskId: `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        status: result.overallStatus === "success" ? "completed" : "failed",
-        startedAt: new Date(),
-        completedAt: new Date(),
-        completion: Promise.resolve(),
-      };
-    }
-
-    this.logger?.debug("Subagent executed via executeTask", {
-      delegationId: signal.delegationId,
-      handleId: handle.id,
-      agentSlug: handle.agentSlug,
-      taskId: handle.taskId,
-      overallStatus: result.overallStatus,
-    });
-
-    return handle;
-  }
-
-  /**
-   * Wait for subagent completion and forward events (GAP 2 fix - T059).
-   * Uses event-based completion notification with timeout fallback (Issue #5 fix).
-   *
-   * @param handle - Subagent handle to wait on
-   * @param delegationId - Delegation ID for event correlation
-   * @param agent - Agent name for event attribution
-   */
-  private async waitForSubagentCompletion(
-    handle: SubagentHandle,
-    delegationId: string,
-    agent: string
-  ): Promise<void> {
-    const maxWaitTime = 300000; // 5 minutes default timeout
-
-    // Helper to get current status (avoids TypeScript control flow narrowing)
-    const getStatus = (): SubagentHandle["status"] => handle.status;
-
-    // Check if already in terminal state
-    const initialStatus = getStatus();
-    if (initialStatus === "completed") {
-      return;
-    }
-    if (initialStatus === "failed" || initialStatus === "cancelled") {
-      throw new Error(`Subagent ${initialStatus}: ${handle.agentSlug}`);
-    }
-
-    // AbortController to stop the polling loop when race resolves (Issue B fix)
-    const abortController = new AbortController();
-
-    // Create timeout promise as fallback safety
-    const timeoutPromise = new Promise<"timeout">((resolve) => {
-      const timer = setTimeout(() => resolve("timeout"), maxWaitTime);
-      // Clean up timer if aborted
-      abortController.signal.addEventListener("abort", () => clearTimeout(timer));
-    });
-
-    // Create cancellation check promise with abort support (Issue B fix)
-    const cancellationCheck = async (): Promise<"cancelled"> => {
-      // Poll for cancellation at lower frequency (avoids busy loop but catches cancellation)
-      const checkInterval = 500;
-      while (!this.cancellation.isCancelled && !abortController.signal.aborted) {
-        await new Promise((resolve) => setTimeout(resolve, checkInterval));
-      }
-      return "cancelled";
-    };
-
-    // Emit initial progress
-    this.emit("subagentTool", delegationId, agent, "processing...");
-
-    // Race between completion, timeout, and cancellation
-    const result = await Promise.race([
-      handle.completion.then(() => "completed" as const),
-      timeoutPromise,
-      cancellationCheck(),
-    ]);
-
-    // Stop the polling loop and clear timeout (Issue B fix)
-    abortController.abort();
-
-    if (result === "cancelled") {
-      throw new Error("Delegation cancelled");
-    }
-
-    if (result === "timeout") {
-      throw new Error("Subagent execution timed out");
-    }
-
-    // Completion resolved - check final status (status may have changed after promise resolved)
-    const finalStatus = getStatus();
-    if (finalStatus === "failed" || finalStatus === "cancelled") {
-      throw new Error(`Subagent ${finalStatus}: ${handle.agentSlug}`);
-    }
   }
 
   /**
@@ -2663,71 +2761,39 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @param name - Tool name
    * @param input - Tool input parameters
    */
-  private async handlePermissionRequired(
+  private requestToolApproval(
     callId: string,
     name: string,
     input: Record<string, unknown>
-  ): Promise<void> {
-    // Transition to wait_permission state
-    this.transitionTo("wait_permission");
-
-    // Emit permission required event
-    this.emit("permissionRequired", callId, name, input);
-
-    // Create a promise that will be resolved when permission is granted/denied
-    const granted = await new Promise<boolean>((resolve) => {
-      this.pendingPermission = {
-        callId,
-        name,
-        input,
-        resolve,
-      };
-    });
-
-    // Clear pending permission
-    this.pendingPermission = null;
-
-    if (granted) {
-      // Permission granted - emit event and execute
-      this.emit("permissionGranted", callId, name);
-
-      // Transition back to tool_executing
-      this.transitionTo("tool_executing");
-
-      // Execute the tool now that permission is granted
-      const toolContext = this.createToolContext(callId);
-      try {
-        // toolStart should represent actual execution start (after approval)
-        this.emit("toolStart", callId, name, input);
-
-        const result = await this.toolExecutor.execute(name, input, toolContext, {
-          permissionOverride: "allow",
-        });
-        this.emit("toolEnd", callId, name, result);
-      } catch (error) {
-        if (error instanceof PermissionDeniedError) {
-          this.emit("permissionDenied", callId, name, error.message);
-        }
-        this.emit("toolEnd", callId, name, {
-          result: { success: false, error: error instanceof Error ? error.message : String(error) },
-          timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-          toolName: name,
+  ): Promise<boolean> {
+    const request = this.interactionQueue.then(async () => {
+      if (this.cancellation.isCancelled) return false;
+      if (this.listenerCount("permissionRequired") === 0) {
+        this.emit(
+          "permissionDenied",
           callId,
-        });
+          name,
+          "Approval is required but no interactive approval handler is available"
+        );
+        return false;
       }
-    } else {
-      // Permission denied by user
-      this.emit("permissionDenied", callId, name, "User denied permission");
-      this.emit("toolEnd", callId, name, {
-        result: { success: false, error: "Permission denied by user" },
-        timing: { startedAt: Date.now(), completedAt: Date.now(), durationMs: 0 },
-        toolName: name,
-        callId,
+      this.transitionTo("wait_permission");
+      const granted = await new Promise<boolean>((resolve) => {
+        this.pendingPermission = { callId, name, input, resolve };
+        this.emit("permissionRequired", callId, name, input);
       });
-
-      // Return to idle state
-      this.transitionTo("idle");
-    }
+      this.pendingPermission = null;
+      if (this.cancellation.isCancelled) return false;
+      this.transitionTo("tool_executing");
+      if (granted) this.emit("permissionGranted", callId, name);
+      else this.emit("permissionDenied", callId, name, "User denied permission");
+      return granted;
+    });
+    this.interactionQueue = request.then(
+      () => undefined,
+      () => undefined
+    );
+    return request;
   }
 
   /**
@@ -2834,6 +2900,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @param extendLimit - Optional new limits to set
    */
   grantCostApproval(extendLimit?: { cost?: number; requests?: number }): void {
+    this.costApprovalDenied = false;
     this.costManager.grantApproval(extendLimit);
   }
 
@@ -2841,6 +2908,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * Deny approval (stop execution due to cost limit).
    */
   denyCostApproval(): void {
+    this.costApprovalDenied = true;
     this.costManager.denyApproval();
   }
 
@@ -2892,6 +2960,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    */
   cancel(reason?: string): void {
     this.cancellation.cancel(reason);
+    this.pendingPermission?.resolve(false);
+    this.pendingUserPrompt?.resolve("Operation cancelled");
     this.abortController?.abort();
     this.pauseSignal.reset();
     this.transitionTo("terminated");

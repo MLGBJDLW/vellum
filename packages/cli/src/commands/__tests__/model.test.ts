@@ -3,8 +3,8 @@
  *
  * Tests 5 input scenarios:
  * 1. /model (no args) - show current model and options
- * 2. /model anthropic/claude-sonnet-4-20250514 (single arg with /) - switch model
- * 3. /model anthropic claude-sonnet-4-20250514 (two args) - switch model from autocomplete
+ * 2. /model anthropic/claude-sonnet-5-5 (single arg with /) - switch model
+ * 3. /model anthropic claude-sonnet-5-5 (two args) - switch model from autocomplete
  * 4. /model google (provider only) - show provider's available models
  * 5. /model invalid-provider - error for unknown provider
  */
@@ -14,8 +14,9 @@ import { modelCommand, setModelCommandConfig } from "../model.js";
 import type { CommandContext, CommandError, CommandResult, CommandSuccess } from "../types.js";
 
 // Mock @vellum/provider
-vi.mock("@vellum/provider", () => ({
-  getSupportedProviders: () => ["anthropic", "openai", "google"],
+vi.mock("@vellum/provider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@vellum/provider")>()),
+  getSupportedProviders: () => ["anthropic", "openai", "google", "ollama", "lmstudio"],
   getProviderModels: (provider: string) => {
     const models: Record<
       string,
@@ -29,8 +30,8 @@ vi.mock("@vellum/provider", () => ({
     > = {
       anthropic: [
         {
-          id: "claude-sonnet-4-20250514",
-          name: "Claude Sonnet 4",
+          id: "claude-sonnet-5-5",
+          name: "Claude Sonnet 5.5",
           contextWindow: 200000,
           inputPrice: 3,
           outputPrice: 15,
@@ -80,9 +81,9 @@ vi.mock("@vellum/provider", () => ({
       >
     > = {
       anthropic: {
-        "claude-sonnet-4-20250514": {
-          id: "claude-sonnet-4-20250514",
-          name: "Claude Sonnet 4",
+        "claude-sonnet-5-5": {
+          id: "claude-sonnet-5-5",
+          name: "Claude Sonnet 5.5",
           contextWindow: 200000,
           inputPrice: 3,
           outputPrice: 15,
@@ -120,7 +121,7 @@ function createMockContext(positionalArgs: (string | undefined)[]): CommandConte
       cwd: "/test",
     },
     credentials: {
-      resolve: vi.fn(),
+      resolve: vi.fn().mockResolvedValue({ ok: true, value: { value: "test-api-key" } }),
       store: vi.fn(),
       delete: vi.fn(),
       list: vi.fn(),
@@ -154,7 +155,7 @@ describe("/model command", () => {
 
   beforeEach(() => {
     onModelChangeMock = vi.fn();
-    setModelCommandConfig("anthropic", "claude-sonnet-4-20250514", onModelChangeMock);
+    setModelCommandConfig("anthropic", "claude-sonnet-5-5", onModelChangeMock);
   });
 
   describe("Scenario 1: /model (no args)", () => {
@@ -174,24 +175,24 @@ describe("/model command", () => {
     });
   });
 
-  describe("Scenario 2: /model anthropic/claude-sonnet-4-20250514 (single arg with /)", () => {
+  describe("Scenario 2: /model anthropic/claude-sonnet-5-5 (single arg with /)", () => {
     it("should switch to specified model with provider/model format", async () => {
       // Set different current model first
       setModelCommandConfig("openai", "gpt-4o", onModelChangeMock);
 
-      const ctx = createMockContext(["anthropic/claude-sonnet-4-20250514"]);
+      const ctx = createMockContext(["anthropic/claude-sonnet-5-5"]);
       const result = await modelCommand.execute(ctx);
 
       expect(isSuccess(result)).toBe(true);
       if (isSuccess(result)) {
         expect(result.message).toContain("Switched to");
-        expect(result.message).toContain("Claude Sonnet 4");
+        expect(result.message).toContain("Claude Sonnet 5.5");
       }
-      expect(onModelChangeMock).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-20250514");
+      expect(onModelChangeMock).toHaveBeenCalledWith("anthropic", "claude-sonnet-5-5");
     });
 
     it("should report already using if same model", async () => {
-      const ctx = createMockContext(["anthropic/claude-sonnet-4-20250514"]);
+      const ctx = createMockContext(["anthropic/claude-sonnet-5-5"]);
       const result = await modelCommand.execute(ctx);
 
       expect(isSuccess(result)).toBe(true);
@@ -201,20 +202,20 @@ describe("/model command", () => {
     });
   });
 
-  describe("Scenario 3: /model anthropic claude-sonnet-4-20250514 (two args from autocomplete)", () => {
+  describe("Scenario 3: /model anthropic claude-sonnet-5-5 (two args from autocomplete)", () => {
     it("should switch to model when provider and model are separate args", async () => {
       // Set different current model first
       setModelCommandConfig("google", "gemini-2.0-flash", onModelChangeMock);
 
-      const ctx = createMockContext(["anthropic", "claude-sonnet-4-20250514"]);
+      const ctx = createMockContext(["anthropic", "claude-sonnet-5-5"]);
       const result = await modelCommand.execute(ctx);
 
       expect(isSuccess(result)).toBe(true);
       if (isSuccess(result)) {
         expect(result.message).toContain("Switched to");
-        expect(result.message).toContain("Claude Sonnet 4");
+        expect(result.message).toContain("Claude Sonnet 5.5");
       }
-      expect(onModelChangeMock).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-20250514");
+      expect(onModelChangeMock).toHaveBeenCalledWith("anthropic", "claude-sonnet-5-5");
     });
   });
 
@@ -257,6 +258,85 @@ describe("/model command", () => {
   });
 
   describe("Edge cases", () => {
+    it("does not claim a switch when the active runtime rejects it", async () => {
+      setModelCommandConfig("anthropic", "claude-sonnet-5-5", async () => {
+        throw new Error("Finish the current task before changing models.");
+      });
+      const result = await modelCommand.execute(createMockContext(["openai/gpt-4o"]));
+      expect(result.kind).toBe("error");
+      if (result.kind === "error") expect(result.message).toContain("Finish the current task");
+    });
+
+    it("offers masked key entry before selecting a provider without credentials", async () => {
+      const ctx = createMockContext(["openai/gpt-4o"]);
+      vi.mocked(ctx.credentials.resolve).mockResolvedValue({ ok: true, value: null });
+      vi.mocked(ctx.credentials.exists).mockResolvedValue({ ok: true, value: false });
+
+      const result = await modelCommand.execute(ctx);
+
+      expect(result.kind).toBe("interactive");
+      if (result.kind === "interactive") {
+        expect(result.prompt.inputType).toBe("password");
+        expect(result.prompt.provider).toBe("openai");
+      }
+      expect(onModelChangeMock).not.toHaveBeenCalled();
+    });
+
+    it("selects the requested model after its key is saved without echoing the key", async () => {
+      const ctx = createMockContext(["openai/gpt-4o"]);
+      vi.mocked(ctx.credentials.resolve).mockResolvedValueOnce({ ok: true, value: null });
+      vi.mocked(ctx.credentials.exists).mockResolvedValue({ ok: true, value: false });
+      vi.mocked(ctx.credentials.store).mockResolvedValue({
+        ok: true,
+        value: {
+          id: "test",
+          provider: "openai",
+          value: "test-secret",
+          type: "api_key",
+          source: "keychain",
+          metadata: {},
+          createdAt: new Date(),
+        },
+      });
+      const result = await modelCommand.execute(ctx);
+      expect(result.kind).toBe("interactive");
+      if (result.kind !== "interactive") return;
+      const saved = await result.prompt.handler("test-secret");
+      expect(saved.kind).toBe("success");
+      expect(JSON.stringify(saved)).not.toContain("test-secret");
+      expect(onModelChangeMock).toHaveBeenCalledWith("openai", "gpt-4o");
+    });
+
+    it("keeps selection unchanged when saving the key fails or setup is cancelled", async () => {
+      const ctx = createMockContext(["openai/gpt-4o"]);
+      vi.mocked(ctx.credentials.resolve).mockResolvedValue({ ok: true, value: null });
+      vi.mocked(ctx.credentials.exists).mockResolvedValue({ ok: true, value: false });
+      vi.mocked(ctx.credentials.store).mockResolvedValue({
+        ok: false,
+        error: { code: "STORE_UNAVAILABLE", message: "Storage unavailable", store: "keychain" },
+      });
+      const result = await modelCommand.execute(ctx);
+      expect(result.kind).toBe("interactive");
+      if (result.kind !== "interactive") return;
+      expect((await result.prompt.handler("test-secret")).kind).toBe("error");
+      expect(result.prompt.onCancel?.().kind).toBe("error");
+      expect(onModelChangeMock).not.toHaveBeenCalled();
+    });
+
+    it("checks credentials even when selecting the current model", async () => {
+      const ctx = createMockContext(["anthropic/claude-sonnet-5-5"]);
+      vi.mocked(ctx.credentials.resolve).mockResolvedValue({ ok: true, value: null });
+      vi.mocked(ctx.credentials.exists).mockResolvedValue({ ok: true, value: false });
+      expect((await modelCommand.execute(ctx)).kind).toBe("interactive");
+    });
+
+    it("does not require a key for a local model", async () => {
+      const ctx = createMockContext(["ollama/local-model"]);
+      expect((await modelCommand.execute(ctx)).kind).toBe("success");
+      expect(ctx.credentials.resolve).not.toHaveBeenCalled();
+      expect(onModelChangeMock).toHaveBeenCalledWith("ollama", "local-model");
+    });
+
     it("should handle empty provider in two-arg format", async () => {
       const ctx = createMockContext(["", "model-id"]);
       const result = await modelCommand.execute(ctx);

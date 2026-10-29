@@ -11,9 +11,10 @@ import { z } from "zod";
 import { AgentLevel } from "../../agent/level.js";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
 import { MODE_CONFIGS } from "../../agent/modes.js";
-import { CONFIG_DEFAULTS } from "../../config/defaults.js";
+import { TerminationReason } from "../../agent/termination.js";
 import { PromptLoader } from "../../prompts/prompt-loader.js";
 import { createUserMessage, SessionParts } from "../../session/message.js";
+import type { PermissionChecker } from "../../tool/index.js";
 import type { WorkerContext, WorkerResult } from "./base.js";
 import { createWorkerToolBridge } from "./worker-tool-bridge.js";
 import { WORKER_TOOL_SETS } from "./worker-tool-constants.js";
@@ -161,14 +162,14 @@ export interface WorkerExecutionConfig {
   providerType?: string;
   /** Model to use (defaults to subsession config) */
   model?: string;
+  cwd?: string;
+  permissionChecker?: PermissionChecker;
 }
 
 /**
  * Default configuration values.
  */
-const DEFAULT_CONFIG: Required<WorkerExecutionConfig> = {
-  maxIterations: 15,
-  timeout: CONFIG_DEFAULTS.timeouts.shell, // 2 minutes
+const DEFAULT_CONFIG = {
   providerType: "anthropic",
   model: "claude-sonnet-4-6",
 };
@@ -215,7 +216,11 @@ export async function executeWorkerTask(
   }
 
   // Merge config with defaults
-  const execConfig = { ...DEFAULT_CONFIG, ...config };
+  const execConfig = {
+    ...config,
+    providerType: config?.providerType ?? DEFAULT_CONFIG.providerType,
+    model: config?.model ?? DEFAULT_CONFIG.model,
+  };
 
   // Get worker-specific prompt (async with markdown support and fallback)
   const systemPrompt = await getWorkerPromptAsync(workerSlug);
@@ -228,6 +233,7 @@ export async function executeWorkerTask(
   const toolBridge = createWorkerToolBridge({
     workerSlug,
     toolRegistry: subsession.toolRegistry,
+    permissionChecker: config?.permissionChecker,
   });
 
   // Validate bridge configuration
@@ -264,6 +270,7 @@ export async function executeWorkerTask(
 
   // Get working directory from context
   const cwd =
+    config?.cwd ??
     (subsession.context.localMemory.cwd as string) ??
     (subsession.context.sharedMemory.cwd as string) ??
     process.cwd();
@@ -280,7 +287,10 @@ export async function executeWorkerTask(
     cwd,
     tools: toolDefinitions,
     toolExecutor, // Bridge worker tools to AgentLoop
+    permissionChecker: config?.permissionChecker,
     agentLevel: AgentLevel.worker,
+    maxIterations: execConfig.maxIterations,
+    contextManagement: { enabled: true },
     terminationLimits: {
       maxSteps: execConfig.maxIterations,
       maxTimeMs: execConfig.timeout,
@@ -321,19 +331,27 @@ export async function executeWorkerTask(
   loop.on("error", (err) => {
     error = err;
   });
+  loop.on("terminated", (reason) => {
+    if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY) {
+      error = new Error(`Worker stopped before completion: ${reason}`);
+    }
+  });
+
+  // Start the turn before linking cancellation: addMessage resets a stopped loop
+  // for a new user turn, so doing this after cancel() would revive the worker.
+  loop.addMessage(createUserMessage([SessionParts.text(taskPacket.task)]));
 
   // Handle abort signal
-  if (signal) {
-    signal.addEventListener("abort", () => {
-      loop.cancel();
-    });
-  }
+  const onAbort = () => loop.cancel("Parent cancelled delegation");
+  signal?.addEventListener("abort", onAbort, { once: true });
+  const deadlineTimer =
+    execConfig.timeout !== undefined && Number.isFinite(execConfig.timeout)
+      ? setTimeout(() => loop.cancel("Worker deadline reached"), execConfig.timeout)
+      : undefined;
 
   try {
-    // Add the task as a user message
-    const userMessage = createUserMessage([SessionParts.text(taskPacket.task)]);
-    loop.addMessage(userMessage);
-
+    // Prompt loading may have completed after the parent was cancelled.
+    if (signal?.aborted) onAbort();
     // Run the agent loop
     await loop.run();
 
@@ -346,7 +364,7 @@ export async function executeWorkerTask(
       data: {
         output,
         finalState,
-        iterations: loop.getTerminationContext().stepCount,
+        iterations: loop.getIterationCount(),
       },
       filesModified,
       tokensUsed,
@@ -359,6 +377,9 @@ export async function executeWorkerTask(
       filesModified,
       tokensUsed,
     };
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    if (deadlineTimer) clearTimeout(deadlineTimer);
   }
 }
 

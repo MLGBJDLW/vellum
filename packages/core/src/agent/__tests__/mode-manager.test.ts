@@ -8,7 +8,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PLAN_AGENT, SPEC_ORCHESTRATOR, VIBE_AGENT } from "../agent-config.js";
 import { AgentRegistry } from "../agent-registry.js";
-import { type CodingMode, PLAN_MODE, SPEC_MODE, VIBE_MODE } from "../coding-modes.js";
+import {
+  BUILTIN_CODING_MODES,
+  type CodingMode,
+  PLAN_MODE,
+  SPEC_MODE,
+  VIBE_MODE,
+} from "../coding-modes.js";
 import type { ModeHandler } from "../mode-handlers/types.js";
 import {
   createModeManager,
@@ -23,7 +29,7 @@ describe("ModeManager", () => {
   let manager: ModeManager;
 
   beforeEach(() => {
-    manager = new ModeManager();
+    manager = new ModeManager({ initialMode: "vibe" });
   });
 
   describe("constructor", () => {
@@ -40,6 +46,7 @@ describe("ModeManager", () => {
     it("should accept custom modes configuration", () => {
       const customManager = new ModeManager({
         modes: {
+          orch: BUILTIN_CODING_MODES.orch,
           vibe: { ...VIBE_MODE, description: "Custom Vibe" },
           plan: PLAN_MODE,
           spec: SPEC_MODE,
@@ -110,7 +117,8 @@ describe("ModeManager", () => {
   describe("getAllHandlers", () => {
     it("should return all registered handlers", () => {
       const handlers = manager.getAllHandlers();
-      expect(handlers.size).toBe(3);
+      expect(handlers.size).toBe(4);
+      expect(handlers.has("orch")).toBe(true);
       expect(handlers.has("vibe")).toBe(true);
       expect(handlers.has("plan")).toBe(true);
       expect(handlers.has("spec")).toBe(true);
@@ -417,7 +425,7 @@ describe("ModeManager spec mode workflow", () => {
   let manager: ModeManager;
 
   beforeEach(() => {
-    manager = new ModeManager({ requireSpecConfirmation: true });
+    manager = new ModeManager({ initialMode: "vibe", requireSpecConfirmation: true });
   });
 
   it("should require confirmation to enter spec mode", async () => {
@@ -535,7 +543,7 @@ describe("ModeManager.getAgentConfig (T012)", () => {
     // Reset registry before each test
     AgentRegistry.getInstance().reset();
     AgentRegistry.getInstance().reinitialize();
-    manager = new ModeManager();
+    manager = new ModeManager({ initialMode: "vibe" });
   });
 
   afterEach(() => {

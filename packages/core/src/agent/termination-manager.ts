@@ -309,6 +309,20 @@ export class AgentTerminationManager {
     this.recordToolCall(tool.id, tool.name, tool.input);
   }
 
+  /** Include observed output in repetition checks without retaining large receipts. */
+  recordToolResult(id: string, result: string): void {
+    const call = this.recentToolCalls
+      .slice()
+      .reverse()
+      .find((item) => item.id === id);
+    if (!call) return;
+    let hash = 2166136261;
+    for (let index = 0; index < result.length; index++) {
+      hash = Math.imul(hash ^ result.charCodeAt(index), 16777619);
+    }
+    call.resultFingerprint = `${result.length}:${hash >>> 0}`;
+  }
+
   // ===========================================================================
   // Response Tracking (Stuck Detection)
   // ===========================================================================

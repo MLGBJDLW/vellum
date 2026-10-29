@@ -23,7 +23,6 @@ import { type Message, MessagesProvider } from "./MessagesContext.js";
 import { MouseProvider } from "./MouseContext.js";
 import { OverflowProvider } from "./OverflowContext.js";
 import { ResilienceProvider } from "./ResilienceContext.js";
-import { ScrollProvider } from "./ScrollContext.js";
 import { ToolsProvider } from "./ToolsContext.js";
 import { ToolTimeoutProvider } from "./ToolTimeoutContext.js";
 
@@ -122,23 +121,21 @@ export function RootProvider({
       <AnimationProvider>
         <BracketedPasteProvider>
           <OverflowProvider>
-            <ScrollProvider autoScrollToBottom>
-              <MouseProvider mode={resolvedMouseMode} enabled={mouseMode !== "disabled"}>
-                <AppProvider initialState={initialAppState}>
-                  <ResilienceProvider>
-                    <ToolTimeoutProvider>
-                      <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
-                        <LspProvider>
-                          <MessagesProvider initialMessages={initialMessages}>
-                            <ToolsProvider>{children}</ToolsProvider>
-                          </MessagesProvider>
-                        </LspProvider>
-                      </McpProvider>
-                    </ToolTimeoutProvider>
-                  </ResilienceProvider>
-                </AppProvider>
-              </MouseProvider>
-            </ScrollProvider>
+            <MouseProvider mode={resolvedMouseMode} enabled={mouseMode !== "disabled"}>
+              <AppProvider initialState={initialAppState}>
+                <ResilienceProvider>
+                  <ToolTimeoutProvider>
+                    <McpProvider toolRegistry={toolRegistry} toolExecutor={toolExecutor}>
+                      <LspProvider>
+                        <MessagesProvider initialMessages={initialMessages}>
+                          <ToolsProvider>{children}</ToolsProvider>
+                        </MessagesProvider>
+                      </LspProvider>
+                    </McpProvider>
+                  </ToolTimeoutProvider>
+                </ResilienceProvider>
+              </AppProvider>
+            </MouseProvider>
           </OverflowProvider>
         </BracketedPasteProvider>
       </AnimationProvider>

@@ -168,6 +168,8 @@ export interface SubsessionManager {
    * @returns true if terminated, false if not found
    */
   terminate(id: string): boolean;
+  /** Release a finished subsession once its result has been delivered. */
+  forget?(id: string): boolean;
 
   /**
    * Lists all subsessions with a given parent.
@@ -252,14 +254,17 @@ class SubsessionManagerImpl implements SubsessionManager {
   private readonly contextIsolator: ContextIsolator;
   private readonly permissionInheritance: PermissionInheritance;
   private readonly resourceQuotaManager: ResourceQuotaManager;
-  private readonly baseToolRegistry: ToolRegistry;
+  private readonly baseToolRegistry: Pick<
+    ToolRegistry,
+    "get" | "list" | "has" | "listByKind" | "getDefinitions"
+  >;
   private approvalHandler?: (request: ApprovalRequest) => Promise<boolean>;
 
   constructor(config: {
     contextIsolator: ContextIsolator;
     permissionInheritance: PermissionInheritance;
     resourceQuotaManager: ResourceQuotaManager;
-    baseToolRegistry: ToolRegistry;
+    baseToolRegistry: Pick<ToolRegistry, "get" | "list" | "has" | "listByKind" | "getDefinitions">;
   }) {
     this.contextIsolator = config.contextIsolator;
     this.permissionInheritance = config.permissionInheritance;
@@ -412,6 +417,13 @@ class SubsessionManagerImpl implements SubsessionManager {
     return children;
   }
 
+  forget(id: string): boolean {
+    const session = this.subsessions.get(id);
+    if (!session || session.status !== "terminated") return false;
+    for (const child of this.listByParent(id)) this.forget(child.id);
+    return this.subsessions.delete(id);
+  }
+
   async execute<T>(subsessionId: string, fn: () => Promise<T>): Promise<T> {
     const subsession = this.subsessions.get(subsessionId);
 
@@ -538,7 +550,7 @@ export function createSubsessionManager(config: {
   contextIsolator: ContextIsolator;
   permissionInheritance: PermissionInheritance;
   resourceQuotaManager: ResourceQuotaManager;
-  baseToolRegistry: ToolRegistry;
+  baseToolRegistry: Pick<ToolRegistry, "get" | "list" | "has" | "listByKind" | "getDefinitions">;
 }): SubsessionManager {
   return new SubsessionManagerImpl(config);
 }

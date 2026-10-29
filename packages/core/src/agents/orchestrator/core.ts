@@ -11,8 +11,10 @@ import { canSpawn } from "../../agent/level.js";
 import type { ModeRegistry } from "../../agent/mode-registry.js";
 import { CONFIG_DEFAULTS } from "../../config/defaults.js";
 import type { ImplementationResult, SpecHandoffPacket } from "../../spec/index.js";
+import type { PermissionChecker } from "../../tool/index.js";
 import { createTaskPacket } from "../protocol/task-packet.js";
 import type { SubsessionManager } from "../session/subsession-manager.js";
+import { BUILTIN_WORKERS } from "../workers/builtin/index.js";
 import { executeWorkerTask, type WorkerExecutionConfig } from "../workers/worker-executor.js";
 import type { AggregatedResult, ResultAggregator, TaskResult } from "./aggregator.js";
 import { createResultAggregator } from "./aggregator.js";
@@ -113,12 +115,25 @@ export interface OrchestratorConfig {
   modeRegistry: ModeRegistry;
   /** Subsession manager for agent isolation (optional) */
   subsessionManager?: SubsessionManager;
+  /** Root subsession whose context and permission scope workers inherit. */
+  parentSessionId?: string;
   /** Maximum number of subagents that can run concurrently (default: 3) */
   maxConcurrentSubagents?: number;
-  /** Timeout in milliseconds for task execution (default: 300000 = 5 min) */
+  /** Optional explicit task deadline in milliseconds. */
   taskTimeout?: number;
   /** Callback invoked when approval is required from user */
   onApprovalRequired?: (request: ApprovalRequest) => Promise<boolean>;
+}
+
+/** Per-delegation runtime inherited from the calling agent. */
+export interface ExecuteTaskOptions {
+  targetAgent?: string;
+  signal?: AbortSignal;
+  providerType?: string;
+  model?: string;
+  maxIterations?: number;
+  cwd?: string;
+  permissionChecker?: PermissionChecker;
 }
 
 /**
@@ -234,7 +249,11 @@ export interface OrchestratorCore {
    * @param level - The agent level to execute at
    * @returns Promise resolving to aggregated results from all subtasks
    */
-  executeTask(task: string, level: AgentLevel): Promise<AggregatedResult<unknown>>;
+  executeTask(
+    task: string,
+    level: AgentLevel,
+    options?: ExecuteTaskOptions
+  ): Promise<AggregatedResult<unknown>>;
 
   /**
    * Cancel all active subagents.
@@ -378,7 +397,6 @@ export type OrchestratorEventHandler = (event: OrchestratorEvent) => void;
 // ============================================
 
 const DEFAULT_MAX_CONCURRENT_SUBAGENTS = CONFIG_DEFAULTS.limits.maxConcurrentAgents;
-const DEFAULT_TASK_TIMEOUT = CONFIG_DEFAULTS.limits.orchestratorTaskTimeout;
 
 // ============================================
 // Implementation
@@ -445,7 +463,8 @@ class OrchestratorCoreImpl implements OrchestratorCore {
   private readonly taskDeadlines = new Map<string, number>(); // taskId -> deadline timestamp
   private readonly deadlineTimers = new Map<string, NodeJS.Timeout>(); // taskId -> deadline timer
   private readonly maxConcurrent: number;
-  private readonly defaultTaskTimeout: number;
+  private readonly defaultTaskTimeout?: number;
+  private readonly taskControllers = new Map<string, AbortController>();
   private readonly eventListeners = new Map<OrchestratorEventType, Set<OrchestratorEventHandler>>();
   private readonly subsessionManager?: SubsessionManager;
 
@@ -462,7 +481,10 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
     // Apply defaults
     this.maxConcurrent = config.maxConcurrentSubagents ?? DEFAULT_MAX_CONCURRENT_SUBAGENTS;
-    this.defaultTaskTimeout = config.taskTimeout ?? DEFAULT_TASK_TIMEOUT;
+    if (!Number.isInteger(this.maxConcurrent) || this.maxConcurrent < 1) {
+      throw new Error("maxConcurrentSubagents must be a positive integer");
+    }
+    this.defaultTaskTimeout = config.taskTimeout;
   }
 
   /**
@@ -504,6 +526,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
     // Only cancel if still active
     if (targetHandle.status === "running" || targetHandle.status === "spawning") {
+      this.taskControllers.get(targetHandle.id)?.abort(new Error("Task exceeded deadline"));
       setHandleStatus(targetHandle, "cancelled");
       targetHandle.completedAt = new Date();
 
@@ -567,6 +590,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     }
 
     const taskId = handle.taskId;
+    const chainId = this.taskToChain.get(taskId);
 
     // Clear deadline timer if exists (prevent timer leak)
     const timer = this.deadlineTimers.get(taskId);
@@ -579,6 +603,14 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     this.handles.delete(handleId);
     this.taskToChain.delete(taskId);
     this.taskDeadlines.delete(taskId);
+    this.taskControllers.delete(handleId);
+    if (handle.subsessionId) {
+      this.subsessionManager?.terminate(handle.subsessionId);
+      this.subsessionManager?.forget?.(handle.subsessionId);
+    }
+    if (chainId && !Array.from(this.taskToChain.values()).includes(chainId)) {
+      this.taskChainManager.deleteChain(chainId);
+    }
   }
 
   /**
@@ -629,7 +661,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
     // Validate agent exists
     const targetMode = this.config.modeRegistry.get(agentSlug);
-    if (!targetMode) {
+    if (!targetMode && !BUILTIN_WORKERS.some((worker) => worker.slug === agentSlug)) {
       throw new Error(`Agent "${agentSlug}" not found in mode registry`);
     }
 
@@ -695,23 +727,26 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
     // Calculate and track deadline
     const timeout = options?.timeout ?? this.defaultTaskTimeout;
-    const deadline = Date.now() + timeout;
-    this.taskDeadlines.set(taskId, deadline);
-
-    // Set timer to enforce deadline (Issue #7: deadline enforcement)
-    const timer = setTimeout(() => this.enforceDeadline(taskId), timeout);
-    this.deadlineTimers.set(taskId, timer);
+    if (timeout !== undefined && Number.isFinite(timeout) && timeout > 0) {
+      this.taskDeadlines.set(taskId, Date.now() + timeout);
+      const timer = setTimeout(() => this.enforceDeadline(taskId), timeout);
+      this.deadlineTimers.set(taskId, timer);
+    }
 
     // Create subsession for isolation if manager is configured
     let subsessionId: string | undefined;
-    if (this.subsessionManager && options?.parentTaskId) {
+    if (this.subsessionManager) {
+      const parentHandle = options?.parentTaskId
+        ? Array.from(this.handles.values()).find((handle) => handle.taskId === options.parentTaskId)
+        : undefined;
       const subsession = this.subsessionManager.create({
-        parentId: options.parentTaskId,
+        parentId: parentHandle?.subsessionId ?? this.config.parentSessionId,
         agentSlug,
         level: getAgentLevel(agentSlug),
       });
       subsessionId = subsession.id;
     }
+    this.taskControllers.set(handleId, new AbortController());
 
     // Create completion promise for event-based waiting (Issue #5 fix)
     const { promise: completion, resolve: resolveCompletion } = createCompletionPromise();
@@ -748,7 +783,14 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     return handle;
   }
 
-  async executeTask(task: string, level: AgentLevel): Promise<AggregatedResult<unknown>> {
+  async executeTask(
+    task: string,
+    level: AgentLevel,
+    options: ExecuteTaskOptions = {}
+  ): Promise<AggregatedResult<unknown>> {
+    options.signal?.throwIfAborted();
+    // Each execution owns its receipts; concurrent calls must not reset each other.
+    const aggregator = createResultAggregator<unknown>();
     // Emit task_started event
     const executionTaskId = generateTaskId();
     this.emit({
@@ -760,14 +802,18 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     });
 
     // Reset aggregator for fresh execution
-    this.aggregator.reset();
 
     // Analyze and potentially decompose the task
     const analysis = this.decomposer.analyze(task);
 
-    if (!analysis.shouldDecompose) {
+    if (options.targetAgent || !analysis.shouldDecompose) {
       // Simple task - route directly
       const routeResult = this.router.route(task, level);
+      if (options.targetAgent) routeResult.selectedAgent = options.targetAgent;
+      else if (!routeResult.selectedAgent && level === 2) {
+        routeResult.selectedAgent =
+          BUILTIN_WORKERS.find((worker) => worker.canHandle(task))?.slug ?? "coder";
+      }
 
       if (!routeResult.selectedAgent) {
         // No agent found - return failure
@@ -780,7 +826,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
           startedAt: new Date(),
           completedAt: new Date(),
         };
-        this.aggregator.addResult(failResult);
+        aggregator.addResult(failResult);
 
         // Emit task_failed event
         this.emit({
@@ -792,14 +838,14 @@ class OrchestratorCoreImpl implements OrchestratorCore {
           },
         });
 
-        return this.aggregator.aggregate();
+        return aggregator.aggregate();
       }
 
       // Spawn single agent
       const handle = await this.spawnSubagent(routeResult.selectedAgent, task);
 
       // Execute the worker task (Issue #3 fix: actually run the task)
-      const execResult = await this.runWorkerTask(handle, task);
+      const execResult = await this.runWorkerTask(handle, task, options);
 
       const result: TaskResult<unknown> = {
         taskId: handle.taskId,
@@ -811,7 +857,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
         completedAt: handle.completedAt ?? new Date(),
       };
 
-      this.aggregator.addResult(result);
+      aggregator.addResult(result);
 
       // Emit task_completed event
       this.emit({
@@ -827,7 +873,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
       // Cleanup completed handle (Issue #6: memory leak prevention)
       this.cleanup(handle.id);
 
-      return this.aggregator.aggregate();
+      return aggregator.aggregate();
     }
 
     // Complex task - decompose and execute subtasks
@@ -836,7 +882,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     // Execute subtasks in order, respecting parallelization groups
     for (const parallelGroup of decomposition.canParallelize) {
       // Execute all tasks in this group (up to maxConcurrent at a time)
-      const groupPromises: Promise<void>[] = [];
+      const groupPromises = new Set<Promise<void>>();
 
       for (const subtaskId of parallelGroup) {
         const subtask = decomposition.subtasks.find((s) => s.id === subtaskId);
@@ -848,13 +894,19 @@ class OrchestratorCoreImpl implements OrchestratorCore {
         ).length;
 
         if (activeCount >= this.maxConcurrent) {
-          // Wait for some to complete (simplified - in real impl would use proper queue)
-          await Promise.race(groupPromises);
+          await Promise.race(this.getActiveSubagents().map((handle) => handle.completion));
         }
+        options.signal?.throwIfAborted();
 
         // Route subtask
         const routeResult = this.router.route(subtask.description, level);
-        const agentSlug = subtask.suggestedAgent ?? routeResult.selectedAgent;
+        const agentSlug =
+          subtask.suggestedAgent ||
+          routeResult.selectedAgent ||
+          (level === 2
+            ? (BUILTIN_WORKERS.find((worker) => worker.canHandle(subtask.description))?.slug ??
+              "coder")
+            : "");
 
         if (!agentSlug) {
           // Record failure for this subtask
@@ -866,7 +918,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
             startedAt: new Date(),
             completedAt: new Date(),
           };
-          this.aggregator.addResult(failResult);
+          aggregator.addResult(failResult);
           continue;
         }
 
@@ -874,11 +926,11 @@ class OrchestratorCoreImpl implements OrchestratorCore {
         const subtaskPromise = (async () => {
           try {
             const handle = await this.spawnSubagent(agentSlug, subtask.description, {
-              taskId: subtaskId,
+              taskId: `${executionTaskId}-${subtaskId}`,
             });
 
             // Execute the worker task (Issue #3 fix: actually run the task)
-            const execResult = await this.runWorkerTask(handle, subtask.description);
+            const execResult = await this.runWorkerTask(handle, subtask.description, options);
 
             const result: TaskResult<unknown> = {
               taskId: handle.taskId,
@@ -890,24 +942,25 @@ class OrchestratorCoreImpl implements OrchestratorCore {
               completedAt: handle.completedAt ?? new Date(),
             };
 
-            this.aggregator.addResult(result);
+            aggregator.addResult(result);
 
             // Cleanup completed handle (Issue #6: memory leak prevention)
             this.cleanup(handle.id);
           } catch (error) {
             const failResult: TaskResult<unknown> = {
-              taskId: subtaskId,
+              taskId: `${executionTaskId}-${subtaskId}`,
               agentSlug,
               status: "failure",
               error: error instanceof Error ? error : new Error(String(error)),
               startedAt: new Date(),
               completedAt: new Date(),
             };
-            this.aggregator.addResult(failResult);
+            aggregator.addResult(failResult);
           }
         })();
 
-        groupPromises.push(subtaskPromise);
+        groupPromises.add(subtaskPromise);
+        void subtaskPromise.finally(() => groupPromises.delete(subtaskPromise));
       }
 
       // Wait for all in group to complete
@@ -928,7 +981,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     }
 
     // Emit task_completed event for the entire complex task
-    const aggregated = this.aggregator.aggregate();
+    const aggregated = aggregator.aggregate();
     this.emit({
       type: "task_completed",
       timestamp: new Date(),
@@ -957,6 +1010,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
     // Only cancel if still active
     if (handle.status === "spawning" || handle.status === "running") {
+      this.taskControllers.get(handleId)?.abort(new Error("Subagent cancelled"));
       setHandleStatus(handle, "cancelled");
       handle.completedAt = new Date();
 
@@ -1009,7 +1063,8 @@ class OrchestratorCoreImpl implements OrchestratorCore {
    */
   private async runWorkerTask(
     handle: SubagentHandle,
-    taskDescription: string
+    taskDescription: string,
+    options: ExecuteTaskOptions = {}
   ): Promise<{ success: boolean; output?: unknown; error?: Error }> {
     // Execute actual task using worker executor if subsession manager is available
     if (this.subsessionManager && handle.subsessionId) {
@@ -1029,9 +1084,17 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
         // Configure worker execution
         const execConfig: WorkerExecutionConfig = {
-          maxIterations: 20, // Standard iterations for task execution
-          timeout: 180000, // 3 minutes for standard tasks
+          maxIterations: options.maxIterations,
+          timeout: this.defaultTaskTimeout,
+          providerType: options.providerType,
+          model: options.model,
+          cwd: options.cwd,
+          permissionChecker: options.permissionChecker,
         };
+        const controller = this.taskControllers.get(handle.id) ?? new AbortController();
+        const onAbort = () => controller.abort(options.signal?.reason);
+        options.signal?.addEventListener("abort", onAbort, { once: true });
+        if (options.signal?.aborted) onAbort();
 
         try {
           // Execute the worker task
@@ -1040,6 +1103,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
             {
               subsession,
               taskPacket,
+              signal: controller.signal,
             },
             execConfig
           );
@@ -1078,19 +1142,24 @@ class OrchestratorCoreImpl implements OrchestratorCore {
             success: false,
             error: error instanceof Error ? error : new Error(String(error)),
           };
+        } finally {
+          options.signal?.removeEventListener("abort", onAbort);
         }
       }
     }
 
-    // Fallback: No subsession manager - mark as completed (legacy behavior)
-    setHandleStatus(handle, "completed");
+    // A missing runtime is a failure, never fabricated successful work.
+    setHandleStatus(handle, "failed");
     handle.completedAt = new Date();
     const chainId = this.taskToChain.get(handle.taskId);
     if (chainId) {
-      this.taskChainManager.updateStatus(chainId, handle.taskId, "completed");
+      this.taskChainManager.updateStatus(chainId, handle.taskId, "failed");
     }
 
-    return { success: true };
+    return {
+      success: false,
+      error: new Error("No subsession runtime configured for worker execution"),
+    };
   }
 
   /**
@@ -1125,53 +1194,10 @@ class OrchestratorCoreImpl implements OrchestratorCore {
         taskId: `spec-impl-${workflowId}`,
       });
 
-      // Execute actual task using worker executor if subsession manager is available
-      if (this.subsessionManager && handle.subsessionId) {
-        const subsession = this.subsessionManager.get(handle.subsessionId);
-        if (subsession) {
-          // Create task packet for the worker
-          const taskPacket = createTaskPacket(
-            taskDescription,
-            { kind: "builtin", slug: "coder" },
-            "orchestrator",
-            {
-              context: {
-                chainId: this.taskToChain.get(handle.taskId),
-                files: tasksFile ? [tasksFile] : undefined,
-              },
-            }
-          );
-
-          // Configure worker execution
-          const execConfig: WorkerExecutionConfig = {
-            maxIterations: 25, // Allow more iterations for implementation tasks
-            timeout: 300000, // 5 minutes for implementation
-          };
-
-          // Execute the worker task
-          const workerResult = await executeWorkerTask(
-            "coder",
-            {
-              subsession,
-              taskPacket,
-            },
-            execConfig
-          );
-
-          // Update handle based on result
-          if (workerResult.success) {
-            setHandleStatus(handle, "completed");
-          } else {
-            setHandleStatus(handle, "failed");
-            throw workerResult.error ?? new Error("Worker execution failed");
-          }
-        } else {
-          // Subsession not found, mark as completed (fallback behavior)
-          setHandleStatus(handle, "completed");
-        }
-      } else {
-        // No subsession manager - use legacy behavior (mark as completed)
-        setHandleStatus(handle, "completed");
+      const execution = await this.runWorkerTask(handle, taskDescription);
+      if (!execution.success) {
+        this.cleanup(handle.id);
+        throw execution.error ?? new Error("Worker execution failed");
       }
 
       handle.completedAt = new Date();

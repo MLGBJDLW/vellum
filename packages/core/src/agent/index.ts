@@ -44,6 +44,7 @@ export {
   CodingModeConfigSchema,
   CodingModeSchema,
   codingModeToCore,
+  ORCH_MODE,
   PLAN_MODE,
   SPEC_MODE,
   SPEC_PHASE_CONFIG,

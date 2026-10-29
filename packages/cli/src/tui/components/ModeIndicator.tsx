@@ -42,6 +42,7 @@ export interface ModeIndicatorProps {
 function getModeIcons(): Record<CodingMode, string> {
   const icons = getIcons();
   return {
+    orch: "[Orch]",
     vibe: icons.vibe,
     plan: icons.plan,
     spec: icons.spec,
@@ -52,6 +53,7 @@ function getModeIcons(): Record<CodingMode, string> {
  * Mode display names.
  */
 const MODE_NAMES: Record<CodingMode, string> = {
+  orch: "orch",
   vibe: "vibe",
   plan: "plan",
   spec: "spec",
@@ -64,6 +66,7 @@ const MODE_NAMES: Record<CodingMode, string> = {
  * - spec: purple (primary) - detailed specification
  */
 const MODE_COLOR_KEYS: Record<CodingMode, "success" | "info" | "primary"> = {
+  orch: "primary",
   vibe: "success",
   plan: "info",
   spec: "primary",

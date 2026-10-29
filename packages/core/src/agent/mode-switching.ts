@@ -270,7 +270,7 @@ export class ModeSwitcher {
    * @param config - Optional configuration options
    */
   constructor(config: ModeSwitcherConfig = {}) {
-    this._currentMode = config.initialMode ?? "vibe";
+    this._currentMode = config.initialMode ?? "orch";
     this._previousMode = this._currentMode;
     this.activityTracker = config.activityTracker ?? new NoOpActivityTracker();
     this.requireSpecConfirmation = config.requireSpecConfirmation ?? true;

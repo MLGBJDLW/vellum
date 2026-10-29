@@ -11,8 +11,11 @@
 import type { TokenUsage } from "@vellum/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { ORCH_MODE, VIBE_MODE } from "../../agent/coding-modes.js";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
+import { CostService } from "../../cost/service.js";
 import type { SessionMessage } from "../../session/index.js";
+import { UnifiedToolContainer } from "../../tool/container.js";
 import { type PermissionChecker, ToolExecutor } from "../../tool/index.js";
 
 // Mock session/index.js (which is what loop.ts imports)
@@ -25,17 +28,6 @@ vi.mock("../../session/index.js", async (importOriginal) => {
       initialize: vi.fn(),
       getRegistry: vi.fn(),
     },
-    toModelMessages: vi.fn((messages) =>
-      messages.map((m: Record<string, unknown>) => ({
-        role: m.role,
-        content: m.parts
-          ? (m.parts as Array<{ type: string; text?: string }>).map((p) => {
-              if (p.type === "text") return { type: "text", text: p.text };
-              return p;
-            })
-          : m.content,
-      }))
-    ),
   };
 });
 
@@ -105,6 +97,363 @@ describe("AgentLoop Integration (T034)", () => {
   });
 
   describe("Happy Path", () => {
+    it.each([
+      false,
+      true,
+    ])("does not report completion after a failed partial stream (processor=%s)", async (useStreamProcessor) => {
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream([
+          { type: "text", content: "Partial response" },
+          { type: "error", code: "PROVIDER_ERROR", message: "Provider failed before completion" },
+        ]) as ReturnType<typeof LLM.stream>
+      );
+      const loop = new AgentLoop({
+        ...config,
+        useStreamProcessor,
+        maxRetries: 0,
+        enableEvidencePack: false,
+      });
+      const complete = vi.fn();
+      const error = vi.fn();
+      loop.on("complete", complete);
+      loop.on("error", error);
+      await expect(loop.run()).rejects.toThrow("Provider failed before completion");
+      expect(complete).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalled();
+    });
+
+    it("uses the newly selected provider and model in the existing runtime", async () => {
+      vi.mocked(LLM.stream).mockImplementation(
+        () =>
+          createMockStream([
+            { type: "text", content: "Answer" },
+            { type: "done", stopReason: "end_turn" },
+          ]) as ReturnType<typeof LLM.stream>
+      );
+      const loop = new AgentLoop({
+        ...config,
+        contextManagement: { enabled: true },
+        enableEvidencePack: false,
+      });
+      loop.addMessage(createSessionMessage("user", "First request"));
+      await loop.run();
+      loop.setModel("openai", "gpt-5.5");
+      loop.addMessage(createSessionMessage("user", "Second request"));
+      await loop.run();
+      expect(vi.mocked(LLM.stream).mock.calls[1]?.[0]).toMatchObject({
+        providerType: "openai",
+        model: "gpt-5.5",
+      });
+      expect(JSON.stringify(vi.mocked(LLM.stream).mock.calls[1]?.[0].messages)).toContain(
+        "First request"
+      );
+      expect(loop.isContextManagementEnabled()).toBe(true);
+    });
+
+    it("rejects changing models during an active response", async () => {
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      vi.mocked(LLM.stream).mockImplementation(() =>
+        (async function* () {
+          expect(() => loop.setModel("openai", "another-model")).toThrow("while a task is running");
+          yield { type: "text" as const, content: "Original model response" };
+          yield { type: "done" as const, stopReason: "end_turn" as const };
+        })()
+      );
+      await loop.run();
+      expect(loop.getConfig().providerType).toBe("anthropic");
+    });
+
+    it("replays provider reasoning metadata on the assistant tool message", async () => {
+      const metadata = {
+        provider: "anthropic",
+        model: config.model,
+        replay: [{ type: "thinking", thinking: "reasoning", signature: "signed" }],
+      };
+      vi.mocked(LLM.stream)
+        .mockReturnValueOnce(
+          createMockStream([
+            { type: "toolCall", id: "read-meta", name: "read_file", input: { path: "/one" } },
+            { type: "provider_metadata", metadata },
+            { type: "done", stopReason: "tool_use" },
+          ]) as ReturnType<typeof LLM.stream>
+        )
+        .mockReturnValueOnce(
+          createMockStream([
+            { type: "text", content: "Done" },
+            { type: "done", stopReason: "end_turn" },
+          ]) as ReturnType<typeof LLM.stream>
+        );
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "read_file",
+          description: "Read",
+          parameters: z.object({ path: z.string() }),
+          kind: "read",
+        },
+        execute: vi.fn(async () => ({ success: true as const, output: "contents" })),
+      });
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      await loop.run();
+      expect(
+        loop.getMessages().find((message) => message.role === "assistant")?.metadata
+          .providerMetadata
+      ).toEqual(metadata);
+      expect(
+        vi
+          .mocked(LLM.stream)
+          .mock.calls[1]?.[0].messages.find((message) => message.role === "assistant")
+          ?.providerMetadata
+      ).toEqual(metadata);
+    });
+
+    it("accepts synchronous prompt responses and releases the response listener", async () => {
+      vi.mocked(LLM.stream)
+        .mockReturnValueOnce(
+          createMockStream([
+            { type: "toolCall", id: "ask-1", name: "ask_followup_question", input: {} },
+            { type: "done", stopReason: "tool_use" },
+          ]) as ReturnType<typeof LLM.stream>
+        )
+        .mockReturnValueOnce(
+          createMockStream([
+            { type: "text", content: "Understood" },
+            { type: "done", stopReason: "end_turn" },
+          ]) as ReturnType<typeof LLM.stream>
+        );
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "ask_followup_question",
+          description: "Ask",
+          parameters: z.object({}),
+          kind: "agent",
+        },
+        execute: vi.fn(async () => ({
+          success: true as const,
+          output: { _prompt: { type: "user_prompt", question: "Which file?" } },
+        })),
+      });
+      const loop = new AgentLoop({ ...config, interactive: true, enableEvidencePack: false });
+      loop.on("userPrompt:required", () => loop.submitUserResponse("report.md"));
+      await loop.run();
+      expect(loop.listenerCount("userPrompt:response")).toBe(0);
+      expect(JSON.stringify(loop.getMessages())).toContain("report.md");
+    });
+
+    it("continues useful work beyond the former 50-turn default without retaining cancellation listeners", async () => {
+      let turn = 0;
+      vi.mocked(LLM.stream).mockImplementation(() => {
+        const current = ++turn;
+        return createMockStream(
+          current <= 55
+            ? [
+                {
+                  type: "toolCall",
+                  id: `read-${current}`,
+                  name: "read_file",
+                  input: { path: `/file-${current}` },
+                },
+                { type: "usage", usage: { inputTokens: 3000, outputTokens: 10 } },
+                { type: "done", stopReason: "tool_use" },
+              ]
+            : [
+                { type: "text", content: "All files inspected." },
+                { type: "done", stopReason: "end_turn" },
+              ]
+        ) as ReturnType<typeof LLM.stream>;
+      });
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "read_file",
+          description: "Read",
+          parameters: z.object({ path: z.string() }),
+          kind: "read",
+        },
+        execute: vi.fn(async () => ({ success: true as const, output: "contents" })),
+      });
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      let activeListeners = 0;
+      const token = loop.getCancellationToken();
+      const onCancel = token.onCancel.bind(token);
+      vi.spyOn(token, "onCancel").mockImplementation((callback) => {
+        activeListeners++;
+        const unregister = onCancel(callback);
+        return () => {
+          activeListeners--;
+          unregister();
+        };
+      });
+      const complete = vi.fn();
+      loop.on("complete", complete);
+      await loop.run();
+      expect(turn).toBe(56);
+      expect(activeListeners).toBe(0);
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(loop.getMessages().at(-1)?.parts).toContainEqual({
+        type: "text",
+        text: "All files inspected.",
+      });
+    });
+
+    it("returns failed verification evidence to the same repair loop before accepting completion", async () => {
+      vi.mocked(LLM.stream)
+        .mockReturnValueOnce(
+          createMockStream([
+            { type: "toolCall", id: "verify-1", name: "attempt_completion", input: {} },
+            { type: "done", stopReason: "tool_use" },
+          ]) as ReturnType<typeof LLM.stream>
+        )
+        .mockReturnValueOnce(
+          createMockStream([
+            { type: "text", content: "The verification failed; here is the remaining blocker." },
+            { type: "done", stopReason: "end_turn" },
+          ]) as ReturnType<typeof LLM.stream>
+        );
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "attempt_completion",
+          description: "Verify",
+          parameters: z.object({}),
+          kind: "agent",
+        },
+        execute: vi.fn(async () => ({
+          success: true as const,
+          output: {
+            result: "Attempted fix",
+            verified: true,
+            verificationPassed: false,
+            verificationOutput: "Assertion failed: expected 2",
+            completed: true,
+          },
+        })),
+      });
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      await loop.run();
+      expect(LLM.stream).toHaveBeenCalledTimes(2);
+      expect(loop.isCompletionAttempted()).toBe(false);
+      expect(JSON.stringify(loop.getMessages())).toContain("Assertion failed: expected 2");
+    });
+
+    it("offers the registered verification tool only to the orch workflow", async () => {
+      const container = new UnifiedToolContainer();
+      container.registerBuiltins();
+      vi.mocked(LLM.stream).mockImplementation(
+        () =>
+          createMockStream([
+            { type: "text", content: "Hello" },
+            { type: "done", stopReason: "end_turn" },
+          ]) as ReturnType<typeof LLM.stream>
+      );
+      for (const mode of [ORCH_MODE, VIBE_MODE]) {
+        const loop = new AgentLoop({
+          ...config,
+          mode,
+          tools: container.getProviderToolDefinitions(),
+          toolExecutor: container.getExecutor(),
+          enableEvidencePack: false,
+        });
+        await loop.run();
+      }
+      expect(
+        vi
+          .mocked(LLM.stream)
+          .mock.calls[0]?.[0].tools?.some((tool) => tool.name === "attempt_completion")
+      ).toBe(true);
+      expect(
+        vi
+          .mocked(LLM.stream)
+          .mock.calls[1]?.[0].tools?.some((tool) => tool.name === "attempt_completion")
+      ).toBe(false);
+    });
+
+    it("honors an explicit request budget before issuing another model call", async () => {
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream([
+          { type: "toolCall", id: "read-budget", name: "read_file", input: { path: "/one" } },
+          { type: "usage", usage: { inputTokens: 10, outputTokens: 10 } },
+          { type: "done", stopReason: "tool_use" },
+        ]) as ReturnType<typeof LLM.stream>
+      );
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "read_file",
+          description: "Read",
+          parameters: z.object({ path: z.string() }),
+          kind: "read",
+        },
+        execute: vi.fn(async () => ({ success: true as const, output: "contents" })),
+      });
+      const loop = new AgentLoop({
+        ...config,
+        costService: new CostService({ sessionId: "budget" }),
+        costLimits: { maxRequestsPerSession: 1, pauseOnLimitReached: true, warningThreshold: 0.8 },
+        enableEvidencePack: false,
+      });
+      const terminated = vi.fn();
+      loop.on("terminated", terminated);
+      loop.on("cost:awaitingApproval", () => loop.denyCostApproval());
+      await loop.run();
+      expect(LLM.stream).toHaveBeenCalledTimes(1);
+      expect(terminated).toHaveBeenCalledWith(
+        "cost_limit",
+        expect.objectContaining({ shouldTerminate: true })
+      );
+    });
+
+    it("reports an explicit iteration cap instead of silently completing after its last tool", async () => {
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream([
+          { type: "toolCall", id: "one", name: "read_file", input: { path: "/one" } },
+          { type: "done", stopReason: "tool_use" },
+        ]) as ReturnType<typeof LLM.stream>
+      );
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "read_file",
+          description: "Read",
+          parameters: z.object({ path: z.string() }),
+          kind: "read",
+        },
+        execute: vi.fn(async () => ({ success: true as const, output: "contents" })),
+      });
+      const loop = new AgentLoop({ ...config, maxIterations: 1, enableEvidencePack: false });
+      const terminated = vi.fn();
+      loop.on("terminated", terminated);
+      await loop.run();
+      expect(LLM.stream).toHaveBeenCalledTimes(1);
+      expect(terminated).toHaveBeenCalledWith(
+        "max_steps",
+        expect.objectContaining({ shouldTerminate: true })
+      );
+      expect(JSON.stringify(loop.getMessages())).toContain("contents");
+    });
+
+    it("stops an actual repeated-tool loop with the existing doom-loop guard", async () => {
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream([
+          { type: "toolCall", id: "repeat", name: "read_file", input: { path: "/same" } },
+          { type: "done", stopReason: "tool_use" },
+        ]) as ReturnType<typeof LLM.stream>
+      );
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "read_file",
+          description: "Read",
+          parameters: z.object({ path: z.string() }),
+          kind: "read",
+        },
+        execute: vi.fn(async () => ({ success: true as const, output: "unchanged" })),
+      });
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      const terminated = vi.fn();
+      loop.on("terminated", terminated);
+      await loop.run();
+      expect(LLM.stream).toHaveBeenCalledTimes(3);
+      expect(terminated).toHaveBeenCalledWith(
+        "doom_loop",
+        expect.objectContaining({ shouldTerminate: true })
+      );
+    });
+
     it("completes a simple text response without tool calls", async () => {
       const events = [
         { type: "text", content: "Hello, " },
@@ -204,9 +553,14 @@ describe("AgentLoop Integration (T034)", () => {
         { type: "done", stopReason: "tool_use" },
       ];
 
-      vi.mocked(LLM.stream).mockReturnValue(
-        createMockStream(events) as ReturnType<typeof LLM.stream>
-      );
+      vi.mocked(LLM.stream)
+        .mockReturnValueOnce(createMockStream(events) as ReturnType<typeof LLM.stream>)
+        .mockReturnValueOnce(
+          createMockStream([
+            { type: "text", content: "Approved action finished" },
+            { type: "done", stopReason: "end_turn" },
+          ]) as ReturnType<typeof LLM.stream>
+        );
 
       const askPermissionChecker: PermissionChecker = {
         checkPermission: vi.fn().mockResolvedValue("ask"),
@@ -316,10 +670,10 @@ describe("AgentLoop Integration (T034)", () => {
     it("cancels before starting returns early from run", async () => {
       const loop = new AgentLoop(config);
 
+      loop.addMessage(createSessionMessage("user", "Test"));
       // Cancel immediately - this sets the cancellation token
       loop.cancel("Pre-cancelled");
 
-      loop.addMessage(createSessionMessage("user", "Test"));
       await loop.run();
 
       // When cancelled before run(), the loop transitions through streaming briefly
@@ -555,7 +909,7 @@ describe("AgentLoop Integration (T034)", () => {
       loop.on("error", (err) => errors.push(err));
 
       loop.addMessage(createSessionMessage("user", "Test"));
-      await loop.run();
+      await expect(loop.run()).rejects.toThrow("Connection lost");
 
       expect(errors.length).toBeGreaterThanOrEqual(1);
       expect(errors[0]?.message).toContain("STREAM_ERROR");

@@ -4,10 +4,11 @@ import {
   createAgentFactory,
   getToolEventBus,
   LLM,
+  TerminationReason,
   UnifiedToolContainer,
 } from "@vellum/core";
 import { createId } from "@vellum/shared";
-import { getOrCreateOrchestrator } from "../orchestrator-singleton.js";
+import { getOrCreateOrchestrator, resetOrchestrator } from "../orchestrator-singleton.js";
 import { getEffectiveThinkingConfig } from "./think.js";
 
 export interface RunOptions {
@@ -19,7 +20,8 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
   console.log(`Running: "${prompt}" with model ${options.model}`);
 
   let agentLoop: AgentLoop | undefined;
-  let initError: Error | undefined;
+  let cleanup: (() => void) | undefined;
+  let stopped: string | undefined;
 
   try {
     const { createCredentialManager } = await import("./auth.js");
@@ -29,16 +31,16 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
     const providerRegistry = new ProviderRegistry({ credentialManager });
     LLM.initialize(providerRegistry);
 
-    const modeConfig = BUILTIN_CODING_MODES.vibe;
-    const orchestrator = getOrCreateOrchestrator();
+    const modeConfig = BUILTIN_CODING_MODES.orch;
 
     const factoryResult = await createAgentFactory({
       cwd: process.cwd(),
       projectRoot: process.cwd(),
-      role: "coder",
-      mode: "vibe",
+      role: "orchestrator",
+      mode: "orch",
     });
-    const { promptBuilder, cleanup } = factoryResult;
+    const { promptBuilder } = factoryResult;
+    cleanup = factoryResult.cleanup;
 
     const toolEventBus = getToolEventBus();
     const toolContainer = new UnifiedToolContainer({
@@ -46,6 +48,7 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
       eventBus: toolEventBus,
     });
     toolContainer.registerBuiltins();
+    const orchestrator = getOrCreateOrchestrator({ toolContainer });
 
     agentLoop = new AgentLoop({
       sessionId: createId(),
@@ -62,6 +65,7 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
       toolExecutor: toolContainer.getExecutor(),
       enableAgentsIntegration: true,
       enableSkillsIntegration: true,
+      contextManagement: { enabled: true },
     });
 
     // Listen for assistant text output
@@ -69,9 +73,15 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
       process.stdout.write(text);
     });
 
-    // Listen for completion
-    agentLoop.on("complete", () => {
-      console.log("\n[Agent completed]");
+    agentLoop.on("terminated", (reason) => {
+      if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
+        stopped = reason;
+    });
+    agentLoop.on("permissionDenied", (_id, tool, reason) => {
+      stopped = `${tool}: ${reason}`;
+    });
+    agentLoop.on("error", (error) => {
+      stopped = error.message;
     });
 
     // Add user message and run
@@ -84,15 +94,22 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
 
     await agentLoop.run();
 
-    await cleanup();
+    if (stopped) {
+      console.error(`\n[Agent stopped: ${stopped}]`);
+      process.exitCode = 1;
+    } else {
+      console.log("\n[Agent completed]");
+    }
   } catch (error) {
-    initError = error instanceof Error ? error : new Error(String(error));
-    console.error("[CLI] Failed to initialize and run agent:", initError.message);
-    process.exit(1);
-  }
-
-  if (initError) {
-    console.error("[CLI] Agent initialization failed.");
-    process.exit(1);
+    console.error(
+      "[CLI] Failed to run agent:",
+      error instanceof Error ? error.message : String(error)
+    );
+    process.exitCode = 1;
+  } finally {
+    cleanup?.();
+    agentLoop?.removeAllListeners();
+    agentLoop?.cancel("CLI session closed");
+    resetOrchestrator();
   }
 }

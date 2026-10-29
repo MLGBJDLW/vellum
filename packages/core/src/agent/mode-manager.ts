@@ -571,6 +571,7 @@ export class ModeManager extends TypedEventEmitter {
   ): Map<CodingMode, ModeHandler> {
     const handlers = new Map<CodingMode, ModeHandler>();
 
+    handlers.set("orch", new VibeModeHandler(this.modes.orch));
     handlers.set("vibe", new VibeModeHandler(this.modes.vibe));
     handlers.set("plan", new PlanModeHandler(this.modes.plan));
     handlers.set("spec", new SpecModeHandler(this.modes.spec, fileChecker));

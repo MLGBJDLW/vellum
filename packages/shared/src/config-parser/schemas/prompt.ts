@@ -15,7 +15,7 @@ import { z } from "zod";
 /**
  * Array of prompt category values for runtime access.
  */
-export const promptCategories = ["role", "worker", "spec", "provider", "custom"] as const;
+export const promptCategories = ["role", "mode", "worker", "spec", "provider", "custom"] as const;
 
 /**
  * Prompt category types.

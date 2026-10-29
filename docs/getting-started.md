@@ -1,130 +1,53 @@
-# Getting Started
+# Getting started
 
-Quick guide to installing and using Vellum.
-
-## Prerequisites
-
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| **Node.js** | 20+ | Required for npm/pnpm installation |
-| **Bun** | 1.1+ | Alternative runtime (optional) |
-
-## Installation
-
-### Using pnpm (recommended)
-
-```bash
-pnpm add -g @butlerw/vellum
-```
-
-### Using npm
+Install Node.js 20 or newer, then install Vellum:
 
 ```bash
 npm install -g @butlerw/vellum
-```
-
-### Using Bun
-
-```bash
-bun add -g @butlerw/vellum
-```
-
-## First Run
-
-### 1. Configure API credentials
-
-```bash
-# Add your API key
-vellum credentials add anthropic
-
-# Or set via environment variable
-export ANTHROPIC_API_KEY=sk-...
-```
-
-### 2. Start Vellum
-
-```bash
 vellum
 ```
 
-### 3. Start coding
-
-Once in the TUI, type your request and press Enter:
-
-```text
-> Add input validation to the login form
-```
-
-## Basic Usage
-
-### Command Line
+In the terminal interface, use `/model` to choose a provider and model. Vellum
+checks local credential sources and opens a masked API-key form when needed.
+You can configure credentials directly with `/auth set <provider>` or:
 
 ```bash
-# Start with a prompt
-vellum "fix the bug in auth.ts"
-
-# Use a specific mode
-vellum --mode=plan "refactor the API layer"
-
-# Continue a previous session
-vellum --resume
+vellum credentials add anthropic
+vellum credentials list
 ```
 
-### Interactive Commands
+Existing provider environment variables are supported, including aliases such
+as `DASHSCOPE_API_KEY`, `ZAI_API_KEY`, and `ARK_API_KEY`. Ollama and LM Studio
+can use local endpoints without cloud credentials. Never paste a secret into a
+normal chat message or an unmasked command argument.
 
-Inside the TUI, use slash commands:
-
-| Command | Description |
-|---------|-------------|
-| `/mode vibe` | Switch to vibe mode |
-| `/mode plan` | Switch to plan mode |
-| `/mode spec` | Switch to spec mode |
-| `/clear` | Clear conversation |
-| `/help` | Show all commands |
-
-### Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Alt+1` | Switch to vibe mode |
-| `Alt+2` | Switch to plan mode |
-| `Alt+3` | Switch to spec mode |
-| `Ctrl+C` | Cancel current operation |
-| `Esc` | Exit or cancel |
-
-## Quick Mode Overview
-
-| Mode | Best For | Approval Level |
-|------|----------|----------------|
-| **⚡ vibe** | Quick fixes, trusted tasks | Full-auto |
-| **📋 plan** | Complex tasks with review | Auto-edit |
-| **📐 spec** | Large features, documentation | Suggest |
-
-Choose your mode based on task complexity and desired oversight level.
-
-## Examples
-
-### Quick Fix (Vibe Mode)
+Vellum starts as your `orch` personal assistant. Describe your objective and
+constraints: research, writing, file organization, analysis, and coding all use
+the same entry point. It chooses when to plan, delegate, execute, and verify.
 
 ```bash
-vellum --mode=vibe "fix the typo in README"
+# Run a task without the interactive interface
+vellum run "Summarize the project documents"
+
+# Choose a provider; its current catalog default is selected
+vellum chat --provider openai
+
+# Choose an exact model ID
+vellum chat --provider anthropic --model claude-opus-4-7
 ```
 
-### Feature with Plan (Plan Mode)
+Useful interactive commands:
 
-```bash
-vellum --mode=plan "add caching to the API endpoints"
-```
+| Command | Purpose |
+| --- | --- |
+| `/model` | Choose a provider/model and configure a missing key |
+| `/auth status` | Inspect credential status without revealing secrets |
+| `/auth set <provider>` | Open masked credential input |
+| `/orch` | Return to the personal assistant |
+| `/mode` | Inspect the workflow and compatibility overrides |
+| `/help` | Show available commands |
+| `/clear` | Clear the current conversation view |
 
-### Large Feature (Spec Mode)
-
-```bash
-vellum --mode=spec "implement user authentication"
-```
-
-## Next Steps
-
-- [Configuration](configuration.md) - Customize Vellum behavior
-- [Modes](modes.md) - Detailed mode documentation
-- [Credentials](credentials.md) - Secure credential management
-- [MCP](mcp.md) - Connect external tools via MCP
+Use Esc or Ctrl+C to interrupt work. Tool approval and sandbox settings remain
+under your control; see [workflows](modes.md), [credentials](credentials.md), and
+[configuration](configuration.md) for details.

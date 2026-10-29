@@ -38,7 +38,7 @@ export interface AttemptCompletionOutput {
   /** Whether verification passed (if run) */
   verificationPassed?: boolean;
   /** Signal that the agent loop should stop */
-  completed: true;
+  completed: boolean;
 }
 
 /**
@@ -72,7 +72,8 @@ export const attemptCompletionTool = defineTool({
   parameters: attemptCompletionParamsSchema,
   kind: "agent",
   category: "agent",
-  enabled: false,
+  // AgentLoop exposes this completion gate only through the orch workflow.
+  enabled: true,
 
   async execute(input, ctx) {
     // Check for cancellation
@@ -91,6 +92,9 @@ export const attemptCompletionTool = defineTool({
 
     // Run verification command
     try {
+      if (!(await ctx.checkPermission("bash", input.command))) {
+        return fail("Permission denied for verification command");
+      }
       const sandboxOptions = getSandboxOptions(ctx);
       const shellResult = await executeShell(input.command, {
         cwd: ctx.workingDir,
@@ -107,7 +111,7 @@ export const attemptCompletionTool = defineTool({
         verified: true,
         verificationOutput: output.trim(),
         verificationPassed: passed,
-        completed: true,
+        completed: passed,
       });
     } catch (error) {
       if (error instanceof Error) {
@@ -116,7 +120,7 @@ export const attemptCompletionTool = defineTool({
           verified: true,
           verificationOutput: `Verification command failed: ${error.message}`,
           verificationPassed: false,
-          completed: true,
+          completed: false,
         });
       }
       return ok({
@@ -124,7 +128,7 @@ export const attemptCompletionTool = defineTool({
         verified: true,
         verificationOutput: "Unknown error during verification",
         verificationPassed: false,
-        completed: true,
+        completed: false,
       });
     }
   },

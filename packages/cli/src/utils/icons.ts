@@ -57,6 +57,7 @@ export const ICONS = {
 
   // Modes
   mode: {
+    orch: "[Orch]",
     vibe: "[Vibe]",
     plan: "[Plan]",
     spec: "[Spec]",

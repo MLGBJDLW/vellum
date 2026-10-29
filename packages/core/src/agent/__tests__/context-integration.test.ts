@@ -109,7 +109,7 @@ describe("sessionToContext", () => {
     expect(content[0]?.is_error).toBe(false);
   });
 
-  it("should preserve token count from metadata", () => {
+  it("does not count cumulative API usage as message size", () => {
     const session = createSessionMessage({
       metadata: {
         createdAt: Date.now(),
@@ -118,7 +118,7 @@ describe("sessionToContext", () => {
     });
     const context = sessionToContext(session);
 
-    expect(context.tokens).toBe(150);
+    expect(context.tokens).toBeUndefined();
   });
 
   it("should preserve createdAt timestamp", () => {
@@ -147,19 +147,64 @@ describe("contextToSession", () => {
     expect(session.parts[0]?.type).toBe("text");
   });
 
-  it("should preserve original parts when provided", () => {
-    const context = createContextMessage();
+  it("should preserve original parts when content is unchanged", () => {
     const original = createSessionMessage({
       parts: [
         { type: "text", text: "Original" },
         { type: "tool", id: "t1", name: "test", input: {} },
       ],
     });
-    const session = contextToSession(context, original);
+    const session = contextToSession(sessionToContext(original), original);
 
     expect(session.parts).toHaveLength(2);
     expect(session.parts[0]?.type).toBe("text");
     expect(session.parts[1]?.type).toBe("tool");
+  });
+
+  it("retains trimmed tool output rather than restoring the large original", () => {
+    const original = createSessionMessage({
+      role: "tool_result",
+      parts: [{ type: "tool_result", toolId: "call-1", content: "large original output" }],
+    });
+    const context = {
+      ...sessionToContext(original),
+      content: [{ type: "tool_result" as const, tool_use_id: "call-1", content: "trimmed output" }],
+    };
+    const session = contextToSession(context, original);
+    expect(session.role).toBe("tool_result");
+    expect(session.parts).toEqual([
+      { type: "tool_result", toolId: "call-1", content: "trimmed output", isError: undefined },
+    ]);
+  });
+
+  it("preserves signed assistant metadata across tool compaction round trips", () => {
+    const metadata = {
+      provider: "anthropic",
+      model: "selected-model",
+      replay: [{ type: "thinking", thinking: "reasoning", signature: "signature" }],
+    };
+    const original = createSessionMessage({
+      role: "assistant",
+      parts: [{ type: "tool", id: "call-1", name: "read_file", input: { path: "/one" } }],
+      metadata: { createdAt: 1, providerMetadata: metadata },
+    });
+    const session = contextToSession(sessionToContext(original), original);
+    expect(session.metadata.providerMetadata).toEqual(metadata);
+    expect(session.parts).toEqual(original.parts);
+  });
+
+  it("retains summary links across rounds so compressed originals stay out of API history", () => {
+    const original = createSessionMessage();
+    const context = { ...sessionToContext(original), condenseParent: "summary-1" };
+    const summary = createContextMessage({
+      id: "summary",
+      content: "Earlier work summarized",
+      isSummary: true,
+      condenseId: "summary-1",
+    });
+    const retained = contextsToSessions([context, summary], [original]);
+    const integration = createContextIntegration({ model: "claude-sonnet-4-6" });
+    expect(integration.getApiMessages(retained).map((message) => message.id)).toEqual(["summary"]);
   });
 
   it("should add context management metadata", () => {

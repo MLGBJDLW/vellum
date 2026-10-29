@@ -170,6 +170,21 @@ export class CostLimitHandler extends EventEmitter<CostLimitHandlerEvents> {
     const result = this.checkLimits();
     const type = result.reason || "cost";
 
+    if (
+      extendLimit?.cost !== undefined &&
+      Number.isFinite(extendLimit.cost) &&
+      extendLimit.cost > result.costUsed
+    ) {
+      this.config.maxCostPerSession = extendLimit.cost;
+    }
+    if (
+      extendLimit?.requests !== undefined &&
+      Number.isInteger(extendLimit.requests) &&
+      extendLimit.requests > result.requestsUsed
+    ) {
+      this.config.maxRequestsPerSession = extendLimit.requests;
+    }
+
     // Emit approved event
     const event: CostApprovedEvent = {
       type,

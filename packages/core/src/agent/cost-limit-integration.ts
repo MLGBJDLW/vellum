@@ -112,8 +112,8 @@ export interface CostCheckResult {
 export class CostLimitIntegration {
   private readonly handler: CostLimitHandler;
   private readonly costService: CostService;
-  private readonly providerType: string;
-  private readonly model: string;
+  private providerType: string;
+  private model: string;
   private readonly logger?: Logger;
   private readonly listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
 
@@ -175,6 +175,12 @@ export class CostLimitIntegration {
       awaitingApproval,
       limits,
     };
+  }
+
+  /** Model selection changes pricing attribution, not existing session usage. */
+  setModel(providerType: string, model: string): void {
+    this.providerType = providerType;
+    this.model = model;
   }
 
   /**
