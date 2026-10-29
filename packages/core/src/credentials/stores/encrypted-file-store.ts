@@ -7,9 +7,22 @@
  * @module credentials/stores/encrypted-file-store
  */
 
+import { execFile } from "node:child_process";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
-import { chmod, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  link,
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { dirname } from "node:path";
+import { promisify } from "node:util";
 
 import { Err, Ok, type Result } from "../../types/result.js";
 
@@ -62,6 +75,28 @@ const FORMAT_VERSION = 1;
 
 /** Secure file permissions (owner read/write only) */
 const SECURE_FILE_MODE = 0o600;
+const LEGACY_DEFAULT_PASSWORD = "vellum-default-key";
+const execFileAsync = promisify(execFile);
+
+class CredentialFileChangedError extends Error {}
+
+/** Secure the empty staging file before placing secret bytes in it. */
+async function secureSecretFile(filePath: string): Promise<void> {
+  if (process.platform !== "win32") {
+    await chmod(filePath, SECURE_FILE_MODE);
+    return;
+  }
+  const options = { windowsHide: true, timeout: 5_000, maxBuffer: 16_384 };
+  const identity = await execFileAsync("whoami.exe", ["/user", "/fo", "csv", "/nh"], options);
+  const sid = identity.stdout.match(/S-1-\d+(?:-\d+)+/)?.[0];
+  if (!sid)
+    throw new Error("Cannot identify the current Windows account for credential protection");
+  await execFileAsync(
+    "icacls.exe",
+    [filePath, "/inheritance:r", "/grant:r", `*${sid}:F`, "/q"],
+    options
+  );
+}
 
 /**
  * Check if running in test environment where memory is constrained.
@@ -95,6 +130,8 @@ interface EncryptedFileFormat {
   version: number;
   /** scrypt version: 1=N=16384, 2=N=65536. undefined treated as v1 */
   scryptVersion?: number;
+  /** Managed files must never fall back to the retired shared password. */
+  keySource?: "managed";
   /** Salt for key derivation (hex encoded) */
   salt: string;
   /** Credentials map: provider -> encrypted data (hex encoded) */
@@ -121,8 +158,8 @@ interface EncryptedCredentialEntry {
 export interface EncryptedFileStoreOptions {
   /** Path to the encrypted credentials file */
   filePath: string;
-  /** Master password for encryption */
-  password: string;
+  /** Explicit master password. Omit to use an owner-only generated local secret. */
+  password?: string;
   /**
    * Automatically migrate to current scrypt version on file load.
    * When true, files using legacy v1 params will be upgraded to v2.
@@ -188,7 +225,12 @@ export class EncryptedFileStore implements CredentialStore {
   readonly readOnly = false;
 
   private readonly filePath: string;
-  private readonly password: string;
+  private password: string | undefined;
+  private readonly managedPassword: boolean;
+  private managedSecret: Promise<string> | undefined;
+  private operation: Promise<void> = Promise.resolve();
+  /** Exact revision read from disk, checked under the write lock before publishing. */
+  private loadedContent: string | null = null;
   private readonly autoMigrate: boolean;
   private cache: EncryptedFileFormat | null = null;
   private salt: Buffer | null = null;
@@ -205,6 +247,7 @@ export class EncryptedFileStore implements CredentialStore {
   constructor(options: EncryptedFileStoreOptions) {
     this.filePath = options.filePath;
     this.password = options.password;
+    this.managedPassword = options.password === undefined;
     this.autoMigrate = options.autoMigrate ?? false;
   }
 
@@ -213,7 +256,7 @@ export class EncryptedFileStore implements CredentialStore {
    * File store is available if we have a valid password
    */
   async isAvailable(): Promise<Result<boolean, CredentialStoreError>> {
-    if (!this.password) {
+    if (this.password === "") {
       return Ok(false);
     }
 
@@ -241,6 +284,13 @@ export class EncryptedFileStore implements CredentialStore {
    * @param key - Optional specific key within provider namespace
    */
   async get(
+    provider: string,
+    key?: string
+  ): Promise<Result<Credential | null, CredentialStoreError>> {
+    return this.serialize(() => this.getCredential(provider, key));
+  }
+
+  private async getCredential(
     provider: string,
     key?: string
   ): Promise<Result<Credential | null, CredentialStoreError>> {
@@ -275,11 +325,19 @@ export class EncryptedFileStore implements CredentialStore {
    * @param credential - The credential to store
    */
   async set(credential: Credential): Promise<Result<void, CredentialStoreError>> {
+    return this.serialize(() => this.setCredential(credential));
+  }
+
+  private async setCredential(credential: Credential): Promise<Result<void, CredentialStoreError>> {
+    // Another instance may have saved or migrated since this instance last read.
+    this.clearCache();
     // Ensure file exists and is loaded
     const loadResult = await this.loadOrInitFile();
     if (!loadResult.ok) {
       return loadResult;
     }
+    const readable = this.verifyReadable();
+    if (!readable.ok) return readable;
 
     // Encrypt the credential
     const encryptResult = this.encrypt(credential);
@@ -290,11 +348,16 @@ export class EncryptedFileStore implements CredentialStore {
     // Update cache
     const credKey = getCredentialKey(credential.provider);
     if (this.cache) {
-      this.cache.credentials[credKey] = encryptResult.value;
+      this.cache = {
+        ...this.cache,
+        credentials: { ...this.cache.credentials, [credKey]: encryptResult.value },
+      };
     }
 
     // Save to disk
-    return this.saveFile();
+    const saved = await this.saveFile();
+    if (!saved.ok) this.clearCache();
+    return saved;
   }
 
   /**
@@ -304,6 +367,14 @@ export class EncryptedFileStore implements CredentialStore {
    * @param key - Optional specific key
    */
   async delete(provider: string, key?: string): Promise<Result<boolean, CredentialStoreError>> {
+    return this.serialize(() => this.deleteCredential(provider, key));
+  }
+
+  private async deleteCredential(
+    provider: string,
+    key?: string
+  ): Promise<Result<boolean, CredentialStoreError>> {
+    this.clearCache();
     const loadResult = await this.loadFile();
     if (!loadResult.ok) {
       if (loadResult.error.code === "NOT_FOUND") {
@@ -311,6 +382,9 @@ export class EncryptedFileStore implements CredentialStore {
       }
       return loadResult;
     }
+
+    const readable = this.verifyReadable();
+    if (!readable.ok) return readable;
 
     const credKey = getCredentialKey(provider, key);
     const existed = credKey in (this.cache?.credentials ?? {});
@@ -320,24 +394,21 @@ export class EncryptedFileStore implements CredentialStore {
     }
 
     if (this.cache) {
-      delete this.cache.credentials[credKey];
+      const credentials = { ...this.cache.credentials };
+      delete credentials[credKey];
+      this.cache = { ...this.cache, credentials };
     }
 
     // If no credentials left, delete the file
     if (Object.keys(this.cache?.credentials ?? {}).length === 0) {
-      try {
-        await unlink(this.filePath);
-        this.cache = null;
-        this.salt = null;
-        this.derivedKey = null;
-      } catch {
-        // Ignore errors deleting empty file
-      }
-      return Ok(true);
+      const removed = await this.saveFile(true);
+      this.clearCache();
+      return removed.ok ? Ok(true) : removed;
     }
 
     const saveResult = await this.saveFile();
     if (!saveResult.ok) {
+      this.clearCache();
       return saveResult;
     }
 
@@ -350,6 +421,12 @@ export class EncryptedFileStore implements CredentialStore {
    * @param provider - Optional filter by provider
    */
   async list(provider?: string): Promise<Result<readonly CredentialRef[], CredentialStoreError>> {
+    return this.serialize(() => this.listCredentials(provider));
+  }
+
+  private async listCredentials(
+    provider?: string
+  ): Promise<Result<readonly CredentialRef[], CredentialStoreError>> {
     const loadResult = await this.loadFile();
     if (!loadResult.ok) {
       if (loadResult.error.code === "NOT_FOUND") {
@@ -391,6 +468,13 @@ export class EncryptedFileStore implements CredentialStore {
    * @param key - Optional specific key
    */
   async exists(provider: string, key?: string): Promise<Result<boolean, CredentialStoreError>> {
+    return this.serialize(() => this.credentialExists(provider, key));
+  }
+
+  private async credentialExists(
+    provider: string,
+    key?: string
+  ): Promise<Result<boolean, CredentialStoreError>> {
     const loadResult = await this.loadFile();
     if (!loadResult.ok) {
       if (loadResult.error.code === "NOT_FOUND") {
@@ -407,10 +491,96 @@ export class EncryptedFileStore implements CredentialStore {
   // Private Methods
   // ===========================================================================
 
+  /** Keep cache/key mutations isolated within an instance, including lazy migration. */
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const pending = this.operation.then(operation);
+    this.operation = pending.then(
+      () => undefined,
+      () => undefined
+    );
+    return pending;
+  }
+
+  private verifyReadable(): Result<void, CredentialStoreError> {
+    for (const entry of Object.values(this.cache?.credentials ?? {})) {
+      if (!this.decrypt(entry).ok) {
+        return Err(
+          createStoreError(
+            "DECRYPTION_ERROR",
+            "Existing credentials cannot be decrypted; refusing to overwrite them. Restore the matching key file or VELLUM_CREDENTIAL_PASSWORD.",
+            "file"
+          )
+        );
+      }
+    }
+    return Ok(undefined);
+  }
+
+  /** Publish a complete protected key atomically; concurrent creators reuse the winner. */
+  private async readManagedSecret(create: boolean): Promise<string> {
+    const keyPath = `${this.filePath}.key`;
+    const read = async () => {
+      const info = await lstat(keyPath);
+      if (!info.isFile() || info.isSymbolicLink())
+        throw new Error("Credential encryption key must be a regular file");
+      const value = (await readFile(keyPath, "utf-8")).trim();
+      if (!/^[a-f0-9]{64}$/.test(value))
+        throw new Error("Credential encryption key is invalid; restore the key file from backup");
+      return value;
+    };
+    try {
+      return await read();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if (!create)
+        throw new Error(
+          "Credential encryption key is missing; restore credentials.enc.key from backup. Existing credentials were not changed."
+        );
+    }
+    await mkdir(dirname(keyPath), { recursive: true });
+    const stagingPath = `${keyPath}.tmp.${process.pid}.${randomBytes(8).toString("hex")}`;
+    const handle = await open(stagingPath, "wx", SECURE_FILE_MODE);
+    try {
+      await secureSecretFile(stagingPath);
+      await handle.writeFile(randomBytes(32).toString("hex"), "utf-8");
+      await handle.sync();
+    } catch (error) {
+      await handle.close();
+      await unlink(stagingPath).catch(() => {});
+      throw error;
+    }
+    await handle.close();
+    try {
+      // link fails with EEXIST rather than overwriting another process's key.
+      await link(stagingPath, keyPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    } finally {
+      await unlink(stagingPath).catch(() => {});
+    }
+    return read();
+  }
+
+  private getManagedSecret(create: boolean): Promise<string> {
+    if (!this.managedSecret) {
+      this.managedSecret = this.readManagedSecret(create).catch((error: unknown) => {
+        this.managedSecret = undefined;
+        throw error;
+      });
+    }
+    return this.managedSecret;
+  }
+
   /**
    * Load the encrypted file from disk
    */
   private async loadFile(): Promise<Result<void, CredentialStoreError>> {
+    return this.loadFileContents();
+  }
+
+  private async loadFileContents(
+    retryMigration = true
+  ): Promise<Result<void, CredentialStoreError>> {
     if (this.cache !== null) {
       return Ok(undefined);
     }
@@ -436,10 +606,46 @@ export class EncryptedFileStore implements CredentialStore {
 
       // Set cache first so deriveKey() can read scryptVersion
       this.cache = data;
+      this.loadedContent = content;
 
       // Extract salt and derive key using version from cache
       this.salt = Buffer.from(data.salt, "hex");
+      if (this.managedPassword) {
+        if (data.keySource === "managed") {
+          this.password = await this.getManagedSecret(false);
+        } else {
+          // Only unmarked legacy files are eligible for migration. Validate all
+          // credentials before creating a key or changing the ciphertext.
+          this.password = LEGACY_DEFAULT_PASSWORD;
+        }
+      }
       this.deriveKey();
+
+      if (this.managedPassword) {
+        for (const entry of Object.values(data.credentials)) {
+          if (!this.decrypt(entry).ok) {
+            this.clearCache();
+            return Err(
+              createStoreError(
+                "DECRYPTION_ERROR",
+                "Unable to decrypt existing credentials. Restore the matching key file or set VELLUM_CREDENTIAL_PASSWORD for a custom password; the original file was not changed.",
+                "file"
+              )
+            );
+          }
+        }
+        if (data.keySource !== "managed") {
+          const managedPassword = await this.getManagedSecret(true);
+          const migrated = await this.migrateToCurrentVersion(managedPassword);
+          if (!migrated.ok) {
+            this.clearCache();
+            if (retryMigration && migrated.error.cause instanceof CredentialFileChangedError) {
+              return this.loadFileContents(false);
+            }
+            return migrated;
+          }
+        }
+      }
 
       // Check if migration is needed
       if (this.autoMigrate && this.needsMigration()) {
@@ -447,6 +653,10 @@ export class EncryptedFileStore implements CredentialStore {
         // Note: This adds ~200ms latency on first read for files needing migration
         const migrateResult = await this.migrateToCurrentVersion();
         if (!migrateResult.ok) {
+          if (migrateResult.error.cause instanceof CredentialFileChangedError) {
+            this.clearCache();
+            return retryMigration ? this.loadFileContents(false) : migrateResult;
+          }
           // Log but don't fail - credentials are still readable with v1 params
           // The migration can be retried later
           console.warn(
@@ -457,6 +667,7 @@ export class EncryptedFileStore implements CredentialStore {
 
       return Ok(undefined);
     } catch (error) {
+      this.clearCache();
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return Err(createStoreError("NOT_FOUND", "Credential file not found", "file"));
       }
@@ -489,6 +700,19 @@ export class EncryptedFileStore implements CredentialStore {
     // Initialize new file with current scrypt version
     // Note: In test environments, v1 is used due to memory constraints (~64MB for v2)
     const scryptVersion = getNewFileScryptVersion();
+    if (this.managedPassword) {
+      try {
+        this.password = await this.getManagedSecret(true);
+      } catch (error) {
+        return Err(
+          createStoreError(
+            "ENCRYPTION_ERROR",
+            `Cannot initialize credential protection: ${error instanceof Error ? error.message : "Unknown error"}`,
+            "file"
+          )
+        );
+      }
+    }
     this.salt = randomBytes(SALT_LENGTH);
     this.deriveKey(scryptVersion);
 
@@ -497,6 +721,7 @@ export class EncryptedFileStore implements CredentialStore {
       scryptVersion: scryptVersion,
       salt: this.salt.toString("hex"),
       credentials: {},
+      ...(this.managedPassword ? { keySource: "managed" as const } : {}),
     };
 
     return Ok(undefined);
@@ -505,18 +730,62 @@ export class EncryptedFileStore implements CredentialStore {
   /**
    * Save the encrypted file to disk
    */
-  private async saveFile(): Promise<Result<void, CredentialStoreError>> {
+  private async saveFile(remove = false): Promise<Result<void, CredentialStoreError>> {
     if (!this.cache) {
       return Err(createStoreError("IO_ERROR", "No data to save", "file"));
     }
 
-    const tempPath = `${this.filePath}.tmp.${Date.now()}`;
+    const tempPath = `${this.filePath}.tmp.${process.pid}.${randomBytes(8).toString("hex")}`;
+    const lockPath = `${this.filePath}.lock`;
+    const expectedContent = this.loadedContent;
+    const content = remove ? null : JSON.stringify(this.cache, null, 2);
+    let lock: Awaited<ReturnType<typeof open>> | undefined;
 
     try {
       // Ensure directory exists
       await mkdir(dirname(this.filePath), { recursive: true });
 
-      const content = JSON.stringify(this.cache, null, 2);
+      // Only the lock holder may compare and replace the file. A stale lock is
+      // never stolen on a timer: a slow writer must not lose its ownership.
+      const deadline = Date.now() + 2_000;
+      while (!lock) {
+        try {
+          lock = await open(lockPath, "wx", SECURE_FILE_MODE);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+          if (Date.now() >= deadline) {
+            return Err(
+              createStoreError(
+                "IO_ERROR",
+                `Credential store is busy; retry after the other operation finishes. If all Vellum processes have stopped, remove the stale lock at ${lockPath}.`,
+                "file"
+              )
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+      }
+      await lock.writeFile(JSON.stringify({ pid: process.pid, createdAt: Date.now() }), "utf-8");
+
+      let currentContent: string | null;
+      try {
+        currentContent = await readFile(this.filePath, "utf-8");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        currentContent = null;
+      }
+      if (currentContent !== expectedContent) {
+        const conflict = new CredentialFileChangedError(
+          "Credential file changed in another process; retry the operation. Existing credentials were not overwritten."
+        );
+        return Err(createStoreError("IO_ERROR", conflict.message, "file", conflict));
+      }
+
+      if (content === null) {
+        await unlink(this.filePath);
+        this.loadedContent = null;
+        return Ok(undefined);
+      }
 
       // Atomic write: write to temp file first, then rename
       await writeFile(tempPath, content, { encoding: "utf-8", mode: SECURE_FILE_MODE });
@@ -524,6 +793,7 @@ export class EncryptedFileStore implements CredentialStore {
 
       // Atomic rename (on most filesystems)
       await rename(tempPath, this.filePath);
+      this.loadedContent = content;
 
       return Ok(undefined);
     } catch (error) {
@@ -542,6 +812,11 @@ export class EncryptedFileStore implements CredentialStore {
           error instanceof Error ? error : undefined
         )
       );
+    } finally {
+      if (lock) {
+        await lock.close().catch(() => {});
+        await unlink(lockPath).catch(() => {});
+      }
     }
   }
 
@@ -555,6 +830,8 @@ export class EncryptedFileStore implements CredentialStore {
     if (!this.salt) {
       throw new Error("Salt not initialized");
     }
+    if (this.password === undefined)
+      throw new Error("Credential encryption password is not initialized");
 
     // Determine which params to use:
     // - Explicit v2 requested, OR
@@ -657,6 +934,10 @@ export class EncryptedFileStore implements CredentialStore {
    * @returns true if migration is needed, false otherwise
    */
   async checkNeedsMigration(): Promise<Result<boolean, CredentialStoreError>> {
+    return this.serialize(() => this.checkMigration());
+  }
+
+  private async checkMigration(): Promise<Result<boolean, CredentialStoreError>> {
     const loadResult = await this.loadFile();
     if (!loadResult.ok) {
       if (loadResult.error.code === "NOT_FOUND") {
@@ -675,6 +956,11 @@ export class EncryptedFileStore implements CredentialStore {
    * @returns Result indicating success or failure
    */
   async migrate(): Promise<Result<void, CredentialStoreError>> {
+    return this.serialize(() => this.migrateFile());
+  }
+
+  private async migrateFile(): Promise<Result<void, CredentialStoreError>> {
+    this.clearCache();
     const loadResult = await this.loadFile();
     if (!loadResult.ok) {
       if (loadResult.error.code === "NOT_FOUND") {
@@ -682,7 +968,9 @@ export class EncryptedFileStore implements CredentialStore {
       }
       return loadResult;
     }
-    return this.migrateToCurrentVersion();
+    const migrated = await this.migrateToCurrentVersion();
+    if (!migrated.ok) this.clearCache();
+    return migrated;
   }
 
   /**
@@ -699,8 +987,10 @@ export class EncryptedFileStore implements CredentialStore {
    * Migrate all credentials from legacy scrypt params to current version.
    * This is an atomic operation - either all credentials migrate or none.
    */
-  private async migrateToCurrentVersion(): Promise<Result<void, CredentialStoreError>> {
-    if (!this.cache || !this.needsMigration()) {
+  private async migrateToCurrentVersion(
+    managedPassword?: string
+  ): Promise<Result<void, CredentialStoreError>> {
+    if (!this.cache || (!this.needsMigration() && managedPassword === undefined)) {
       return Ok(undefined);
     }
 
@@ -708,6 +998,9 @@ export class EncryptedFileStore implements CredentialStore {
     const oldSalt = this.salt;
     const oldDerivedKey = this.derivedKey;
     const oldCache = { ...this.cache };
+    const oldPassword = this.password;
+    const targetVersion =
+      managedPassword === undefined ? CURRENT_SCRYPT_VERSION : getNewFileScryptVersion();
 
     try {
       // 1. Decrypt all credentials using OLD key (already derived with v1 params)
@@ -729,9 +1022,10 @@ export class EncryptedFileStore implements CredentialStore {
       // 2. Generate new salt for v2 (security best practice)
       const newSalt = randomBytes(SALT_LENGTH);
       this.salt = newSalt;
+      if (managedPassword !== undefined) this.password = managedPassword;
 
       // 3. Derive new key with v2 params
-      this.deriveKey(CURRENT_SCRYPT_VERSION);
+      this.deriveKey(targetVersion);
 
       // 4. Re-encrypt all credentials with new key
       const newCredentials: Record<string, EncryptedCredentialEntry> = {};
@@ -742,6 +1036,7 @@ export class EncryptedFileStore implements CredentialStore {
           this.salt = oldSalt;
           this.derivedKey = oldDerivedKey;
           this.cache = oldCache;
+          this.password = oldPassword;
           return Err(
             createStoreError(
               "MIGRATION_ERROR",
@@ -755,10 +1050,12 @@ export class EncryptedFileStore implements CredentialStore {
 
       // 5. Update cache with new version
       this.cache = {
+        ...oldCache,
         version: FORMAT_VERSION,
-        scryptVersion: CURRENT_SCRYPT_VERSION,
+        scryptVersion: targetVersion,
         salt: newSalt.toString("hex"),
         credentials: newCredentials,
+        ...(managedPassword !== undefined ? { keySource: "managed" as const } : {}),
       };
 
       // 6. Save migrated file
@@ -768,6 +1065,7 @@ export class EncryptedFileStore implements CredentialStore {
         this.salt = oldSalt;
         this.derivedKey = oldDerivedKey;
         this.cache = oldCache;
+        this.password = oldPassword;
         return saveResult;
       }
 
@@ -777,6 +1075,7 @@ export class EncryptedFileStore implements CredentialStore {
       this.salt = oldSalt;
       this.derivedKey = oldDerivedKey;
       this.cache = oldCache;
+      this.password = oldPassword;
       return Err(
         createStoreError(
           "MIGRATION_ERROR",
@@ -792,7 +1091,14 @@ export class EncryptedFileStore implements CredentialStore {
    */
   clearCache(): void {
     this.cache = null;
+    this.loadedContent = null;
     this.salt = null;
+    if (this.managedPassword) {
+      // A restored key file must replace any previously cached invalid secret.
+      // Explicit caller-supplied passwords remain the configured source.
+      this.managedSecret = undefined;
+      this.password = undefined;
+    }
     if (this.derivedKey) {
       this.derivedKey.fill(0);
       this.derivedKey = null;

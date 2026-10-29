@@ -14,6 +14,10 @@ The credential system features:
 
 ## Quick Start
 
+Selecting a cloud model with `/model provider/model-id` (or the model selector) checks the same local credential stores used by inference. If no key is found, Vellum opens a masked key prompt before switching. The first submitted task also offers setup and resumes after saving. Local Ollama/LM Studio endpoints may run without a key. A locally detected key is not a claim that the provider has accepted it; authentication errors remain visible on the request.
+
+Environment variables have precedence over stored keys. `/credentials` reports the source without displaying the secret. Common aliases such as `DASHSCOPE_API_KEY`, `ZHIPUAI_API_KEY`, and `ARK_API_KEY` are recognized.
+
 ### 1. Store a credential
 
 ```bash
@@ -21,7 +25,7 @@ The credential system features:
 vellum credentials add anthropic
 
 # Using slash commands in TUI
-/login anthropic
+/auth set anthropic
 ```markdown
 
 ### 2. Use in configuration
@@ -205,6 +209,10 @@ const store = new KeychainStore({
 
 AES-256-GCM encrypted file storage.
 
+Without an explicit `VELLUM_CREDENTIAL_PASSWORD`, the fallback generates a local encryption secret in `~/.vellum/credentials.enc.key`. Creation uses owner-only POSIX permissions or the current Windows user's ACL. Back up the encrypted file and its matching key together. An explicit password remains supported and takes precedence over this managed secret.
+
+Older files using the retired shared default password are validated and reencrypted on first access. A failed migration preserves the original file. If the matching key for a modern file is missing, Vellum refuses to overwrite credentials; restore the key from backup.
+
 ```typescript
 import { EncryptedFileStore } from "@vellum/core";
 
@@ -231,7 +239,7 @@ Auto-switches between keychain and file storage.
 import { HybridCredentialStore } from "@vellum/core";
 
 const store = new HybridCredentialStore({
-  fileStorePath: "~/.vellum/credentials.enc",
+  filePath: "~/.vellum/credentials.enc",
   password: process.env.VELLUM_CREDENTIAL_PASSWORD,
 });
 ```text
@@ -285,23 +293,23 @@ Stored Credentials:
 
 Use these commands in the interactive chat:
 
-#### `/login [provider]`
+#### `/auth set [provider]`
 
 Add or update a credential.
 
 ```
-/login anthropic
+/auth set anthropic
 🔐 Adding credential for anthropic. Enter your API key:
-> sk-ant-api03-...
+> **************
 ✅ Credential for anthropic saved to keychain
 ```markdown
 
-#### `/logout [provider]`
+#### `/auth clear [provider]`
 
 Remove a credential.
 
 ```
-/logout anthropic
+/auth clear anthropic
 ✅ Credential for anthropic removed
 ```markdown
 

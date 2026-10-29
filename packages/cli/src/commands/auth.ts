@@ -16,6 +16,7 @@ import {
   type CredentialRef,
   EnvCredentialStore,
   HybridCredentialStore,
+  LLM,
 } from "@vellum/core";
 
 import type {
@@ -90,16 +91,27 @@ export interface SlashCommand {
 /**
  * Create a credential manager instance with default stores
  */
+let sharedCredentialManager: CredentialManager | undefined;
+
 export async function createCredentialManager(): Promise<CredentialManager> {
+  if (sharedCredentialManager) return sharedCredentialManager;
   const stores = [
     new EnvCredentialStore(),
     new HybridCredentialStore({
       filePath: `${process.env.HOME ?? process.env.USERPROFILE}/.vellum/credentials.enc`,
-      password: process.env.VELLUM_CREDENTIAL_PASSWORD ?? "vellum-default-key",
+      password: process.env.VELLUM_CREDENTIAL_PASSWORD,
     }),
   ];
 
-  return new CredentialManager(stores);
+  const manager = new CredentialManager(stores);
+  manager.on((event) => {
+    if (event.type === "credential:stored" || event.type === "credential:deleted") {
+      // Provider clients keep their configured key. Recreate them after a key changes.
+      LLM.getRegistry()?.clear();
+    }
+  });
+  sharedCredentialManager = manager;
+  return manager;
 }
 
 // =============================================================================
@@ -648,7 +660,7 @@ function getProviderHints(provider: string): {
 /**
  * /auth set - Add or update API credential
  */
-async function authSet(
+export async function authSet(
   credentials: CredentialManager,
   provider: string | undefined,
   store?: string
@@ -748,7 +760,7 @@ async function authClear(
   // Check if credential exists
   const existsResult = await credentials.exists(normalizedProvider);
   if (!existsResult.ok || !existsResult.value) {
-    return error("CREDENTIAL_NOT_FOUND", `⚠️ No credential found for ${normalizedProvider}`);
+    return error("CREDENTIAL_NOT_FOUND", `! No credential found for ${normalizedProvider}`);
   }
 
   // If not forced, return confirmation prompt
@@ -790,7 +802,7 @@ async function performAuthClear(
     }
 
     if (result.value === 0) {
-      return error("CREDENTIAL_NOT_FOUND", `⚠️ No credential found for ${provider}`);
+      return error("CREDENTIAL_NOT_FOUND", `! No credential found for ${provider}`);
     }
 
     return success(`✅ Credential for ${provider} removed from ${result.value} store(s)`, {

@@ -72,6 +72,20 @@ describe("HybridCredentialStore", () => {
   // ===========================================================================
 
   describe("Basic Properties", () => {
+    it("shares backing-store initialization across concurrent credential checks", async () => {
+      vi.spyOn(KeychainStore.prototype, "isAvailable").mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return { ok: true, value: false };
+      });
+      const store = new HybridCredentialStore({ filePath: testFilePath, password: testPassword });
+      const results = await Promise.all([
+        store.isAvailable(),
+        store.isAvailable(),
+        store.get("openai"),
+      ]);
+      expect(results.every((result) => result.ok)).toBe(true);
+    });
+
     it("should have correct name", () => {
       const store = new HybridCredentialStore({
         filePath: testFilePath,

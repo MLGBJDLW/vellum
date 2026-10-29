@@ -39,6 +39,16 @@ const PROVIDER_ENV_VARS: Record<string, readonly string[]> = {
   huggingface: ["HUGGINGFACE_API_KEY", "HF_TOKEN", "HF_API_KEY"],
   deepseek: ["DEEPSEEK_API_KEY"],
   xai: ["XAI_API_KEY"],
+  openrouter: ["OPENROUTER_API_KEY"],
+  qwen: ["QWEN_API_KEY", "DASHSCOPE_API_KEY"],
+  moonshot: ["MOONSHOT_API_KEY", "MOONSHOTAI_API_KEY"],
+  zhipu: ["ZHIPU_API_KEY", "ZHIPUAI_API_KEY", "ZAI_API_KEY"],
+  yi: ["YI_API_KEY"],
+  baichuan: ["BAICHUAN_API_KEY"],
+  doubao: ["DOUBAO_API_KEY", "ARK_API_KEY"],
+  minimax: ["MINIMAX_API_KEY"],
+  ollama: ["OLLAMA_API_KEY"],
+  lmstudio: ["LMSTUDIO_API_KEY"],
 } as const;
 
 /**
@@ -57,6 +67,11 @@ function generateMaskedHint(value: string): string {
  */
 function normalizeProvider(provider: string): string {
   return provider.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** Environment names used by credential discovery and user-facing setup hints. */
+export function getCredentialEnvVars(provider: string): readonly string[] {
+  return PROVIDER_ENV_VARS[normalizeProvider(provider)] ?? [`${provider.toUpperCase()}_API_KEY`];
 }
 
 // =============================================================================
