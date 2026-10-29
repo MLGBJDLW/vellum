@@ -3776,13 +3776,18 @@ function AppContent({
     }
 
     // Handle real usage events from AgentLoop
-    const handleUsage = (usage: {
-      inputTokens: number;
-      outputTokens: number;
-      thinkingTokens?: number;
-      cacheReadTokens?: number;
-      cacheWriteTokens?: number;
-    }) => {
+    const handleUsage = (
+      usage: {
+        inputTokens: number;
+        outputTokens: number;
+        thinkingTokens?: number;
+        cacheReadTokens?: number;
+        cacheWriteTokens?: number;
+      },
+      source?: { providerType: string; model: string }
+    ) => {
+      const usageProvider = source?.providerType ?? currentProvider;
+      const usageModel = source?.model ?? currentModel;
       // Update turn usage (per-turn tracking)
       setTurnUsage({
         inputTokens: usage.inputTokens,
@@ -3795,8 +3800,8 @@ function AppContent({
       // Update cumulative usage
       setTokenUsage((prev) => {
         const turnCost = calculateCost(
-          currentProvider,
-          currentModel,
+          usageProvider,
+          usageModel,
           usage.inputTokens,
           usage.outputTokens
         );
@@ -3824,8 +3829,8 @@ function AppContent({
           cacheWriteTokens: usage.cacheWriteTokens ?? 0,
           thinkingTokens: usage.thinkingTokens ?? 0,
         },
-        currentModel,
-        currentProvider
+        usageModel,
+        usageProvider
       );
     };
 

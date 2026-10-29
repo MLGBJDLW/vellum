@@ -8,6 +8,7 @@
 import { BUILT_IN_AGENTS } from "../../agent/agent-config.js";
 import type { AgentLevel } from "../../agent/level.js";
 import { canSpawn } from "../../agent/level.js";
+import type { AgentSessionBudget } from "../../agent/loop.js";
 import type { ModeRegistry } from "../../agent/mode-registry.js";
 import { CONFIG_DEFAULTS } from "../../config/defaults.js";
 import type { ImplementationResult, SpecHandoffPacket } from "../../spec/index.js";
@@ -127,6 +128,7 @@ export interface OrchestratorConfig {
 
 /** Per-delegation runtime inherited from the calling agent. */
 export interface ExecuteTaskOptions {
+  sessionBudget?: AgentSessionBudget;
   targetAgent?: string;
   signal?: AbortSignal;
   providerType?: string;
@@ -1090,6 +1092,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
           model: options.model,
           cwd: options.cwd,
           permissionChecker: options.permissionChecker,
+          sessionBudget: options.sessionBudget,
         };
         const controller = this.taskControllers.get(handle.id) ?? new AbortController();
         const onAbort = () => controller.abort(options.signal?.reason);

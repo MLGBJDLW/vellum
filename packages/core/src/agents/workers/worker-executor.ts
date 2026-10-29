@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import type { ToolDefinition } from "@vellum/provider";
 import { z } from "zod";
 import { AgentLevel } from "../../agent/level.js";
-import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
+import { AgentLoop, type AgentLoopConfig, type AgentSessionBudget } from "../../agent/loop.js";
 import { MODE_CONFIGS } from "../../agent/modes.js";
 import { TerminationReason } from "../../agent/termination.js";
 import { PromptLoader } from "../../prompts/prompt-loader.js";
@@ -154,6 +154,7 @@ export { WORKER_TOOL_SETS };
  * Configuration options for worker execution.
  */
 export interface WorkerExecutionConfig {
+  sessionBudget?: AgentSessionBudget;
   /** Maximum iterations for the agent loop */
   maxIterations?: number;
   /** Timeout in milliseconds */
@@ -290,6 +291,7 @@ export async function executeWorkerTask(
     permissionChecker: config?.permissionChecker,
     agentLevel: AgentLevel.worker,
     maxIterations: execConfig.maxIterations,
+    sessionBudget: config?.sessionBudget,
     contextManagement: { enabled: true },
     terminationLimits: {
       maxSteps: execConfig.maxIterations,

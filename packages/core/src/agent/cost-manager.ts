@@ -118,12 +118,16 @@ export class AgentCostManager {
    * @param usage - Token usage from LLM
    * @returns Cost check result or undefined if no cost limits configured
    */
-  trackUsage(usage: TokenUsage): CostCheckResult | undefined {
+  trackUsage(
+    usage: TokenUsage,
+    source?: { providerType: string; model: string },
+    requestCounted = false
+  ): CostCheckResult | undefined {
     if (!this.costLimitIntegration) {
       return undefined;
     }
 
-    const costResult = this.costLimitIntegration.trackUsage(usage);
+    const costResult = this.costLimitIntegration.trackUsage(usage, source, requestCounted);
     this.logger?.debug("Cost limit check after usage", {
       withinLimits: costResult.limits.withinLimits,
       percentUsed: costResult.limits.percentUsed.toFixed(1),

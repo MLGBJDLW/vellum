@@ -31,6 +31,8 @@ The loop executes a model turn, records actual tool receipts, applies progress/r
 
 Workers use the same live tool container through a read-only registry view, with level-specific filtering and the caller's permission checker. They inherit the selected provider/model and working directory, receive cancellation, and return actual results. Each concurrent delegation owns its result aggregation. Missing runtime configuration and budget exhaustion are failures, not success.
 
+Explicit session request, cost and token budgets include delegated work. Concurrent workers reserve requests through the parent's existing budget owner before dispatch, and their usage is recorded once with the actual provider/model. Cancelling a shared budget approval stops the waiting child. An unknown price cannot silently count as zero against an explicit dollar limit.
+
 Automatic context management is enabled for primary and worker loops. Conversion retains actual trimmed content, tool pairing, summary links and provider reasoning metadata. Exact Google replay metadata is dropped if its assistant content is rewritten; unchanged assistant tool messages retain provider metadata. Model changes update the catalog-derived context window and pricing attribution in existing owners.
 
 ## Validation and limits

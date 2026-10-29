@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { ORCH_MODE } from "../../../agent/coding-modes.js";
+import { AgentLoop, type AgentLoopConfig } from "../../../agent/loop.js";
 import { createModeRegistry } from "../../../agent/mode-registry.js";
+import { delegateAgentTool } from "../../../builtin/delegate-agent.js";
+import { CostService } from "../../../cost/service.js";
 import { PromptLoader } from "../../../prompts/prompt-loader.js";
-import { LLM } from "../../../session/index.js";
+import { createUserMessage, LLM, SessionParts } from "../../../session/index.js";
 import { UnifiedToolContainer } from "../../../tool/container.js";
 import { createContextIsolator } from "../../session/context-isolator.js";
 import { createPermissionInheritance } from "../../session/permission-inheritance.js";
@@ -35,6 +39,7 @@ function createRuntime() {
   });
   const root = sessions.create({ agentSlug: "orch", level: 0 });
   return {
+    tools,
     readFile,
     sessions,
     orchestrator: createOrchestrator({
@@ -199,5 +204,225 @@ describe("Orchestrator worker runtime", () => {
     });
     expect(result.overallStatus).toBe("failure");
     expect(result.results[0]?.error?.message).toContain("max_steps");
+  });
+});
+
+describe("Delegated session budgets", () => {
+  function createParent(overrides: Partial<AgentLoopConfig> = {}) {
+    const runtime = createRuntime();
+    runtime.tools.registerTool(delegateAgentTool);
+    const costService = new CostService({ sessionId: "shared-budget" });
+    const loop = new AgentLoop({
+      sessionId: "shared-budget",
+      mode: ORCH_MODE,
+      agentLevel: 0,
+      providerType: "anthropic",
+      model: "claude-sonnet-4-6",
+      cwd: process.cwd(),
+      tools: runtime.tools.getProviderToolDefinitions(),
+      toolExecutor: runtime.tools.getExecutor(),
+      orchestrator: runtime.orchestrator,
+      costService,
+      costLimits: { maxRequestsPerSession: 2, pauseOnLimitReached: true, warningThreshold: 0.8 },
+      enableEvidencePack: false,
+      ...overrides,
+    });
+    const terminated = vi.fn();
+    loop.on("terminated", terminated);
+    loop.on("cost:awaitingApproval", () => loop.denyCostApproval());
+    return { ...runtime, loop, costService, terminated };
+  }
+
+  function parentStream(count = 1, childModel = "claude-opus-4-6"): ReturnType<typeof LLM.stream> {
+    return (async function* () {
+      for (let i = 0; i < count; i++) {
+        yield {
+          type: "toolCall" as const,
+          id: `delegate-${i}`,
+          name: "delegate_agent",
+          input: {
+            task: `Inspect evidence ${i}`,
+            targetAgent: "researcher",
+            model: childModel,
+          },
+        };
+      }
+      yield { type: "usage" as const, inputTokens: 10, outputTokens: 10 };
+      yield { type: "done" as const, stopReason: "tool_use" as const };
+    })();
+  }
+
+  function childStream(): ReturnType<typeof LLM.stream> {
+    return (async function* () {
+      yield {
+        type: "toolCall" as const,
+        id: "read-evidence",
+        name: "read_file",
+        input: { path: "note.txt" },
+      };
+      yield { type: "usage" as const, inputTokens: 30, outputTokens: 40 };
+      yield { type: "done" as const, stopReason: "tool_use" as const };
+    })();
+  }
+
+  it("blocks delegation before its first request when the parent exhausted the session budget", async () => {
+    const { loop, terminated, readFile } = createParent({
+      costLimits: { maxRequestsPerSession: 1, pauseOnLimitReached: true, warningThreshold: 0.8 },
+    });
+    vi.mocked(LLM.stream).mockReturnValueOnce(parentStream());
+    await loop.run();
+    expect(LLM.stream).toHaveBeenCalledTimes(1);
+    expect(readFile).not.toHaveBeenCalled();
+    expect(terminated).toHaveBeenCalledWith("cost_limit", expect.anything());
+    expect(JSON.stringify(loop.getMessages())).toContain(
+      "Worker stopped before completion: cost_limit"
+    );
+  });
+
+  it("charges child usage once with its model and stops both child and parent continuation", async () => {
+    const { loop, costService, terminated, readFile } = createParent();
+    const usage = vi.fn();
+    loop.on("usage", usage);
+    vi.mocked(LLM.stream).mockReturnValueOnce(parentStream()).mockReturnValueOnce(childStream());
+    await loop.run();
+    expect(LLM.stream).toHaveBeenCalledTimes(2);
+    expect(readFile).toHaveBeenCalledTimes(1);
+    expect(loop.getCostLimitIntegration()?.getRequestCount()).toBe(2);
+    expect(
+      costService.getRecords().map(({ provider, model, inputTokens, outputTokens }) => ({
+        provider,
+        model,
+        inputTokens,
+        outputTokens,
+      }))
+    ).toEqual([
+      { provider: "anthropic", model: "claude-sonnet-4-6", inputTokens: 10, outputTokens: 10 },
+      { provider: "anthropic", model: "claude-opus-4-6", inputTokens: 30, outputTokens: 40 },
+    ]);
+    expect(loop.getTerminationContext().tokenUsage.totalTokens).toBe(90);
+    expect(usage).toHaveBeenCalledTimes(2);
+    expect(usage).toHaveBeenLastCalledWith(
+      { inputTokens: 30, outputTokens: 40 },
+      { providerType: "anthropic", model: "claude-opus-4-6" }
+    );
+    expect(
+      loop.getMessages().find((message) => message.role === "assistant")?.metadata.tokens
+    ).toEqual({ input: 10, output: 10 });
+    expect(terminated).toHaveBeenCalledWith("cost_limit", expect.anything());
+  });
+
+  it("reserves the remaining request atomically across concurrent workers before usage arrives", async () => {
+    const { loop, readFile, terminated } = createParent({ parallelToolExecution: true });
+    let releaseChild: (() => void) | undefined;
+    const holdChild = new Promise<void>((resolve) => {
+      releaseChild = resolve;
+    });
+    vi.mocked(LLM.stream)
+      .mockReturnValueOnce(parentStream(2))
+      .mockImplementation(() =>
+        (async function* () {
+          await holdChild;
+          yield* childStream();
+        })()
+      );
+    const running = loop.run();
+    try {
+      await vi.waitFor(() => expect(loop.getCostLimitIntegration()?.getRequestCount()).toBe(2));
+      await vi.waitFor(() =>
+        expect(terminated).toHaveBeenCalledWith("cost_limit", expect.anything())
+      );
+    } finally {
+      releaseChild?.();
+    }
+    await running;
+    expect(LLM.stream).toHaveBeenCalledTimes(2);
+    expect(readFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases a child waiting on the shared budget when the parent is cancelled", async () => {
+    const { loop, orchestrator, terminated } = createParent();
+    loop.removeAllListeners("cost:awaitingApproval");
+    const awaitingApproval = vi.fn();
+    loop.on("cost:awaitingApproval", awaitingApproval);
+    vi.mocked(LLM.stream).mockReturnValueOnce(parentStream()).mockReturnValueOnce(childStream());
+    const running = loop.run();
+    await vi.waitFor(() => expect(awaitingApproval).toHaveBeenCalled());
+    loop.cancel("Stop while the worker awaits budget approval");
+    await running;
+    expect(LLM.stream).toHaveBeenCalledTimes(2);
+    expect(loop.getState()).toBe("terminated");
+    expect(orchestrator.getActiveSubagents()).toEqual([]);
+    expect(terminated).toHaveBeenCalledWith("cancelled", expect.anything());
+
+    vi.mocked(LLM.stream).mockReturnValueOnce(finalStream("Continued after explicit approval"));
+    loop.addMessage(createUserMessage([SessionParts.text("Continue")]));
+    const resumed = loop.run();
+    await vi.waitFor(() => expect(awaitingApproval).toHaveBeenCalledTimes(2));
+    expect(LLM.stream).toHaveBeenCalledTimes(2);
+    loop.grantCostApproval({ requests: 3 });
+    await resumed;
+    expect(LLM.stream).toHaveBeenCalledTimes(3);
+  });
+
+  it("pauses an explicit dollar budget when a child model's cost is unknown", async () => {
+    const { loop, costService, terminated } = createParent({
+      costLimits: { maxCostPerSession: 1, pauseOnLimitReached: true, warningThreshold: 0.8 },
+    });
+    vi.mocked(LLM.stream)
+      .mockReturnValueOnce(parentStream(1, "unpriced-custom-model"))
+      .mockReturnValueOnce(childStream());
+    await loop.run();
+    expect(LLM.stream).toHaveBeenCalledTimes(2);
+    expect(Number.isNaN(costService.getSessionCost().total)).toBe(true);
+    expect(terminated).toHaveBeenCalledWith("cost_limit", expect.anything());
+  });
+
+  it("rechecks the independent deadline after a shared budget approval", async () => {
+    const { loop, terminated } = createParent({
+      costLimits: { maxRequestsPerSession: 1, pauseOnLimitReached: true, warningThreshold: 0.8 },
+      terminationLimits: { maxTimeMs: 10_000 },
+    });
+    loop.removeAllListeners("cost:awaitingApproval");
+    loop.on("cost:awaitingApproval", () => undefined);
+    const integration = loop.getCostLimitIntegration();
+    if (!integration) throw new Error("The fixture must have a session budget");
+    const waitForApproval = vi.spyOn(integration, "waitForApproval");
+    vi.mocked(LLM.stream)
+      .mockReturnValueOnce(parentStream())
+      .mockImplementation(() => finalStream("Unexpected request"));
+    const running = loop.run();
+    await vi.waitFor(() => expect(waitForApproval).toHaveBeenCalled());
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 20_000);
+    try {
+      loop.grantCostApproval({ requests: 3 });
+      await running;
+      expect(LLM.stream).toHaveBeenCalledTimes(1);
+      expect(terminated).toHaveBeenCalledWith("max_time", expect.anything());
+    } finally {
+      clock.mockRestore();
+      waitForApproval.mockRestore();
+    }
+  });
+
+  it.each([
+    "tokens",
+    "cost",
+  ] as const)("applies the parent's explicit %s budget to child continuation", async (budget) => {
+    const { loop, terminated } = createParent({
+      costLimits: {
+        ...(budget === "cost" ? { maxCostPerSession: 0.001 } : {}),
+        pauseOnLimitReached: true,
+        warningThreshold: 0.8,
+      },
+      terminationLimits: budget === "tokens" ? { maxTokens: 50 } : undefined,
+    });
+    vi.mocked(LLM.stream).mockReturnValueOnce(parentStream()).mockReturnValueOnce(childStream());
+    await loop.run();
+    expect(LLM.stream).toHaveBeenCalledTimes(2);
+    expect(terminated).toHaveBeenCalledWith(
+      budget === "tokens" ? "max_tokens" : "cost_limit",
+      expect.anything()
+    );
+    expect(JSON.stringify(loop.getMessages())).toContain("Worker stopped before completion");
   });
 });

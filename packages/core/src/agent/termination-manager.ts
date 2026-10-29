@@ -238,8 +238,8 @@ export class AgentTerminationManager {
    *
    * @param tokens - Token usage from LLM response
    */
-  recordTokenUsage(tokens: TokenUsage): void {
-    this.lastAssistantTokens = tokens;
+  recordTokenUsage(tokens: TokenUsage, updateLastAssistant = true): void {
+    if (updateLastAssistant) this.lastAssistantTokens = tokens;
 
     // Update termination context token tracking
     this.terminationContext.tokenUsage.inputTokens += tokens.inputTokens ?? 0;
@@ -376,6 +376,18 @@ export class AgentTerminationManager {
     }
 
     return result;
+  }
+
+  /** Inspect budgets without counting another step or applying completion/progress guards. */
+  checkResourceLimits(): TerminationResult {
+    return this.terminationChecker.shouldTerminate({
+      ...this.terminationContext,
+      isCancelled: this.isCancelled(),
+      hasNaturalStop: false,
+      hasTextOnly: false,
+      recentToolCalls: [],
+      recentResponses: [],
+    });
   }
 
   /**

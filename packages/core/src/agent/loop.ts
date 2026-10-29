@@ -88,6 +88,17 @@ import { AgentTerminationManager } from "./termination-manager.js";
 /**
  * Configuration for the AgentLoop.
  */
+export interface AgentUsageSource {
+  providerType: string;
+  model: string;
+}
+
+/** Delegated requests use the original session's budget and usage owners. */
+export interface AgentSessionBudget {
+  beforeRequest(signal: AbortSignal): Promise<TerminationReason | undefined>;
+  recordUsage(usage: TokenUsage, source: AgentUsageSource): void;
+}
+
 export interface AgentLoopConfig {
   /** Session identifier */
   sessionId: string;
@@ -149,6 +160,7 @@ export interface AgentLoopConfig {
   orchestrator?: OrchestratorCore;
   /** Parent session ID if running in a subsession (T048) */
   parentSessionId?: string;
+  sessionBudget?: AgentSessionBudget;
   /** Agent level for hierarchy constraints (T048) */
   agentLevel?: AgentLevel;
   /** Whether the session is interactive (enables interactive-only tools like ask_followup_question) */
@@ -285,7 +297,7 @@ export interface AgentLoopEvents {
   /** Emitted when a tool call is received */
   toolCall: [id: string, name: string, input: Record<string, unknown>];
   /** Emitted when token usage is reported */
-  usage: [usage: TokenUsage];
+  usage: [usage: TokenUsage, source?: AgentUsageSource];
   /** Emitted when a tool execution starts (T014) */
   toolStart: [callId: string, name: string, input: Record<string, unknown>];
   /** Emitted when a tool execution completes (T014) */
@@ -460,6 +472,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private nextIterationRequested = false;
   private interactionQueue: Promise<void> = Promise.resolve();
   private costApprovalDenied = false;
+  private requestBudgetQueue: Promise<void> = Promise.resolve();
+  private budgetStopReason?: TerminationReason;
 
   /** Pending user prompt awaiting response (GAP 1 fix) */
   private pendingUserPrompt: {
@@ -803,6 +817,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     if (message.role === "user") {
       this.resetAutoApprovalCounters();
       if (!this.activeRun && this.state !== "shutdown") {
+        this.budgetStopReason = undefined;
         this.resetIterationCount();
         this.resetTerminationTracking();
         this.resetRetryCounter();
@@ -1057,7 +1072,78 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     this.emit("usage", usage);
 
     // Track usage with cost manager (Phase 35+)
-    this.costManager.trackUsage(usage);
+    if (this.config.sessionBudget) {
+      this.config.sessionBudget.recordUsage(usage, {
+        providerType: this.config.providerType,
+        model: this.config.model,
+      });
+    } else {
+      this.costManager.trackUsage(usage, undefined, true);
+    }
+  }
+
+  private recordDelegatedUsage(usage: TokenUsage, source: AgentUsageSource): void {
+    this.terminationManager.recordTokenUsage(usage, false);
+    this.costManager.trackUsage(usage, source, true);
+    this.emit("usage", usage, source);
+  }
+
+  private recordBudgetStop(reason: TerminationReason): void {
+    if (this.budgetStopReason === reason) return;
+    this.budgetStopReason = reason;
+    this.emit("terminated", reason, {
+      shouldTerminate: true,
+      reason,
+      metadata: { stepsExecuted: this.iterationCount },
+    });
+  }
+
+  /** Serialize check/reserve, including approvals, without a second usage counter. */
+  private reserveSessionRequest(signal: AbortSignal): Promise<TerminationReason | undefined> {
+    const request = this.requestBudgetQueue.then(async () => {
+      if (signal.aborted || this.cancellation.isCancelled) return TerminationReason.CANCELLED;
+      if (this.budgetStopReason) return this.budgetStopReason;
+      const resources = this.terminationManager.checkResourceLimits();
+      if (resources.shouldTerminate && resources.reason) {
+        this.recordBudgetStop(resources.reason);
+        return resources.reason;
+      }
+      const integration = this.costManager.getIntegration();
+      if (integration?.shouldPauseForApproval()) {
+        const onAbort = () => integration.denyApproval();
+        signal.addEventListener("abort", onAbort, { once: true });
+        const unregister = this.cancellation.onCancel(onAbort);
+        let approved = false;
+        try {
+          approved =
+            !this.costApprovalDenied &&
+            this.listenerCount("cost:awaitingApproval") > 0 &&
+            (await integration.waitForApproval());
+        } finally {
+          unregister();
+          signal.removeEventListener("abort", onAbort);
+        }
+        if (signal.aborted || this.cancellation.isCancelled) return TerminationReason.CANCELLED;
+        if (!approved || this.costApprovalDenied) {
+          this.recordBudgetStop(TerminationReason.COST_LIMIT);
+          return TerminationReason.COST_LIMIT;
+        }
+      }
+      // Other workers can consume tokens, or the deadline can pass, during approval.
+      // Extending a dollar/request limit must not override those independent limits.
+      const currentResources = this.terminationManager.checkResourceLimits();
+      if (currentResources.shouldTerminate && currentResources.reason) {
+        this.recordBudgetStop(currentResources.reason);
+        return currentResources.reason;
+      }
+      integration?.startRequest();
+      return undefined;
+    });
+    this.requestBudgetQueue = request.then(
+      () => undefined,
+      () => undefined
+    );
+    return request;
   }
 
   private buildAssistantMetadata(): Partial<Omit<SessionMessageMetadata, "createdAt">> {
@@ -1547,31 +1633,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return;
     }
 
-    const costIntegration = this.costManager.getIntegration();
-    if (costIntegration?.shouldPauseForApproval()) {
-      const unregister = this.cancellation.onCancel(() => costIntegration.denyApproval());
-      let approved = false;
-      try {
-        approved =
-          !this.costApprovalDenied &&
-          this.listenerCount("cost:awaitingApproval") > 0 &&
-          (await costIntegration.waitForApproval());
-      } finally {
-        unregister();
-      }
-      if (this.cancellation.isCancelled) return;
-      if (!approved) {
-        this.emit("terminated", TerminationReason.COST_LIMIT, {
-          shouldTerminate: true,
-          reason: TerminationReason.COST_LIMIT,
-          metadata: { stepsExecuted: this.iterationCount },
-        });
-        this.transitionTo("idle");
-        this.emit("complete");
-        return;
-      }
-    }
-
     // Reset stream state for this run
     this.streamHandler.resetState();
     this.lastTurnUsage = null;
@@ -1659,6 +1720,19 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
       // Get effective thinking config (dynamic if getter provided, static otherwise)
       const effectiveThinking = this.getEffectiveThinkingConfig();
+
+      const reservedBudgetReason = await (this.config.sessionBudget
+        ? this.config.sessionBudget.beforeRequest(this.abortController.signal)
+        : this.reserveSessionRequest(this.abortController.signal));
+      const budgetReason =
+        reservedBudgetReason ??
+        (this.cancellation.isCancelled ? TerminationReason.CANCELLED : undefined);
+      if (budgetReason) {
+        this.recordBudgetStop(budgetReason);
+        this.transitionTo(budgetReason === TerminationReason.CANCELLED ? "terminated" : "idle");
+        this.emit("complete");
+        return;
+      }
 
       // Create base stream from LLM
       const baseStream = LLM.stream({
@@ -2272,6 +2346,12 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return;
     }
 
+    if (this.budgetStopReason) {
+      if (this.state === "tool_executing") this.transitionTo("idle");
+      this.emit("complete");
+      return;
+    }
+
     // Run the existing progress/resource guards on the real execution path.
     // Keep tool receipts in history before stopping so the run can be resumed.
     if (!this.completionAttempted && this.terminationManager.checkTermination().shouldTerminate) {
@@ -2450,6 +2530,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         model: signal.model ?? this.config.model,
         maxIterations: signal.maxTurns,
         cwd: this.config.cwd,
+        sessionBudget: this.config.sessionBudget ?? {
+          beforeRequest: (abortSignal) => this.reserveSessionRequest(abortSignal),
+          recordUsage: (usage, source) => this.recordDelegatedUsage(usage, source),
+        },
         permissionChecker: {
           checkPermission: async (name, input, context) => {
             const decision = await this.toolExecutor.checkPermission(name, input, context);
@@ -2960,6 +3044,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    */
   cancel(reason?: string): void {
     this.cancellation.cancel(reason);
+    this.costManager.denyApproval();
     this.pendingPermission?.resolve(false);
     this.pendingUserPrompt?.resolve("Operation cancelled");
     this.abortController?.abort();

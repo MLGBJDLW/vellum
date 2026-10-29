@@ -90,7 +90,11 @@ export class CostLimitHandler extends EventEmitter<CostLimitHandlerEvents> {
     const { maxCostPerSession, maxRequestsPerSession } = this.config;
 
     // Calculate percentages
-    const costPercent = maxCostPerSession ? (costUsed / maxCostPerSession) * 100 : 0;
+    const costPercent = maxCostPerSession
+      ? Number.isFinite(costUsed)
+        ? (costUsed / maxCostPerSession) * 100
+        : 100
+      : 0;
     const requestPercent = maxRequestsPerSession ? (requestsUsed / maxRequestsPerSession) * 100 : 0;
 
     // Determine highest percentage used
@@ -100,7 +104,7 @@ export class CostLimitHandler extends EventEmitter<CostLimitHandlerEvents> {
     let withinLimits = true;
     let reason: LimitReason | undefined;
 
-    if (maxCostPerSession && costUsed >= maxCostPerSession) {
+    if (maxCostPerSession && (!Number.isFinite(costUsed) || costUsed >= maxCostPerSession)) {
       withinLimits = false;
       reason = "cost";
     } else if (maxRequestsPerSession && requestsUsed >= maxRequestsPerSession) {
@@ -140,6 +144,14 @@ export class CostLimitHandler extends EventEmitter<CostLimitHandlerEvents> {
    */
   isAwaitingApproval(): boolean {
     return this.awaitingApproval;
+  }
+
+  /** Reopen a still-reached limit after interruption; an explicit grant clears that flag. */
+  prepareApproval(): void {
+    const result = this.checkLimits();
+    if (this.config.pauseOnLimitReached && result.reason && this.limitReached[result.reason]) {
+      this.awaitingApproval = true;
+    }
   }
 
   /**
@@ -280,10 +292,10 @@ export class CostLimitHandler extends EventEmitter<CostLimitHandlerEvents> {
     limit: number,
     threshold: number
   ): void {
-    const percentUsed = (current / limit) * 100;
+    const percentUsed = Number.isFinite(current) ? (current / limit) * 100 : 100;
 
     // Check for limit reached
-    if (current >= limit && !this.limitReached[type]) {
+    if ((!Number.isFinite(current) || current >= limit) && !this.limitReached[type]) {
       this.limitReached[type] = true;
       this.awaitingApproval = this.config.pauseOnLimitReached;
 
