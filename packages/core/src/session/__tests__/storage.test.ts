@@ -347,6 +347,9 @@ describe("StorageManager", () => {
 
       expect(index.size).toBe(1);
       expect(index.has(metadata.id)).toBe(true);
+      expect(index.get(metadata.id)?.createdAt).toEqual(metadata.createdAt);
+      expect(index.get(metadata.id)?.updatedAt).toEqual(metadata.updatedAt);
+      expect(index.get(metadata.id)?.lastActive).toEqual(metadata.lastActive);
     });
 
     it("should start with empty index when file doesn't exist", async () => {
@@ -354,6 +357,23 @@ describe("StorageManager", () => {
       const index = await manager.getIndex();
 
       expect(index.size).toBe(0);
+    });
+
+    it("keeps valid metadata when another index entry is malformed without rewriting disk", async () => {
+      await fs.mkdir(tempDir, { recursive: true });
+      const metadata = createTestMetadata();
+      const content = JSON.stringify({
+        [metadata.id]: metadata,
+        damaged: { ...metadata, lastActive: "not a date" },
+        legacy: { title: "Legacy record" },
+      });
+      const indexPath = path.join(tempDir, "index.json");
+      await fs.writeFile(indexPath, content, "utf8");
+      const manager = await StorageManager.create({ basePath: tempDir });
+      const index = await manager.getIndex();
+      expect(index.size).toBe(1);
+      expect(index.get(metadata.id)).toEqual(metadata);
+      expect(await fs.readFile(indexPath, "utf8")).toBe(content);
     });
 
     it("should handle corrupted index file gracefully", async () => {
@@ -1117,6 +1137,9 @@ describe("StorageManager", () => {
       expect(archived.length).toBe(1);
       expect(archived[0]?.id).toBe(session.metadata.id);
       expect(archived[0]?.status).toBe("archived");
+      expect(archived[0]?.createdAt).toEqual(session.metadata.createdAt);
+      expect(archived[0]?.updatedAt).toBeInstanceOf(Date);
+      expect(archived[0]?.lastActive).toBeInstanceOf(Date);
     });
 
     it("should return multiple archived sessions", async () => {

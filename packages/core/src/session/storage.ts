@@ -17,7 +17,12 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 import * as zlib from "node:zlib";
 import { z } from "zod";
-import { type Session, type SessionMetadata, SessionSchema } from "./types.js";
+import {
+  type Session,
+  type SessionMetadata,
+  SessionMetadataSchema,
+  SessionSchema,
+} from "./types.js";
 
 // Promisified zlib functions
 const gzip = promisify(zlib.gzip);
@@ -408,10 +413,7 @@ export class StorageManager {
 
     try {
       const content = await fs.readFile(indexPath, "utf-8");
-      const parsed = JSON.parse(content);
-
-      // Deserialize Object to Map
-      return new Map(Object.entries(parsed));
+      return StorageManager.parseIndex(content, indexPath);
     } catch (error) {
       // Return empty Map if file doesn't exist or is invalid
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -421,6 +423,25 @@ export class StorageManager {
       console.warn(`Failed to parse index file at ${indexPath}, starting fresh:`, error);
       return new Map();
     }
+  }
+
+  /** Restore runtime metadata types at the JSON boundary without rewriting the index. */
+  private static parseIndex(content: string, indexPath: string): Map<string, SessionMetadata> {
+    const parsed: unknown = JSON.parse(content);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("Session index must be an object");
+    }
+    const index = new Map<string, SessionMetadata>();
+    for (const [id, metadata] of Object.entries(parsed)) {
+      const result = SessionMetadataSchema.safeParse(metadata);
+      if (result.success) {
+        index.set(id, result.data);
+      } else {
+        // One damaged or unsupported record must not hide other saved sessions.
+        console.warn(`Skipping invalid session index entry ${id} in ${indexPath}`);
+      }
+    }
+    return index;
   }
 
   /**
@@ -1044,8 +1065,7 @@ export class StorageManager {
 
     try {
       const content = await fs.readFile(archivedIndexPath, "utf-8");
-      const parsed = JSON.parse(content);
-      return Object.values(parsed) as SessionMetadata[];
+      return Array.from(StorageManager.parseIndex(content, archivedIndexPath).values());
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         return [];
