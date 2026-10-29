@@ -90,6 +90,7 @@ const SEPARATOR = "│";
 
 /** Mode display configuration */
 const MODES_CONFIG: Array<{ mode: CodingMode; icon: string; label: string }> = [
+  { mode: "orch", icon: "●", label: "orch" },
   { mode: "vibe", icon: "◐", label: "vibe" },
   { mode: "plan", icon: "◑", label: "plan" },
   { mode: "spec", icon: "◒", label: "spec" },
@@ -97,6 +98,7 @@ const MODES_CONFIG: Array<{ mode: CodingMode; icon: string; label: string }> = [
 
 /** Agent name to abbreviation mapping for status bar display */
 const AGENT_ABBREVIATIONS: Record<string, string> = {
+  "orch-agent": "Orch",
   // Mode-based agents (fallback when no role override)
   "vibe-agent": "Vibe",
   "plan-agent": "Plan",
@@ -222,7 +224,7 @@ function formatCost(cost: number): string {
  * ```
  */
 export function StatusBar({
-  mode = "vibe",
+  mode = "orch",
   agentName,
   agentLevel,
   modelName,
@@ -279,6 +281,7 @@ export function StatusBar({
   // Mode-specific gradient colors
   const modeGradients: Record<CodingMode, readonly string[]> = useMemo(
     () => ({
+      orch: [theme.colors.primary, theme.colors.info],
       vibe: [theme.colors.success, "#34d399", "#6ee7b7"], // Green gradient
       plan: [theme.colors.info, "#60a5fa", "#93c5fd"], // Blue gradient
       spec: [theme.colors.primary, "#8b5cf6", "#a78bfa"], // Purple gradient

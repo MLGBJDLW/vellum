@@ -19,7 +19,6 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { memo, useCallback, useEffect, useId, useMemo, useRef } from "react";
-import { useAnimationFrame } from "../../context/AnimationContext.js";
 import type { ToolCallInfo } from "../../context/MessagesContext.js";
 import { useMouseContextOptional } from "../../context/MouseContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
@@ -254,9 +253,6 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   const clickId = useId();
   const mouseCtx = useMouseContextOptional();
   const isMouseActive = mouseCtx?.isMouseActive ?? false;
-
-  // Animation frame for tool call spinners
-  const frameIndex = useAnimationFrame(TOOL_SPINNER_FRAMES);
 
   // In compact mode, force collapsed and disable keyboard toggle
   const isCompactMode = displayMode === "compact";
@@ -526,13 +522,13 @@ export const ThinkingBlock = memo(function ThinkingBlock({
         <Box marginLeft={2} marginTop={0} flexDirection="column">
           {toolCalls.map((toolCall) => {
             // Determine status indicator and color
-            let statusIcon: string;
+            let statusIcon: React.ReactNode;
             let statusColor: string;
 
             switch (toolCall.status) {
               case "running":
               case "pending":
-                statusIcon = TOOL_SPINNER_FRAMES[frameIndex] ?? "-";
+                statusIcon = <Spinner frames={TOOL_SPINNER_FRAMES} color={accentColor} />;
                 statusColor = accentColor;
                 break;
               case "completed":

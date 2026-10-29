@@ -374,10 +374,10 @@ export const icons = {
   error: "✗",
 
   /** Warning indicator */
-  warning: "⚠",
+  warning: "!",
 
   /** Info indicator */
-  info: "ℹ",
+  info: "i",
 
   /** Pending indicator */
   pending: "○",
@@ -453,10 +453,10 @@ function parseEnvNumber(envVar: string | undefined, defaultValue: number): numbe
  */
 export const tuiConfig = {
   layout: {
-    compactThreshold: parseEnvNumber(process.env.VELLUM_COMPACT_THRESHOLD, 60),
-    sidebarWidthPercent: parseEnvNumber(process.env.VELLUM_SIDEBAR_WIDTH_PERCENT, 20),
-    sidebarMinWidth: parseEnvNumber(process.env.VELLUM_SIDEBAR_MIN_WIDTH, 16),
-    sidebarMaxWidth: parseEnvNumber(process.env.VELLUM_SIDEBAR_MAX_WIDTH, 60),
+    compactThreshold: parseEnvNumber(process.env.VELLUM_COMPACT_THRESHOLD, 96),
+    sidebarWidthPercent: parseEnvNumber(process.env.VELLUM_SIDEBAR_WIDTH_PERCENT, 26),
+    sidebarMinWidth: parseEnvNumber(process.env.VELLUM_SIDEBAR_MIN_WIDTH, 28),
+    sidebarMaxWidth: parseEnvNumber(process.env.VELLUM_SIDEBAR_MAX_WIDTH, 44),
   },
   virtualization: {
     reservedLines: parseEnvNumber(process.env.VELLUM_RESERVED_LINES, 10),

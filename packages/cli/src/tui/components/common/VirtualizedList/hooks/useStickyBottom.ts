@@ -6,7 +6,7 @@
  *
  * 1. User lightly scrolls up → auto-scroll disables (off)
  * 2. User scrolls back down to bottom → auto-scroll restores (auto)
- * 3. Keyboard navigation (Page Up/Down) → doesn't break sticky
+ * 3. Keyboard navigation upward → pauses follow just like the mouse wheel
  * 4. User presses End / clicks "scroll to bottom" → locks follow (locked)
  *
  * State Machine:
@@ -105,7 +105,7 @@ export const initialState: StickyBottomInternalState = {
  * |---------|--------------------------|--------|----------------------------------|
  * | auto    | wheel-up                 | off    | Record direction                 |
  * | auto    | wheel-down               | auto   | No change (don't break sticky)   |
- * | auto    | keyboard-nav             | auto   | No change (don't break sticky)   |
+ * | auto    | keyboard-up              | off    | Preserve reading position        |
  * | auto    | new-content              | auto   | Auto-scroll to bottom            |
  * | off     | wheel-down (to bottom)   | auto   | Restore auto-follow              |
  * | off     | keyboard-End / click     | locked | Scroll to bottom, lock follow    |
@@ -119,13 +119,13 @@ export function stickyBottomReducer(
 ): StickyBottomInternalState {
   switch (action.type) {
     case "SCROLL": {
-      const { delta, source, isAtBottom } = action;
+      const { delta, isAtBottom } = action;
       const direction = delta < 0 ? "up" : delta > 0 ? "down" : null;
 
       switch (state.followMode) {
         case "auto":
-          // Only wheel-up breaks auto mode
-          if (source === "wheel" && direction === "up") {
+          // Any explicit upward navigation pauses follow, including PageUp.
+          if (direction === "up") {
             return {
               ...state,
               followMode: "off",
@@ -133,7 +133,7 @@ export function stickyBottomReducer(
               newMessageCount: 0,
             };
           }
-          // Keyboard nav and wheel-down don't break auto
+          // Downward navigation keeps following.
           return {
             ...state,
             lastScrollDirection: direction,
@@ -141,7 +141,7 @@ export function stickyBottomReducer(
 
         case "off":
           // Wheel-down reaching bottom restores auto
-          if (source === "wheel" && direction === "down" && isAtBottom) {
+          if (direction === "down" && isAtBottom) {
             return {
               ...state,
               followMode: "auto",
@@ -156,7 +156,7 @@ export function stickyBottomReducer(
 
         case "locked":
           // Wheel-up breaks locked mode
-          if (source === "wheel" && direction === "up") {
+          if (direction === "up") {
             return {
               ...state,
               followMode: "off",
@@ -269,7 +269,9 @@ export interface UseStickyBottomOptions {
   dataLength: number;
   /** Whether content is currently streaming */
   isStreaming?: boolean;
-  /** Threshold in pixels to consider "at bottom" (default: 5) */
+  /** Whether the initial viewport follows the tail. */
+  initiallyFollowing?: boolean;
+  /** Threshold in terminal rows to consider "at bottom" (default: 0) */
   bottomThreshold?: number;
 }
 
@@ -369,10 +371,15 @@ export function useStickyBottom(options: UseStickyBottomOptions): UseStickyBotto
     totalContentHeight: _totalContentHeight,
     dataLength,
     isStreaming = false,
-    bottomThreshold = 5,
+    initiallyFollowing = true,
+    bottomThreshold = 0,
   } = options;
 
-  const [state, dispatch] = useReducer(stickyBottomReducer, initialState);
+  const [state, dispatch] = useReducer(stickyBottomReducer, {
+    ...initialState,
+    followMode: initiallyFollowing ? "auto" : "off",
+    prevDataLength: dataLength,
+  });
 
   // Calculate derived values
   const distanceFromBottom = Math.max(0, maxScroll - scrollTop);

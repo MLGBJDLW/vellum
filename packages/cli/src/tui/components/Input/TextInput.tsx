@@ -10,7 +10,7 @@
 import type { Key } from "ink";
 import { Box, Text, useInput } from "ink";
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAnimation } from "../../context/AnimationContext.js";
+import { useAnimationControls } from "../../context/AnimationContext.js";
 import { usePasteHandler } from "../../context/BracketedPasteContext.js";
 import { useTheme } from "../../theme/index.js";
 import { HighlightedText } from "./HighlightedText.js";
@@ -165,7 +165,7 @@ function TextInputComponent({
   enableHighlight = false,
 }: TextInputProps) {
   const { theme } = useTheme();
-  const { pauseAnimations, resumeAnimations, isVSCode } = useAnimation();
+  const { pauseAnimations, resumeAnimations, isVSCode } = useAnimationControls();
 
   // Pause animations when input is focused in VS Code to reduce flickering
   useEffect(() => {

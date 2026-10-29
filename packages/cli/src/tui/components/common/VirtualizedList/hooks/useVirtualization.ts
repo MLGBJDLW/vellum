@@ -19,6 +19,7 @@ import {
   type BlockSumsState,
   batchUpdateHeights,
   createBlockSums,
+  findOffsetIndex,
   prefixSum,
   updateHeight as updateBlockHeight,
 } from "../utils/blockSums.js";
@@ -213,22 +214,6 @@ export interface UseVirtualizationReturn {
   readonly blockSumsState: BlockSumsState;
   /** Map from item ID to current index */
   readonly idToIndexMap: ReadonlyMap<string, number>;
-}
-
-/**
- * Find the last index where predicate returns true.
- */
-function findLastIndex<T>(
-  array: readonly T[],
-  predicate: (value: T, index: number) => boolean
-): number {
-  for (let i = array.length - 1; i >= 0; i--) {
-    const item = array[i];
-    if (item !== undefined && predicate(item, i)) {
-      return i;
-    }
-  }
-  return -1;
 }
 
 /**
@@ -454,13 +439,13 @@ export function useVirtualization<T = unknown>(
   // This ensures we NEVER render more items than fit in the viewport
   // FIX: Improved off-by-one handling - findLastIndex returns the index where offset <= scrollTop
   // We don't need to subtract 1; that was causing negative indices and blank areas
-  const foundStartIndex = findLastIndex(offsets, (offset) => offset <= scrollTop);
+  const foundStartIndex = findOffsetIndex(offsets, scrollTop);
   // If no offset found (scrollTop < 0 or empty), start at 0
   // Otherwise use the found index directly (no -1 subtraction)
   const rawStartIndex = Math.max(0, foundStartIndex === -1 ? 0 : foundStartIndex);
 
   const endOffsetLimit = scrollTop + safeContainerHeight;
-  const foundEndIndex = findLastIndex(offsets, (offset) => offset <= endOffsetLimit);
+  const foundEndIndex = findOffsetIndex(offsets, endOffsetLimit);
   // FIX: Use last offset within viewport (<=) to avoid skipping the last visible item
   // when scrollTop = 0 and the scrollbar first appears.
   const rawEndIndex = Math.min(dataLength - 1, Math.max(0, foundEndIndex));

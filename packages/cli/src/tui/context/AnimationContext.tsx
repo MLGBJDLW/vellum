@@ -14,7 +14,15 @@
 
 import type React from "react";
 import type { ReactNode } from "react";
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 // =============================================================================
 // Constants
@@ -117,6 +125,8 @@ const initialState: AnimationContextValue = {
  * Animation context - provides global animation frame and timing
  */
 export const AnimationContext = createContext<AnimationContextValue>(initialState);
+type AnimationControls = Omit<AnimationContextValue, keyof AnimationState>;
+const AnimationControlsContext = createContext<AnimationControls>(initialState);
 
 // =============================================================================
 // Provider Component
@@ -148,8 +158,9 @@ export function AnimationProvider({
   children,
   tickInterval: tickOverride,
 }: AnimationProviderProps): React.JSX.Element {
-  const animationsDisabled = process.env.VELLUM_TEST_DISABLE_ANIMATION === "1";
-  const tickInterval = tickOverride ?? getAnimationTick();
+  const animationsDisabled =
+    process.env.VELLUM_TEST_DISABLE_ANIMATION === "1" || process.env.VELLUM_REDUCED_MOTION === "1";
+  const tickInterval = Math.max(MIN_FRAME_INTERVAL_MS, tickOverride ?? getAnimationTick());
   const isVSCode = isVSCodeTerminal();
 
   const [state, setState] = useState<AnimationState>({
@@ -204,16 +215,29 @@ export function AnimationProvider({
     };
   }, [tickInterval, isPaused, animationsDisabled]);
 
-  const contextValue: AnimationContextValue = {
-    ...state,
-    isVSCode,
-    tickInterval,
-    isPaused,
-    pauseAnimations,
-    resumeAnimations,
-  };
+  const controls = useMemo<AnimationControls>(
+    () => ({
+      isVSCode,
+      tickInterval,
+      isPaused: isPaused || animationsDisabled,
+      pauseAnimations,
+      resumeAnimations,
+    }),
+    [isVSCode, tickInterval, isPaused, animationsDisabled, pauseAnimations, resumeAnimations]
+  );
 
-  return <AnimationContext.Provider value={contextValue}>{children}</AnimationContext.Provider>;
+  const contextValue: AnimationContextValue = { ...state, ...controls };
+
+  return (
+    <AnimationControlsContext.Provider value={controls}>
+      <AnimationContext.Provider value={contextValue}>{children}</AnimationContext.Provider>
+    </AnimationControlsContext.Provider>
+  );
+}
+
+/** Timing controls without subscribing the text editor to every animation frame. */
+export function useAnimationControls(): AnimationControls {
+  return useContext(AnimationControlsContext);
 }
 
 // =============================================================================

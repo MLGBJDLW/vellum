@@ -16,6 +16,14 @@ import type { AnchorManager } from "./scrollAnchorAPI.js";
  */
 export const SCROLL_TO_ITEM_END = Number.MAX_SAFE_INTEGER;
 
+export interface VirtualizedScrollState {
+  readonly scrollTop: number;
+  readonly scrollHeight: number;
+  readonly innerHeight: number;
+  readonly followMode: FollowMode;
+  readonly newMessageCount: number;
+}
+
 /**
  * Props for the VirtualizedList component.
  * Generic type T represents the data item type.
@@ -42,8 +50,8 @@ export interface VirtualizedListProps<T> {
   /** Color for the scrollbar thumb */
   readonly scrollbarThumbColor?: string;
 
-  /** Callback when scroll position changes */
-  readonly onScrollTopChange?: (scrollTop: number) => void;
+  /** Read-only scroll snapshot; the list owns geometry and follow intent. */
+  readonly onScrollStateChange?: (state: VirtualizedScrollState) => void;
 
   /** Callback when sticking to bottom state changes */
   readonly onStickingToBottomChange?: (isSticking: boolean) => void;

@@ -15,7 +15,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SCROLL_TO_ITEM_END, type ScrollAnchor } from "../types.js";
-import { type BlockSumsState, computeAnchorDelta, prefixSum } from "../utils/blockSums.js";
+import {
+  type BlockSumsState,
+  computeAnchorDelta,
+  findOffsetIndex,
+  prefixSum,
+} from "../utils/blockSums.js";
 
 /** Minimum compensation threshold to avoid floating-point noise */
 const COMPENSATION_THRESHOLD = 0.5;
@@ -112,22 +117,6 @@ function computeAnchorFromBlockSums(
 }
 
 /**
- * Find the last index where predicate returns true.
- */
-function findLastIndex<T>(
-  array: readonly T[],
-  predicate: (value: T, index: number) => boolean
-): number {
-  for (let i = array.length - 1; i >= 0; i--) {
-    const item = array[i];
-    if (item !== undefined && predicate(item, i)) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-/**
  * Hook for managing scroll position as an anchor.
  *
  * @param props - Configuration for scroll anchor behavior
@@ -212,7 +201,7 @@ export function useScrollAnchor(props: UseScrollAnchorProps): UseScrollAnchorRet
         return { index: 0, offset: 0 };
       }
 
-      const index = findLastIndex(offsets, (offset) => offset <= scrollTop);
+      const index = findOffsetIndex(offsets, scrollTop);
       if (index === -1) {
         return { index: 0, offset: 0 };
       }

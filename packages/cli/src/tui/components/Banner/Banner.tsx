@@ -130,7 +130,7 @@ function VersionDisplay({ version, brand }: VersionDisplayProps): React.JSX.Elem
       <Text color={brand.accent}>v{version}</Text>
       <Text color={brand.secondary}> | </Text>
       <Text color={brand.primary} italic>
-        AI-Powered Coding Assistant
+        Your personal AI assistant
       </Text>
     </Box>
   );
@@ -180,6 +180,7 @@ export function Banner({
 }: BannerProps): React.JSX.Element | null {
   const { stdout } = useStdout();
   const { theme } = useTheme();
+  const reducedMotion = process.env.VELLUM_REDUCED_MOTION === "1";
   const [visible, setVisible] = useState(true);
   const [opacity, setOpacity] = useState(1);
   const [typingComplete, setTypingComplete] = useState(!typewriter);
@@ -213,6 +214,11 @@ export function Banner({
   // Auto-hide timer with smooth transition
   useEffect(() => {
     if (!autoHide) return;
+    if (reducedMotion) {
+      onComplete?.();
+      setVisible(false);
+      return;
+    }
 
     // Use simple timeout - start hiding 300ms before end for quicker transition
     const hideTimer = setTimeout(() => {
@@ -235,12 +241,12 @@ export function Banner({
       if (step1Ref.current) clearTimeout(step1Ref.current);
       if (step2Ref.current) clearTimeout(step2Ref.current);
     };
-  }, [autoHide, displayDuration, onComplete]);
+  }, [autoHide, displayDuration, onComplete, reducedMotion]);
 
   if (!visible) return null;
 
   // Determine which phase we're in: typing or static gradient (no shimmer)
-  const isTypingPhase = typewriter && !typingComplete;
+  const isTypingPhase = typewriter && !typingComplete && !reducedMotion;
 
   return (
     <Box

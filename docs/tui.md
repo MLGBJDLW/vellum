@@ -49,12 +49,23 @@ Vellum’s sidebar panels are designed to be discoverable via keyboard. When the
 
 | Shortcut | Action |
 |---|---|
-| `Ctrl+\` | Toggle sidebar |
-| `Ctrl+G` | Open **Tools** panel |
-| `Ctrl+O` | Open **MCP** panel |
-| `Ctrl+P` | Open **Memory** panel |
-| `Ctrl+T` | Open **Todo** panel |
+| `Alt+K` | Show/hide the workspace sidebar |
+| `Alt+B` | Focus the sidebar or return to chat |
+| `Alt+Left` / `Alt+Right` | Cycle sidebar panels while focused |
+| `Esc` | Return from the sidebar to chat |
+| `Alt+G` | Open **Activity** panel |
+| `Alt+O` | Open **Connections** panel |
+| `Alt+P` | Open **Memory** panel |
+| `Alt+T` | Open **Tasks** panel |
+| `Alt+S` | Open **Checkpoints** panel |
+| `Alt+L` | Open **Code tools** panel |
 | `Ctrl+S` | Open **Sessions** picker |
+
+The sidebar has its own keyboard focus. Typing in the composer cannot activate a task or checkpoint. Below 96 columns, focusing the sidebar opens it in the content pane; returning to chat preserves the draft and history position.
+
+Responses, tool results, and streaming text share one scrollable viewport. PageUp pauses following; additional output and typing preserve your reading position. PageDown to the bottom resumes following. Arrow keys stay with the composer while it is focused. Mouse wheel events over the sidebar do not move chat history.
+
+Set `VELLUM_REDUCED_MOTION=1` to disable decorative clock animations and skip the startup transition. Loading states remain visible. Scrollbar feedback only animates while active, and completed tool rows and text inputs do not subscribe to animation frames.
 
 ## Architecture
 
@@ -133,8 +144,8 @@ import { Layout } from "@butlerw/vellum";
 
 **Features:**
 
-- Auto-detects compact mode for narrow terminals (< 80 columns)
-- Responsive sidebar width (25% of terminal, 20-40 columns)
+- Auto-detects compact mode for narrow terminals (< 96 columns)
+- Responsive sidebar width (26% of terminal, normally 28–44 columns)
 - Theme-aware border styling
 
 ---

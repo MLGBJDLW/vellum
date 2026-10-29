@@ -11,12 +11,11 @@ import type { MemoryEntry, MemoryEntryType } from "@vellum/core";
 import { getIcons } from "@vellum/shared";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { isEndKey, isHomeKey } from "../types/ink-extended.js";
 import { truncateToDisplayWidth } from "../utils/index.js";
-import { HotkeyHints } from "./common/HotkeyHints.js";
 
 // =============================================================================
 // Types
@@ -30,6 +29,7 @@ export interface MemoryPanelProps {
   readonly entries: readonly MemoryEntry[];
   /** Maximum height in lines */
   readonly maxHeight?: number;
+  readonly width?: number;
   /** Whether the panel is focused for keyboard input */
   readonly isFocused?: boolean;
   /** Callback when an entry is selected */
@@ -131,6 +131,21 @@ function MemoryItem({ entry, isSelected, width }: MemoryItemProps): React.JSX.El
   const icon = typeIcons[entry.type];
   const color = typeColors[entry.type];
   const date = formatDate(entry.updatedAt);
+
+  if (width < 60) {
+    return (
+      <Box flexDirection="column">
+        <Text color={isSelected ? theme.colors.primary : color} bold={isSelected} wrap="truncate">
+          {isSelected ? "› " : "  "}
+          {icon} {truncate(entry.key, Math.max(1, width - 6))}
+        </Text>
+        <Text dimColor wrap="truncate">
+          {" "}
+          {truncate(entry.content, Math.max(1, width - 4))}
+        </Text>
+      </Box>
+    );
+  }
 
   // Calculate available width for content preview
   const keyWidth = Math.min(entry.key.length, 20);
@@ -257,6 +272,7 @@ function MemoryDetails({ entry, width }: MemoryDetailsProps): React.JSX.Element 
 export function MemoryPanel({
   entries,
   maxHeight = DEFAULT_MAX_HEIGHT,
+  width = 80,
   isFocused = true,
   onSelectEntry,
   onActivateEntry,
@@ -265,26 +281,18 @@ export function MemoryPanel({
   const { theme } = useTheme();
   const { t } = useTUITranslation();
 
-  const hints = useMemo(
-    () => [
-      { keys: "Alt+K", label: "Sidebar" },
-      { keys: "Alt+G", label: "Tools" },
-      { keys: "Alt+O", label: "MCP" },
-      { keys: "Alt+P", label: "Memory" },
-      { keys: "Alt+T", label: "Todo" },
-      { keys: "Ctrl+S", label: "Sessions" },
-      { keys: "Ctrl+Z", label: "Undo" },
-      { keys: "Ctrl+Y", label: "Redo" },
-    ],
-    []
-  );
-
   // Track selection and scroll
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   // Calculate visible items (account for header)
-  const maxVisible = Math.max(1, maxHeight - 3);
+  const maxVisible = Math.max(1, Math.floor((maxHeight - 3) / (width < 60 ? 2 : 1)));
+
+  useEffect(() => {
+    setSelectedIndex((index) => Math.min(index, Math.max(0, entries.length - 1)));
+    setScrollOffset((offset) => Math.min(offset, Math.max(0, entries.length - maxVisible)));
+  }, [entries.length, maxVisible]);
 
   // Get visible entries
   const visibleEntries = useMemo(
@@ -364,9 +372,11 @@ export function MemoryPanel({
       }
 
       // Enter to activate
-      if (key.return && selectedEntry && onActivateEntry) {
-        onActivateEntry(selectedEntry);
+      if (key.return && selectedEntry) {
+        setExpandedKey((current) => (current === selectedEntry.key ? null : selectedEntry.key));
+        onActivateEntry?.(selectedEntry);
       }
+      if (key.escape) setExpandedKey(null);
     },
     { isActive: isFocused }
   );
@@ -386,8 +396,7 @@ export function MemoryPanel({
     );
   }
 
-  // Estimate terminal width (fallback)
-  const estimatedWidth = 80;
+  const estimatedWidth = width;
 
   return (
     <Box flexDirection="column">
@@ -429,7 +438,7 @@ export function MemoryPanel({
       )}
 
       {/* Details panel */}
-      {showDetails && selectedEntry && (
+      {(showDetails || expandedKey === selectedEntry?.key) && selectedEntry && (
         <Box marginTop={1} paddingX={1}>
           <MemoryDetails entry={selectedEntry} width={estimatedWidth} />
         </Box>
@@ -439,7 +448,6 @@ export function MemoryPanel({
       {isFocused && (
         <Box marginTop={1} paddingX={1} flexDirection="column">
           <Text dimColor>{t("memory.keybindings")}</Text>
-          <HotkeyHints hints={hints} />
         </Box>
       )}
     </Box>
