@@ -56,6 +56,8 @@ node D:\coder\Vellum\scripts\verify-tui-native.mjs
 
 完整 CLI 又发现普通 `absolute opaque` 弹窗会被聊天滚动区域覆盖。检查当前 Ink 合成代码后，为弹窗使用 `opaque` 独立滚动区域且隐藏其滚动条。七项 Layout＋MessageList＋SettingsPanel 合成回归覆盖六种分类、后台追加报告、鼠标命中及关闭恢复；完整 ConPTY 帧也由覆盖错误转为正常正文。
 
+最后补充固定顶部区域的收缩边界，避免展开 slash 菜单时标题栏被压缩并与历史首行重叠。24 行终端的布局回归及最终构建 ConPTY 帧验证通过；设置与标题布局合计九项回归通过。
+
 ### 发布前证据
 
 - 全仓测试：487 个文件通过、1 个跳过；13,537 项通过、32 项跳过、5 项 todo。该次运行使用 `--maxWorkers=4`，避免与构建／安装并行时触发既有 core 计时测试超时。类型检查、构建及 Biome 通过；Biome 保留 30 个既有 warning。

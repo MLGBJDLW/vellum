@@ -4689,6 +4689,8 @@ function AppOverlays({
 }: AppOverlaysProps): React.JSX.Element {
   const { margins, loadingMinWidth, isNarrow, contentWidth } = useOverlayPositioning(showSidebar);
   const confirmWidth = Math.min(contentWidth, Math.max(24, contentWidth - margins.standard.left));
+  // Ink composites chat scroll regions after ordinary boxes. Each overlay below
+  // needs its own opaque scroll region, even when it has no visible scrollbar.
   // Exactly one overlay owns input, even when asynchronous approvals arrive over a picker.
   const activeOverlay = currentConfirmRequest
     ? "lsp"
