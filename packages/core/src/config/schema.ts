@@ -106,13 +106,13 @@ export type BearerTokenCredential = z.infer<typeof BearerTokenCredentialSchema>;
 export type ServiceAccountCredential = z.infer<typeof ServiceAccountCredentialSchema>;
 export type CertificateCredential = z.infer<typeof CertificateCredentialSchema>;
 
-// Re-export credential types from credentials module
-export { CredentialTypeSchema, CredentialSourceSchema, CredentialMetadataSchema };
 export type {
   CredentialMetadata,
   CredentialSource,
   CredentialType,
 } from "../credentials/types.js";
+// Re-export credential types from credentials module
+export { CredentialMetadataSchema, CredentialSourceSchema, CredentialTypeSchema };
 
 // ============================================
 // Provider Configuration Schemas

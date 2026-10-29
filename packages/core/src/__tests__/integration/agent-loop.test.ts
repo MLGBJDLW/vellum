@@ -97,30 +97,30 @@ describe("AgentLoop Integration (T034)", () => {
   });
 
   describe("Happy Path", () => {
-    it.each([
-      false,
-      true,
-    ])("does not report completion after a failed partial stream (processor=%s)", async (useStreamProcessor) => {
-      vi.mocked(LLM.stream).mockReturnValue(
-        createMockStream([
-          { type: "text", content: "Partial response" },
-          { type: "error", code: "PROVIDER_ERROR", message: "Provider failed before completion" },
-        ]) as ReturnType<typeof LLM.stream>
-      );
-      const loop = new AgentLoop({
-        ...config,
-        useStreamProcessor,
-        maxRetries: 0,
-        enableEvidencePack: false,
-      });
-      const complete = vi.fn();
-      const error = vi.fn();
-      loop.on("complete", complete);
-      loop.on("error", error);
-      await expect(loop.run()).rejects.toThrow("Provider failed before completion");
-      expect(complete).not.toHaveBeenCalled();
-      expect(error).toHaveBeenCalled();
-    });
+    it.each([false, true])(
+      "does not report completion after a failed partial stream (processor=%s)",
+      async (useStreamProcessor) => {
+        vi.mocked(LLM.stream).mockReturnValue(
+          createMockStream([
+            { type: "text", content: "Partial response" },
+            { type: "error", code: "PROVIDER_ERROR", message: "Provider failed before completion" },
+          ]) as ReturnType<typeof LLM.stream>
+        );
+        const loop = new AgentLoop({
+          ...config,
+          useStreamProcessor,
+          maxRetries: 0,
+          enableEvidencePack: false,
+        });
+        const complete = vi.fn();
+        const error = vi.fn();
+        loop.on("complete", complete);
+        loop.on("error", error);
+        await expect(loop.run()).rejects.toThrow("Provider failed before completion");
+        expect(complete).not.toHaveBeenCalled();
+        expect(error).toHaveBeenCalled();
+      }
+    );
 
     it("uses the newly selected provider and model in the existing runtime", async () => {
       vi.mocked(LLM.stream).mockImplementation(

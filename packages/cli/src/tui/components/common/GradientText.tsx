@@ -171,6 +171,7 @@ function GradientTextImpl({
       {segments.map((segment, index) => {
         const color = effectiveColors[index % effectiveColors.length];
         return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
           <Text key={`${index}-${segment}`} color={color} bold={bold} dimColor={dimColor}>
             {segment}
           </Text>

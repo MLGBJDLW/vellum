@@ -460,4 +460,4 @@ export function attachToolLifecycleMetrics(
   };
 }
 
-export { MetricsCollector, type Counter, type Gauge, type Histogram };
+export { type Counter, type Gauge, type Histogram, MetricsCollector };

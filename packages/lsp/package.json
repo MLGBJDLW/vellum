@@ -26,17 +26,17 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "chokidar": "^4.0.3",
-    "lru-cache": "^10.4.3",
-    "nanoid": "^5.1.6",
-    "vscode-jsonrpc": "^8.2.1",
-    "vscode-languageserver-protocol": "^3.17.5",
-    "zod": "^4.3.6"
+    "chokidar": "^6.0.0",
+    "lru-cache": "^11.5.3",
+    "nanoid": "^6.0.2",
+    "vscode-jsonrpc": "^10.0.0",
+    "vscode-languageserver-protocol": "^3.18.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^22.19.7",
-    "tsup": "^8.5.1",
+    "@types/node": "^22.20.5",
+    "tsup": "^9.0.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.0.18"
+    "vitest": "^5.0.5"
   }
 }

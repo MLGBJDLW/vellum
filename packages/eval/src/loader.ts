@@ -58,7 +58,7 @@ const MockScriptSchema = z.object({
         .array(
           z.object({
             name: z.string(),
-            arguments: z.record(z.unknown()),
+            arguments: z.record(z.string(), z.unknown()),
           })
         )
         .optional(),

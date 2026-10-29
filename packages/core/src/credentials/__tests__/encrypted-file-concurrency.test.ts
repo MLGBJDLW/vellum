@@ -52,25 +52,25 @@ describe("encrypted credential concurrency", () => {
     await rm(directory, { recursive: true, force: true });
   });
 
-  it.each([
-    false,
-    true,
-  ])("retries a restored managed key in the same instance (explicit cache clear=%s)", async (clearExplicitly) => {
-    const initial = new EncryptedFileStore({ filePath });
-    expect((await initial.set(credential("openai"))).ok).toBe(true);
-    const ciphertext = await readFile(filePath, "utf-8");
-    const keyPath = `${filePath}.key`;
-    const originalKey = await readFile(keyPath, "utf-8");
-    await writeFile(keyPath, "f".repeat(64));
-    const recovering = new EncryptedFileStore({ filePath });
-    expect((await recovering.get("openai")).ok).toBe(false);
+  it.each([false, true])(
+    "retries a restored managed key in the same instance (explicit cache clear=%s)",
+    async (clearExplicitly) => {
+      const initial = new EncryptedFileStore({ filePath });
+      expect((await initial.set(credential("openai"))).ok).toBe(true);
+      const ciphertext = await readFile(filePath, "utf-8");
+      const keyPath = `${filePath}.key`;
+      const originalKey = await readFile(keyPath, "utf-8");
+      await writeFile(keyPath, "f".repeat(64));
+      const recovering = new EncryptedFileStore({ filePath });
+      expect((await recovering.get("openai")).ok).toBe(false);
 
-    await writeFile(keyPath, originalKey);
-    if (clearExplicitly) recovering.clearCache();
-    const restored = await recovering.get("openai");
-    expect(restored.ok && restored.value?.provider).toBe("openai");
-    expect(await readFile(filePath, "utf-8")).toBe(ciphertext);
-  });
+      await writeFile(keyPath, originalKey);
+      if (clearExplicitly) recovering.clearCache();
+      const restored = await recovering.get("openai");
+      expect(restored.ok && restored.value?.provider).toBe("openai");
+      expect(await readFile(filePath, "utf-8")).toBe(ciphertext);
+    }
+  );
 
   it("does not overwrite a newer saved credential when a legacy read finishes migration", async () => {
     const legacy = new EncryptedFileStore({ filePath, password: "vellum-default-key" });

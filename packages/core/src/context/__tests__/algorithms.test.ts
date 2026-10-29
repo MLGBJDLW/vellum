@@ -1222,7 +1222,7 @@ describe("Phase 2: Core Algorithms", () => {
         pruneToolOutputs(messages, { maxOutputChars: 100 });
 
         // Original should be unchanged
-        const originalToolResult = (messages[1]?.content as ContentBlock[])[0] as ToolResultBlock;
+        const originalToolResult = (messages[1]?.content as ContentBlock[])?.[0] as ToolResultBlock;
         expect(originalToolResult.content).toBe(originalContent);
       });
 

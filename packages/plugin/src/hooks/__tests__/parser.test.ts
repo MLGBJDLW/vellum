@@ -57,7 +57,7 @@ describe("parseHooksConfig - valid config parsing", () => {
     expect(config).toHaveLength(1);
     expect(config[0]?.event).toBe("PreToolUse");
     expect(config[0]?.action.type).toBe("command");
-    expect((config[0]?.action as { command: string }).command).toBe("lint");
+    expect((config[0]?.action as { command: string })?.command).toBe("lint");
   });
 
   it("should parse script action with path expansion", () => {
@@ -75,7 +75,7 @@ describe("parseHooksConfig - valid config parsing", () => {
     const config = parseHooksConfig("/hooks.json", content, ctx);
 
     expect(config[0]?.action.type).toBe("script");
-    expect((config[0]?.action as { path: string }).path).toBe(
+    expect((config[0]?.action as { path: string })?.path).toBe(
       "/home/user/plugins/my-plugin/scripts/init.py"
     );
   });
@@ -91,7 +91,7 @@ describe("parseHooksConfig - valid config parsing", () => {
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
     expect(config[0]?.action.type).toBe("prompt");
-    expect((config[0]?.action as { content: string }).content).toBe(
+    expect((config[0]?.action as { content: string })?.content).toBe(
       "Remember the coding guidelines."
     );
   });
@@ -175,7 +175,7 @@ describe("parseHooksConfig - valid config parsing", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect((config[0]?.action as { args?: string[] }).args).toEqual(["--fix", "./src"]);
+    expect((config[0]?.action as { args?: string[] })?.args).toEqual(["--fix", "./src"]);
   });
 
   it("should parse script action with interpreter", () => {
@@ -188,7 +188,7 @@ describe("parseHooksConfig - valid config parsing", () => {
 
     const config = parseHooksConfig("/hooks.json", content, createPathContext());
 
-    expect((config[0]?.action as { interpreter?: string }).interpreter).toBe("python3");
+    expect((config[0]?.action as { interpreter?: string })?.interpreter).toBe("python3");
   });
 });
 
@@ -544,7 +544,7 @@ describe("parseHooksConfigRaw", () => {
     const config = parseHooksConfigRaw("/hooks.json", content);
 
     // Path should NOT be expanded
-    expect((config[0]?.action as { path: string }).path).toBe(
+    expect((config[0]?.action as { path: string })?.path).toBe(
       "${VELLUM_PLUGIN_ROOT}/scripts/init.py"
     );
   });

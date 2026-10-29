@@ -297,4 +297,4 @@ export function getTipsForFeature(tipEngine: TipEngine, feature: string): Tip[] 
 // Exports
 // =============================================================================
 
-export { BUILTIN_TIPS, createTipEngine, TipEngine, type Tip, type TipContext, type TipState };
+export { BUILTIN_TIPS, createTipEngine, type Tip, type TipContext, TipEngine, type TipState };

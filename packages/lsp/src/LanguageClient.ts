@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createMessageConnection, type MessageConnection } from "vscode-jsonrpc";
-import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/lib/node/main.js";
+import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
 import type {
   CallHierarchyIncomingCall,
   CallHierarchyItem,

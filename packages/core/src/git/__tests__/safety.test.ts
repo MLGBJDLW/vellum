@@ -296,6 +296,24 @@ describe("Safety Module", () => {
       expect(env.SSH_AUTH_SOCK).toBeUndefined();
     });
 
+    it("omits inherited pager commands without altering the parent environment", () => {
+      process.env.GIT_PAGER = "cat";
+      process.env.PAGER = "less";
+      process.env.GIT_DIR = "/inherited/repository";
+      process.env.GIT_CONFIG_COUNT = "1";
+      process.env.GIT_CONFIG_KEY_0 = "core.hooksPath";
+      process.env.GIT_CONFIG_VALUE_0 = "/inherited/hooks";
+      const env = getSanitizedEnv();
+
+      expect(env.GIT_PAGER).toBeUndefined();
+      expect(env.PAGER).toBeUndefined();
+      expect(env.GIT_DIR).toBeUndefined();
+      expect(env.GIT_CONFIG_COUNT).toBeUndefined();
+      expect(env.GIT_CONFIG_KEY_0).toBeUndefined();
+      expect(env.GIT_CONFIG_VALUE_0).toBeUndefined();
+      expect(process.env.GIT_PAGER).toBe("cat");
+    });
+
     it("should preserve non-sensitive environment variables", () => {
       const env = getSanitizedEnv();
 

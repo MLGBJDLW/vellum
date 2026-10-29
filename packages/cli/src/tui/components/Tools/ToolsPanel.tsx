@@ -144,6 +144,7 @@ export function ToolsPanel({ maxItems = 10 }: ToolsPanelProps): React.JSX.Elemen
                   paddingX={1}
                 >
                   {latest.shellOutput.slice(-5).map((line, idx) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
                     <Text key={`shell-output-${idx}-${line.slice(0, 20)}`} wrap="truncate">
                       {line}
                     </Text>

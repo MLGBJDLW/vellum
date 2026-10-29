@@ -1,6 +1,6 @@
 # Getting started
 
-Install Node.js 20 or newer, then install Vellum:
+Install Node.js 22.22.1+ or 24.11.0+, then install Vellum:
 
 ```bash
 npm install -g @butlerw/vellum

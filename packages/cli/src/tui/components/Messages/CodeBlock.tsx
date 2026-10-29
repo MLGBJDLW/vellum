@@ -326,6 +326,7 @@ function CodeLine({
           </Text>
         )}
         {tokens.map((token, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
           <TokenRenderer key={`${lineNumber}-${index}-${token.type}`} token={token} />
         ))}
       </Box>

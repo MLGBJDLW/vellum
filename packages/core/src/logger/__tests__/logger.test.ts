@@ -1,5 +1,6 @@
-import { trace } from "@opentelemetry/api";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { context, trace } from "@opentelemetry/api";
+import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
+import { TracerProvider } from "@opentelemetry/sdk-trace";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Logger } from "../logger.js";
 import { ConsoleTransport } from "../transports/console.js";
@@ -586,15 +587,18 @@ describe("Logger", () => {
   });
 
   describe("trace ID injection", () => {
-    let provider: NodeTracerProvider;
+    let provider: TracerProvider;
 
     beforeEach(() => {
-      provider = new NodeTracerProvider();
-      provider.register();
+      provider = new TracerProvider();
+      trace.setGlobalTracerProvider(provider);
+      context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
     });
 
     afterEach(async () => {
       await provider.shutdown();
+      trace.disable();
+      context.disable();
     });
 
     it("should include traceId and spanId when in active span", () => {

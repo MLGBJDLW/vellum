@@ -107,6 +107,7 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
   private watcher: FSWatcher | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingChanges: Map<string, PendingChange> = new Map();
+  private watchTargets = new Set<string>();
   private isRunning = false;
 
   /**
@@ -140,17 +141,45 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
     }
 
     const watchPaths = await this.buildWatchPaths();
+    this.watchTargets = new Set(watchPaths.map((filePath) => this.normalizePath(filePath)));
+    // Watch existing directory roots so files and nested directories created later
+    // are observed too. Chokidar no longer expands glob patterns.
+    const directories = new Set<string>();
+    for (const filePath of watchPaths) {
+      let directory = path.dirname(filePath);
+      while (true) {
+        try {
+          if ((await fs.stat(directory)).isDirectory()) break;
+        } catch {
+          // Find the existing ancestor of a not-yet-created instruction directory.
+        }
+        const parent = path.dirname(directory);
+        if (parent === directory) break;
+        directory = parent;
+      }
+      directories.add(directory);
+    }
 
-    this.watcher = watch(watchPaths, {
+    this.watcher = watch([...directories], {
       persistent: true,
+      // Parent instruction lookup must not recursively subscribe to a home directory.
+      backend: "native",
       ignoreInitial: true, // Don't emit events for existing files
       awaitWriteFinish: {
         // Wait for writes to complete
         stabilityThreshold: 100,
         pollInterval: 50,
       },
-      // Ignore common non-relevant directories
-      ignored: ["**/node_modules/**", "**/.git/**"],
+      // Prune everything except target files and their ancestor directories.
+      ignored: (filePath) => {
+        const normalized = this.normalizePath(filePath);
+        if (this.watchTargets.has(normalized)) return false;
+        const prefix = normalized.endsWith(path.sep) ? normalized : `${normalized}${path.sep}`;
+        for (const target of this.watchTargets) {
+          if (target.startsWith(prefix)) return false;
+        }
+        return true;
+      },
     });
 
     // Set up event handlers
@@ -349,7 +378,7 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
     }
 
     // Add to pending changes
-    this.pendingChanges.set(filePath, {
+    this.pendingChanges.set(this.normalizePath(filePath), {
       filePath,
       eventType,
       timestamp: Date.now(),
@@ -363,29 +392,12 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
    * Checks if a file path matches AGENTS.md patterns.
    */
   private isAgentsFile(filePath: string): boolean {
-    const basename = path.basename(filePath);
-    const patterns = this.getFilePatterns();
+    return this.watchTargets.has(this.normalizePath(filePath));
+  }
 
-    // Direct pattern match
-    if (patterns.includes(basename)) {
-      return true;
-    }
-
-    // Handle nested patterns like .github/copilot-instructions.md
-    for (const pattern of patterns) {
-      if (pattern.includes("/") && filePath.endsWith(pattern.replace(/\//g, path.sep))) {
-        return true;
-      }
-    }
-
-    // Check additional patterns
-    for (const pattern of this.additionalPatterns) {
-      if (filePath.endsWith(pattern) || basename === pattern) {
-        return true;
-      }
-    }
-
-    return false;
+  private normalizePath(filePath: string): string {
+    const resolved = path.resolve(filePath);
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
   }
 
   /**
@@ -412,7 +424,7 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
     }
 
     // Collect changed paths
-    const changedPaths = Array.from(this.pendingChanges.keys());
+    const changedPaths = Array.from(this.pendingChanges.values(), (change) => change.filePath);
 
     // Clear pending changes
     this.pendingChanges.clear();

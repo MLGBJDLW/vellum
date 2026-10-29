@@ -295,6 +295,7 @@ export function BannerShimmerText({
     <Text>
       {coloredChars.map((item, index) => (
         <ShimmerChar
+          // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
           key={`${index}-${item.char}`}
           char={item.char}
           color={item.isWhitespace ? baseColor : item.color}

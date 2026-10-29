@@ -15,7 +15,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type SimpleGit, type SimpleGitOptions, simpleGit } from "simple-git";
-import { getNoGpgFlags, getSanitizedEnv } from "../git/safety.js";
+import { getNoGpgFlags, getSanitizedEnv, SNAPSHOT_GIT_ENV_KEYS } from "../git/safety.js";
 import type { Result } from "../types/result.js";
 import { Err, Ok } from "../types/result.js";
 
@@ -136,6 +136,7 @@ function createShadowGit(workingDir: string, shadowPath: string): SimpleGit {
     binary: "git",
     maxConcurrentProcesses: 1,
     trimmed: true,
+    allowEnvironment: SNAPSHOT_GIT_ENV_KEYS,
     config,
   };
 
@@ -222,7 +223,9 @@ export namespace Snapshot {
       const env = getSanitizedEnv();
 
       // Initialize bare repository
-      const git = simpleGit({ baseDir: resolvedDir }).env(env);
+      const git = simpleGit({ baseDir: resolvedDir, allowEnvironment: SNAPSHOT_GIT_ENV_KEYS }).env(
+        env
+      );
       await git.raw(["init", "--bare", shadowPath]);
 
       // Configure the shadow repository

@@ -56,11 +56,13 @@ function normalizeWorkspaceEdit(edit: WorkspaceEdit): FileChange[] {
         result.push({
           path: filePath,
           edits: docChange.edits.map((e) => {
-            // Handle both TextEdit and AnnotatedTextEdit
-            const textEdit = "annotationId" in e ? e : e;
+            // Snippet edits require interactive expansion, which this client does not advertise.
+            if (!("newText" in e)) {
+              throw new Error("The language server returned an unsupported snippet edit");
+            }
             return {
-              range: textEdit.range,
-              newText: textEdit.newText,
+              range: e.range,
+              newText: e.newText,
             };
           }),
         });

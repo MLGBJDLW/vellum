@@ -225,6 +225,7 @@ export const ToolResultPreview = memo(function ToolResultPreview({
     <Box flexDirection="column">
       {visibleLines.map((line, index) => (
         <Text
+          // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
           key={`${index}-${line.text.slice(0, 20)}`}
           wrap="truncate"
           bold={line.isDirectory}

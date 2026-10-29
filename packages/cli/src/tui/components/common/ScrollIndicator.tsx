@@ -377,6 +377,7 @@ export function HorizontalScrollIndicator({
   return (
     <Text>
       {scrollbar.map((item, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
         <Text key={`${index}-${item.char}`} color={item.isThumb ? thumbColor : trackColor}>
           {item.char}
         </Text>

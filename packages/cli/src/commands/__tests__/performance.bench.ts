@@ -10,7 +10,7 @@
  * @module cli/commands/__tests__/performance
  */
 
-import { bench, describe, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { autocompleteReducer, initialAutocompleteState } from "../autocomplete.js";
 import { CommandParser } from "../parser.js";
@@ -65,85 +65,67 @@ describe("Parser Performance", () => {
   const parser = new CommandParser();
 
   // Simple command: should be <5ms (target: <1ms)
-  bench(
-    "parse simple command: /help",
-    () => {
+  test("parse simple command: /help", async ({ bench }) => {
+    await bench("parse simple command: /help", () => {
       parser.parse("/help");
-    },
-    { iterations: 1000 }
-  );
+    }).run({ iterations: 1000 });
+  });
 
   // Command with positional arg
-  bench(
-    "parse with positional: /login anthropic",
-    () => {
+  test("parse with positional: /login anthropic", async ({ bench }) => {
+    await bench("parse with positional: /login anthropic", () => {
       parser.parse("/login anthropic");
-    },
-    { iterations: 1000 }
-  );
+    }).run({ iterations: 1000 });
+  });
 
   // Command with flags
-  bench(
-    "parse with flags: /exit --force",
-    () => {
+  test("parse with flags: /exit --force", async ({ bench }) => {
+    await bench("parse with flags: /exit --force", () => {
       parser.parse("/exit --force");
-    },
-    { iterations: 1000 }
-  );
+    }).run({ iterations: 1000 });
+  });
 
   // Command with short flags
-  bench(
-    "parse with short flags: /cmd -v -f",
-    () => {
+  test("parse with short flags: /cmd -v -f", async ({ bench }) => {
+    await bench("parse with short flags: /cmd -v -f", () => {
       parser.parse("/cmd -v -f");
-    },
-    { iterations: 1000 }
-  );
+    }).run({ iterations: 1000 });
+  });
 
   // Complex command with all features
-  bench(
-    "parse complex: /login anthropic --store keychain -v",
-    () => {
+  test("parse complex: /login anthropic --store keychain -v", async ({ bench }) => {
+    await bench("parse complex: /login anthropic --store keychain -v", () => {
       parser.parse("/login anthropic --store keychain -v");
-    },
-    { iterations: 1000 }
-  );
+    }).run({ iterations: 1000 });
+  });
 
   // Quoted strings
-  bench(
-    'parse quoted: /cmd "hello world"',
-    () => {
+  test('parse quoted: /cmd "hello world"', async ({ bench }) => {
+    await bench('parse quoted: /cmd "hello world"', () => {
       parser.parse('/cmd "hello world"');
-    },
-    { iterations: 1000 }
-  );
+    }).run({ iterations: 1000 });
+  });
 
   // Long quoted string
-  bench(
-    "parse long quoted string",
-    () => {
+  test("parse long quoted string", async ({ bench }) => {
+    await bench("parse long quoted string", () => {
       parser.parse('/cmd "This is a much longer string with multiple words and special chars!"');
-    },
-    { iterations: 1000 }
-  );
+    }).run({ iterations: 1000 });
+  });
 
   // Multiple quoted strings
-  bench(
-    "parse multiple quoted",
-    () => {
+  test("parse multiple quoted", async ({ bench }) => {
+    await bench("parse multiple quoted", () => {
       parser.parse('/cmd "first arg" "second arg" --flag "flag value"');
-    },
-    { iterations: 1000 }
-  );
+    }).run({ iterations: 1000 });
+  });
 
   // Flag with = syntax
-  bench(
-    "parse flag=value syntax",
-    () => {
+  test("parse flag=value syntax", async ({ bench }) => {
+    await bench("parse flag=value syntax", () => {
       parser.parse("/cmd --store=keychain --provider=anthropic");
-    },
-    { iterations: 1000 }
-  );
+    }).run({ iterations: 1000 });
+  });
 });
 
 // =============================================================================
@@ -156,81 +138,69 @@ describe("Autocomplete Performance", () => {
   describe("with 100 commands", () => {
     const registry100 = createLargeRegistry(100);
 
-    bench(
-      "autocomplete single char: /c",
-      () => {
+    test("autocomplete single char: /c", async ({ bench }) => {
+      await bench("autocomplete single char: /c", () => {
         autocompleteReducer(initialAutocompleteState, {
           type: "INPUT_CHANGE",
           query: "c",
           registry: registry100,
         });
-      },
-      { iterations: 100 }
-    );
+      }).run({ iterations: 100 });
+    });
 
-    bench(
-      "autocomplete prefix: /com",
-      () => {
+    test("autocomplete prefix: /com", async ({ bench }) => {
+      await bench("autocomplete prefix: /com", () => {
         autocompleteReducer(initialAutocompleteState, {
           type: "INPUT_CHANGE",
           query: "com",
           registry: registry100,
         });
-      },
-      { iterations: 100 }
-    );
+      }).run({ iterations: 100 });
+    });
 
-    bench(
-      "autocomplete full word: /command",
-      () => {
+    test("autocomplete full word: /command", async ({ bench }) => {
+      await bench("autocomplete full word: /command", () => {
         autocompleteReducer(initialAutocompleteState, {
           type: "INPUT_CHANGE",
           query: "command",
           registry: registry100,
         });
-      },
-      { iterations: 100 }
-    );
+      }).run({ iterations: 100 });
+    });
 
-    bench(
-      "autocomplete fuzzy: /cmd",
-      () => {
+    test("autocomplete fuzzy: /cmd", async ({ bench }) => {
+      await bench("autocomplete fuzzy: /cmd", () => {
         autocompleteReducer(initialAutocompleteState, {
           type: "INPUT_CHANGE",
           query: "cmd",
           registry: registry100,
         });
-      },
-      { iterations: 100 }
-    );
+      }).run({ iterations: 100 });
+    });
   });
 
   describe("with 500 commands (stress test)", () => {
     const registry500 = createLargeRegistry(500);
 
-    bench(
-      "autocomplete 500 commands: /c",
-      () => {
+    test("autocomplete 500 commands: /c", async ({ bench }) => {
+      await bench("autocomplete 500 commands: /c", () => {
         autocompleteReducer(initialAutocompleteState, {
           type: "INPUT_CHANGE",
           query: "c",
           registry: registry500,
         });
-      },
-      { iterations: 50 }
-    );
+      }).run({ iterations: 50 });
+    });
 
-    bench(
-      "autocomplete 500 commands: /command",
-      () => {
+    test("autocomplete 500 commands: /command", async ({ bench }) => {
+      await bench("autocomplete 500 commands: /command", () => {
         autocompleteReducer(initialAutocompleteState, {
           type: "INPUT_CHANGE",
           query: "command",
           registry: registry500,
         });
-      },
-      { iterations: 50 }
-    );
+      }).run({ iterations: 50 });
+    });
   });
 
   describe("navigation operations", () => {
@@ -241,37 +211,29 @@ describe("Autocomplete Performance", () => {
       registry,
     });
 
-    bench(
-      "SELECT_NEXT navigation",
-      () => {
+    test("SELECT_NEXT navigation", async ({ bench }) => {
+      await bench("SELECT_NEXT navigation", () => {
         autocompleteReducer(activeState, { type: "SELECT_NEXT" });
-      },
-      { iterations: 1000 }
-    );
+      }).run({ iterations: 1000 });
+    });
 
-    bench(
-      "SELECT_PREV navigation",
-      () => {
+    test("SELECT_PREV navigation", async ({ bench }) => {
+      await bench("SELECT_PREV navigation", () => {
         autocompleteReducer(activeState, { type: "SELECT_PREV" });
-      },
-      { iterations: 1000 }
-    );
+      }).run({ iterations: 1000 });
+    });
 
-    bench(
-      "TAB_COMPLETE action",
-      () => {
+    test("TAB_COMPLETE action", async ({ bench }) => {
+      await bench("TAB_COMPLETE action", () => {
         autocompleteReducer(activeState, { type: "TAB_COMPLETE" });
-      },
-      { iterations: 1000 }
-    );
+      }).run({ iterations: 1000 });
+    });
 
-    bench(
-      "CANCEL action",
-      () => {
+    test("CANCEL action", async ({ bench }) => {
+      await bench("CANCEL action", () => {
         autocompleteReducer(activeState, { type: "CANCEL" });
-      },
-      { iterations: 1000 }
-    );
+      }).run({ iterations: 1000 });
+    });
   });
 });
 
@@ -283,58 +245,46 @@ describe("Registry Performance", () => {
   describe("with 100 commands", () => {
     const registry = createLargeRegistry(100);
 
-    bench(
-      "get command by name",
-      () => {
+    test("get command by name", async ({ bench }) => {
+      await bench("get command by name", () => {
         registry.get("command-50");
-      },
-      { iterations: 1000 }
-    );
+      }).run({ iterations: 1000 });
+    });
 
-    bench(
-      "check command exists",
-      () => {
+    test("check command exists", async ({ bench }) => {
+      await bench("check command exists", () => {
         registry.has("command-50");
-      },
-      { iterations: 1000 }
-    );
+      }).run({ iterations: 1000 });
+    });
 
-    bench(
-      "search commands: /com",
-      () => {
+    test("search commands: /com", async ({ bench }) => {
+      await bench("search commands: /com", () => {
         registry.search("com");
-      },
-      { iterations: 100 }
-    );
+      }).run({ iterations: 100 });
+    });
 
-    bench(
-      "get commands by category",
-      () => {
+    test("get commands by category", async ({ bench }) => {
+      await bench("get commands by category", () => {
         registry.getByCategory("system");
-      },
-      { iterations: 1000 }
-    );
+      }).run({ iterations: 1000 });
+    });
 
-    bench(
-      "get all commands",
-      () => {
+    test("get all commands", async ({ bench }) => {
+      await bench("get all commands", () => {
         registry.list();
-      },
-      { iterations: 100 }
-    );
+      }).run({ iterations: 100 });
+    });
   });
 
   describe("registration", () => {
-    bench(
-      "register new command",
-      () => {
+    test("register new command", async ({ bench }) => {
+      await bench("register new command", () => {
         const registry = new CommandRegistry();
         for (let i = 0; i < 10; i++) {
           registry.register(createMockCommand(`cmd-${i}`));
         }
-      },
-      { iterations: 100 }
-    );
+      }).run({ iterations: 100 });
+    });
   });
 });
 
@@ -346,35 +296,39 @@ describe("Performance Assertions", () => {
   const parser = new CommandParser();
   const registry100 = createLargeRegistry(100);
 
-  bench("ASSERT: parse <5ms for typical command", () => {
-    const start = performance.now();
+  test("ASSERT: parse <5ms for typical command", async ({ bench }) => {
+    await bench("ASSERT: parse <5ms for typical command", () => {
+      const start = performance.now();
 
-    for (let i = 0; i < 100; i++) {
-      parser.parse("/login anthropic --store keychain");
-    }
+      for (let i = 0; i < 100; i++) {
+        parser.parse("/login anthropic --store keychain");
+      }
 
-    const elapsed = performance.now() - start;
-    const perParse = elapsed / 100;
+      const elapsed = performance.now() - start;
+      const perParse = elapsed / 100;
 
-    // Each parse should be well under 5ms
-    expect(perParse).toBeLessThan(5);
+      // Each parse should be well under 5ms
+      expect(perParse).toBeLessThan(5);
+    }).run();
   });
 
-  bench("ASSERT: autocomplete <16ms for 100 commands", () => {
-    const start = performance.now();
+  test("ASSERT: autocomplete <16ms for 100 commands", async ({ bench }) => {
+    await bench("ASSERT: autocomplete <16ms for 100 commands", () => {
+      const start = performance.now();
 
-    for (let i = 0; i < 10; i++) {
-      autocompleteReducer(initialAutocompleteState, {
-        type: "INPUT_CHANGE",
-        query: "com",
-        registry: registry100,
-      });
-    }
+      for (let i = 0; i < 10; i++) {
+        autocompleteReducer(initialAutocompleteState, {
+          type: "INPUT_CHANGE",
+          query: "com",
+          registry: registry100,
+        });
+      }
 
-    const elapsed = performance.now() - start;
-    const perAutocomplete = elapsed / 10;
+      const elapsed = performance.now() - start;
+      const perAutocomplete = elapsed / 10;
 
-    // Each autocomplete should be under 16ms (one frame)
-    expect(perAutocomplete).toBeLessThan(16);
+      // Each autocomplete should be under 16ms (one frame)
+      expect(perAutocomplete).toBeLessThan(16);
+    }).run();
   });
 });

@@ -50,7 +50,9 @@ export class MultiClientManager {
     return [];
   }
 
-  mergeDiagnostics<T extends { message: string; range?: unknown }>(sources: T[][]): T[] {
+  mergeDiagnostics<T extends { message: string | { value: string }; range?: unknown }>(
+    sources: T[][]
+  ): T[] {
     if (this.config.diagnosticMergeStrategy === "union") {
       return sources.flat();
     }
@@ -60,7 +62,8 @@ export class MultiClientManager {
 
     for (const list of sources) {
       for (const diag of list) {
-        const key = `${diag.message}:${JSON.stringify(diag.range ?? {})}`;
+        const message = typeof diag.message === "string" ? diag.message : diag.message.value;
+        const key = `${message}:${JSON.stringify(diag.range ?? {})}`;
         if (this.config.diagnosticMergeStrategy === "priority") {
           if (!seen.has(key)) {
             deduped.push(diag);
