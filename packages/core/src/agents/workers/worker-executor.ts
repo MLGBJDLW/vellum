@@ -7,7 +7,6 @@
 
 import { randomUUID } from "node:crypto";
 import { getDefaultModelId, type ToolDefinition } from "@vellum/provider";
-import { z } from "zod";
 import { AgentLevel } from "../../agent/level.js";
 import { AgentLoop, type AgentLoopConfig, type AgentSessionBudget } from "../../agent/loop.js";
 import { MODE_CONFIGS } from "../../agent/modes.js";
@@ -15,6 +14,7 @@ import { TerminationReason } from "../../agent/termination.js";
 import { PromptLoader } from "../../prompts/prompt-loader.js";
 import { createUserMessage, SessionParts } from "../../session/message.js";
 import type { PermissionChecker } from "../../tool/index.js";
+import { getToolInputSchema } from "../../tool/schema.js";
 import type { WorkerContext, WorkerResult } from "./base.js";
 import { createWorkerToolBridge } from "./worker-tool-bridge.js";
 import { WORKER_TOOL_SETS } from "./worker-tool-constants.js";
@@ -267,11 +267,7 @@ export async function executeWorkerTask(
   const toolDefinitions: ToolDefinition[] = filteredTools.map((tool) => ({
     name: tool.definition.name,
     description: tool.definition.description,
-    // Convert Zod schema to JSON schema for the LLM
-    inputSchema: z.toJSONSchema(tool.definition.parameters, {
-      target: "openapi-3.0",
-      unrepresentable: "any",
-    }) as Record<string, unknown>,
+    inputSchema: getToolInputSchema(tool.definition),
   }));
 
   // Create session ID for this worker execution

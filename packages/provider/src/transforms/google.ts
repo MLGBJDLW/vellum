@@ -11,7 +11,7 @@ import type {
   ToolDefinition,
 } from "../types.js";
 import { AbstractProviderTransform } from "./base.js";
-import { sanitizeJsonSchemaForGemini } from "./schema-sanitizer.js";
+import { type JsonSchema, stripSchemaMetaFields } from "./schema-sanitizer.js";
 import type {
   ParsedResponse,
   TransformConfig,
@@ -101,11 +101,7 @@ export interface GeminiContent {
 interface GeminiFunctionDeclaration {
   name: string;
   description: string;
-  parameters: {
-    type: "OBJECT";
-    properties: Record<string, unknown>;
-    required?: string[];
-  };
+  parametersJsonSchema: JsonSchema;
 }
 
 /**
@@ -228,7 +224,7 @@ export class GoogleTransform extends AbstractProviderTransform<
     }
 
     // Normalize empty content
-    const normalized = this.normalizeEmptyContent(messages);
+    const normalized = this.normalizeEmptyContent(messages, config);
 
     const result: GeminiContent[] = [];
     const isThinkingModel = this.isThinkingModel(config.modelId);
@@ -480,13 +476,8 @@ export class GoogleTransform extends AbstractProviderTransform<
   /**
    * Transform Vellum tool definitions to Gemini FunctionDeclaration format
    *
-   * Gemini tools have the format:
-   * { functionDeclarations: [{ name, description, parameters: { type: "OBJECT", properties, required } }] }
-   *
-   * This method also sanitizes the JSON Schema to remove fields unsupported by Gemini:
-   * - exclusiveMinimum/exclusiveMaximum → converted to minimum/maximum
-   * - propertyNames, patternProperties, etc. → removed
-   * - $schema, $id, $ref, etc. → removed
+   * Use the native parametersJsonSchema transport to retain root constraints,
+   * references and nested schemas without routing through the OpenAPI subset.
    */
   transformTools(tools: ToolDefinition[], _config: TransformConfig): TransformResult<GeminiTool[]> {
     const warnings: TransformWarning[] = [];
@@ -496,21 +487,10 @@ export class GoogleTransform extends AbstractProviderTransform<
     }
 
     const functionDeclarations: GeminiFunctionDeclaration[] = tools.map((tool) => {
-      // Sanitize the schema to remove Gemini-unsupported fields
-      const sanitizedSchema = sanitizeJsonSchemaForGemini(tool.inputSchema || {});
-
-      // Extract properties and required from sanitized schema
-      const properties = (sanitizedSchema.properties as Record<string, unknown>) || {};
-      const required = (sanitizedSchema.required as string[]) || [];
-
       return {
         name: tool.name,
         description: tool.description,
-        parameters: {
-          type: "OBJECT",
-          properties,
-          ...(required.length > 0 && { required }),
-        },
+        parametersJsonSchema: stripSchemaMetaFields(tool.inputSchema || {}),
       };
     });
 

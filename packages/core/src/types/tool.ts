@@ -78,6 +78,8 @@ export interface ToolDefinition<TInput extends z.ZodType> {
   description: string;
   /** Zod schema defining and validating input parameters */
   parameters: TInput;
+  /** Authoritative JSON Schema for external tools, preserved for provider requests. */
+  inputSchema?: Record<string, unknown>;
   /** Category of tool determining permissions and behavior */
   kind: ToolKind;
   /** Optional grouping category for organization */
@@ -246,6 +248,8 @@ export interface DefineToolConfig<TInput extends z.ZodType, TOutput> {
   description: string;
   /** Zod schema defining and validating input parameters */
   parameters: TInput;
+  /** Authoritative JSON Schema for external tools, preserved for provider requests. */
+  inputSchema?: Record<string, unknown>;
   /** Category of tool determining permissions and behavior */
   kind: ToolKind;
   /** Optional grouping category for organization */
@@ -311,6 +315,7 @@ export function defineTool<TInput extends z.ZodType, TOutput>(
     name,
     description,
     parameters,
+    inputSchema,
     kind,
     category,
     enabled = true,
@@ -324,6 +329,7 @@ export function defineTool<TInput extends z.ZodType, TOutput>(
       name,
       description,
       parameters,
+      ...(inputSchema && { inputSchema: structuredClone(inputSchema) }),
       kind,
       category,
       enabled,

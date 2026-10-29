@@ -13,7 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { ORCH_MODE, VIBE_MODE } from "../../agent/coding-modes.js";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
+import { AgentRetryManager } from "../../agent/retry-manager.js";
 import { CostService } from "../../cost/service.js";
+import { ErrorCode } from "../../errors/index.js";
 import type { SessionMessage } from "../../session/index.js";
 import { UnifiedToolContainer } from "../../tool/container.js";
 import { type PermissionChecker, ToolExecutor } from "../../tool/index.js";
@@ -103,7 +105,12 @@ describe("AgentLoop Integration (T034)", () => {
         vi.mocked(LLM.stream).mockReturnValue(
           createMockStream([
             { type: "text", content: "Partial response" },
-            { type: "error", code: "PROVIDER_ERROR", message: "Provider failed before completion" },
+            {
+              type: "error",
+              code: "PROVIDER_ERROR",
+              message: "Provider failed before completion",
+              retryable: false,
+            },
           ]) as ReturnType<typeof LLM.stream>
         );
         const loop = new AgentLoop({
@@ -119,6 +126,109 @@ describe("AgentLoop Integration (T034)", () => {
         await expect(loop.run()).rejects.toThrow("Provider failed before completion");
         expect(complete).not.toHaveBeenCalled();
         expect(error).toHaveBeenCalled();
+      }
+    );
+
+    it.each([false, true])(
+      "rejects exhausted retries without committing partial assistant content or dispatching tools (processor=%s)",
+      async (useStreamProcessor) => {
+        const wait = vi.spyOn(AgentRetryManager.prototype, "waitForRetry").mockResolvedValue();
+        const toolExecute = vi.fn(async () => ({ success: true as const, output: "Done" }));
+        mockToolExecutor.registerTool({
+          definition: {
+            name: "read_file",
+            description: "Fixture",
+            kind: "read",
+            parameters: z.object({ path: z.string() }),
+          },
+          execute: toolExecute,
+        });
+        vi.mocked(LLM.stream).mockImplementation(
+          () =>
+            createMockStream([
+              { type: "text", content: "Discard this partial answer" },
+              {
+                type: "toolCall",
+                id: "unfinished-call",
+                name: "read_file",
+                input: { path: "fixture.txt" },
+              },
+              {
+                type: "error",
+                code: String(ErrorCode.SERVICE_UNAVAILABLE),
+                message: "Provider capacity exhausted",
+                retryable: true,
+              },
+            ]) as ReturnType<typeof LLM.stream>
+        );
+        const loop = new AgentLoop({
+          ...config,
+          useStreamProcessor,
+          maxRetries: 1,
+          enableEvidencePack: false,
+        });
+        const complete = vi.fn();
+        const error = vi.fn();
+        loop.on("complete", complete);
+        loop.on("error", error);
+        loop.addMessage(createSessionMessage("user", "Inspect files"));
+        await expect(loop.run()).rejects.toThrow("Provider capacity exhausted");
+        expect(LLM.stream).toHaveBeenCalledTimes(2);
+        expect(wait).toHaveBeenCalledTimes(1);
+        expect(error).toHaveBeenCalledTimes(1);
+        expect(complete).not.toHaveBeenCalled();
+        expect(toolExecute).not.toHaveBeenCalled();
+        expect(loop.getMessages().filter((message) => message.role === "assistant")).toHaveLength(
+          0
+        );
+        expect(loop.getState()).toBe("recovering");
+      }
+    );
+
+    it.each([false, true])(
+      "completes a recovered retry once without persisting the failed partial response (processor=%s)",
+      async (useStreamProcessor) => {
+        vi.spyOn(AgentRetryManager.prototype, "waitForRetry").mockResolvedValue();
+        vi.mocked(LLM.stream)
+          .mockReturnValueOnce(
+            createMockStream([
+              { type: "text", content: "Discard this partial answer" },
+              {
+                type: "error",
+                code: String(ErrorCode.SERVICE_UNAVAILABLE),
+                message: "Temporarily unavailable",
+                retryable: true,
+              },
+            ]) as ReturnType<typeof LLM.stream>
+          )
+          .mockReturnValueOnce(
+            createMockStream([
+              { type: "text", content: "Recovered complete answer" },
+              { type: "done", stopReason: "end_turn" },
+            ]) as ReturnType<typeof LLM.stream>
+          );
+        const loop = new AgentLoop({
+          ...config,
+          useStreamProcessor,
+          maxRetries: 1,
+          enableEvidencePack: false,
+        });
+        const complete = vi.fn();
+        const error = vi.fn();
+        loop.on("complete", complete);
+        loop.on("error", error);
+        loop.addMessage(createSessionMessage("user", "Answer the question"));
+        await expect(loop.run()).resolves.toBeUndefined();
+        expect(LLM.stream).toHaveBeenCalledTimes(2);
+        expect(complete).toHaveBeenCalledTimes(1);
+        expect(error).not.toHaveBeenCalled();
+        const assistant = loop.getMessages().filter((message) => message.role === "assistant");
+        expect(assistant).toHaveLength(1);
+        expect(JSON.stringify(assistant)).toContain("Recovered complete answer");
+        expect(JSON.stringify(loop.getMessages())).not.toContain("Discard this partial answer");
+        expect(JSON.stringify(vi.mocked(LLM.stream).mock.calls[1]?.[0].messages)).not.toContain(
+          "Discard this partial answer"
+        );
       }
     );
 

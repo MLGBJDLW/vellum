@@ -17,6 +17,7 @@
 import {
   type CompletionMessage,
   type CompletionParams,
+  classifyProviderError,
   getModelInfo,
   type LLMProvider,
   type ProviderRegistry,
@@ -26,9 +27,9 @@ import {
   type StreamEvent,
   type ToolDefinition,
 } from "@vellum/provider";
-import { ErrorCode } from "@vellum/shared";
 import { z } from "zod";
 import { CONFIG_DEFAULTS } from "../config/defaults.js";
+import { prepareToolNames } from "./tool-names.js";
 
 // =============================================================================
 // Constants
@@ -369,16 +370,22 @@ export namespace LLM {
       validated.model
     );
 
+    const wire = prepareToolNames(
+      validated.tools,
+      buildMessages(validated.messages, validated.system),
+      validated.extraBody
+    );
+
     // Build completion params
     const completionParams: CompletionParams = {
       model: validated.model,
-      messages: buildMessages(validated.messages, validated.system),
+      messages: wire.messages,
       temperature: validated.temperature,
       maxTokens,
       // Unknown metadata must not silently disable tools explicitly requested by the agent.
-      tools: modelInfo.supportsTools !== false ? validated.tools : undefined,
+      tools: modelInfo.supportsTools !== false ? wire.tools : undefined,
       thinking: resolvedThinking,
-      extraBody: validated.extraBody,
+      extraBody: wire.extraBody,
       abortSignal: validated.abortSignal,
     };
 
@@ -402,8 +409,9 @@ export namespace LLM {
 
         // Handle tool call repair
         if (event.type === "toolCall") {
-          const repair = repairToolCall(event.name, event.input, toolLookup);
-          if (repair.repaired) {
+          const restoredName = wire.restore(event.name);
+          const repair = repairToolCall(restoredName, event.input, toolLookup);
+          if (repair.repaired || restoredName !== event.name) {
             yield {
               ...event,
               name: repair.toolName,
@@ -412,6 +420,16 @@ export namespace LLM {
             };
             continue;
           }
+        }
+
+        if (event.type === "tool_call_start") {
+          yield { ...event, name: wire.restore(event.name) };
+          continue;
+        }
+
+        if (event.type === "toolCallDelta" && event.name !== undefined) {
+          yield { ...event, name: wire.restore(event.name) };
+          continue;
         }
 
         yield event as LLMStreamEvent;
@@ -427,12 +445,14 @@ export namespace LLM {
         return;
       }
 
-      // Emit error event
+      // Preserve the provider's classification so invalid schemas and credentials
+      // are not retried as transient API failures.
+      const classification = classifyProviderError(error);
       const errorEvent: LLMStreamEvent = {
         type: "error",
-        code: ErrorCode.API_ERROR.toString(),
+        code: classification.code.toString(),
         message: error instanceof Error ? error.message : "Unknown streaming error",
-        retryable: true,
+        retryable: classification.retryable,
       };
       yield errorEvent;
     }

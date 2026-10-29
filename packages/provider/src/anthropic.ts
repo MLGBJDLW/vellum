@@ -28,6 +28,7 @@ import { ErrorCode } from "@vellum/shared";
 import { createProviderError, ProviderError } from "./errors.js";
 import type { ReasoningEffort } from "./models/index.js";
 import { getModelInfo } from "./models/index.js";
+import { parseToolArguments, validateToolArguments } from "./tool-arguments.js";
 import { anthropicTransform } from "./transforms/anthropic.js";
 import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
 import type { TransformConfig } from "./transforms/types.js";
@@ -136,6 +137,7 @@ export class AnthropicProvider implements Provider {
   private initialized = false;
   private apiKey: string | undefined;
   private configured = false;
+  private readonly initialOptions: AnthropicProviderOptions;
 
   /**
    * Create a new AnthropicProvider
@@ -143,6 +145,7 @@ export class AnthropicProvider implements Provider {
    * @param options - Optional configuration (for legacy Provider interface)
    */
   constructor(options?: AnthropicProviderOptions) {
+    this.initialOptions = { ...options };
     this.apiKey = options?.apiKey;
     // If apiKey is provided, mark as configured
     // If not provided, SDK will use ANTHROPIC_API_KEY env var
@@ -227,7 +230,7 @@ export class AnthropicProvider implements Provider {
    */
   async initialize(options: ProviderOptions): Promise<void> {
     try {
-      const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
+      const apiKey = options.apiKey ?? this.apiKey ?? process.env.ANTHROPIC_API_KEY;
 
       if (!apiKey) {
         throw new ProviderError("No API key provided for Anthropic", {
@@ -239,9 +242,9 @@ export class AnthropicProvider implements Provider {
 
       this.client = new Anthropic({
         apiKey,
-        baseURL: options.baseUrl,
+        baseURL: options.baseUrl ?? this.initialOptions.baseUrl,
         // Retain the SDK's reasoning-aware default unless the caller sets a timeout.
-        timeout: options.timeout,
+        timeout: options.timeout ?? this.initialOptions.timeout,
         defaultHeaders: options.headers,
       });
 
@@ -434,10 +437,16 @@ export class AnthropicProvider implements Provider {
 
     // Make a test API call to verify the key works
     try {
-      const testClient = new Anthropic({ apiKey });
+      const testClient =
+        this.client?.withOptions({ apiKey }) ??
+        new Anthropic({
+          apiKey,
+          baseURL: this.initialOptions.baseUrl,
+          timeout: this.initialOptions.timeout,
+        });
       await testClient.messages.create({
-        model: "claude-3-5-haiku-20241022",
-        max_tokens: 1,
+        model: this.getDefaultModel(),
+        max_tokens: 16,
         messages: [{ role: "user", content: "test" }],
       });
       return { valid: true };
@@ -671,7 +680,7 @@ export class AnthropicProvider implements Provider {
         toolCalls.push({
           id: toolBlock.id,
           name: toolBlock.name,
-          input: toolBlock.input as Record<string, unknown>,
+          input: validateToolArguments(toolBlock.input),
         });
       }
     }
@@ -717,6 +726,9 @@ export class AnthropicProvider implements Provider {
     let cacheReadTokens: number | undefined;
     let cacheWriteTokens: number | undefined;
     let stopReason: StopReason = "end_turn";
+    let hasStopReason = false;
+    let finished = false;
+    const completedTools: StreamEvent[] = [];
     const reasoningBlocks = new Map<number, Record<string, unknown>>();
 
     for await (const event of stream) {
@@ -733,7 +745,12 @@ export class AnthropicProvider implements Provider {
         if (block && event.delta.type === "signature_delta")
           block.signature = `${block.signature ?? ""}${event.delta.signature}`;
       }
-      yield* this.processStreamEvent(event, toolCallState);
+      for (const converted of this.processStreamEvent(event, toolCallState)) {
+        if (converted.type === "tool_call_end" || converted.type === "toolCall")
+          completedTools.push(converted);
+        else yield converted;
+      }
+      if (event.type === "message_stop") finished = true;
 
       // Track usage from message_delta
       if (event.type === "message_delta") {
@@ -749,6 +766,7 @@ export class AnthropicProvider implements Provider {
 
         if (delta.delta?.stop_reason) {
           stopReason = this.mapStopReason(delta.delta.stop_reason);
+          hasStopReason = true;
         }
       }
 
@@ -776,6 +794,17 @@ export class AnthropicProvider implements Provider {
         }
       }
     }
+
+    if (!finished || !hasStopReason || toolCallState.size > 0) {
+      throw new ProviderError("Anthropic stream ended before the message was complete", {
+        code: ErrorCode.API_ERROR,
+        category: "network_error",
+        retryable: true,
+      });
+    }
+    // A completed content block is not permission to execute it: the enclosing
+    // message must also finish successfully, rather than being cut off or refused.
+    if (stopReason === "tool_use") yield* completedTools;
 
     if (reasoningBlocks.size > 0)
       yield {
@@ -903,6 +932,7 @@ export class AnthropicProvider implements Provider {
         // Emit complete tool call when block ends
         const state = toolCallState.get(blockStop.index);
         if (state) {
+          const input = parseToolArguments(state.inputJson);
           // Emit new tool_call_end event
           const endEvent: StreamToolCallEndEvent = {
             type: "tool_call_end",
@@ -911,26 +941,14 @@ export class AnthropicProvider implements Provider {
           };
           yield endEvent;
 
-          // Also emit legacy toolCall for backward compatibility
-          try {
-            const input = state.inputJson ? JSON.parse(state.inputJson) : {};
-            const toolCallEvent: StreamToolCallEvent = {
-              type: "toolCall",
-              id: state.id,
-              name: state.name,
-              input,
-            };
-            yield toolCallEvent;
-          } catch {
-            // Invalid JSON - emit with empty input
-            const toolCallEvent: StreamToolCallEvent = {
-              type: "toolCall",
-              id: state.id,
-              name: state.name,
-              input: {},
-            };
-            yield toolCallEvent;
-          }
+          // Also emit legacy toolCall for backward compatibility.
+          const toolCallEvent: StreamToolCallEvent = {
+            type: "toolCall",
+            id: state.id,
+            name: state.name,
+            input,
+          };
+          yield toolCallEvent;
           toolCallState.delete(blockStop.index);
         }
         break;

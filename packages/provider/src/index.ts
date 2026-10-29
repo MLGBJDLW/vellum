@@ -9,6 +9,7 @@
 export type { AnthropicProviderOptions } from "./anthropic.js";
 export { AnthropicProvider } from "./anthropic.js";
 export { BaichuanProvider } from "./baichuan.js";
+export { getCredentialEnvVars, PROVIDER_CREDENTIAL_ENV_VARS } from "./credential-env.js";
 export { DeepSeekProvider } from "./deepseek.js";
 export { DoubaoProvider } from "./doubao.js";
 export type { GoogleProviderOptions } from "./google.js";

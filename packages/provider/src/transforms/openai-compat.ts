@@ -319,7 +319,7 @@ export class OpenAICompatTransform extends AbstractProviderTransform<
 
     // Filter empty messages if required
     if (this.compatConfig.filterEmptyMessages) {
-      processedMessages = this.filterEmptyMessages(processedMessages);
+      processedMessages = this.filterEmptyMessages(processedMessages, config);
     }
 
     // Use base OpenAI transformation (via singleton)
@@ -432,9 +432,22 @@ export class OpenAICompatTransform extends AbstractProviderTransform<
   /**
    * Filter out messages with empty or whitespace-only content
    */
-  private filterEmptyMessages(messages: CompletionMessage[]): CompletionMessage[] {
+  private filterEmptyMessages(
+    messages: CompletionMessage[],
+    config: TransformConfig
+  ): CompletionMessage[] {
     return messages.filter((message) => {
       const { content } = message;
+
+      const metadata = message.providerMetadata;
+      if (
+        message.role === "assistant" &&
+        config.provider !== "groq" &&
+        metadata?.provider === config.provider &&
+        metadata.model === config.modelId &&
+        (metadata.reasoningContent !== undefined || metadata.replay?.length)
+      )
+        return true;
 
       if (typeof content === "string") {
         return content.trim().length > 0;
@@ -460,6 +473,32 @@ export class OpenAICompatTransform extends AbstractProviderTransform<
    * Normalize tool IDs for Mistral (exactly 9 alphanumeric characters)
    */
   private normalizeMistralToolIds(messages: OpenAIMessage[]): OpenAIMessage[] {
+    const originalIds = messages.flatMap((message) =>
+      message.role === "assistant"
+        ? (message.tool_calls ?? []).map((call) => call.id)
+        : message.role === "tool"
+          ? [message.tool_call_id]
+          : []
+    );
+    // Reserve valid IDs first so converted cross-provider IDs cannot take them.
+    const used = new Set(originalIds.filter((id) => /^[a-zA-Z0-9]{9}$/.test(id)));
+    const mapped = new Map<string, string>();
+    for (const id of originalIds) {
+      if (mapped.has(id)) continue;
+      if (/^[a-zA-Z0-9]{9}$/.test(id)) {
+        mapped.set(id, id);
+        continue;
+      }
+      const base = this.toMistralToolId(id);
+      let candidate = base;
+      let collision = 0;
+      while (used.has(candidate)) {
+        const suffix = (++collision).toString(36);
+        candidate = base.slice(0, 9 - suffix.length) + suffix;
+      }
+      used.add(candidate);
+      mapped.set(id, candidate);
+    }
     return messages.map((message) => {
       // Handle assistant messages with tool_calls
       if (message.role === "assistant" && "tool_calls" in message && message.tool_calls) {
@@ -467,7 +506,7 @@ export class OpenAICompatTransform extends AbstractProviderTransform<
           ...message,
           tool_calls: message.tool_calls.map((call) => ({
             ...call,
-            id: this.toMistralToolId(call.id),
+            id: mapped.get(call.id) ?? call.id,
           })),
         };
       }
@@ -476,7 +515,7 @@ export class OpenAICompatTransform extends AbstractProviderTransform<
       if (message.role === "tool" && "tool_call_id" in message) {
         return {
           ...message,
-          tool_call_id: this.toMistralToolId(message.tool_call_id),
+          tool_call_id: mapped.get(message.tool_call_id) ?? message.tool_call_id,
         };
       }
 

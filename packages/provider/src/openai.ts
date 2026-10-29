@@ -23,6 +23,7 @@ import type {
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
+import { getCredentialEnvVars } from "./credential-env.js";
 import { createProviderError, ProviderError } from "./errors.js";
 import { normalizeDiscoveredModels } from "./models/discovery.js";
 import type { ReasoningEffort } from "./models/index.js";
@@ -32,7 +33,8 @@ import {
   mapResponsesStream,
   normalizeResponsesResult,
 } from "./openai-responses.js";
-import { openaiTransform } from "./transforms/openai.js";
+import { parseToolArguments } from "./tool-arguments.js";
+import { type OpenAIMessage, openaiTransform } from "./transforms/openai.js";
 import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
 import type { TransformConfig } from "./transforms/types.js";
 import type {
@@ -96,6 +98,20 @@ function visibleReasoningDetails(details: Record<string, unknown>[]): string {
     .join("");
 }
 
+function normalizeChatUsage(
+  usage: (ChatCompletion["usage"] & { prompt_cache_hit_tokens?: number }) | null | undefined
+): TokenUsage {
+  const cacheReadTokens =
+    usage?.prompt_tokens_details?.cached_tokens ?? usage?.prompt_cache_hit_tokens;
+  const thinkingTokens = usage?.completion_tokens_details?.reasoning_tokens;
+  return {
+    inputTokens: usage?.prompt_tokens ?? 0,
+    outputTokens: usage?.completion_tokens ?? 0,
+    ...(cacheReadTokens !== undefined && { cacheReadTokens }),
+    ...(thinkingTokens !== undefined && { thinkingTokens }),
+  };
+}
+
 // =============================================================================
 // Provider Options
 // =============================================================================
@@ -148,6 +164,7 @@ export class OpenAIProvider {
   private initialized = false;
   private apiKey: string | undefined;
   private configured = false;
+  private readonly initialOptions: OpenAIProviderOptions;
 
   /**
    * Create a new OpenAIProvider
@@ -155,10 +172,10 @@ export class OpenAIProvider {
    * @param options - Optional configuration (for legacy Provider interface)
    */
   constructor(options?: OpenAIProviderOptions) {
+    this.initialOptions = { ...options };
     this.apiKey = options?.apiKey;
-    // If apiKey is provided, mark as configured
-    // If not provided, SDK will use OPENAI_API_KEY env var
-    this.configured = !!this.apiKey || !!process.env.OPENAI_API_KEY;
+    // Subclass provider identity is not initialized until after super().
+    this.configured = !!this.apiKey;
   }
 
   // ===========================================================================
@@ -204,7 +221,23 @@ export class OpenAIProvider {
    * @returns true if configured with credentials
    */
   isConfigured(): boolean {
-    return this.configured;
+    return this.configured || !!this.getEnvironmentApiKey();
+  }
+
+  private getEnvironmentApiKey(): string | undefined {
+    return getCredentialEnvVars(this.getProviderTypeForModelInfo())
+      .map((name) => process.env[name]?.trim())
+      .find((value) => !!value);
+  }
+
+  private resolveBaseUrl(baseUrl?: string): string {
+    return (
+      baseUrl ??
+      this.initialOptions.baseUrl ??
+      (process.env[`${this.getProviderTypeForModelInfo().toUpperCase()}_BASE_URL`]?.trim() ||
+        this.getDefaultBaseUrl()) ??
+      "https://api.openai.com/v1"
+    );
   }
 
   /**
@@ -240,22 +273,32 @@ export class OpenAIProvider {
    */
   async initialize(options: ProviderOptions): Promise<void> {
     try {
-      const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
+      const provider = this.getProviderTypeForModelInfo();
+      const apiKey = (
+        options.apiKey ??
+        this.initialOptions.apiKey ??
+        this.getEnvironmentApiKey()
+      )?.trim();
 
       if (!apiKey) {
-        throw new ProviderError("No API key provided for OpenAI", {
-          code: ErrorCode.CREDENTIAL_NOT_FOUND,
-          category: "credential_invalid",
-          retryable: false,
-        });
+        throw new ProviderError(
+          `No API key provided for ${provider === "openai" ? "OpenAI" : provider}`,
+          {
+            code: ErrorCode.CREDENTIAL_NOT_FOUND,
+            category: "credential_invalid",
+            retryable: false,
+          }
+        );
       }
 
       this.client = new OpenAI({
         apiKey,
-        baseURL: options.baseUrl,
+        baseURL: this.resolveBaseUrl(options.baseUrl),
         // Retain the SDK's reasoning-aware default unless the caller sets a timeout.
-        timeout: options.timeout,
+        timeout: options.timeout ?? this.initialOptions.timeout,
         defaultHeaders: options.headers,
+        organization: provider === "openai" ? this.initialOptions.organization : null,
+        project: provider === "openai" ? undefined : null,
       });
 
       this.apiKey = apiKey;
@@ -315,7 +358,7 @@ export class OpenAIProvider {
           : this.getThinkingReplay(message?.content);
       return {
         ...result,
-        ...(result.thinking || replay?.length
+        ...(result.thinking !== undefined || replay?.length
           ? {
               providerMetadata: {
                 provider,
@@ -463,6 +506,9 @@ export class OpenAIProvider {
       };
     }
 
+    // Compatible providers use their own key formats (for example Groq's gsk_).
+    if (this.getProviderTypeForModelInfo() !== "openai") return { valid: true };
+
     // Format validation
     if (!OPENAI_KEY_PATTERN.test(apiKey)) {
       return {
@@ -504,12 +550,34 @@ export class OpenAIProvider {
 
     // Make a test API call to verify the key works
     try {
-      const testClient = new OpenAI({ apiKey });
-      await testClient.chat.completions.create({
-        model: "gpt-4o-mini",
-        max_tokens: 1,
+      // Clone the configured SDK so candidate credentials do not replace the
+      // active key and endpoint/header/timeout settings stay identical.
+      const testClient =
+        this.client?.withOptions({ apiKey }) ??
+        new OpenAI({
+          apiKey,
+          baseURL: this.resolveBaseUrl(),
+          timeout: this.initialOptions.timeout,
+          organization:
+            this.getProviderTypeForModelInfo() === "openai"
+              ? this.initialOptions.organization
+              : null,
+          project: this.getProviderTypeForModelInfo() === "openai" ? undefined : null,
+        });
+      const params: CompletionParams = {
+        model: this.getDefaultModel(),
+        maxTokens: 16,
         messages: [{ role: "user", content: "test" }],
-      });
+      };
+      if (getModelInfo(this.getProviderTypeForModelInfo(), params.model).api === "responses") {
+        await testClient.responses.create(
+          buildResponsesRequest(params, this.getProviderTypeForModelInfo())
+        );
+      } else {
+        await testClient.chat.completions.create(
+          this.buildRequest(params, this.isOSeriesModel(params.model))
+        );
+      }
       return { valid: true };
     } catch (error) {
       // Check if it's an auth error
@@ -585,6 +653,17 @@ export class OpenAIProvider {
     };
   }
 
+  protected getDefaultBaseUrl(): string | undefined {
+    return undefined;
+  }
+
+  protected transformRequestMessages(
+    messages: CompletionMessage[],
+    config: TransformConfig
+  ): OpenAIMessage[] {
+    return openaiTransform.transformMessages(messages, config).data;
+  }
+
   /**
    * Provider type for model metadata lookup.
    * Subclasses (OpenAI-compatible providers) override to use their catalog.
@@ -644,10 +723,7 @@ export class OpenAIProvider {
     isOSeries: boolean
   ): ChatCompletionCreateParamsNonStreaming {
     const config = this.createTransformConfig(params.model);
-    const { data: transformedMessages } = openaiTransform.transformMessages(
-      params.messages,
-      config
-    );
+    const transformedMessages = this.transformRequestMessages(params.messages, config);
     // Cast to SDK type and handle O-series system message conversion
     const messages = (
       isOSeries
@@ -739,10 +815,7 @@ export class OpenAIProvider {
    */
   private buildStreamingRequest(params: CompletionParams): ChatCompletionCreateParamsStreaming {
     const config = this.createTransformConfig(params.model);
-    const { data: transformedMessages } = openaiTransform.transformMessages(
-      params.messages,
-      config
-    );
+    const transformedMessages = this.transformRequestMessages(params.messages, config);
     // Cast to SDK type
     const messages = transformedMessages as ChatCompletionMessageParam[];
 
@@ -840,7 +913,10 @@ export class OpenAIProvider {
     ) {
       // Models may return reasoning in a separate field
       const messageWithReasoning = message as typeof message & CompatibleReasoningPayload;
-      if (messageWithReasoning.reasoning_content || messageWithReasoning.reasoning) {
+      if (
+        typeof messageWithReasoning.reasoning_content === "string" ||
+        typeof messageWithReasoning.reasoning === "string"
+      ) {
         thinking = messageWithReasoning.reasoning_content ?? messageWithReasoning.reasoning;
       } else if (messageWithReasoning.reasoning_details) {
         thinking = visibleReasoningDetails(messageWithReasoning.reasoning_details);
@@ -851,16 +927,10 @@ export class OpenAIProvider {
     if (message.tool_calls) {
       for (const toolCall of message.tool_calls) {
         if (toolCall.type === "function") {
-          let input: Record<string, unknown> = {};
-          try {
-            input = JSON.parse(toolCall.function.arguments);
-          } catch {
-            // Invalid JSON, use empty object
-          }
           toolCalls.push({
             id: toolCall.id,
             name: toolCall.function.name,
-            input,
+            input: parseToolArguments(toolCall.function.arguments),
           });
         }
       }
@@ -870,26 +940,13 @@ export class OpenAIProvider {
     const stopReason = this.mapStopReason(choice.finish_reason);
 
     // Build token usage
-    const usage: TokenUsage = {
-      inputTokens: response.usage?.prompt_tokens ?? 0,
-      outputTokens: response.usage?.completion_tokens ?? 0,
-    };
-
-    // Add reasoning tokens for O-series if available
-    if (isOSeries && response.usage) {
-      const usageWithReasoning = response.usage as typeof response.usage & {
-        completion_tokens_details?: { reasoning_tokens?: number };
-      };
-      if (usageWithReasoning.completion_tokens_details?.reasoning_tokens) {
-        usage.thinkingTokens = usageWithReasoning.completion_tokens_details.reasoning_tokens;
-      }
-    }
+    const usage = normalizeChatUsage(response.usage);
 
     return {
       content,
       usage,
       stopReason,
-      ...(thinking && { thinking }),
+      ...(thinking !== undefined && { thinking }),
       ...(toolCalls.length > 0 && { toolCalls }),
     };
   }
@@ -907,10 +964,11 @@ export class OpenAIProvider {
       { id: string; name: string; argumentsJson: string; started: boolean }
     > = new Map();
 
-    let inputTokens = 0;
-    let outputTokens = 0;
+    let usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
     let stopReason: StopReason = "end_turn";
+    let finished = false;
     let reasoningContent = "";
+    let hasReasoningContent = false;
     const reasoningDetails: Record<string, unknown>[] = [];
 
     for await (const chunk of stream) {
@@ -937,6 +995,7 @@ export class OpenAIProvider {
           deltaWithReasoning.reasoning_content ??
           deltaWithReasoning.reasoning ??
           normalizedContent.thinking;
+        if (typeof rawReasoning === "string") hasReasoningContent = true;
         if (rawReasoning) {
           reasoningContent += rawReasoning;
           const reasoningEvent: StreamReasoningEvent = {
@@ -1030,6 +1089,15 @@ export class OpenAIProvider {
         // Track finish reason
         if (choice.finish_reason) {
           stopReason = this.mapStopReason(choice.finish_reason);
+          finished = true;
+
+          // Validate the entire batch before declaring any tool call complete.
+          const inputs = new Map(
+            [...toolCallState].map(([index, state]) => [
+              index,
+              parseToolArguments(state.argumentsJson),
+            ])
+          );
 
           // Emit complete tool calls when finished
           for (const [index, state] of toolCallState) {
@@ -1042,25 +1110,13 @@ export class OpenAIProvider {
             yield endEvent;
 
             // Also emit legacy toolCall for backward compatibility
-            try {
-              const input = state.argumentsJson ? JSON.parse(state.argumentsJson) : {};
-              const toolCallEvent: StreamToolCallEvent = {
-                type: "toolCall",
-                id: state.id,
-                name: state.name,
-                input,
-              };
-              yield toolCallEvent;
-            } catch {
-              // Invalid JSON - emit with empty input
-              const toolCallEvent: StreamToolCallEvent = {
-                type: "toolCall",
-                id: state.id,
-                name: state.name,
-                input: {},
-              };
-              yield toolCallEvent;
-            }
+            const toolCallEvent: StreamToolCallEvent = {
+              type: "toolCall",
+              id: state.id,
+              name: state.name,
+              input: inputs.get(index) as Record<string, unknown>,
+            };
+            yield toolCallEvent;
           }
           toolCallState.clear();
         }
@@ -1068,12 +1124,19 @@ export class OpenAIProvider {
 
       // Track usage from final chunk
       if (chunk.usage) {
-        inputTokens = chunk.usage.prompt_tokens;
-        outputTokens = chunk.usage.completion_tokens;
+        usage = normalizeChatUsage(chunk.usage);
       }
     }
 
-    if (model && (reasoningContent || reasoningDetails.length > 0))
+    if (!finished) {
+      throw new ProviderError("Provider stream ended before a finish reason was received", {
+        code: ErrorCode.API_ERROR,
+        category: "network_error",
+        retryable: true,
+      });
+    }
+
+    if (model && (hasReasoningContent || reasoningDetails.length > 0))
       yield {
         type: "provider_metadata",
         metadata: {
@@ -1086,8 +1149,7 @@ export class OpenAIProvider {
     // Emit usage event with new flat structure
     const usageEvent: StreamUsageEvent = {
       type: "usage",
-      inputTokens,
-      outputTokens,
+      ...usage,
     };
     yield usageEvent;
 
@@ -1163,14 +1225,7 @@ export class OpenAIProvider {
       // Yield usage with new flat structure
       const usageEvent: StreamUsageEvent = {
         type: "usage",
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
-        ...(result.usage.cacheReadTokens !== undefined && {
-          cacheReadTokens: result.usage.cacheReadTokens,
-        }),
-        ...(result.usage.cacheWriteTokens !== undefined && {
-          cacheWriteTokens: result.usage.cacheWriteTokens,
-        }),
+        ...result.usage,
       };
       yield usageEvent;
 
@@ -1205,6 +1260,16 @@ export class OpenAIProvider {
         return "tool_use";
       case "content_filter":
         return "content_filter";
+      case "insufficient_system_resource":
+      case "aborted":
+        throw new ProviderError(`Provider interrupted generation: ${reason}`, {
+          code:
+            reason === "insufficient_system_resource"
+              ? ErrorCode.SERVICE_UNAVAILABLE
+              : ErrorCode.API_ERROR,
+          category: "api_error",
+          retryable: reason === "insufficient_system_resource",
+        });
       default:
         return "end_turn";
     }

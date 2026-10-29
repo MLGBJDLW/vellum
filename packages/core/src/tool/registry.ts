@@ -5,6 +5,7 @@
 import { z } from "zod";
 
 import type { Tool, ToolKind } from "../types/tool.js";
+import { getToolInputSchema } from "./schema.js";
 
 // =============================================================================
 // MCP Tool Integration (T044)
@@ -316,11 +317,7 @@ class ToolRegistryImpl implements ToolRegistry {
         continue;
       }
 
-      // Convert Zod schema to JSON Schema using Zod v4 native function
-      const jsonSchema = z.toJSONSchema(tool.definition.parameters, {
-        target: "openapi-3.0",
-        unrepresentable: "any",
-      });
+      const jsonSchema = getToolInputSchema(tool.definition);
 
       definitions.push({
         name: tool.definition.name,
@@ -380,6 +377,7 @@ class ToolRegistryImpl implements ToolRegistry {
         description: tool.description ?? `MCP tool: ${tool.name}`,
         kind: "mcp",
         parameters: inputSchema,
+        inputSchema: structuredClone(tool.inputSchema),
         enabled: true,
       },
       execute: async (params, _context) => {

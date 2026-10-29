@@ -184,8 +184,8 @@ export async function* mapResponsesStream(
           const input: unknown = JSON.parse(event.item.arguments);
           if (!input || typeof input !== "object" || Array.isArray(input))
             throw new Error(`Invalid arguments for tool ${event.item.name}`);
-          yield { type: "tool_call_end", id: event.item.call_id, index: event.output_index };
-          calls.delete(event.item.id ?? event.item.call_id);
+          // The item can finish before the enclosing response fails. Keep its
+          // completion pending until response.completed confirms the whole turn.
         }
         break;
       case "response.completed":
@@ -196,7 +196,11 @@ export async function* mapResponsesStream(
         // Only release executable calls after the provider confirms a complete
         // response. A dropped/failed stream must not trigger partial actions.
         if (event.type === "response.completed") {
-          for (const tool of result.toolCalls ?? []) yield { type: "toolCall", ...tool };
+          for (const tool of result.toolCalls ?? []) {
+            const call = [...calls.values()].find((entry) => entry.id === tool.id);
+            if (call) yield { type: "tool_call_end", id: tool.id, index: call.index };
+            yield { type: "toolCall", ...tool };
+          }
         }
         yield { type: "usage", ...result.usage };
         yield { type: "end", stopReason: result.stopReason };

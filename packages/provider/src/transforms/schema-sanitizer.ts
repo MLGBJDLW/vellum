@@ -128,8 +128,10 @@ export function sanitizeJsonSchemaForGemini(
     ) as unknown as JsonSchema;
   }
 
-  // Deep clone and sanitize
-  return sanitizeSchemaObject(schema, options);
+  // Normalize legacy OpenAPI input and resolve local references before the
+  // Gemini subset removes definition containers. Never erase a live reference.
+  const normalized = stripSchemaMetaFields(schema);
+  return sanitizeSchemaObject(resolveLocalReferences(normalized), options);
 }
 
 /**
@@ -146,7 +148,6 @@ function sanitizeSchemaObject(schema: JsonSchema, options?: SanitizeOptions): Js
 
     // Handle convertible fields
     if (GEMINI_CONVERTIBLE_FIELDS.has(key)) {
-      handleConvertibleField(result, key, value);
       continue;
     }
 
@@ -167,6 +168,12 @@ function sanitizeSchemaObject(schema: JsonSchema, options?: SanitizeOptions): Js
     result[key] = value;
   }
 
+  // Apply bounds after all fields so insertion order cannot weaken a constraint.
+  handleConvertibleField(result, "exclusiveMinimum", schema.exclusiveMinimum);
+  handleConvertibleField(result, "exclusiveMaximum", schema.exclusiveMaximum);
+  if ("const" in schema) {
+    result.enum = [schema.const];
+  }
   return result;
 }
 
@@ -179,15 +186,19 @@ function handleConvertibleField(result: JsonSchema, key: string, value: unknown)
       // Convert exclusiveMinimum to minimum
       // Note: This is slightly less precise (>n becomes >=n)
       // but maintains API compatibility
-      if (typeof value === "number" && !("minimum" in result)) {
-        result.minimum = value;
+      if (typeof value === "number") {
+        const bound = result.type === "integer" ? Math.floor(value) + 1 : value;
+        result.minimum =
+          typeof result.minimum === "number" ? Math.max(result.minimum, bound) : bound;
       }
       break;
 
     case "exclusiveMaximum":
       // Convert exclusiveMaximum to maximum
-      if (typeof value === "number" && !("maximum" in result)) {
-        result.maximum = value;
+      if (typeof value === "number") {
+        const bound = result.type === "integer" ? Math.ceil(value) - 1 : value;
+        result.maximum =
+          typeof result.maximum === "number" ? Math.min(result.maximum, bound) : bound;
       }
       break;
   }
@@ -333,24 +344,16 @@ export function sanitizeJsonSchema(
  * Meta fields to strip from JSON Schema for provider compatibility.
  * These fields are safe to remove for all providers:
  * - $schema: JSON Schema version declaration
- * - $id: Schema identifier
  * - $comment: Comments
- * - $defs / definitions: Definition references (when not using $ref)
  * - examples: Example values (not used by any provider for validation)
  * - default: Default values (providers handle differently)
  */
-const BASIC_META_FIELDS = new Set([
-  "$schema",
-  "$id",
-  "$comment",
-  "$defs",
-  "definitions",
-  "examples",
-  "default",
-]);
+// $id is not an annotation: it defines the base URI for relative references.
+const BASIC_META_FIELDS = new Set(["$schema", "$comment", "examples", "default"]);
 
 /**
- * Basic sanitization - strips JSON Schema meta fields.
+ * Normalize legacy OpenAPI bounds/nullability and strip annotations.
+ * Keep definition containers: removing them leaves dangling MCP $ref values.
  * Safe for all providers (Anthropic, OpenAI, etc.)
  *
  * @param schema - The JSON Schema to sanitize
@@ -382,7 +385,7 @@ export function stripSchemaMetaFields(schema: JsonSchema): JsonSchema {
     return schema;
   }
 
-  return stripMetaFieldsRecursive(schema);
+  return normalizeTupleSchemas(stripMetaFieldsRecursive(schema));
 }
 
 /**
@@ -390,15 +393,14 @@ export function stripSchemaMetaFields(schema: JsonSchema): JsonSchema {
  * @internal
  */
 function stripMetaFieldsFromProperties(value: unknown): JsonSchema {
-  const props: JsonSchema = {};
-  for (const [propName, propSchema] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof propSchema === "object" && propSchema !== null) {
-      props[propName] = stripMetaFieldsRecursive(propSchema as JsonSchema);
-    } else {
-      props[propName] = propSchema;
-    }
-  }
-  return props;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([name, child]) => [
+      name,
+      typeof child === "object" && child !== null
+        ? stripMetaFieldsRecursive(child as JsonSchema)
+        : child,
+    ])
+  );
 }
 
 /**
@@ -412,7 +414,7 @@ function stripMetaFieldsFromArray(value: unknown[]): unknown[] {
 }
 
 /**
- * Strip only meta fields ($schema, $id, etc.) for providers with better support
+ * Strip annotations while preserving reference scopes for JSON Schema transports.
  * @internal
  */
 function stripMetaFieldsRecursive(schema: JsonSchema): JsonSchema {
@@ -430,6 +432,29 @@ function stripMetaFieldsRecursive(schema: JsonSchema): JsonSchema {
     result[key] = processMetaFieldValue(key, value);
   }
 
+  for (const [exclusive, inclusive] of [
+    ["exclusiveMinimum", "minimum"],
+    ["exclusiveMaximum", "maximum"],
+  ] as const) {
+    if (typeof result[exclusive] === "boolean") {
+      if (result[exclusive] && typeof result[inclusive] === "number") {
+        result[exclusive] = result[inclusive];
+        delete result[inclusive];
+      } else {
+        delete result[exclusive];
+      }
+    }
+  }
+  if ("nullable" in result) {
+    const nullable = result.nullable === true;
+    delete result.nullable;
+    if (nullable && typeof result.type === "string" && result.type !== "null") {
+      // Extend the type in place so local JSON pointers keep their targets.
+      result.type = [result.type, "null"];
+    } else if (nullable && Array.isArray(result.type) && !result.type.includes("null")) {
+      result.type = [...result.type, "null"];
+    }
+  }
   return result;
 }
 
@@ -443,19 +468,19 @@ function processMetaFieldValue(key: string, value: unknown): unknown {
   }
 
   // Properties object
-  if (key === "properties" && typeof value === "object" && !Array.isArray(value)) {
+  if (SCHEMA_MAP_FIELDS.has(key) && typeof value === "object" && !Array.isArray(value)) {
     return stripMetaFieldsFromProperties(value);
   }
 
   // Items can be array or single schema
-  if (key === "items" && typeof value === "object") {
+  if ((key === "items" || key === "prefixItems") && typeof value === "object") {
     return Array.isArray(value)
       ? stripMetaFieldsFromArray(value)
       : stripMetaFieldsRecursive(value as JsonSchema);
   }
 
   // Single nested schemas
-  if ((key === "additionalProperties" || key === "contains") && typeof value === "object") {
+  if (SINGLE_SCHEMA_FIELDS.has(key) && typeof value === "object") {
     return stripMetaFieldsRecursive(value as JsonSchema);
   }
 
@@ -465,6 +490,214 @@ function processMetaFieldValue(key: string, value: unknown): unknown {
   }
 
   return value;
+}
+
+// Traverse schema-bearing fields only. User keys and enum/const values are data.
+const SCHEMA_MAP_FIELDS = new Set([
+  "properties",
+  "patternProperties",
+  "$defs",
+  "definitions",
+  "dependentSchemas",
+]);
+const SINGLE_SCHEMA_FIELDS = new Set([
+  "additionalProperties",
+  "additionalItems",
+  "contains",
+  "propertyNames",
+  "not",
+  "if",
+  "then",
+  "else",
+  "unevaluatedProperties",
+  "unevaluatedItems",
+  "contentSchema",
+]);
+const SCHEMA_ARRAY_FIELDS = new Set(["anyOf", "oneOf", "allOf", "prefixItems"]);
+
+/**
+ * All JSON Schema transports require schema-valued items, not draft-7 tuple
+ * arrays. Preserve tuple constraints and references when their locations move.
+ * Each nested $id establishes a resource scope for relative JSON pointers.
+ */
+function normalizeTupleSchemas(schema: JsonSchema): JsonSchema {
+  interface Scope {
+    uri: string;
+    moves: [string, string][];
+  }
+  interface Location {
+    scope: Scope;
+    from: string;
+    to: string;
+  }
+  const root: Scope = { uri: "https://vellum.invalid/schema-root.json", moves: [] };
+  const resources = new Map<string, Scope>([[root.uri, root]]);
+  const references: { node: JsonSchema; key: string; base: string; scope: Scope }[] = [];
+  const pointerKey = (key: string) => key.replace(/~/g, "~0").replace(/\//g, "~1");
+
+  function visit(value: unknown, locations: Location[], base: string, isRoot = false): unknown {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    const source = value as JsonSchema;
+    if (typeof source.$id === "string") {
+      try {
+        const id = new URL(source.$id, base);
+        base = id.href;
+        if (!id.hash) {
+          const scope: Scope = isRoot ? root : { uri: id.href, moves: [] };
+          scope.uri = id.href;
+          resources.set(id.href, scope);
+          if (!isRoot) locations = [...locations, { scope, from: "#", to: "#" }];
+        }
+      } catch {
+        /* Keep invalid IDs untouched for the provider to validate. */
+      }
+    }
+    const current = locations[locations.length - 1];
+    if (!current) return value;
+    const result: JsonSchema = {};
+    const tuple = Array.isArray(source.items);
+    for (const [key, child] of Object.entries(source)) {
+      const targetKey =
+        tuple && key === "items"
+          ? "prefixItems"
+          : tuple && key === "additionalItems"
+            ? "items"
+            : key;
+      const children = locations.map(({ scope, from, to }) => {
+        const next = {
+          scope,
+          from: `${from}/${pointerKey(key)}`,
+          to: `${to}/${pointerKey(targetKey)}`,
+        };
+        if (targetKey !== key) scope.moves.push([next.from, next.to]);
+        return next;
+      });
+      if (
+        SCHEMA_MAP_FIELDS.has(key) &&
+        child &&
+        typeof child === "object" &&
+        !Array.isArray(child)
+      ) {
+        result[targetKey] = Object.fromEntries(
+          Object.entries(child).map(([name, item]) => [
+            name,
+            visit(
+              item,
+              children.map(({ scope, from, to }) => ({
+                scope,
+                from: `${from}/${pointerKey(name)}`,
+                to: `${to}/${pointerKey(name)}`,
+              })),
+              base
+            ),
+          ])
+        );
+      } else if ((SCHEMA_ARRAY_FIELDS.has(key) || key === "items") && Array.isArray(child)) {
+        result[targetKey] = child.map((item, index) =>
+          visit(
+            item,
+            children.map(({ scope, from, to }) => ({
+              scope,
+              from: `${from}/${index}`,
+              to: `${to}/${index}`,
+            })),
+            base
+          )
+        );
+      } else if (SINGLE_SCHEMA_FIELDS.has(key) || key === "items") {
+        result[targetKey] = visit(child, children, base);
+      } else {
+        // enum/const values and property names are data, never schema keywords.
+        result[targetKey] = child;
+      }
+    }
+    for (const key of ["$ref", "$dynamicRef", "$recursiveRef"]) {
+      if (typeof result[key] === "string")
+        references.push({ node: result, key, base, scope: current.scope });
+    }
+    return result;
+  }
+
+  const result = visit(schema, [{ scope: root, from: "#", to: "#" }], root.uri, true) as JsonSchema;
+  for (const scope of new Set(resources.values()))
+    scope.moves.sort(([left], [right]) => right.length - left.length);
+  for (const reference of references) {
+    const ref = reference.node[reference.key] as string;
+    const hash = ref.indexOf("#");
+    if (hash < 0) continue;
+    let target: URL;
+    let pointer: string;
+    try {
+      target = new URL(ref, reference.base);
+      pointer = `#${decodeURIComponent(target.hash.slice(1))}`;
+    } catch {
+      continue;
+    }
+    if (!pointer.startsWith("#/")) continue;
+    target.hash = "";
+    const scope = ref.startsWith("#") ? reference.scope : resources.get(target.href);
+    const moved = scope?.moves.find(([from]) => pointer === from || pointer.startsWith(`${from}/`));
+    if (moved)
+      reference.node[reference.key] =
+        `${ref.slice(0, hash)}${encodeURI(`${moved[1]}${pointer.slice(moved[0].length)}`)}`;
+  }
+  return result;
+}
+
+/** Gemini's Schema transport cannot carry recursive/external JSON references. */
+function resolveLocalReferences(root: JsonSchema): JsonSchema {
+  let visited = 0;
+  function visit(value: unknown, active: Set<string>): unknown {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    if (++visited > 10000)
+      throw new Error("Tool schema reference expansion exceeds the Gemini limit");
+    const schema = value as JsonSchema;
+    if (typeof schema.$ref === "string") {
+      const ref = schema.$ref;
+      if (active.has(ref))
+        throw new Error(`Recursive tool schema reference is unsupported by Gemini: ${ref}`);
+      if (ref !== "#" && !ref.startsWith("#/")) {
+        throw new Error(`External tool schema reference is unsupported by Gemini: ${ref}`);
+      }
+      let target: unknown = root;
+      for (const segment of ref === "#" ? [] : ref.slice(2).split("/")) {
+        const key = decodeURIComponent(segment).replace(/~1/g, "/").replace(/~0/g, "~");
+        if (!target || typeof target !== "object" || !Object.hasOwn(target, key)) {
+          throw new Error(`Unresolved tool schema reference: ${ref}`);
+        }
+        target = (target as JsonSchema)[key];
+      }
+      const next = new Set(active).add(ref);
+      const { $ref: _ref, $defs: _defs, definitions: _definitions, ...siblings } = schema;
+      const resolved = visit(target, next) as JsonSchema;
+      if (Object.keys(siblings).length === 0) return resolved;
+      // Preserve intersection semantics when references have validation siblings.
+      return { allOf: [resolved, visit(siblings, active)] };
+    }
+    return Object.fromEntries(
+      Object.entries(schema).map(([key, child]) => {
+        if (key === "$defs" || key === "definitions") return [key, child];
+        if (SCHEMA_MAP_FIELDS.has(key) && child && typeof child === "object") {
+          return [
+            key,
+            Object.fromEntries(
+              Object.entries(child).map(([name, item]) => [name, visit(item, active)])
+            ),
+          ];
+        }
+        if (SINGLE_SCHEMA_FIELDS.has(key) || key === "items") {
+          return [
+            key,
+            Array.isArray(child) ? child.map((item) => visit(item, active)) : visit(child, active),
+          ];
+        }
+        if (SCHEMA_ARRAY_FIELDS.has(key) && Array.isArray(child))
+          return [key, child.map((item) => visit(item, active))];
+        return [key, child];
+      })
+    );
+  }
+  return visit(root, new Set()) as JsonSchema;
 }
 
 /**

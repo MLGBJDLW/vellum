@@ -11,7 +11,7 @@
  */
 
 import type { Logger } from "../logger/logger.js";
-import { classifyError, type ErrorInfo, isFatal } from "../session/errors.js";
+import { classifyError, type ErrorInfo } from "../session/errors.js";
 import { RetryAbortedError } from "../session/retry.js";
 import type { CancellationToken } from "./cancellation.js";
 
@@ -97,7 +97,7 @@ export class AgentRetryManager {
     const errorInfo = classifyError(error);
 
     // Check for fatal errors first
-    if (isFatal(errorInfo)) {
+    if (errorInfo.severity === "fatal") {
       this.deps.logger?.error("Fatal error encountered", { errorInfo });
       return {
         shouldRetry: false,

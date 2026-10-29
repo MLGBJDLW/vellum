@@ -553,10 +553,33 @@ export function classifyError(error: unknown): ErrorInfo {
   if (error instanceof VellumError) {
     const classification = ERROR_CLASSIFICATIONS[error.code];
     if (classification) {
+      const override = error.retryabilityOverride;
+      const retryable = override ?? classification.retryable;
       return {
         error,
         code: error.code,
         ...classification,
+        retryable,
+        severity:
+          override === true
+            ? "transient"
+            : override === false && classification.severity === "transient"
+              ? "recoverable"
+              : classification.severity,
+        suggestedAction:
+          override === undefined
+            ? classification.suggestedAction
+            : retryable
+              ? "retry"
+              : classification.suggestedAction === "retry"
+                ? "abort"
+                : classification.suggestedAction,
+        retryDelay: retryable ? (error.retryDelay ?? classification.retryDelay) : undefined,
+        maxRetries: retryable ? classification.maxRetries : undefined,
+        userMessage:
+          override === false && classification.retryable
+            ? error.message
+            : classification.userMessage,
         context: error.context,
       };
     }

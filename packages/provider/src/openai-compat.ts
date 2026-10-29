@@ -19,8 +19,16 @@
 
 import { getProviderModels, MODEL_CATALOG } from "./models/catalog.js";
 import { OpenAIProvider } from "./openai.js";
+import type { OpenAIMessage } from "./transforms/openai.js";
+import { createOpenAICompatTransform } from "./transforms/openai-compat.js";
 import type { TransformConfig } from "./transforms/types.js";
-import type { CompletionParams, ModelInfo, ProviderOptions, ProviderType } from "./types.js";
+import type {
+  CompletionMessage,
+  CompletionParams,
+  ModelInfo,
+  ProviderOptions,
+  ProviderType,
+} from "./types.js";
 
 // =============================================================================
 // OpenAICompatibleProvider Abstract Base Class
@@ -59,6 +67,10 @@ export abstract class OpenAICompatibleProvider extends OpenAIProvider {
    */
   abstract readonly providerName: string;
 
+  protected override getDefaultBaseUrl(): string {
+    return this.defaultBaseUrl;
+  }
+
   /**
    * Initialize the provider with configuration options
    *
@@ -69,11 +81,7 @@ export abstract class OpenAICompatibleProvider extends OpenAIProvider {
    * @throws ProviderError if initialization fails
    */
   async initialize(options: ProviderOptions): Promise<void> {
-    const finalOptions: ProviderOptions = {
-      ...options,
-      baseUrl: options.baseUrl ?? this.defaultBaseUrl,
-    };
-    return super.initialize(finalOptions);
+    return super.initialize(options);
   }
 
   /**
@@ -138,6 +146,13 @@ export abstract class OpenAICompatibleProvider extends OpenAIProvider {
       provider: this.providerName as ProviderType,
       modelId: model,
     };
+  }
+
+  protected override transformRequestMessages(
+    messages: CompletionMessage[],
+    config: TransformConfig
+  ): OpenAIMessage[] {
+    return createOpenAICompatTransform(this.providerName).transformMessages(messages, config).data;
   }
 
   /**

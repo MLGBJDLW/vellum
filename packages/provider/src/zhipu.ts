@@ -135,18 +135,7 @@ export class ZhipuProvider extends OpenAICompatibleProvider {
    * @param options - Provider configuration
    */
   async initialize(options: ProviderOptions): Promise<void> {
-    if (!options.apiKey?.trim()) {
-      throw new Error("Zhipu API key is required");
-    }
-
-    const finalOptions: ProviderOptions = {
-      ...options,
-      apiKey: options.apiKey.trim(),
-      baseUrl: options.baseUrl ?? this.defaultBaseUrl,
-    };
-
-    // Call grandparent's initialize (OpenAIProvider)
-    return super.initialize(finalOptions);
+    return super.initialize(options);
   }
 
   /**

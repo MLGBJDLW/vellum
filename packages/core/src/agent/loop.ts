@@ -1582,7 +1582,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     if (this.state !== "terminated" && this.state !== "shutdown") {
       this.transitionTo("recovering");
     }
-    return true;
+    // Nothing resumed or completed: preserve failure for callers of run().
+    return false;
   }
 
   /**
