@@ -1,6 +1,6 @@
 {
   "name": "@butlerw/vellum",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Personal AI assistant for the terminal",
   "private": false,
   "publishConfig": {
