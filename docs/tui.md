@@ -36,6 +36,7 @@ The Vellum TUI is a React-based terminal interface built with [Ink](https://gith
 - [Architecture](#architecture)
 - [Components](#components)
 - [Quick keybindings](#quick-keybindings)
+- [Mouse and Thinking controls](#mouse-and-thinking-controls)
 - [Context Providers](#context-providers)
 - [Hooks](#hooks)
 - [Themes](#themes)
@@ -60,12 +61,44 @@ Vellum’s sidebar panels are designed to be discoverable via keyboard. When the
 | `Alt+S` | Open **Checkpoints** panel |
 | `Alt+L` | Open **Code tools** panel |
 | `Ctrl+S` | Open **Sessions** picker |
+| `Alt+E` | Expand or collapse the active Thinking block, including while streaming |
 
 The sidebar has its own keyboard focus. Typing in the composer cannot activate a task or checkpoint. Below 96 columns, focusing the sidebar opens it in the content pane; returning to chat preserves the draft and history position.
 
 Responses, tool results, and streaming text share one scrollable viewport. PageUp pauses following; additional output and typing preserve your reading position. PageDown to the bottom resumes following. Arrow keys stay with the composer while it is focused. Mouse wheel events over the sidebar do not move chat history.
 
 Set `VELLUM_REDUCED_MOTION=1` to disable decorative clock animations and skip the startup transition. Loading states remain visible. Scrollbar feedback only animates while active, and completed tool rows and text inputs do not subscribe to animation frames.
+
+## Mouse and Thinking controls
+
+Use `/mouse` or `/mouse status` to inspect the current mouse mode. Mode changes take effect immediately in the running session; restarting restores the configured defaults.
+
+| Command | Behavior |
+|---|---|
+| `/mouse on` | Enable clicking, wheel scrolling, and scrollbar dragging |
+| `/mouse wheel` | Enable wheel scrolling without clicks or dragging |
+| `/mouse off` | Stop capturing mouse input and return handling to the terminal |
+
+With full mouse mode enabled, drag the scrollbar thumb to move through chat history, or click the track above or below it to page. Scrolling away from the bottom pauses following: incoming streamed text and typing in the composer preserve the reading position. Click **Reading history · Click to return to latest**, click the new-message banner, or scroll back to the bottom to resume following.
+
+Click the model or mode in the status bar to open its selector, then click an available row to select it. In the model selector, the wheel moves focus within the visible list; `Enter` confirms the focused model. The **Thinking** and **Display: Full/Compact** controls can also be clicked. Approval and option dialogs accept clicks on their available choices. While a dialog is open, background controls do not receive those clicks.
+
+The mode menu offers all four existing modes (`orch`, `vibe`, `plan`, `spec`). Click the status bar's Thinking indicator to toggle it for the current session, or click the approval indicator to view pending approvals. Opening this queue does not change the approval policy.
+
+| Surface | Mouse actions |
+|---|---|
+| Slash and `@` completion | Click command, nested command, mention type, directory, or file; wheel within the candidate list. Click completes text; `Enter` executes. |
+| Settings | `/settings` opens the saved-preferences panel; click category tabs, editable values, confirm/cancel, and close. Explicit `/settings <key> <value>` remains supported. |
+| Sessions and checkpoints | Select/preview/open sessions, navigate checkpoint rows, inspect diffs, create/refresh checkpoints, and confirm or cancel restore actions. |
+| Sidebar | Click previous/next to switch among six panels, close the sidebar, or click a panel action to focus it. History mouse controls remain available while the sidebar has keyboard focus. |
+| LSP setup | Read actual installed status, detect project languages, install available servers through the configured LSP hub, and view errors. Detection alone does not install servers. |
+| Dialogs and notices | Click permission/option choices, skip, trust decisions, onboarding choices, branch actions, help close, and notice dismissal. Disabled or covered actions remain inactive. |
+
+Wheel input belongs to the visible list under the pointer. Only the frontmost overlay receives input. Token counts, costs, health indicators, and other passive readouts remain display-only.
+
+Click a Thinking header, or press `Alt+E` for the active block, to expand or collapse it. This works during streaming and in **Compact** display mode. A collapsed block occupies one row, such as `▸ Thinking · Checking input routing`. Its activity title comes from the latest complete provider heading, or a conservative local activity label when no heading is available; incomplete streamed fragments are not used as titles. Expanding shows all received thinking content with its existing inline formatting. Manual expansion or collapse is preserved as streaming continues and completes.
+
+In Windows Terminal, hold `Shift` while dragging to select text with the terminal's native selection when Vellum is capturing the mouse. Use `/mouse off` when you want the terminal to handle all mouse input.
 
 ## Architecture
 
