@@ -170,6 +170,11 @@ export function usePersistence(options: UsePersistenceOptions): UsePersistenceRe
   );
   const bridgeRef = useRef<PersistenceBridge | null>(null);
   const previousMessageCountRef = useRef(0);
+  // App creates notification callbacks while rendering streamed messages. Their
+  // identity must not dispose the active manager, restart auto-save, or enqueue
+  // false/true state updates on every token. The bridge reads the latest callbacks.
+  const callbacksRef = useRef({ onSave, onError, onCheckpointCreated, onRollbackComplete });
+  callbacksRef.current = { onSave, onError, onCheckpointCreated, onRollbackComplete };
 
   // ==========================================================================
   // Basic Session Adapter
@@ -218,18 +223,18 @@ export function usePersistence(options: UsePersistenceOptions): UsePersistenceRe
         setLastSavedAt(new Date());
         setUnsavedCount(0);
         setCheckpoints(session.checkpoints);
-        onSave?.(session);
+        callbacksRef.current.onSave?.(session);
       },
       onError: (error) => {
         setStatus("error");
-        onError?.(error);
+        callbacksRef.current.onError?.(error);
       },
       onCheckpointCreated: (checkpointId) => {
         const session = manager.currentSession;
         if (session) {
           setCheckpoints(session.checkpoints);
         }
-        onCheckpointCreated?.(checkpointId);
+        callbacksRef.current.onCheckpointCreated?.(checkpointId);
       },
       onRollbackComplete: (success) => {
         if (success) {
@@ -238,7 +243,7 @@ export function usePersistence(options: UsePersistenceOptions): UsePersistenceRe
             setCheckpoints(session.checkpoints);
           }
         }
-        onRollbackComplete?.(success);
+        callbacksRef.current.onRollbackComplete?.(success);
       },
     };
 
@@ -266,17 +271,7 @@ export function usePersistence(options: UsePersistenceOptions): UsePersistenceRe
       persistenceManagerRef.current = null;
       setAutoSaveRunning(false);
     };
-  }, [
-    isAdvancedEnabled,
-    storageManager,
-    externalPersistenceManager,
-    autoSave,
-    saveDebounceMs,
-    onSave,
-    onError,
-    onCheckpointCreated,
-    onRollbackComplete,
-  ]);
+  }, [isAdvancedEnabled, storageManager, externalPersistenceManager, autoSave, saveDebounceMs]);
 
   // Track unsaved message count
   useEffect(() => {
