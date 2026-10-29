@@ -1,2 +1,10 @@
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+# Preserve captured response fixtures byte for byte.
+packages/cli/__fixtures__/** -text
 .husky/* text eol=lf
 .husky/_/* text eol=lf

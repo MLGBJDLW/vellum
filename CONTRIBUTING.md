@@ -71,6 +71,22 @@ pnpm lint
 pnpm format
 ```
 
+### TypeScript compiler
+
+All workspace packages use the stable TypeScript 7 native compiler for type checking
+and declaration emission. Verify the installed version with
+`pnpm --filter @vellum/shared exec tsc --version` (currently 7.0.2).
+
+Tsup still bundles JavaScript, but its `--dts` option depends on the compiler API
+removed in TypeScript 7. Library builds therefore run native `tsc` with
+`tsconfig.build.json` after bundling. Development watchers regenerate declarations
+after each successful JavaScript build. Declarations retain their source directory
+structure under `dist`, with the same public `dist/index.d.ts` entry point and the
+existing LSP subpath entries. No legacy compiler is needed for these builds.
+
+See the [official TypeScript 7 release notes](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/)
+for compiler API and editor compatibility details.
+
 ## Code Style
 
 ### TypeScript Rules
