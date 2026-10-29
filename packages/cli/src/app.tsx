@@ -3016,6 +3016,12 @@ function AppContent({
       return;
     }
 
+    if (key.escape && (showModelSelector || showModeSelector)) {
+      setShowModelSelector(false);
+      setShowModeSelector(false);
+      return;
+    }
+
     if (applicationState.focusedArea === "tools" && key.escape) {
       dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
       return;
@@ -4414,7 +4420,6 @@ interface AppOverlaysProps {
   readonly currentMode: CodingMode;
   readonly currentModel: string;
   readonly currentProvider: string;
-  readonly dismissUpdateBanner: () => void;
   readonly handleApprove: () => void;
   readonly handleApproveAlways: () => void;
   readonly handleModeSelect: (mode: CodingMode) => void;
@@ -4439,7 +4444,6 @@ interface AppOverlaysProps {
   readonly onApproveAll: () => void;
   readonly onRejectAll: () => void;
   readonly themeContext: ThemeContextValue;
-  readonly updateAvailable: { current: string; latest: string } | null;
   /** Current LSP confirmation request (null if no dialog active) */
   readonly currentConfirmRequest: import("@vellum/lsp").ConfirmationRequest | null;
   /** Callback when user responds to LSP confirmation */
@@ -4546,7 +4550,6 @@ function AppOverlays({
   currentMode,
   currentModel,
   currentProvider,
-  dismissUpdateBanner,
   handleApprove,
   handleApproveAlways,
   handleModeSelect,
@@ -4569,7 +4572,6 @@ function AppOverlays({
   onApproveAll,
   onRejectAll,
   themeContext,
-  updateAvailable,
   currentConfirmRequest,
   respondToConfirmation,
   showSidebar,
@@ -4579,19 +4581,10 @@ function AppOverlays({
 
   return (
     <>
-      {updateAvailable && (
-        <UpdateBanner
-          currentVersion={updateAvailable.current}
-          latestVersion={updateAvailable.latest}
-          dismissible
-          onDismiss={dismissUpdateBanner}
-          compact
-        />
-      )}
-
       {showModeSelector && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="round"
@@ -4610,6 +4603,7 @@ function AppOverlays({
       {showSessionManager && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.compact.top}
           marginLeft={margins.compact.left}
           borderStyle="round"
@@ -4630,6 +4624,7 @@ function AppOverlays({
       {activeApproval && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="double"
@@ -4650,6 +4645,7 @@ function AppOverlays({
       {currentConfirmRequest && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           width={confirmWidth}
@@ -4665,6 +4661,7 @@ function AppOverlays({
       {showModelSelector && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="round"
@@ -4684,6 +4681,7 @@ function AppOverlays({
       {pendingOperation && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.loading.top}
           marginLeft={margins.loading.left}
           borderStyle="round"
@@ -4700,6 +4698,7 @@ function AppOverlays({
       {showHelpModal && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.standard.top}
           marginLeft={margins.standard.left}
           borderStyle="round"
@@ -4717,6 +4716,7 @@ function AppOverlays({
       {showApprovalQueue && pendingApprovals.length > 1 && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.compact.top}
           marginLeft={margins.compact.left}
           borderStyle="double"
@@ -4737,6 +4737,7 @@ function AppOverlays({
       {checkpointDiff.isVisible && (
         <Box
           position="absolute"
+          opaque
           marginTop={margins.compact.top}
           marginLeft={margins.compact.left}
           borderStyle="double"
@@ -5306,44 +5307,15 @@ function AppContentView({
 
       {showMainView && (
         <>
-          <AppOverlays
-            activeApproval={activeApproval}
-            activeRiskLevel={activeRiskLevel}
-            activeSessionId={activeSessionId}
-            checkpointDiff={checkpointDiff}
-            closeCheckpointDiff={closeCheckpointDiff}
-            closeSessionManager={closeSessionManager}
-            currentMode={currentMode}
-            currentModel={currentModel}
-            currentProvider={currentProvider}
-            dismissUpdateBanner={dismissUpdateBanner}
-            handleApprove={handleApprove}
-            handleApproveAlways={handleApproveAlways}
-            handleModeSelect={handleModeSelect}
-            handleModelSelect={handleModelSelect}
-            handleReject={handleReject}
-            handleSessionSelected={handleSessionSelected}
-            loadSessionPreviewMessages={loadSessionPreviewMessages}
-            pendingOperation={pendingOperation}
-            sessions={sessions}
-            showModeSelector={showModeSelector}
-            showModelSelector={showModelSelector}
-            showSessionManager={showSessionManager}
-            showHelpModal={showHelpModal}
-            closeHelpModal={closeHelpModal}
-            showApprovalQueue={showApprovalQueue}
-            closeApprovalQueue={closeApprovalQueue}
-            pendingApprovals={pendingApprovals}
-            onApproveQueueItem={onApproveQueueItem}
-            onRejectQueueItem={onRejectQueueItem}
-            onApproveAll={onApproveAll}
-            onRejectAll={onRejectAll}
-            themeContext={themeContext}
-            updateAvailable={updateAvailable}
-            currentConfirmRequest={currentConfirmRequest}
-            respondToConfirmation={respondToConfirmation}
-            showSidebar={showSidebar}
-          />
+          {updateAvailable && (
+            <UpdateBanner
+              currentVersion={updateAvailable.current}
+              latestVersion={updateAvailable.latest}
+              dismissible
+              onDismiss={dismissUpdateBanner}
+              compact
+            />
+          )}
 
           <AdaptiveLayout
             regularLayout={
@@ -5368,6 +5340,43 @@ function AppContentView({
           >
             {screenReaderContent}
           </AdaptiveLayout>
+
+          <AppOverlays
+            activeApproval={activeApproval}
+            activeRiskLevel={activeRiskLevel}
+            activeSessionId={activeSessionId}
+            checkpointDiff={checkpointDiff}
+            closeCheckpointDiff={closeCheckpointDiff}
+            closeSessionManager={closeSessionManager}
+            currentMode={currentMode}
+            currentModel={currentModel}
+            currentProvider={currentProvider}
+            handleApprove={handleApprove}
+            handleApproveAlways={handleApproveAlways}
+            handleModeSelect={handleModeSelect}
+            handleModelSelect={handleModelSelect}
+            handleReject={handleReject}
+            handleSessionSelected={handleSessionSelected}
+            loadSessionPreviewMessages={loadSessionPreviewMessages}
+            pendingOperation={pendingOperation}
+            sessions={sessions}
+            showModeSelector={showModeSelector}
+            showModelSelector={showModelSelector}
+            showSessionManager={showSessionManager}
+            showHelpModal={showHelpModal}
+            closeHelpModal={closeHelpModal}
+            showApprovalQueue={showApprovalQueue}
+            closeApprovalQueue={closeApprovalQueue}
+            pendingApprovals={pendingApprovals}
+            onApproveQueueItem={onApproveQueueItem}
+            onRejectQueueItem={onRejectQueueItem}
+            onApproveAll={onApproveAll}
+            onRejectAll={onRejectAll}
+            themeContext={themeContext}
+            currentConfirmRequest={currentConfirmRequest}
+            respondToConfirmation={respondToConfirmation}
+            showSidebar={showSidebar}
+          />
         </>
       )}
     </>

@@ -175,7 +175,7 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
   modelSelector: {
     title: "Select Model:",
     current: "Current: ",
-    keybindings: "↑↓ navigate • Enter select",
+    keybindings: "↑↓ navigate • Enter select • Esc close",
   },
   modeSelector: {
     title: "Personal assistant",
@@ -415,7 +415,7 @@ const ZH_TRANSLATIONS: Record<string, unknown> = {
   modelSelector: {
     title: "选择模型：",
     current: "当前：",
-    keybindings: "↑↓ 导航 • Enter 选择",
+    keybindings: "↑↓ 导航 • Enter 选择 • Esc 关闭",
   },
   modeSelector: {
     title: "个人助理",

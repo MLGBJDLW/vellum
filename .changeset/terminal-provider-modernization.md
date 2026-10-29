@@ -8,6 +8,8 @@ Repair terminal mouse reports leaking into the composer and restore Backspace,
 Delete, paste, modifier shortcuts, and rapid editing through one ordered terminal
 input path. Keep large model catalogs within the terminal viewport, preserve
 current values when submitting forms, and remove conflicting persistence shortcuts.
+Paint dialogs above the conversation, restore Escape dismissal, and hydrate saved
+session timestamps before rendering the session manager.
 
 Refresh supported provider catalogs and discovery, preserve current model
 capabilities and reasoning transport, and share catalog updates with adapter
