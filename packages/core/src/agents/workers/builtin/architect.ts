@@ -50,9 +50,6 @@ export const architectWorker: BaseWorker = createBaseWorker({
     specializations: ["design", "adr", "system-design", "patterns"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    // Execute using the worker executor with architect-specific configuration
-    return executeWorkerTask("architect", context, {
-      maxIterations: 15, // Design tasks are typically well-scoped
-    });
+    return executeWorkerTask("architect", context);
   },
 });

@@ -48,10 +48,7 @@ export const analystWorker: BaseWorker = createBaseWorker({
     specializations: ["analysis", "review", "dependency-mapping", "impact-assessment"],
   },
   handler: async (context): Promise<WorkerResult> => {
-    // Execute using the worker executor with analyst-specific configuration
-    const result = await executeWorkerTask("analyst", context, {
-      maxIterations: 20, // Analysis may need more iterations for thorough review
-    });
+    const result = await executeWorkerTask("analyst", context);
 
     // Ensure filesModified is always empty for read-only worker
     return {

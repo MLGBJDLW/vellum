@@ -6,7 +6,7 @@
 // @see REQ-001, REQ-019
 
 import { randomUUID } from "node:crypto";
-import type { ToolDefinition } from "@vellum/provider";
+import { getDefaultModelId, type ToolDefinition } from "@vellum/provider";
 import { z } from "zod";
 import { AgentLevel } from "../../agent/level.js";
 import { AgentLoop, type AgentLoopConfig, type AgentSessionBudget } from "../../agent/loop.js";
@@ -172,7 +172,6 @@ export interface WorkerExecutionConfig {
  */
 const DEFAULT_CONFIG = {
   providerType: "anthropic",
-  model: "claude-sonnet-4-6",
 };
 
 // ============================================
@@ -217,10 +216,19 @@ export async function executeWorkerTask(
   }
 
   // Merge config with defaults
+  const providerType = config?.providerType ?? DEFAULT_CONFIG.providerType;
+  const model = config?.model ?? getDefaultModelId(providerType);
+  if (!model) {
+    return {
+      success: false,
+      error: new Error(`No default model configured for provider: ${providerType}`),
+    };
+  }
   const execConfig = {
     ...config,
-    providerType: config?.providerType ?? DEFAULT_CONFIG.providerType,
-    model: config?.model ?? DEFAULT_CONFIG.model,
+    providerType,
+    model,
+    timeout: config?.timeout ?? taskPacket.constraints?.timeout,
   };
 
   // Get worker-specific prompt (async with markdown support and fallback)

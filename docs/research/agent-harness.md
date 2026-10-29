@@ -40,3 +40,21 @@ Automatic context management is enabled for primary and worker loops. Conversion
 Focused integration tests exercise more than 50 useful turns, repeated unchanged tool results, explicit iteration/request budgets, verification failure feedback, real worker execution with mocked model streams, parent permissions, cancellation, concurrent result isolation, live model switching, synchronous prompt replies, and context round trips. These tests do not make paid provider calls and do not establish live-provider quality or a benchmark improvement. Release and complete repository checks are tracked separately in the PR.
 
 This change does not add background scheduling, autonomous self-modification, a new durable goal service, or a second context store. The improvement is the execution and verification lifecycle inside the existing assistant session.
+
+## Terminal modernization follow-up
+
+The direct built-in worker entry points still supplied a second set of implicit
+15–25 turn and three-to-five-minute limits after the main loop was modernized.
+A regression through the real `coderWorker.execute` path reproduced incomplete
+work when reviewing 26 distinct files. Those per-role defaults are now removed;
+explicit executor limits and task-packet deadlines remain active. Worker model
+defaults and generated CLI configuration now use the existing shared provider
+catalog rather than a stale hardcoded Claude model.
+
+This follows the existing DeepSeek Harness driver contract (no built-in turn
+budget, cancellation owned by the driver) without adopting its plugin framework.
+The Hermes comparison remains useful for distinguishing explicit budgets from
+natural completion, but Hermes itself does have default iteration caps. The
+source revisions linked above were re-read for this follow-up. Focused runtime
+tests cover useful work past the former cap and explicit deadline cancellation;
+they do not establish live model quality.
