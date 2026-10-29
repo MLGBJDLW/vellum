@@ -400,13 +400,13 @@ describe("YiProvider", () => {
       expect(yiLarge?.supportsTools).toBe(true);
     });
 
-    it("should include pricing info", async () => {
+    it("keeps unverified legacy Yi pricing unknown", async () => {
       const provider = new YiProvider();
       const models = await provider.listModelsAsync();
 
       const yiMedium = models.find((m) => m.id === "yi-medium");
-      expect(yiMedium?.inputPrice).toBeDefined();
-      expect(yiMedium?.outputPrice).toBeDefined();
+      expect(yiMedium?.inputPrice).toBeUndefined();
+      expect(yiMedium?.outputPrice).toBeUndefined();
     });
   });
 

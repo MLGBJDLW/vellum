@@ -85,7 +85,7 @@ export const DEFAULT_MODEL_IDS: Record<ProviderType, string> = {
   openai: "gpt-6.1-sol",
   google: "gemini-3.8-flash",
   deepseek: "deepseek-flash",
-  qwen: "qwen3.7-plus",
+  qwen: "qwen3.8-flash",
   groq: "openai/gpt-oss-120b",
   xai: "grok-4.7",
   openrouter: "openai/gpt-6.1-sol",

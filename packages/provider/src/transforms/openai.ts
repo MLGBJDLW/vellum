@@ -80,7 +80,7 @@ interface OpenAIUserMessage {
  */
 interface OpenAIAssistantMessage {
   role: "assistant";
-  content?: string | null;
+  content?: string | null | Record<string, unknown>[];
   tool_calls?: OpenAIToolCall[];
   reasoning_content?: string;
   reasoning_details?: Record<string, unknown>[];
@@ -224,6 +224,15 @@ export class OpenAITransform extends AbstractProviderTransform<
           if (item.role !== "assistant") continue;
           if (config.provider === "openrouter" && metadata.replay?.length) {
             item.reasoning_details = metadata.replay;
+          } else if (config.provider === "mistral" && metadata.replay?.length) {
+            item.content = [
+              ...metadata.replay,
+              ...(typeof item.content === "string" && item.content.length > 0
+                ? [{ type: "text", text: item.content }]
+                : []),
+            ];
+          } else if (config.provider === "groq") {
+            // Groq's reasoning is display-only; its message schema does not accept reasoning_content.
           } else if (metadata.reasoningContent !== undefined) {
             item.reasoning_content = metadata.reasoningContent;
           }

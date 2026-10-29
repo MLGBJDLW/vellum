@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnthropicProvider } from "../anthropic.js";
 import { DeepSeekProvider } from "../deepseek.js";
+import { DoubaoProvider } from "../doubao.js";
 import { GoogleProvider } from "../google.js";
+import { GroqProvider } from "../groq.js";
+import { MistralProvider } from "../mistral.js";
 import { DEFAULT_MODEL_IDS, getProviderModels, MODEL_CATALOG } from "../models/catalog.js";
 import { normalizeDiscoveredModels, updateDiscoveredModels } from "../models/discovery.js";
 import { calculateCost, getModelInfo } from "../models/index.js";
@@ -13,7 +16,10 @@ import { googleTransform } from "../transforms/google.js";
 import { openaiTransform } from "../transforms/openai.js";
 import type { CompletionParams, ProviderResponseMetadata } from "../types.js";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 const responseBody = {
   id: "resp_test",
@@ -52,7 +58,228 @@ function mockJson(body: unknown) {
   return fetch;
 }
 
+function deferred<T>() {
+  let resolve: (value: T) => void = () => {};
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe("current provider contracts", () => {
+  it.each([true, false])(
+    "sends the Doubao thinking toggle at the request root (%s)",
+    async (enabled) => {
+      const fetch = mockJson({
+        choices: [{ finish_reason: "stop", message: { role: "assistant", content: "Done" } }],
+      });
+      const provider = new DoubaoProvider();
+      await provider.initialize({ apiKey: "fixture" });
+      await provider.complete({
+        model: "doubao-seed-2-1-pro-260915",
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: { enabled },
+      });
+      const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(String(init.body)).thinking).toEqual({
+        type: enabled ? "enabled" : "disabled",
+      });
+    }
+  );
+
+  it.each([
+    [() => new OpenAIProvider(), "gpt-6.1-sol"],
+    [() => new AnthropicProvider(), "claude-sonnet-5-5"],
+  ] as const)(
+    "allows SDK default reasoning time and preserves request cancellation (%s)",
+    async (create, model) => {
+      vi.useFakeTimers();
+      const controller = new AbortController();
+      const { promise: started, resolve: signalReady } = deferred<AbortSignal>();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          (_url, init: RequestInit) =>
+            new Promise((_resolve, reject) => {
+              const signal = init.signal as AbortSignal;
+              signalReady(signal);
+              signal.addEventListener(
+                "abort",
+                () => reject(new DOMException("Aborted", "AbortError")),
+                { once: true }
+              );
+            })
+        )
+      );
+      const provider = create();
+      await provider.initialize({ apiKey: "fixture" });
+      const pending = provider
+        .complete({
+          model,
+          messages: [{ role: "user", content: "Reason" }],
+          abortSignal: controller.signal,
+        })
+        .catch((error: unknown) => error);
+      const signal = await started;
+      await vi.advanceTimersByTimeAsync(60_001);
+      const abortedAtOneMinute = signal.aborted;
+      controller.abort();
+      await pending;
+      expect(abortedAtOneMinute).toBe(false);
+      expect(signal.aborted).toBe(true);
+    }
+  );
+
+  it.each([
+    [() => new OpenAIProvider(), "gpt-6.1-sol"],
+    [() => new AnthropicProvider(), "claude-sonnet-5-5"],
+  ] as const)("keeps explicit provider timeouts (%s)", async (create, model) => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const { promise: started, resolve: signalReady } = deferred<AbortSignal>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            const signal = init.signal as AbortSignal;
+            signalReady(signal);
+            signal.addEventListener(
+              "abort",
+              () => reject(new DOMException("Aborted", "AbortError")),
+              { once: true }
+            );
+          })
+      )
+    );
+    const provider = create();
+    await provider.initialize({ apiKey: "fixture", timeout: 120_000 });
+    const pending = provider
+      .complete({
+        model,
+        messages: [{ role: "user", content: "Reason" }],
+        abortSignal: controller.signal,
+      })
+      .catch((error: unknown) => error);
+    const signal = await started;
+    await vi.advanceTimersByTimeAsync(120_001);
+    const timedOut = signal.aborted;
+    controller.abort();
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(timedOut).toBe(true);
+  });
+
+  it.each([
+    ["openai/gpt-oss-120b", { include_reasoning: true }],
+    ["qwen/qwen3.8-27b", { reasoning_format: "parsed" }],
+  ])("uses the supported Groq reasoning control for %s", async (model, format) => {
+    const fetch = mockJson({
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { role: "assistant", content: "Done", reasoning: "Work" },
+        },
+      ],
+    });
+    const provider = new GroqProvider();
+    await provider.initialize({ apiKey: "fixture" });
+    const result = await provider.complete({
+      model,
+      messages: [{ role: "user", content: "Go" }],
+      thinking: { enabled: true, reasoningEffort: "high" },
+    });
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ ...format, reasoning_effort: "high" });
+    expect(result.thinking).toBe("Work");
+    const replay = openaiTransform.transformMessages(
+      [{ role: "assistant", content: "Done", providerMetadata: result.providerMetadata }],
+      { provider: "groq", modelId: model }
+    ).data[0];
+    expect(replay).not.toHaveProperty("reasoning_content");
+  });
+
+  it("normalizes Mistral thinking chunks and replays them in the native content shape", async () => {
+    const thinking = { type: "thinking", thinking: [{ type: "text", text: "Inspect the files." }] };
+    const fetch = mockJson({
+      id: "mistral-fixture",
+      model: "mistral-medium-3-5",
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { role: "assistant", content: [thinking, { type: "text", text: "Done" }] },
+        },
+      ],
+      usage: { prompt_tokens: 2, completion_tokens: 3 },
+    });
+    const provider = new MistralProvider();
+    await provider.initialize({ apiKey: "fixture" });
+    const result = await provider.complete({
+      model: "mistral-medium-3-5",
+      messages: [{ role: "user", content: "Inspect" }],
+      thinking: { enabled: true, reasoningEffort: "high" },
+    });
+    expect(result).toMatchObject({
+      content: "Done",
+      thinking: "Inspect the files.",
+      providerMetadata: { replay: [thinking] },
+    });
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).reasoning_effort).toBe("high");
+    const replayed = openaiTransform.transformMessages(
+      [{ role: "assistant", content: result.content, providerMetadata: result.providerMetadata }],
+      { provider: "mistral", modelId: "mistral-medium-3-5" }
+    ).data[0];
+    expect(replayed).toMatchObject({ content: [thinking, { type: "text", text: "Done" }] });
+    expect(replayed).not.toHaveProperty("reasoning_content");
+  });
+
+  it("keeps mixed Mistral stream chunks out of displayed text objects", async () => {
+    const thinking = { type: "thinking", thinking: [{ type: "text", text: "Inspect." }] };
+    const chunks = [
+      {
+        choices: [
+          {
+            delta: { content: [thinking, { type: "text", text: "Result:" }] },
+            finish_reason: null,
+          },
+        ],
+      },
+      { choices: [{ delta: { content: " done" }, finish_reason: "stop" }] },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") +
+              "data: [DONE]\n\n",
+            { headers: { "content-type": "text/event-stream" } }
+          )
+      )
+    );
+    const provider = new MistralProvider();
+    await provider.initialize({ apiKey: "fixture" });
+    const events = [];
+    for await (const event of provider.stream({
+      model: "mistral-medium-3-5",
+      messages: [{ role: "user", content: "Inspect" }],
+    }))
+      events.push(event);
+    expect(
+      events
+        .filter((event) => event.type === "text")
+        .map((event) => event.content)
+        .join("")
+    ).toBe("Result: done");
+    expect(events.find((event) => event.type === "reasoning")).toMatchObject({
+      content: "Inspect.",
+    });
+    expect(events.find((event) => event.type === "provider_metadata")).toMatchObject({
+      metadata: { replay: [thinking] },
+    });
+  });
+
   it("routes GPT-6 tools through Responses and preserves tool IDs, usage and opaque reasoning", async () => {
     const fetch = mockJson(responseBody);
     const provider = new OpenAIProvider();
@@ -166,38 +393,38 @@ describe("current provider contracts", () => {
     }).rejects.toThrow("without a completion event");
   });
 
-  it.each([
-    "claude-opus-4-7",
-    "claude-opus-5-5",
-  ])("uses adaptive thinking without invalid sampling or manual budget on %s", async (model) => {
-    const fetch = mockJson({
-      id: "msg_test",
-      model,
-      role: "assistant",
-      type: "message",
-      content: [{ type: "text", text: "Done" }],
-      stop_reason: "end_turn",
-      usage: { input_tokens: 1, output_tokens: 1 },
-    });
-    const provider = new AnthropicProvider();
-    await provider.initialize({ apiKey: "sk-ant-api03-fixture" });
-    await provider.complete({
-      model,
-      messages: [{ role: "user", content: "Hello" }],
-      temperature: 0.2,
-      topP: 0.8,
-      thinking: { enabled: true, reasoningEffort: "xhigh", budgetTokens: 10_000 },
-    });
-    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    const body = JSON.parse(String(init.body));
-    expect(body).toMatchObject({
-      thinking: { type: "adaptive" },
-      output_config: { effort: "xhigh" },
-    });
-    expect(body).not.toHaveProperty("temperature");
-    expect(body).not.toHaveProperty("top_p");
-    expect(body.thinking).not.toHaveProperty("budget_tokens");
-  });
+  it.each(["claude-opus-4-7", "claude-opus-5-5"])(
+    "uses adaptive thinking without invalid sampling or manual budget on %s",
+    async (model) => {
+      const fetch = mockJson({
+        id: "msg_test",
+        model,
+        role: "assistant",
+        type: "message",
+        content: [{ type: "text", text: "Done" }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+      const provider = new AnthropicProvider();
+      await provider.initialize({ apiKey: "sk-ant-api03-fixture" });
+      await provider.complete({
+        model,
+        messages: [{ role: "user", content: "Hello" }],
+        temperature: 0.2,
+        topP: 0.8,
+        thinking: { enabled: true, reasoningEffort: "xhigh", budgetTokens: 10_000 },
+      });
+      const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+      const body = JSON.parse(String(init.body));
+      expect(body).toMatchObject({
+        thinking: { type: "adaptive" },
+        output_config: { effort: "xhigh" },
+      });
+      expect(body).not.toHaveProperty("temperature");
+      expect(body).not.toHaveProperty("top_p");
+      expect(body.thinking).not.toHaveProperty("budget_tokens");
+    }
+  );
 
   it("sends DeepSeek thinking at the JSON root and retains assistant reasoning for tool continuation", async () => {
     const fetch = mockJson({
@@ -303,6 +530,101 @@ describe("current provider contracts", () => {
 });
 
 describe("audited model catalog", () => {
+  it.each([
+    ["anthropic", () => new AnthropicProvider()],
+    ["openai", () => new OpenAIProvider()],
+    ["google", () => new GoogleProvider()],
+    ["groq", () => new GroqProvider()],
+  ] as const)("uses refreshed %s models in both adapter listing APIs", async (provider, create) => {
+    const previous = MODEL_CATALOG.get(provider);
+    if (!previous) throw new Error(`Missing catalog for ${provider}`);
+    const instance = create();
+    try {
+      const models = normalizeDiscoveredModels(provider, [
+        { id: "gpt-7-fixture", context_window: 262144 },
+      ]);
+      updateDiscoveredModels(provider, models);
+      expect(instance.listModels()).toEqual(["gpt-7-fixture"]);
+      expect(await instance.listModelsAsync()).toEqual(models);
+      expect(getModelInfo(provider, "gpt-7-fixture").contextWindow).toBe(262144);
+    } finally {
+      updateDiscoveredModels(provider, previous);
+    }
+  });
+
+  it("honors authoritative discovery capabilities and excludes non-chat model routes", () => {
+    const models = normalizeDiscoveredModels("groq", [
+      {
+        id: "openai/gpt-oss-120b",
+        context_window: 131072,
+        max_completion_tokens: 65536,
+        capabilities: { function_calling: false, vision: false },
+      },
+      { id: "whisper-large-v3" },
+      { id: "canopylabs/orpheus-v1-english" },
+      { id: "meta-llama/llama-prompt-guard-2-22m" },
+      { id: "vendor/embedding", capabilities: { completion_chat: false } },
+    ]);
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({
+      contextWindow: 131072,
+      maxOutputTokens: 65536,
+      supportsTools: false,
+    });
+  });
+
+  it("uses provider lifecycle and reasoning metadata for newly discovered models", () => {
+    const claude = normalizeDiscoveredModels("anthropic", [
+      { id: "claude-fixture-retired", lifecycle: "retired" },
+      {
+        id: "claude-fixture-new",
+        lifecycle: "active",
+        max_input_tokens: 1000000,
+        capabilities: {
+          thinking: {
+            supported: true,
+            types: { adaptive: { supported: true }, disabled: { supported: false } },
+          },
+          effort: {
+            supported: true,
+            low: { supported: true },
+            high: { supported: true },
+            max: { supported: false },
+          },
+        },
+      },
+    ]);
+    expect(claude).toHaveLength(1);
+    expect(claude[0]).toMatchObject({
+      thinkingMode: "adaptive",
+      requiresThinking: true,
+      reasoningEfforts: ["low", "high"],
+    });
+    const routed = normalizeDiscoveredModels("openrouter", [
+      { id: "vendor/new:batch", architecture: { output_modalities: ["text"] } },
+      {
+        id: "vendor/new",
+        supported_parameters: ["tools", "reasoning_effort"],
+        reasoning: {
+          mandatory: true,
+          supported_efforts: ["low", "max", "not-a-wire-effort"],
+          default_effort: "max",
+        },
+        pricing: { prompt: "0.0000001", input_cache_read: "0.00000005" },
+      },
+    ]);
+    expect(routed).toHaveLength(1);
+    expect(routed[0]).toMatchObject({
+      supportsReasoning: true,
+      supportsSampling: false,
+      requiresThinking: true,
+      reasoningEfforts: ["low", "max"],
+      defaultReasoningEffort: "max",
+      inputPrice: 0.1,
+      cacheReadsPrice: 0.05,
+    });
+  });
+
   it("keeps defaults valid, model IDs unique per provider, and retired IDs out of picker lists", () => {
     for (const [provider, models] of MODEL_CATALOG) {
       expect(new Set(models.map((model) => model.id)).size).toBe(models.length);

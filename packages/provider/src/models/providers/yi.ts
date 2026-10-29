@@ -7,8 +7,9 @@ import type { ModelInfo } from "../types.js";
 
 /**
  * Yi (01.AI) model catalog
- * Pricing: https://platform.01.ai/docs/pricing
- * Models: https://platform.01.ai/docs/models
+ * Legacy IDs retained for existing deployments. Current public documentation does
+ * not verify a price table; prices stay unknown until account discovery supplies them.
+ * Models: https://platform.lingyiwanwu.com/docs
  */
 export const YI_MODELS: ModelInfo[] = [
   {
@@ -22,8 +23,6 @@ export const YI_MODELS: ModelInfo[] = [
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.12,
-    outputPrice: 0.12,
     deprecated: false,
     description: "01.AI's flagship Yi Large model",
   },
@@ -38,8 +37,6 @@ export const YI_MODELS: ModelInfo[] = [
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.012,
-    outputPrice: 0.012,
     deprecated: false,
     description: "Faster variant of Yi Large",
   },
@@ -54,8 +51,6 @@ export const YI_MODELS: ModelInfo[] = [
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.0025,
-    outputPrice: 0.0025,
     deprecated: false,
     description: "Balanced model for cost and performance",
   },
@@ -70,8 +65,6 @@ export const YI_MODELS: ModelInfo[] = [
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.012,
-    outputPrice: 0.012,
     deprecated: false,
     description: "Extended-context Yi Medium",
   },
@@ -86,8 +79,6 @@ export const YI_MODELS: ModelInfo[] = [
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.006,
-    outputPrice: 0.006,
     deprecated: false,
     description: "Vision-enabled multimodal Yi model",
   },

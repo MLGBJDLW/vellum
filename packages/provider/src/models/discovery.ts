@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ProviderType } from "../types.js";
 import { ALL_MODELS, getModelReplacement, getProviderModels, MODEL_CATALOG } from "./catalog.js";
-import type { ModelInfo } from "./types.js";
+import { type ModelInfo, reasoningEffortSchema } from "./types.js";
 
 const recordSchema = z.record(z.string(), z.unknown());
 const record = (value: unknown): Record<string, unknown> =>
@@ -10,16 +10,20 @@ const positive = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 const price = (value: unknown): number | undefined => {
   if (typeof value !== "string" && typeof value !== "number") return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed * 1_000_000 : undefined;
+  const perMillion = Number(value) * 1_000_000;
+  return Number.isFinite(perMillion) && perMillion >= 0
+    ? Number(perMillion.toPrecision(12))
+    : undefined;
 };
+const boolean = (value: unknown): boolean | undefined =>
+  typeof value === "boolean" ? value : undefined;
 
 /** Normalize provider discovery without inventing capabilities or prices. */
 export function normalizeDiscoveredModels(provider: ProviderType, records: unknown[]): ModelInfo[] {
   const result = new Map<string, ModelInfo>();
   for (const value of records) {
     const data = record(value);
-    const rawId = data.id ?? data.name;
+    const rawId = data.id ?? data.name ?? data.key;
     if (typeof rawId !== "string" || rawId.length === 0) continue;
     const id = provider === "google" ? rawId.replace(/^models\//, "") : rawId;
     if (getModelReplacement(provider, id)) continue;
@@ -27,12 +31,25 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       (model) => model.id === id || model.aliases?.includes(id)
     );
     const capabilities = record(data.capabilities);
+    const localCapabilities = Array.isArray(data.capabilities) ? data.capabilities : undefined;
+    const thinkingTypes = record(record(capabilities.thinking).types);
+    const effortCapability = record(capabilities.effort);
     const architecture = record(data.architecture);
     const topProvider = record(data.top_provider);
     const pricing = record(data.pricing);
+    const reasoning = record(data.reasoning);
     const supported = Array.isArray(data.supported_parameters) ? data.supported_parameters : [];
     const methods = data.supportedGenerationMethods ?? data.supportedActions;
-    if (data.active === false || data.deprecated === true) continue;
+    if (data.active === false || data.deprecated === true || data.lifecycle === "retired") continue;
+    if (
+      (provider === "ollama" || provider === "lmstudio") &&
+      (data.type === "embedding" ||
+        data.type === "decision" ||
+        (localCapabilities?.includes("embedding") && !localCapabilities.includes("completion")))
+    )
+      continue;
+    // Batch products use a separate asynchronous API, not this interactive chat transport.
+    if (provider === "openrouter" && id.endsWith(":batch")) continue;
     if (Array.isArray(methods) && !methods.includes("generateContent")) continue;
     if (
       Array.isArray(architecture.output_modalities) &&
@@ -44,14 +61,29 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       (!/^(gpt-\d|o\d|chatgpt-)/.test(id) || /audio|realtime|transcribe|tts|search-api/.test(id))
     )
       continue;
-    if (provider === "mistral" && capabilities.completion_chat === false) continue;
+    if (capabilities.completion_chat === false) continue;
+    // Groq's /models endpoint also includes speech and moderation-only products.
+    if (provider === "groq" && /whisper|orpheus|prompt-guard|llama-guard|safeguard/.test(id))
+      continue;
     const contextWindow =
       positive(data.context_length) ??
+      positive(data.context_window) ??
       positive(data.max_input_tokens) ??
       positive(data.inputTokenLimit) ??
       positive(data.max_context_length) ??
       known?.contextWindow ??
       8_192;
+    const reasoningEfforts = Array.isArray(reasoning.supported_efforts)
+      ? reasoning.supported_efforts.flatMap((effort) => {
+          const parsed = reasoningEffortSchema.safeParse(effort);
+          return parsed.success ? [parsed.data] : [];
+        })
+      : effortCapability.supported === true
+        ? reasoningEffortSchema.options.filter(
+            (effort) => record(effortCapability[effort]).supported === true
+          )
+        : known?.reasoningEfforts;
+    const defaultEffort = reasoningEffortSchema.safeParse(reasoning.default_effort);
     const model: ModelInfo = {
       ...known,
       id,
@@ -70,28 +102,59 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       contextWindow,
       maxOutputTokens:
         positive(topProvider.max_completion_tokens) ??
+        positive(data.max_completion_tokens) ??
         positive(data.max_tokens) ??
         positive(data.outputTokenLimit) ??
         known?.maxOutputTokens,
       supportsTools:
-        supported.includes("tools") ||
-        capabilities.function_calling === true ||
-        record(capabilities.tool_use).supported === true ||
-        known?.supportsTools === true,
+        boolean(capabilities.function_calling) ??
+        boolean(capabilities.trained_for_tool_use) ??
+        boolean(record(capabilities.tool_use).supported) ??
+        (localCapabilities ? localCapabilities.includes("tools") : undefined) ??
+        (Array.isArray(data.supported_parameters)
+          ? supported.includes("tools")
+          : known?.supportsTools),
       supportsVision: Array.isArray(architecture.input_modalities)
         ? architecture.input_modalities.includes("image")
-        : capabilities.vision === true ||
-          record(capabilities.image_input).supported === true ||
-          known?.supportsVision === true,
+        : (boolean(capabilities.vision) ??
+          (localCapabilities ? localCapabilities.includes("vision") : undefined) ??
+          boolean(record(capabilities.image_input).supported) ??
+          known?.supportsVision === true),
       supportsReasoning:
-        supported.includes("reasoning") ||
-        record(capabilities.thinking).supported === true ||
-        known?.supportsReasoning === true,
+        boolean(record(capabilities.thinking).supported) ??
+        (localCapabilities ? localCapabilities.includes("thinking") : undefined) ??
+        (Array.isArray(data.supported_parameters)
+          ? supported.includes("reasoning") || supported.includes("reasoning_effort")
+          : known?.supportsReasoning === true),
       supportsStreaming: true,
-      supportsPromptCache: known?.supportsPromptCache ?? false,
-      deprecated: false,
+      supportsPromptCache:
+        price(pricing.input_cache_read) !== undefined ||
+        price(pricing.input_cache_write) !== undefined ||
+        known?.supportsPromptCache === true,
+      ...(Array.isArray(data.supported_parameters)
+        ? { supportsSampling: supported.includes("temperature") || supported.includes("top_p") }
+        : {}),
+      thinkingMode:
+        record(thinkingTypes.adaptive).supported === true
+          ? "adaptive"
+          : record(thinkingTypes.enabled).supported === true
+            ? "budget"
+            : known?.thinkingMode,
+      reasoningEfforts,
+      defaultReasoningEffort: defaultEffort.success
+        ? defaultEffort.data
+        : known?.defaultReasoningEffort,
+      requiresThinking:
+        boolean(reasoning.mandatory) ??
+        (record(capabilities.thinking).supported === true &&
+        record(thinkingTypes.disabled).supported === false
+          ? true
+          : known?.requiresThinking),
+      deprecated: data.lifecycle === "deprecated",
       inputPrice: price(pricing.prompt) ?? known?.inputPrice,
       outputPrice: price(pricing.completion) ?? known?.outputPrice,
+      cacheReadsPrice: price(pricing.input_cache_read) ?? known?.cacheReadsPrice,
+      cacheWritesPrice: price(pricing.input_cache_write) ?? known?.cacheWritesPrice,
       description:
         known?.description ??
         "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",

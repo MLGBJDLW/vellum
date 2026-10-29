@@ -7,8 +7,9 @@ import type { ModelInfo } from "../types.js";
 
 /**
  * Baichuan model catalog
- * Pricing: https://platform.baichuan-ai.com/docs/pricing
- * Models: https://platform.baichuan-ai.com/docs/models
+ * Legacy IDs retained for existing deployments. The public portal requires business
+ * access and does not establish current prices; confirm limits in the account console.
+ * Models: https://platform.baichuan-ai.com/docs-v2/api
  */
 export const BAICHUAN_MODELS: ModelInfo[] = [
   {
@@ -22,10 +23,8 @@ export const BAICHUAN_MODELS: ModelInfo[] = [
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.1,
-    outputPrice: 0.1,
     deprecated: false,
-    description: "Baichuan's latest model",
+    description: "Legacy Baichuan 4; confirm current access and limits in the provider console.",
   },
   {
     id: "Baichuan3-Turbo",
@@ -38,8 +37,6 @@ export const BAICHUAN_MODELS: ModelInfo[] = [
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.012,
-    outputPrice: 0.012,
     deprecated: false,
     description: "Fast, efficient Baichuan 3 model",
   },
@@ -54,8 +51,6 @@ export const BAICHUAN_MODELS: ModelInfo[] = [
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.024,
-    outputPrice: 0.024,
     deprecated: false,
     description: "Extended-context Baichuan 3 Turbo",
   },
@@ -70,8 +65,6 @@ export const BAICHUAN_MODELS: ModelInfo[] = [
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.008,
-    outputPrice: 0.008,
     deprecated: false,
     description: "Previous generation turbo model",
   },
@@ -86,8 +79,6 @@ export const BAICHUAN_MODELS: ModelInfo[] = [
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0.016,
-    outputPrice: 0.016,
     deprecated: false,
     description: "Extended-context Baichuan 2 Turbo",
   },

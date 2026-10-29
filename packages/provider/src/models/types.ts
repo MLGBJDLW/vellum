@@ -75,8 +75,8 @@ export const modelInfoSchema = z.object({
   thinkingMode: z.enum(["adaptive", "budget"]).optional(),
   /** Some current models always reason, even when the UI toggle is off. */
   requiresThinking: z.boolean().optional(),
-  /** Whether the model supports function/tool calling */
-  supportsTools: z.boolean().default(true),
+  /** Tool support; omitted means the endpoint has not reported the capability. */
+  supportsTools: z.boolean().optional(),
   /** Whether the model can process images */
   supportsVision: z.boolean().default(false),
   /** Whether the model supports reasoning/thinking mode */

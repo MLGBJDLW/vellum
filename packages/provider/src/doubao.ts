@@ -1,4 +1,5 @@
 import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+
 /**
  * Doubao Provider (ByteDance/Volcengine)
  *
@@ -8,9 +9,10 @@ import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
  * @module @vellum/provider/doubao
  */
 
+import { getModelInfo } from "./models/index.js";
 import { DOUBAO_MODELS } from "./models/providers/doubao.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
-import type { ModelInfo } from "./types.js";
+import type { CompletionParams, ModelInfo } from "./types.js";
 
 // =============================================================================
 // Doubao Provider Implementation
@@ -37,6 +39,14 @@ import type { ModelInfo } from "./types.js";
  * ```
  */
 export class DoubaoProvider extends OpenAICompatibleProvider {
+  protected override buildExtraBody(params: CompletionParams): Record<string, unknown> | undefined {
+    if (!getModelInfo("doubao", params.model).supportsReasoning) return params.extraBody;
+    return {
+      ...params.extraBody,
+      thinking: { type: params.thinking?.enabled ? "enabled" : "disabled" },
+    };
+  }
+
   /**
    * Default base URL for Doubao API (Volcengine ARK)
    * @see https://www.volcengine.com/docs/82379/1099334

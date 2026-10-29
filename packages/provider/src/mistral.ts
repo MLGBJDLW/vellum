@@ -39,6 +39,34 @@ import type { ModelInfo } from "./types.js";
  * ```
  */
 export class MistralProvider extends OpenAICompatibleProvider {
+  protected override normalizeAssistantContent(content: unknown): {
+    text: string;
+    thinking?: string;
+  } {
+    if (!Array.isArray(content)) return super.normalizeAssistantContent(content);
+    let text = "";
+    let thinking = "";
+    for (const chunk of content) {
+      if (!chunk || typeof chunk !== "object") continue;
+      if (chunk.type === "text" && typeof chunk.text === "string") text += chunk.text;
+      if (chunk.type === "thinking" && Array.isArray(chunk.thinking)) {
+        for (const part of chunk.thinking) {
+          if (part?.type === "text" && typeof part.text === "string") thinking += part.text;
+        }
+      }
+    }
+    return { text, ...(thinking ? { thinking } : {}) };
+  }
+
+  protected override getThinkingReplay(content: unknown): Record<string, unknown>[] | undefined {
+    if (!Array.isArray(content)) return undefined;
+    const blocks = content.filter(
+      (chunk): chunk is Record<string, unknown> =>
+        chunk !== null && typeof chunk === "object" && chunk.type === "thinking"
+    );
+    return blocks.length > 0 ? blocks : undefined;
+  }
+
   /**
    * Default base URL for Mistral API
    */

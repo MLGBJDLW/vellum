@@ -59,26 +59,25 @@ function jsonResponse(body: unknown): Response {
 }
 
 describe("OpenRouter reasoning replay", () => {
-  it.each([
-    "openai/gpt-6.1-sol",
-    "anthropic/claude-opus-5.5",
-    "google/gemini-4-argon",
-  ])("echoes opaque reasoning on the next %s tool turn without requiring visible text", async (model) => {
-    const fetch = vi.fn(async () => jsonResponse(response(model, [encrypted])));
-    vi.stubGlobal("fetch", fetch);
-    const provider = new OpenRouterProvider();
-    await provider.initialize({ apiKey: "sk-or-test-fixture" });
+  it.each(["openai/gpt-6.1-sol", "anthropic/claude-opus-5.5", "google/gemini-4-argon"])(
+    "echoes opaque reasoning on the next %s tool turn without requiring visible text",
+    async (model) => {
+      const fetch = vi.fn(async () => jsonResponse(response(model, [encrypted])));
+      vi.stubGlobal("fetch", fetch);
+      const provider = new OpenRouterProvider();
+      await provider.initialize({ apiKey: "sk-or-test-fixture" });
 
-    const result = await provider.complete({ model, messages: followUp().slice(0, 1) });
-    await provider.complete({ model, messages: followUp(result.providerMetadata) });
+      const result = await provider.complete({ model, messages: followUp().slice(0, 1) });
+      await provider.complete({ model, messages: followUp(result.providerMetadata) });
 
-    const [, init] = fetch.mock.calls[1] as unknown as [string, RequestInit];
-    const body = JSON.parse(String(init.body));
-    expect(body.messages[1].reasoning_details).toEqual([encrypted]);
-    expect(body.messages[1]).not.toHaveProperty("reasoning_content");
-    expect(body.messages[2]).toMatchObject({ role: "tool", tool_call_id: toolCall.id });
-    expect(result.thinking ?? "").not.toContain(encrypted.data);
-  });
+      const [, init] = fetch.mock.calls[1] as unknown as [string, RequestInit];
+      const body = JSON.parse(String(init.body));
+      expect(body.messages[1].reasoning_details).toEqual([encrypted]);
+      expect(body.messages[1]).not.toHaveProperty("reasoning_content");
+      expect(body.messages[2]).toMatchObject({ role: "tool", tool_call_id: toolCall.id });
+      expect(result.thinking ?? "").not.toContain(encrypted.data);
+    }
+  );
 
   it("retains streamed signed, summarized and encrypted chunks in their original sequence", async () => {
     const model = "anthropic/claude-opus-5.5";

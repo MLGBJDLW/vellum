@@ -79,7 +79,6 @@ const DEFAULT_MODEL_INFO: ModelInfo = {
   provider: "openai", // Default provider
   contextWindow: 128000, // Reasonable default
   maxOutputTokens: 8192,
-  supportsTools: true,
   supportsVision: false,
   supportsReasoning: false,
   supportsStreaming: true,
