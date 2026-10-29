@@ -4,8 +4,9 @@
  * @module tui/components/Messages/__tests__/CodeBlock.test
  */
 
-import { render } from "ink-testing-library";
-import { describe, expect, it } from "vitest";
+import { cleanup, render } from "ink-testing-library";
+import { act } from "react";
+import { afterEach, describe, expect, it } from "vitest";
 import { translate } from "../../../i18n/index.js";
 import { ThemeProvider } from "../../../theme/index.js";
 import { CodeBlock } from "../CodeBlock.js";
@@ -14,8 +15,19 @@ import { CodeBlock } from "../CodeBlock.js";
  * Wrap component with ThemeProvider for testing.
  */
 function renderWithTheme(ui: React.ReactElement) {
-  return render(<ThemeProvider>{ui}</ThemeProvider>);
+  let screen: ReturnType<typeof render> | undefined;
+  act(() => {
+    screen = render(<ThemeProvider>{ui}</ThemeProvider>);
+  });
+  if (!screen) throw new Error("Test renderer did not initialize");
+  return screen;
 }
+
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+  });
+});
 
 describe("CodeBlock", () => {
   describe("basic rendering", () => {

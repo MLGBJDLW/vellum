@@ -39,7 +39,8 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 // Mock safety module
-vi.mock("../../git/safety.js", () => ({
+vi.mock("../../git/safety.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../git/safety.js")>()),
   getSanitizedEnv: vi.fn(() => ({})),
   getNoGpgFlags: vi.fn(() => ["-c", "commit.gpgsign=false"]),
 }));

@@ -17,9 +17,10 @@
  * @module tui/components/Tools/__tests__/PermissionDialog.test
  */
 
-import { render } from "ink-testing-library";
+import { cleanup, render } from "ink-testing-library";
 import type React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { act } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ToolExecution } from "../../../context/ToolsContext.js";
 import { ThemeProvider } from "../../../theme/index.js";
 import { PermissionDialog, type RiskLevel } from "../PermissionDialog.js";
@@ -32,8 +33,19 @@ import { PermissionDialog, type RiskLevel } from "../PermissionDialog.js";
  * Wrap component with ThemeProvider for testing.
  */
 function renderWithTheme(ui: React.ReactElement) {
-  return render(<ThemeProvider>{ui}</ThemeProvider>);
+  let screen: ReturnType<typeof render> | undefined;
+  act(() => {
+    screen = render(<ThemeProvider>{ui}</ThemeProvider>);
+  });
+  if (!screen) throw new Error("Test renderer did not initialize");
+  return screen;
 }
+
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+  });
+});
 
 /**
  * Create a test tool execution with default values.

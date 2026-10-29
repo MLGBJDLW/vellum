@@ -5,10 +5,10 @@
  */
 
 import { getIcons } from "@vellum/shared";
-import { render } from "ink-testing-library";
+import { cleanup, render } from "ink-testing-library";
 import type React from "react";
 import { act } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { Message } from "../../../context/MessagesContext.js";
 import { ThemeProvider } from "../../../theme/index.js";
 import { MessageList } from "../MessageList.js";
@@ -20,8 +20,19 @@ const icons = getIcons();
  * Wrapper to provide theme context for tests
  */
 function renderWithTheme(element: React.ReactElement) {
-  return render(<ThemeProvider>{element}</ThemeProvider>);
+  let screen: ReturnType<typeof render> | undefined;
+  act(() => {
+    screen = render(<ThemeProvider>{element}</ThemeProvider>);
+  });
+  if (!screen) throw new Error("Test renderer did not initialize");
+  return screen;
 }
+
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+  });
+});
 
 /**
  * Create a test message with defaults
