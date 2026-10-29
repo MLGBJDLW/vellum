@@ -24,9 +24,10 @@ import {
   type PROVIDER_INFO,
   OnboardingWizard as WizardCore,
 } from "@vellum/core";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { useInput } from "../hooks/useTerminalInput.js";
 import { useTerminalDimensions } from "../hooks/useTerminalSize.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
@@ -221,11 +222,15 @@ function CredentialSetupContent({
   onInputChange,
   inputValue,
   error,
+  onSubmit,
+  disabled,
 }: {
   provider: OnboardingProvider;
   onInputChange: (value: string) => void;
   inputValue: string;
   error: string | null;
+  onSubmit: (value: string) => void;
+  disabled: boolean;
 }): React.ReactElement {
   const { theme } = useTheme();
   return (
@@ -233,7 +238,13 @@ function CredentialSetupContent({
       <Text>{formatCredentialPrompt(provider)}</Text>
       <Box marginTop={1}>
         <Text color={theme.colors.info}>API Key: </Text>
-        <TextInput value={inputValue} onChange={onInputChange} mask="*" />
+        <TextInput
+          value={inputValue}
+          onChange={onInputChange}
+          onSubmit={onSubmit}
+          disabled={disabled}
+          mask="*"
+        />
       </Box>
       {error && (
         <Box marginTop={1}>
@@ -489,96 +500,99 @@ export function OnboardingWizard({
   );
 
   // Handle step submission
-  const handleSubmit = useCallback(async () => {
-    setState((s) => ({ ...s, isLoading: true, error: null }));
+  const handleSubmit = useCallback(
+    async (submittedInput = state.input) => {
+      setState((s) => ({ ...s, isLoading: true, error: null }));
 
-    try {
-      switch (state.step) {
-        case "welcome": {
-          const result = await wizard.executeWelcome();
-          if (result.next) {
-            setState((s) => ({ ...s, step: "provider-select", input: "", isLoading: false }));
+      try {
+        switch (state.step) {
+          case "welcome": {
+            const result = await wizard.executeWelcome();
+            if (result.next) {
+              setState((s) => ({ ...s, step: "provider-select", input: "", isLoading: false }));
+            }
+            break;
           }
-          break;
-        }
 
-        case "provider-select": {
-          // Provider selection is now handled by handleProviderSelect
-          // This case handles Enter when no selection made (use default)
-          const result = await wizard.executeProviderSelect("anthropic");
-          if (result.success && result.next) {
-            setState((s) => ({
-              ...s,
-              step: "credential-setup",
-              input: "",
-              isLoading: false,
-              selectedProvider: (result.data?.provider as OnboardingProvider) || "anthropic",
-            }));
-          } else if (result.error) {
-            setState((s) => ({ ...s, error: result.error || null, isLoading: false }));
+          case "provider-select": {
+            // Provider selection is now handled by handleProviderSelect
+            // This case handles Enter when no selection made (use default)
+            const result = await wizard.executeProviderSelect("anthropic");
+            if (result.success && result.next) {
+              setState((s) => ({
+                ...s,
+                step: "credential-setup",
+                input: "",
+                isLoading: false,
+                selectedProvider: (result.data?.provider as OnboardingProvider) || "anthropic",
+              }));
+            } else if (result.error) {
+              setState((s) => ({ ...s, error: result.error || null, isLoading: false }));
+            }
+            break;
           }
-          break;
-        }
 
-        case "credential-setup": {
-          const source = getRecommendedSource();
-          const result = await wizard.executeCredentialSetup(state.input, source);
-          if (result.success && result.next) {
-            setState((s) => ({
-              ...s,
-              step: "complete",
-              selectedMode: "orch",
-              input: "",
-              isLoading: false,
-              credentialsConfigured: (result.data?.saved as boolean) ?? false,
-            }));
-          } else if (result.back) {
-            setState((s) => ({ ...s, step: "provider-select", input: "", isLoading: false }));
-          } else if (result.error) {
-            setState((s) => ({ ...s, error: result.error || null, isLoading: false }));
+          case "credential-setup": {
+            const source = getRecommendedSource();
+            const result = await wizard.executeCredentialSetup(submittedInput, source);
+            if (result.success && result.next) {
+              setState((s) => ({
+                ...s,
+                step: "complete",
+                selectedMode: "orch",
+                input: "",
+                isLoading: false,
+                credentialsConfigured: (result.data?.saved as boolean) ?? false,
+              }));
+            } else if (result.back) {
+              setState((s) => ({ ...s, step: "provider-select", input: "", isLoading: false }));
+            } else if (result.error) {
+              setState((s) => ({ ...s, error: result.error || null, isLoading: false }));
+            }
+            break;
           }
-          break;
-        }
 
-        case "mode-select": {
-          const result = await wizard.executeModeSelect(state.input || "1");
-          if (result.success && result.next) {
-            setState((s) => ({
-              ...s,
-              step: "complete",
-              input: "",
-              isLoading: false,
-              selectedMode: (result.data?.mode as string) || "orch",
-            }));
-          } else if (result.back) {
-            setState((s) => ({ ...s, step: "credential-setup", input: "", isLoading: false }));
-          } else if (result.error) {
-            setState((s) => ({ ...s, error: result.error || null, isLoading: false }));
+          case "mode-select": {
+            const result = await wizard.executeModeSelect(state.input || "1");
+            if (result.success && result.next) {
+              setState((s) => ({
+                ...s,
+                step: "complete",
+                input: "",
+                isLoading: false,
+                selectedMode: (result.data?.mode as string) || "orch",
+              }));
+            } else if (result.back) {
+              setState((s) => ({ ...s, step: "credential-setup", input: "", isLoading: false }));
+            } else if (result.error) {
+              setState((s) => ({ ...s, error: result.error || null, isLoading: false }));
+            }
+            break;
           }
-          break;
-        }
 
-        case "complete": {
-          await wizard.executeComplete();
-          await wizard.saveConfig();
+          case "complete": {
+            await wizard.executeComplete();
+            await wizard.saveConfig();
 
-          // Fire completion callback - parent component handles transition
-          onComplete?.({
-            provider: state.selectedProvider || "anthropic",
-            mode: state.selectedMode || "orch",
-            credentialsConfigured: state.credentialsConfigured,
-          });
-          break;
+            // Fire completion callback - parent component handles transition
+            onComplete?.({
+              provider: state.selectedProvider || "anthropic",
+              mode: state.selectedMode || "orch",
+              credentialsConfigured: state.credentialsConfigured,
+            });
+            break;
+          }
         }
+      } catch (err) {
+        setState((s) => ({
+          ...s,
+          error: err instanceof Error ? err.message : "An error occurred",
+          isLoading: false,
+        }));
       }
-    } catch (err) {
-      setState((s) => ({
-        ...s,
-        error: err instanceof Error ? err.message : "An error occurred",
-        isLoading: false,
-      }));
-    }
-  }, [state, wizard, onComplete]);
+    },
+    [state, wizard, onComplete]
+  );
 
   // Handle keyboard input
   useInput(
@@ -597,7 +611,12 @@ export function OnboardingWizard({
         if (key.return) {
           // Selectors own Enter. Handling it twice overwrites the chosen provider
           // with the default and races the wizard's persisted state.
-          if (state.step === "provider-select" || state.step === "mode-select") return;
+          if (
+            state.step === "provider-select" ||
+            state.step === "mode-select" ||
+            state.step === "credential-setup"
+          )
+            return;
           handleSubmit();
           return;
         }
@@ -634,6 +653,8 @@ export function OnboardingWizard({
             onInputChange={handleInputChange}
             inputValue={state.input}
             error={state.error}
+            onSubmit={handleSubmit}
+            disabled={state.isLoading}
           />
         );
 

@@ -7,9 +7,10 @@
  * @module tui/components/LspSetupPanel
  */
 
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
+import { useInput } from "../hooks/useTerminalInput.js";
 import { useTheme } from "../theme/index.js";
 
 // =============================================================================

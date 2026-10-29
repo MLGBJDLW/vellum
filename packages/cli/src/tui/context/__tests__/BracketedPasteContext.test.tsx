@@ -395,21 +395,27 @@ describe("BracketedPasteContext", () => {
     });
 
     it("signal handler cleanup disables paste mode", () => {
-      render(
-        <TestWrapper>
-          <Text>test</Text>
-        </TestWrapper>
-      );
+      const wasTTY = process.stdout.isTTY;
+      process.stdout.isTTY = true;
+      try {
+        render(
+          <TestWrapper>
+            <Text>test</Text>
+          </TestWrapper>
+        );
 
-      // Get a SIGINT handler if registered
-      const sigintHandlers = processListeners.get("SIGINT");
-      if (sigintHandlers && sigintHandlers.size > 0) {
-        writtenData = [];
-        const handler = Array.from(sigintHandlers)[0];
-        handler?.();
+        // Get a SIGINT handler if registered
+        const sigintHandlers = processListeners.get("SIGINT");
+        if (sigintHandlers && sigintHandlers.size > 0) {
+          writtenData = [];
+          const handler = Array.from(sigintHandlers)[0];
+          handler?.();
 
-        // Should have written disable sequence
-        expect(writtenData.some((d) => d.includes("\x1b[?2004l"))).toBe(true);
+          // Should have written disable sequence
+          expect(writtenData.some((d) => d.includes("\x1b[?2004l"))).toBe(true);
+        }
+      } finally {
+        process.stdout.isTTY = wasTTY;
       }
     });
   });

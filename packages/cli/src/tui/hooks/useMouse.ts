@@ -11,16 +11,16 @@
  * @module tui/hooks/useMouse
  */
 
+import { useStdin } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   disableMouseTracking,
   enableMouseTracking,
-  isMouseSequence,
   type MouseEvent,
-  parseMouseEvent,
 } from "../utils/mouse-parser.js";
 import { getNoFlickerConfig } from "../utils/no-flicker.js";
+import { subscribeTerminalInput } from "../utils/terminal-input.js";
 
 // =============================================================================
 // Types
@@ -98,6 +98,7 @@ function resolveMode(
  * ```
  */
 export function useMouse(options: UseMouseOptions = {}): UseMouseReturn {
+  const { stdin } = useStdin();
   const {
     mode: requestedMode = "full",
     enabled: enabledOverride,
@@ -156,23 +157,7 @@ export function useMouse(options: UseMouseOptions = {}): UseMouseReturn {
     enableMouseTracking(process.stdout, effectiveMode);
     setIsActive(true);
 
-    // ── Stdin data handler ───────────────────────────────────────────────
-    // We need to intercept mouse sequences BEFORE Ink's handler.
-    // Node streams call listeners in registration order, and we prepend
-    // via prependListener so our handler runs first.
-    // To prevent Ink from seeing the mouse data, we temporarily pause stdin,
-    // then resume on next tick for non-mouse data.
-
-    const onData = (data: Buffer): void => {
-      const str = data.toString("utf-8");
-
-      // Fast path: not a mouse sequence → let it pass to Ink
-      if (!isMouseSequence(str)) return;
-
-      // It's a mouse sequence — parse and dispatch
-      const event = parseMouseEvent(str);
-      if (!event) return;
-
+    const onMouse = (event: MouseEvent): void => {
       // Update position
       setLastPosition({ col: event.col, row: event.row });
 
@@ -200,8 +185,7 @@ export function useMouse(options: UseMouseOptions = {}): UseMouseReturn {
       }
     };
 
-    // Prepend so we run before Ink's listener
-    process.stdin.prependListener("data", onData);
+    const unsubscribe = subscribeTerminalInput(stdin, { onMouse });
 
     // ── Process exit cleanup ─────────────────────────────────────────────
     const onExit = (): void => {
@@ -217,7 +201,7 @@ export function useMouse(options: UseMouseOptions = {}): UseMouseReturn {
 
     // ── Teardown ─────────────────────────────────────────────────────────
     return () => {
-      process.stdin.removeListener("data", onData);
+      unsubscribe();
       process.removeListener("exit", onExit);
       process.removeListener("SIGINT", onExit);
       process.removeListener("SIGTERM", onExit);
@@ -228,7 +212,7 @@ export function useMouse(options: UseMouseOptions = {}): UseMouseReturn {
       }
       setIsActive(false);
     };
-  }, [isEnabled, effectiveMode]);
+  }, [isEnabled, effectiveMode, stdin]);
 
   return { isActive, lastPosition, setEnabled };
 }

@@ -13,11 +13,12 @@
 
 import { type CredentialRef, type CredentialSource, getCredentialEnvVars } from "@vellum/core";
 import { getSupportedProviders } from "@vellum/provider";
-import { Box, render, Text, useApp, useInput } from "ink";
+import { Box, render, Text, useApp } from "ink";
 import { useCallback, useEffect, useState } from "react";
 import { createCompatStdout } from "../tui/buffered-stdout.js";
 import { TextInput } from "../tui/components/Input/TextInput.js";
 import { BracketedPasteProvider } from "../tui/context/BracketedPasteContext.js";
+import { useInput } from "../tui/hooks/useTerminalInput.js";
 import { createCredentialManager } from "./auth.js";
 
 // =============================================================================
@@ -557,11 +558,11 @@ export function renderCredentialsRemove(provider: string): void {
 // =============================================================================
 
 export {
-  CredentialsApp,
-  ListCredentials,
   AddCredential,
-  RemoveCredential,
+  CredentialsApp,
   createCredentialManager,
-  SUPPORTED_PROVIDERS,
+  ListCredentials,
   PROVIDER_ENV_VARS,
+  RemoveCredential,
+  SUPPORTED_PROVIDERS,
 };

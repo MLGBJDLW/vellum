@@ -9,9 +9,10 @@
 
 import type { MemoryEntry, MemoryEntryType } from "@vellum/core";
 import { getIcons } from "@vellum/shared";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useInput } from "../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { isEndKey, isHomeKey } from "../types/ink-extended.js";
@@ -212,6 +213,7 @@ function MemoryDetails({ entry, width }: MemoryDetailsProps): React.JSX.Element 
 
       <Box flexDirection="column" marginLeft={1}>
         {contentLines.map((line, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
           <Text key={`${entry.key}-line-${i}`} wrap="truncate">
             {truncate(line, width - 6)}
           </Text>

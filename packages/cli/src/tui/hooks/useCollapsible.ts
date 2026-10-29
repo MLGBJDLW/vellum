@@ -7,8 +7,8 @@
  * @module tui/hooks/useCollapsible
  */
 
-import { useInput } from "ink";
 import { useCallback, useEffect, useState } from "react";
+import { useInput } from "./useTerminalInput.js";
 
 // =============================================================================
 // Types

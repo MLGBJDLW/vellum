@@ -7,8 +7,9 @@
  * @module tui/components/Input/Autocomplete
  */
 
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useInput } from "../../hooks/useTerminalInput.js";
 import {
   type FuzzyResult,
   fuzzySearch,
@@ -305,10 +306,12 @@ function HighlightedOption({
     <Text>
       {segments.map((segment, index) =>
         segment.highlighted ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
           <Text key={`${index}-${segment.text}`} color={highlightColor} bold>
             {segment.text}
           </Text>
         ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Stateless text cells are identified by their position, including repeated text.
           <Text key={`${index}-${segment.text}`} color={normalColor}>
             {segment.text}
           </Text>
@@ -552,7 +555,7 @@ function AutocompleteComponent({
         const highlights = item.highlights ?? [];
 
         return (
-          <Box key={`${opt.name}-${displayIdx}`} flexDirection="row">
+          <Box key={opt.name} flexDirection="row">
             {isSelected ? (
               <Text inverse>
                 <Text color={highlightColor} bold>

@@ -8,10 +8,11 @@
  * @module tui/components/Input/EnhancedCommandInput
  */
 
-import { Box, useInput } from "ink";
+import { Box } from "ink";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useInputHistory } from "../../hooks/useInputHistory.js";
 import { useMentionAutocomplete } from "../../hooks/useMentionAutocomplete.js";
+import { useInput } from "../../hooks/useTerminalInput.js";
 import type { AutocompleteOption } from "./Autocomplete.js";
 import { Autocomplete } from "./Autocomplete.js";
 import { MentionAutocomplete } from "./MentionAutocomplete.js";

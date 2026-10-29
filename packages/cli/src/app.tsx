@@ -40,7 +40,7 @@ import {
 } from "@vellum/core";
 import { getProviderModels } from "@vellum/provider";
 import { createId } from "@vellum/shared";
-import { Box, Text, useApp as useInkApp, useInput, useStdout } from "ink";
+import { Box, Text, useApp as useInkApp, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DefaultContextProvider } from "./commands/index.js";
 import {
@@ -191,11 +191,7 @@ import {
   initializeEnterprise,
   shutdownEnterprise,
 } from "./tui/enterprise-integration.js";
-import {
-  type PersistenceStatus,
-  usePersistence,
-  usePersistenceShortcuts,
-} from "./tui/hooks/index.js";
+import { type PersistenceStatus, usePersistence } from "./tui/hooks/index.js";
 import { useAlternateBuffer } from "./tui/hooks/useAlternateBuffer.js";
 import { useBacktrack } from "./tui/hooks/useBacktrack.js";
 import { useCopyMode } from "./tui/hooks/useCopyMode.js";
@@ -210,6 +206,7 @@ import { useProviderStatus } from "./tui/hooks/useProviderStatus.js";
 import { isScreenReaderEnabled, useScreenReader } from "./tui/hooks/useScreenReader.js";
 import { type SidebarContent, useSidebarPanelData } from "./tui/hooks/useSidebarPanelData.js";
 import { useSnapshots } from "./tui/hooks/useSnapshots.js";
+import { useInput } from "./tui/hooks/useTerminalInput.js";
 import { useTerminalDimensions } from "./tui/hooks/useTerminalSize.js";
 import { useToolApprovalController } from "./tui/hooks/useToolApprovalController.js";
 import type { VimMode } from "./tui/hooks/useVim.js";
@@ -1671,15 +1668,6 @@ function AppContent({
     return () => setPersistenceRef(null);
   }, [persistence]);
 
-  // Initialize persistence keyboard shortcuts
-  usePersistenceShortcuts({
-    persistence,
-    enabled: true,
-    onSave: () => announce("Session saved"),
-    onCheckpointCreated: (id) => announce(`Checkpoint: ${id.slice(0, 8)}`),
-    onError: (error) => notifyError(error),
-  });
-
   // ==========================================================================
   // FIX 4: Real Todo and Memory Data
   // ==========================================================================
@@ -2917,28 +2905,31 @@ function AppContent({
     [addMessage, clearMessages, clearSession]
   );
 
-  const handlePromptSubmit = useCallback(async () => {
-    if (!interactivePrompt) {
-      return;
-    }
+  const handlePromptSubmit = useCallback(
+    async (submittedValue: string) => {
+      if (!interactivePrompt) {
+        return;
+      }
 
-    const prompt = interactivePrompt;
-    const input = promptValue.trim();
-    const resolvedValue = input === "" ? (prompt.defaultValue ?? "") : input;
+      const prompt = interactivePrompt;
+      const input = submittedValue.trim();
+      const resolvedValue = input === "" ? (prompt.defaultValue ?? "") : input;
 
-    setInteractivePrompt(null);
-    setPromptValue("");
+      setInteractivePrompt(null);
+      setPromptValue("");
 
-    try {
-      const result = await prompt.handler(resolvedValue);
-      await handleCommandResult(result);
-    } catch (error) {
-      addMessage({
-        role: "assistant",
-        content: `[x] ${error instanceof Error ? error.message : String(error)}`,
-      });
-    }
-  }, [interactivePrompt, promptValue, handleCommandResult, addMessage]);
+      try {
+        const result = await prompt.handler(resolvedValue);
+        await handleCommandResult(result);
+      } catch (error) {
+        addMessage({
+          role: "assistant",
+          content: `[x] ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    },
+    [interactivePrompt, handleCommandResult, addMessage]
+  );
 
   const handlePromptCancel = useCallback(() => {
     if (!interactivePrompt) {
@@ -3093,7 +3084,7 @@ function AppContent({
     }
 
     // Ctrl+C - cancel operation when loading; otherwise exit
-    if (key.ctrl && inputChar === "c") {
+    if (key.ctrl && !key.shift && !key.meta && inputChar === "c") {
       if (isLoading && cancellationRef.current) {
         cancellationRef.current.cancel("user_ctrl_c");
         setIsLoading(false);
@@ -4164,7 +4155,7 @@ interface AppContentViewProps {
     mode: string;
     credentialsConfigured: boolean;
   }) => void;
-  readonly handlePromptSubmit: () => void;
+  readonly handlePromptSubmit: (value: string) => void;
   readonly handlePromptCancel: () => void;
   readonly handlePromptSelectOption: (option: string) => Promise<void>;
   readonly handleReject: () => void;

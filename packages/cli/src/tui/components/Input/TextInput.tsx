@@ -8,11 +8,14 @@
  */
 
 import type { Key } from "ink";
-import { Box, Text, useInput } from "ink";
-import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Box, Text, useStdin } from "ink";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import stripAnsi from "strip-ansi";
 import { useAnimationControls } from "../../context/AnimationContext.js";
 import { usePasteHandler } from "../../context/BracketedPasteContext.js";
+import { useInput } from "../../hooks/useTerminalInput.js";
 import { useTheme } from "../../theme/index.js";
+import { getCurrentTerminalKey, subscribeTerminalInput } from "../../utils/terminal-input.js";
 import { HighlightedText } from "./HighlightedText.js";
 
 // =============================================================================
@@ -71,26 +74,22 @@ function insertAt(str: string, index: number, char: string): string {
 /**
  * Delete a character at a specific position in a string.
  */
-function deleteAt(str: string, index: number): string {
-  if (index <= 0 || index > str.length) return str;
-  return str.slice(0, index - 1) + str.slice(index);
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+function previousCharacter(str: string, index: number): number {
+  return graphemes.segment(str).containing(Math.max(0, index - 1))?.index ?? 0;
+}
+
+function nextCharacter(str: string, index: number): number {
+  const segment = graphemes.segment(str).containing(index);
+  return segment ? segment.index + segment.segment.length : str.length;
 }
 
 /**
- * Strip common ANSI control sequences (e.g., bracketed paste wrappers).
- */
-function stripAnsiSequences(input: string): string {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional - matching ANSI escape sequences
-  const withoutCsi = input.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional - matching OSC sequences with BEL/ST terminators
-  return withoutCsi.replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, "");
-}
-
-/**
- * Normalize and sanitize input chunks for single-line or multiline fields.
+ * Normalize pasted and typed text while preventing embedded terminal controls.
  */
 function normalizeInputValue(input: string, multiline: boolean): string {
-  const sanitized = stripAnsiSequences(input)
+  const sanitized = stripAnsi(input)
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .replace(/\u2028|\u2029/g, "\n");
@@ -148,7 +147,7 @@ function getLineKey(lineStartPos: number): string {
  */
 function TextInputComponent({
   value,
-  onChange,
+  onChange: onValueChange,
   onSubmit,
   placeholder = "",
   multiline = false,
@@ -178,17 +177,19 @@ function TextInputComponent({
   // Calculate effective min height (default 5 for multiline, 1 for single-line)
   const effectiveMinHeight = minHeight ?? (multiline ? 5 : 1);
 
-  // Rapid input buffering for paste fallback (when bracketed paste is not available)
-  const inputBufferRef = useRef<string>("");
-  const inputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Use shorter threshold for faster input response
-  // Reduced from 100/150ms to 50/80ms for improved responsiveness
-  const RAPID_INPUT_THRESHOLD = mask ? 80 : 50; // ms - reduced for faster response
-
-  // Refs to store latest value and cursorPosition for setTimeout callback
-  // This avoids closure trap where setTimeout captures stale values
+  // Refs advance synchronously: Ink can deliver several keys in one read loop
+  // before React commits the controlled value or cursor state.
   const valueRef = useRef(value);
-  const cursorPositionRef = useRef(0);
+  const cursorPositionRef = useRef(value.length);
+  const { stdin } = useStdin();
+  useEffect(() => subscribeTerminalInput(stdin), [stdin]);
+  const onChange = useCallback(
+    (next: string) => {
+      valueRef.current = next;
+      onValueChange(next);
+    },
+    [onValueChange]
+  );
 
   // Cursor position within the value
   const [cursorPosition, setCursorPosition] = useState(value.length);
@@ -210,15 +211,12 @@ function TextInputComponent({
     }
   }, [value, cursorPosition, setCursor]);
 
-  // Keep valueRef in sync with latest value
-  useEffect(() => {
+  // Reconcile every commit, including a parent that clears back to the same
+  // prop value after typing and submission were batched in one input event.
+  useLayoutEffect(() => {
     valueRef.current = value;
-  }, [value]);
-
-  // Keep cursorPositionRef in sync with latest cursorPosition
-  useEffect(() => {
-    cursorPositionRef.current = cursorPosition;
-  }, [cursorPosition]);
+    cursorPositionRef.current = Math.min(cursorPosition, value.length);
+  });
 
   // Track value changes for undo stack (debounced to group rapid typing)
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -251,15 +249,6 @@ function TextInputComponent({
     }
   }, [cursorToEnd, value.length, onCursorMoved, setCursor]);
 
-  // Cleanup input buffer timer on unmount
-  useEffect(() => {
-    return () => {
-      if (inputTimerRef.current) {
-        clearTimeout(inputTimerRef.current);
-      }
-    };
-  }, []);
-
   /**
    * Handle bracketed paste events.
    * When a paste is detected via bracketed paste mode, the entire
@@ -267,6 +256,8 @@ function TextInputComponent({
    */
   const handlePaste = useCallback(
     (pastedText: string) => {
+      const value = valueRef.current;
+      const cursorPosition = cursorPositionRef.current;
       if (disabled || !focused) return;
 
       // Normalize the pasted text
@@ -286,7 +277,7 @@ function TextInputComponent({
       onChange(newValue);
       setCursor(newCursorPosition);
     },
-    [disabled, focused, multiline, value, cursorPosition, maxLength, onChange, setCursor]
+    [disabled, focused, multiline, maxLength, onChange, setCursor]
   );
 
   // Subscribe to paste events from the BracketedPasteProvider
@@ -297,6 +288,8 @@ function TextInputComponent({
    */
   const handleInput = useCallback(
     (char: string) => {
+      const value = valueRef.current;
+      const cursorPosition = cursorPositionRef.current;
       if (disabled) return;
 
       const normalizedInput = normalizeInputValue(char, multiline);
@@ -315,42 +308,55 @@ function TextInputComponent({
       if (maxLength !== undefined && newValue.length > maxLength) {
         const truncated = newValue.slice(0, maxLength);
         onChange(truncated);
-        setCursorPosition(Math.min(cursorPosition + normalizedInput.length, maxLength));
+        setCursor(Math.min(cursorPosition + normalizedInput.length, maxLength));
         return;
       }
 
       onChange(newValue);
       setCursor(cursorPosition + normalizedInput.length);
     },
-    [disabled, value, cursorPosition, maxLength, onChange, multiline, setCursor]
+    [disabled, maxLength, onChange, multiline, setCursor]
   );
 
   /**
    * Handle backspace key
    */
   const handleBackspace = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
     if (disabled || cursorPosition === 0) return;
 
-    const newValue = deleteAt(value, cursorPosition);
+    const previous = previousCharacter(value, cursorPosition);
+    const newValue = value.slice(0, previous) + value.slice(cursorPosition);
     onChange(newValue);
-    setCursor(cursorPosition - 1);
-  }, [disabled, value, cursorPosition, onChange, setCursor]);
+    setCursor(previous);
+  }, [disabled, onChange, setCursor]);
 
   /**
    * Handle delete key
    */
-  const handleDelete = useCallback(() => {
-    if (disabled || cursorPosition >= value.length) return;
+  const handleDelete = useCallback(
+    (word = false) => {
+      const value = valueRef.current;
+      const cursorPosition = cursorPositionRef.current;
+      if (disabled || cursorPosition >= value.length) return;
 
-    const newValue = value.slice(0, cursorPosition) + value.slice(cursorPosition + 1);
-    onChange(newValue);
-  }, [disabled, value, cursorPosition, onChange]);
+      const end = word
+        ? cursorPosition + (value.slice(cursorPosition).match(/^\s*\S*/)?.[0].length ?? 0)
+        : nextCharacter(value, cursorPosition);
+      const newValue = value.slice(0, cursorPosition) + value.slice(end);
+      onChange(newValue);
+    },
+    [disabled, onChange]
+  );
 
   /**
    * Handle left arrow navigation
    */
   const handleLeftArrow = useCallback(
     (ctrl: boolean) => {
+      const value = valueRef.current;
+      const cursorPosition = cursorPositionRef.current;
       if (cursorPosition === 0) return;
 
       if (ctrl) {
@@ -360,10 +366,10 @@ function TextInputComponent({
         const jumpLength = match ? match[0].length : 1;
         setCursor(Math.max(0, cursorPosition - jumpLength));
       } else {
-        setCursor(cursorPosition - 1);
+        setCursor(previousCharacter(value, cursorPosition));
       }
     },
-    [value, cursorPosition, setCursor]
+    [setCursor]
   );
 
   /**
@@ -371,6 +377,8 @@ function TextInputComponent({
    */
   const handleRightArrow = useCallback(
     (ctrl: boolean) => {
+      const value = valueRef.current;
+      const cursorPosition = cursorPositionRef.current;
       if (cursorPosition >= value.length) return;
 
       if (ctrl) {
@@ -380,16 +388,18 @@ function TextInputComponent({
         const jumpLength = match ? match[0].length : 1;
         setCursor(Math.min(value.length, cursorPosition + jumpLength));
       } else {
-        setCursor(cursorPosition + 1);
+        setCursor(nextCharacter(value, cursorPosition));
       }
     },
-    [value, cursorPosition, setCursor]
+    [setCursor]
   );
 
   /**
    * Handle up arrow in multiline mode
    */
   const handleUpArrow = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
     if (!multiline) return;
 
     // Find the previous newline
@@ -410,12 +420,14 @@ function TextInputComponent({
     // Move to same column in previous line (or end of line if shorter)
     const newPosition = lineStart + Math.min(columnInCurrentLine, previousLineLength);
     setCursor(newPosition);
-  }, [multiline, value, cursorPosition, setCursor]);
+  }, [multiline, setCursor]);
 
   /**
    * Handle down arrow in multiline mode
    */
   const handleDownArrow = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
     if (!multiline) return;
 
     // Find the current line boundaries
@@ -441,20 +453,15 @@ function TextInputComponent({
     // Move to same column in next line (or end of line if shorter)
     const newPosition = nextLineStart + Math.min(columnInCurrentLine, nextLineLength);
     setCursor(newPosition);
-  }, [multiline, value, cursorPosition, setCursor]);
-
-  /**
-   * Calculate current cursor row (0-indexed)
-   */
-  const cursorRow = useMemo(() => {
-    const beforeCursor = value.slice(0, cursorPosition);
-    return (beforeCursor.match(/\n/g) || []).length;
-  }, [value, cursorPosition]);
+  }, [multiline, setCursor]);
 
   /**
    * Handle Home key (Ctrl+A) - move to current line start
    */
   const handleHome = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
+    const cursorRow = (value.slice(0, cursorPosition).match(/\n/g) || []).length;
     const lines = value.split("\n");
     let pos = 0;
     for (let i = 0; i < cursorRow; i++) {
@@ -464,12 +471,15 @@ function TextInputComponent({
       }
     }
     setCursor(pos);
-  }, [value, cursorRow, setCursor]);
+  }, [setCursor]);
 
   /**
    * Handle End key (Ctrl+E) - move to current line end
    */
   const handleEnd = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
+    const cursorRow = (value.slice(0, cursorPosition).match(/\n/g) || []).length;
     const lines = value.split("\n");
     let pos = 0;
     for (let i = 0; i <= cursorRow; i++) {
@@ -479,12 +489,15 @@ function TextInputComponent({
       }
     }
     setCursor(pos);
-  }, [value, cursorRow, setCursor]);
+  }, [setCursor]);
 
   /**
    * Handle Ctrl+K - kill (delete) from cursor to end of line
    */
   const handleKillToEnd = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
+    const cursorRow = (value.slice(0, cursorPosition).match(/\n/g) || []).length;
     if (disabled) return;
     const lines = value.split("\n");
     const currentLine = lines[cursorRow];
@@ -493,24 +506,29 @@ function TextInputComponent({
     const lineEnd = lineStart + currentLine.length;
     const newValue = value.slice(0, cursorPosition) + value.slice(lineEnd);
     onChange(newValue);
-  }, [disabled, value, cursorPosition, cursorRow, onChange]);
+  }, [disabled, onChange]);
 
   /**
    * Handle Ctrl+U - kill (delete) from cursor to start of line
    */
   const handleKillToStart = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
+    const cursorRow = (value.slice(0, cursorPosition).match(/\n/g) || []).length;
     if (disabled) return;
     const lines = value.split("\n");
     const lineStart = lines.slice(0, cursorRow).join("\n").length + (cursorRow > 0 ? 1 : 0);
     const newValue = value.slice(0, lineStart) + value.slice(cursorPosition);
     onChange(newValue);
     setCursor(lineStart);
-  }, [disabled, value, cursorPosition, cursorRow, onChange, setCursor]);
+  }, [disabled, onChange, setCursor]);
 
   /**
    * Handle Ctrl+W - delete word backward
    */
   const handleDeleteWordBackward = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
     if (disabled || cursorPosition === 0) return;
 
     // Find the start of the previous word
@@ -523,12 +541,14 @@ function TextInputComponent({
     const newValue = value.slice(0, pos) + value.slice(cursorPosition);
     onChange(newValue);
     setCursor(pos);
-  }, [disabled, value, cursorPosition, onChange, setCursor]);
+  }, [disabled, onChange, setCursor]);
 
   /**
    * Handle Ctrl+Z - undo
    */
   const handleUndo = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
     const prev = undoStack[undoStack.length - 1];
     if (!prev) return;
     setUndoStack((s) => s.slice(0, -1));
@@ -536,12 +556,14 @@ function TextInputComponent({
     onChange(prev.value);
     setCursor(prev.cursor);
     lastValueRef.current = prev.value; // Prevent re-adding to undo stack
-  }, [undoStack, value, cursorPosition, onChange, setCursor]);
+  }, [undoStack, onChange, setCursor]);
 
   /**
    * Handle Ctrl+Shift+Z / Ctrl+Y - redo
    */
   const handleRedo = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
     const next = redoStack[redoStack.length - 1];
     if (!next) return;
     setRedoStack((s) => s.slice(0, -1));
@@ -549,20 +571,22 @@ function TextInputComponent({
     onChange(next.value);
     setCursor(next.cursor);
     lastValueRef.current = next.value; // Prevent re-adding to undo stack
-  }, [redoStack, value, cursorPosition, onChange, setCursor]);
+  }, [redoStack, onChange, setCursor]);
 
   /**
    * Handle submission
    */
   const handleSubmit = useCallback(() => {
     if (disabled) return;
-    onSubmit?.(value);
-  }, [disabled, value, onSubmit]);
+    onSubmit?.(valueRef.current);
+  }, [disabled, onSubmit]);
 
   /**
    * Handle newline in multiline mode
    */
   const handleNewline = useCallback(() => {
+    const value = valueRef.current;
+    const cursorPosition = cursorPositionRef.current;
     if (disabled || !multiline) return;
 
     // Check max length before inserting newline
@@ -573,7 +597,7 @@ function TextInputComponent({
     const newValue = insertAt(value, cursorPosition, "\n");
     onChange(newValue);
     setCursor(cursorPosition + 1);
-  }, [disabled, multiline, value, cursorPosition, maxLength, onChange, setCursor]);
+  }, [disabled, multiline, maxLength, onChange, setCursor]);
 
   /**
    * Handle return/enter key based on mode
@@ -627,8 +651,8 @@ function TextInputComponent({
     (input: string, key: Key): boolean => {
       // Navigation and editing keys
       if (key.backspace) {
-        // Ctrl+Backspace: delete word backward
-        if (key.ctrl) {
+        // Ctrl/Alt+Backspace: delete word backward
+        if (key.ctrl || key.meta) {
           handleDeleteWordBackward();
         } else {
           handleBackspace();
@@ -636,7 +660,7 @@ function TextInputComponent({
         return true;
       }
       if (key.delete) {
-        handleDelete();
+        handleDelete(key.ctrl || key.meta);
         return true;
       }
       if (key.leftArrow) {
@@ -717,104 +741,22 @@ function TextInputComponent({
     ]
   );
 
-  // Handle keyboard input with immediate display for single chars, buffering for paste
+  // Each framed text chunk is one edit. No delayed paste timer can overtake a
+  // subsequent Backspace, cursor movement or Enter.
   useInput(
     (input, key) => {
       if (disabled) return;
-
-      // Try to process as a special key
-      if (processKeyEvent(input, key)) {
+      const raw = getCurrentTerminalKey(stdin);
+      if (raw && ["\x1b[H", "\x1b[1~", "\x1b[7~", "\x1bOH"].includes(raw)) {
+        handleHome();
         return;
       }
-
-      // Handle regular character input
-      // Strategy: Single chars ALWAYS display immediately, multi-char inputs (paste) use buffering
-      if (input && !key.ctrl && !key.meta) {
-        const normalizedInput = normalizeInputValue(input, multiline);
-        if (normalizedInput.length === 0) return;
-
-        // Single character: ALWAYS process immediately for responsive typing
-        // Multi-char (paste): use buffering to batch operations
-        const isSingleChar = normalizedInput.length === 1;
-
-        if (isSingleChar) {
-          // Clear any pending buffer timer - single chars take priority
-          if (inputTimerRef.current) {
-            clearTimeout(inputTimerRef.current);
-            inputTimerRef.current = null;
-          }
-          // Flush any buffered content first
-          if (inputBufferRef.current.length > 0) {
-            const buffered = inputBufferRef.current;
-            inputBufferRef.current = "";
-            handleInput(buffered);
-          }
-          // Immediate processing - no buffering delay
-          const currentValue = valueRef.current;
-          const currentCursorPosition = cursorPositionRef.current;
-
-          // Check max length before inserting
-          if (maxLength !== undefined && currentValue.length >= maxLength) {
-            return;
-          }
-
-          // Insert character at cursor position
-          let newValue = insertAt(currentValue, currentCursorPosition, normalizedInput);
-
-          // Handle max length after insertion
-          if (maxLength !== undefined && newValue.length > maxLength) {
-            newValue = newValue.slice(0, maxLength);
-          }
-
-          const newPosition = Math.min(currentCursorPosition + 1, newValue.length);
-          // Update value first, then cursor position in low-priority transition
-          // This batches both updates in React 18+ automatic batching
-          onChange(newValue);
-          cursorPositionRef.current = newPosition;
-          startTransition(() => {
-            setCursorPosition(newPosition);
-          });
-        } else if (normalizedInput.length > 1) {
-          // Multi-character input (paste) only - use buffering to batch paste operations
-          inputBufferRef.current += normalizedInput;
-
-          if (inputTimerRef.current) {
-            clearTimeout(inputTimerRef.current);
-          }
-
-          inputTimerRef.current = setTimeout(() => {
-            const buffered = inputBufferRef.current;
-            inputBufferRef.current = "";
-
-            if (buffered.length === 0) return;
-
-            // Use refs to get latest values, avoiding closure trap
-            const currentValue = valueRef.current;
-            const currentCursorPosition = cursorPositionRef.current;
-
-            // Check max length before inserting
-            if (maxLength !== undefined && currentValue.length >= maxLength) {
-              return;
-            }
-
-            // Insert buffered content at cursor position
-            let newValue = insertAt(currentValue, currentCursorPosition, buffered);
-
-            // Handle max length after insertion
-            if (maxLength !== undefined && newValue.length > maxLength) {
-              newValue = newValue.slice(0, maxLength);
-            }
-
-            const newPosition = Math.min(currentCursorPosition + buffered.length, newValue.length);
-            // Use startTransition for cursor update to reduce flickering during paste
-            cursorPositionRef.current = newPosition;
-            startTransition(() => {
-              setCursorPosition(newPosition);
-            });
-            onChange(newValue);
-          }, RAPID_INPUT_THRESHOLD);
-        }
+      if (raw && ["\x1b[F", "\x1b[4~", "\x1b[8~", "\x1bOF"].includes(raw)) {
+        handleEnd();
+        return;
       }
+      if (processKeyEvent(input, key)) return;
+      if (input && !key.ctrl && !key.meta) handleInput(input);
     },
     { isActive: focused && !disabled }
   );
@@ -869,8 +811,9 @@ function TextInputComponent({
 
     const cursorCol = cursorPosition - lineStartPosition;
     const beforeCursor = line.slice(0, cursorCol);
-    const cursorChar = line[cursorCol] || " ";
-    const afterCursor = line.slice(cursorCol + 1);
+    const nextCol = nextCharacter(line, cursorCol);
+    const cursorChar = line.slice(cursorCol, nextCol) || " ";
+    const afterCursor = line.slice(nextCol);
 
     return (
       <Text>
@@ -986,22 +929,6 @@ function TextInputComponent({
  * Memoized TextInput to prevent unnecessary re-renders.
  * Custom comparison checks key props that affect visual output.
  */
-export const TextInput = memo(TextInputComponent, (prevProps, nextProps) => {
-  // Return true if props are equal (skip render)
-  return (
-    prevProps.value === nextProps.value &&
-    prevProps.focused === nextProps.focused &&
-    prevProps.disabled === nextProps.disabled &&
-    prevProps.mask === nextProps.mask &&
-    prevProps.placeholder === nextProps.placeholder &&
-    prevProps.suppressEnter === nextProps.suppressEnter &&
-    prevProps.cursorToEnd === nextProps.cursorToEnd &&
-    prevProps.multiline === nextProps.multiline &&
-    prevProps.maxLength === nextProps.maxLength &&
-    prevProps.minHeight === nextProps.minHeight &&
-    prevProps.showBorder === nextProps.showBorder &&
-    prevProps.enableHighlight === nextProps.enableHighlight
-  );
-});
+export const TextInput = memo(TextInputComponent);
 
 export default TextInput;

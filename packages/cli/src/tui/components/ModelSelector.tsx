@@ -9,9 +9,9 @@
 
 import { getProviderModels, getSupportedProviders, type ModelInfo } from "@vellum/provider";
 import { getIcons } from "@vellum/shared";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useStdin } from "ink";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getThinkingDisplayMode,
   getThinkingState,
@@ -21,8 +21,12 @@ import {
   type ThinkingDisplayMode,
   toggleThinking,
 } from "../../commands/think.js";
+import { useInput } from "../hooks/useTerminalInput.js";
+import { useTerminalDimensions } from "../hooks/useTerminalSize.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
+import { isEndKey, isHomeKey } from "../types/ink-extended.js";
+import { getCurrentTerminalKey } from "../utils/terminal-input.js";
 
 // =============================================================================
 // Types
@@ -136,7 +140,7 @@ function getProviderInfo(provider: string): { name: string; icon: string } {
  * - Enter to confirm selection
  * - Visual indication of current model
  * - Shows model details (context window, pricing)
- * - Groups by provider
+ * - Scrolls a bounded window in provider order
  *
  * @example
  * ```tsx
@@ -170,6 +174,8 @@ export function ModelSelector({
   const { theme } = useTheme();
   const { t } = useTUITranslation();
   const icons = getIcons();
+  const { width, height, isNarrow } = useTerminalDimensions();
+  const { stdin } = useStdin();
 
   // Thinking state management
   const [thinkingEnabled, setThinkingEnabled] = useState(() => getThinkingState().enabled);
@@ -228,7 +234,34 @@ export function ModelSelector({
   }, [modelOptions, currentProvider, currentModel]);
 
   // Track focused index for keyboard navigation
-  const [focusedIndex, setFocusedIndex] = useState(() => (currentIndex >= 0 ? currentIndex : 0));
+  const [focusedIndex, setFocusedIndex] = useState(() => Math.max(currentIndex, 0));
+  const focusedIndexRef = useRef(focusedIndex);
+  const focusModel = useCallback(
+    (index: number) => {
+      const next = Math.max(0, Math.min(index, modelOptions.length - 1));
+      focusedIndexRef.current = next;
+      setFocusedIndex(next);
+    },
+    [modelOptions.length]
+  );
+  useEffect(() => {
+    focusModel(Math.max(currentIndex, 0));
+  }, [currentIndex, focusModel]);
+
+  // Reserve the existing overlay's top margin, border and wide-screen padding.
+  // Every model occupies one row, so catalog growth cannot grow the overlay.
+  const viewportHeight = Math.max(7, height - (isNarrow ? 6 : 10));
+  const viewportWidth = Math.max(20, width - (isNarrow ? 4 : 24));
+  const visibleCount = Math.min(
+    modelOptions.length || 1,
+    Math.max(1, viewportHeight - 5 - (showDetails ? 1 : 0))
+  );
+  const startIndex = Math.max(
+    0,
+    Math.min(focusedIndex - Math.floor(visibleCount / 2), modelOptions.length - visibleCount)
+  );
+  const visibleModels = modelOptions.slice(startIndex, startIndex + visibleCount);
+  const focusedModel = modelOptions[focusedIndex];
 
   // Handle keyboard input
   useInput(
@@ -250,18 +283,34 @@ export function ModelSelector({
 
         // Arrow navigation
         if (key.upArrow || input === "k") {
-          setFocusedIndex((prev) => (prev > 0 ? prev - 1 : modelOptions.length - 1));
+          const index = focusedIndexRef.current;
+          focusModel(index > 0 ? index - 1 : modelOptions.length - 1);
           return;
         }
 
         if (key.downArrow || input === "j") {
-          setFocusedIndex((prev) => (prev < modelOptions.length - 1 ? prev + 1 : 0));
+          const index = focusedIndexRef.current;
+          focusModel(index < modelOptions.length - 1 ? index + 1 : 0);
+          return;
+        }
+
+        if (key.pageUp || key.pageDown) {
+          focusModel(focusedIndexRef.current + (key.pageDown ? visibleCount : -visibleCount));
+          return;
+        }
+        const raw = getCurrentTerminalKey(stdin) ?? input;
+        if (isHomeKey(raw) || input === "g") {
+          focusModel(0);
+          return;
+        }
+        if (isEndKey(raw) || input === "G") {
+          focusModel(modelOptions.length - 1);
           return;
         }
 
         // Confirm selection
         if (key.return) {
-          const selected = modelOptions[focusedIndex];
+          const selected = modelOptions[focusedIndexRef.current];
           if (selected) {
             onSelect(selected.provider, selected.model.id);
           }
@@ -269,7 +318,9 @@ export function ModelSelector({
       },
       [
         isActive,
-        focusedIndex,
+        focusModel,
+        visibleCount,
+        stdin,
         modelOptions,
         onSelect,
         handleThinkingToggle,
@@ -279,111 +330,62 @@ export function ModelSelector({
     { isActive }
   );
 
-  // Group models by provider for display
-  const groupedByProvider = useMemo(() => {
-    const groups = new Map<string, { options: ModelOption[]; startIndex: number }>();
-    let index = 0;
-
-    for (const option of modelOptions) {
-      const existing = groups.get(option.provider);
-      if (existing) {
-        existing.options.push(option);
-      } else {
-        groups.set(option.provider, {
-          options: [option],
-          startIndex: index,
-        });
-      }
-      index++;
-    }
-
-    return groups;
-  }, [modelOptions]);
-
   return (
-    <Box flexDirection="column" paddingX={1}>
+    <Box flexDirection="column" paddingX={1} width={viewportWidth} maxHeight={viewportHeight}>
+      <Text bold wrap="truncate">
+        {t("modelSelector.title")} {modelOptions.length ? focusedIndex + 1 : 0}/
+        {modelOptions.length}
+      </Text>
+      <Text dimColor wrap="truncate">
+        {t("modelSelector.current")}
+        {getProviderInfo(currentProvider).name} /{" "}
+        {modelOptions[currentIndex]?.model.name ?? currentModel}
+      </Text>
       <Box marginBottom={1}>
-        <Text bold>{t("modelSelector.title")}</Text>
-      </Box>
-
-      {/* Thinking Mode Toggle */}
-      <Box marginBottom={1} flexDirection="column">
-        <Box>
-          <Text>Thinking: </Text>
+        <Text wrap="truncate">
+          Thinking:{" "}
           <Text color={thinkingEnabled ? "green" : "gray"}>
             {thinkingEnabled ? "◆ On" : "◇ Off"}
-          </Text>
-          <Text dimColor> (press T to toggle)</Text>
-        </Box>
-        {thinkingEnabled && (
-          <Box marginLeft={2}>
-            <Text>Display: </Text>
-            <Text color={displayMode === "full" ? "cyan" : "gray"}>
-              {displayMode === "full" ? "◆ Full" : "◇ Compact"}
+          </Text>{" "}
+          [T]
+          {thinkingEnabled ? `  Display: ${displayMode === "full" ? "Full" : "Compact"} [D]` : ""}
+        </Text>
+      </Box>
+      <Box flexDirection="column" height={visibleCount} flexShrink={0}>
+        {visibleModels.map((option, offset) => {
+          const selected = startIndex + offset === focusedIndex;
+          const current = option.provider === currentProvider && option.model.id === currentModel;
+          return (
+            <Text
+              key={`${option.provider}/${option.model.id}`}
+              wrap="truncate"
+              color={
+                selected && isActive
+                  ? theme.colors.info
+                  : current
+                    ? theme.colors.success
+                    : undefined
+              }
+              bold={current}
+            >
+              {selected && isActive ? "❯ " : "  "}
+              {current ? "✓ " : "  "}
+              {getProviderInfo(option.provider).name}: {option.model.name}
             </Text>
-            <Text dimColor> (press D to toggle)</Text>
-          </Box>
-        )}
+          );
+        })}
+        {modelOptions.length === 0 && <Text dimColor>No models available</Text>}
       </Box>
-
-      {Array.from(groupedByProvider.entries()).map(([provider, { options, startIndex }]) => {
-        const providerInfo = getProviderInfo(provider);
-
-        return (
-          <Box key={provider} flexDirection="column" marginBottom={1}>
-            {/* Provider header */}
-            <Box>
-              <Text color={theme.colors.primary} bold>
-                {providerInfo.icon} {providerInfo.name}
-              </Text>
-            </Box>
-
-            {/* Models in this provider */}
-            {options.map((opt, idx) => {
-              const globalIndex = startIndex + idx;
-              const isFocused = globalIndex === focusedIndex && isActive;
-              const isCurrent = opt.provider === currentProvider && opt.model.id === currentModel;
-
-              return (
-                <Box key={opt.model.id} flexDirection="column" marginLeft={2}>
-                  <Box>
-                    {/* Focus indicator */}
-                    <Text color={isFocused ? theme.colors.info : undefined}>
-                      {isFocused ? "❯ " : "  "}
-                    </Text>
-
-                    {/* Model name */}
-                    <Text color={isCurrent ? theme.colors.success : undefined} bold={isCurrent}>
-                      {opt.model.name}
-                    </Text>
-
-                    {/* Current indicator */}
-                    {isCurrent && (
-                      <Text color={theme.semantic.text.muted}> {t("modeSelector.current")}</Text>
-                    )}
-                  </Box>
-
-                  {/* Details (when enabled and focused) */}
-                  {showDetails && isFocused && (
-                    <Box marginLeft={4}>
-                      <Text dimColor>
-                        {icons.context} {formatContextWindow(opt.model.contextWindow)} ctx •{" "}
-                        {formatPrice(opt.model.inputPrice)} in •{" "}
-                        {formatPrice(opt.model.outputPrice)} out
-                      </Text>
-                    </Box>
-                  )}
-                </Box>
-              );
-            })}
-          </Box>
-        );
-      })}
-
-      {/* Help text */}
-      <Box marginTop={1}>
-        <Text dimColor>{t("modelSelector.keybindings")}</Text>
-      </Box>
+      {showDetails && (
+        <Text dimColor wrap="truncate">
+          {focusedModel
+            ? `${icons.context} ${formatContextWindow(focusedModel.model.contextWindow)} ctx • ${formatPrice(focusedModel.model.inputPrice)} in • ${formatPrice(focusedModel.model.outputPrice)} out`
+            : " "}
+        </Text>
+      )}
+      <Text dimColor wrap="truncate">
+        {t("modelSelector.keybindings")} • PgUp/PgDn • Home/End
+      </Text>
     </Box>
   );
 }

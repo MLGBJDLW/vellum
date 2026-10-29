@@ -20,7 +20,7 @@
  */
 
 import { getIcons } from "@vellum/shared";
-import { Box, type Key, Text, useInput } from "ink";
+import { Box, type Key, Text } from "ink";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getThinkingAutoCollapse,
@@ -38,6 +38,7 @@ import { useAlternateBuffer } from "../../hooks/useAlternateBuffer.js";
 import { useAnimatedScrollbar } from "../../hooks/useAnimatedScrollbar.js";
 import { useDiffMode } from "../../hooks/useDiffMode.js";
 import { useMouseScroll } from "../../hooks/useMouseScroll.js";
+import { useInput } from "../../hooks/useTerminalInput.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";

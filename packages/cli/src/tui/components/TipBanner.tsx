@@ -7,10 +7,11 @@
  * @module tui/components/TipBanner
  */
 
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type React from "react";
 import { memo } from "react";
 import type { Tip } from "../../onboarding/index.js";
+import { useInput } from "../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../i18n/index.js";
 
 // =============================================================================

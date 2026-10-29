@@ -8,8 +8,9 @@
  */
 
 import type { ConfirmationRequest } from "@vellum/lsp";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type React from "react";
+import { useInput } from "../../hooks/useTerminalInput.js";
 
 // =============================================================================
 // Types

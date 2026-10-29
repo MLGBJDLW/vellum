@@ -16,10 +16,10 @@
  */
 
 import type { Key } from "ink";
-import { useInput } from "ink";
 import { useMemo } from "react";
 import { isEndKey, isHomeKey } from "../types/ink-extended.js";
 import type { ViewportScrollActions, ViewportScrollState } from "./useScrollController.js";
+import { useInput } from "./useTerminalInput.js";
 
 // =============================================================================
 // Types

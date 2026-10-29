@@ -7,9 +7,10 @@
  * @module tui/components/TodoPanel
  */
 
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useInput } from "../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { isEndKey, isHomeKey } from "../types/ink-extended.js";
