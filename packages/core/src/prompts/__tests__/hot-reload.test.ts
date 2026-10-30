@@ -467,7 +467,7 @@ Content.`
         expect(hotReload.getStats()).toMatchObject({ invalidations: 1, filesInvalidated: 2 });
         expect(mockPromptLoader.invalidateByPath).toHaveBeenCalledWith(paths[0]);
         expect(mockPromptLoader.invalidateByPath).toHaveBeenCalledWith(paths[1]);
-        invalidate([paths[0]!]);
+        invalidate(paths.slice(0, 1));
         expect(hotReload.getStats()).toMatchObject({ invalidations: 2, filesInvalidated: 3 });
       } finally {
         subscribe.mockRestore();
