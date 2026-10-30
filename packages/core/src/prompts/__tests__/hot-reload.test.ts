@@ -24,6 +24,7 @@ import type { CommandLoader } from "../../commands/command-loader.js";
 import type { WorkflowLoader } from "../../workflows/workflow-loader.js";
 import { HotReloadIntegration, type HotReloadOptions } from "../hot-reload.js";
 import type { PromptLoader } from "../prompt-loader.js";
+import { PromptWatcher } from "../prompt-watcher.js";
 
 // =============================================================================
 // Test Fixtures
@@ -445,42 +446,32 @@ Content.`
   // Statistics Tracking
   // ===========================================================================
   describe("statistics", () => {
-    it("tracks invalidation count", async () => {
-      let onReload!: () => void;
-      const invalidated = new Promise<void>((resolve) => {
-        onReload = resolve;
-      });
-      hotReload = createHotReload({ onReload });
-      hotReload.start();
-
-      const initialStats = hotReload.getStats();
-      expect(initialStats.invalidations).toBe(0);
-
-      // Create multiple files
-      writeFileSync(
-        join(tempWorkspace, ".vellum", "prompts", "stat1.md"),
-        `---
-id: stat1
-name: Stat 1
-category: role
----
-Content 1.`
-      );
-
-      writeFileSync(
-        join(tempWorkspace, ".vellum", "prompts", "stat2.md"),
-        `---
-id: stat2
-name: Stat 2
-category: role
----
-Content 2.`
-      );
-
-      await invalidated;
-
-      const finalStats = hotReload.getStats();
-      expect(finalStats.invalidations).toBeGreaterThan(0);
+    it("tracks invalidation batches and file counts", () => {
+      let invalidate: ((paths: string[]) => void) | undefined;
+      const subscribe = vi
+        .spyOn(PromptWatcher.prototype, "onInvalidate")
+        .mockImplementationOnce((callback) => {
+          invalidate = callback;
+          return () => {};
+        });
+      try {
+        hotReload = createHotReload();
+        hotReload.start();
+        expect(hotReload.getStats().invalidations).toBe(0);
+        if (!invalidate) throw new Error("Hot reload did not subscribe to invalidation events");
+        const paths = [
+          "/workspace/.vellum/prompts/stat1.md",
+          "/workspace/.vellum/prompts/stat2.md",
+        ];
+        invalidate(paths);
+        expect(hotReload.getStats()).toMatchObject({ invalidations: 1, filesInvalidated: 2 });
+        expect(mockPromptLoader.invalidateByPath).toHaveBeenCalledWith(paths[0]);
+        expect(mockPromptLoader.invalidateByPath).toHaveBeenCalledWith(paths[1]);
+        invalidate(paths.slice(0, 1));
+        expect(hotReload.getStats()).toMatchObject({ invalidations: 2, filesInvalidated: 3 });
+      } finally {
+        subscribe.mockRestore();
+      }
     });
 
     it("tracks last invalidation timestamp", async () => {
