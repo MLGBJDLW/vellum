@@ -14,7 +14,7 @@ import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { defineTool, fail, ok } from "../types/index.js";
 import { executeShell, getSandboxOptions, type ShellResult } from "./utils/index.js";
 
-/** Default timeout for bash commands (2 minutes) */
+/** No default deadline; commands remain cancellable. */
 const DEFAULT_TIMEOUT = CONFIG_DEFAULTS.timeouts.bashExecution;
 
 /**
@@ -23,14 +23,14 @@ const DEFAULT_TIMEOUT = CONFIG_DEFAULTS.timeouts.bashExecution;
 export const bashParamsSchema = z.object({
   /** Command to execute in bash */
   command: z.string().describe("The bash command to execute"),
-  /** Timeout in milliseconds (default: 120000) */
+  /** Optional deadline in milliseconds (0 = unlimited). */
   timeout: z
     .number()
     .int()
-    .positive()
+    .nonnegative()
     .optional()
     .default(DEFAULT_TIMEOUT)
-    .describe("Timeout in milliseconds (default: 120000)"),
+    .describe("Optional timeout in milliseconds. Default: 0 (no deadline)."),
   /** Run as background process (detached, non-blocking) */
   isBackground: z
     .boolean()

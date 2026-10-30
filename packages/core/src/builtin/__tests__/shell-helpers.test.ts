@@ -4,6 +4,7 @@
  * Tests for shell-helpers utility functions, specifically output truncation.
  */
 
+import { readFile, unlink } from "node:fs/promises";
 import { platform } from "node:os";
 import { describe, expect, it } from "vitest";
 import { detectShell, executeShell } from "../utils/shell-helpers.js";
@@ -50,6 +51,14 @@ describe("shell-helpers", () => {
       });
 
       expect(result.truncated).toBe(true);
+      expect(result.killed).toBe(false);
+      expect(result.savedOutputPath).toBeTruthy();
+      if (result.savedOutputPath) {
+        const output = await readFile(result.savedOutputPath, "utf8");
+        expect(output).toContain("This is line 1 of output");
+        expect(output).toContain("This is line 30 of output");
+        await unlink(result.savedOutputPath);
+      }
     }, 35000);
 
     it("should append warning message with buffer limit and dropped bytes when truncated", async () => {

@@ -797,7 +797,8 @@ describe("MCPProxy Tool Execution", () => {
           jsonrpc: "2.0",
           method: "tools/call",
           params: { name: "echo", arguments: { message: "test" } },
-        })
+        }),
+        expect.any(AbortSignal)
       );
     });
 

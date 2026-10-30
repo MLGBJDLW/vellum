@@ -93,7 +93,7 @@ export interface MCPTransport {
    * @param request - JSON-RPC 2.0 request object
    * @returns JSON-RPC 2.0 response object
    */
-  send(request: JSONRPCRequest): Promise<JSONRPCResponse>;
+  send(request: JSONRPCRequest, signal?: AbortSignal): Promise<JSONRPCResponse>;
 
   /**
    * Check if the transport is currently active.
@@ -161,7 +161,7 @@ export interface MCPProxy {
    * @param params - Tool parameters
    * @returns Tool execution result
    */
-  callTool(name: string, params: unknown): Promise<MCPToolResult>;
+  callTool(name: string, params: unknown, signal?: AbortSignal): Promise<MCPToolResult>;
 
   /**
    * Check if currently connected to the MCP server.
@@ -483,6 +483,7 @@ const DEFAULT_TOOL_PREFIX = "mcp_";
 class MCPProxyImpl implements MCPProxy {
   private readonly transport: MCPTransport;
   private readonly timeoutMs: number;
+  private readonly toolTimeoutMs: number;
   private readonly toolPrefix: string;
   private connected = false;
   private requestId = 0;
@@ -490,6 +491,7 @@ class MCPProxyImpl implements MCPProxy {
   constructor(config: MCPProxyConfig) {
     this.transport = config.transport;
     this.timeoutMs = config.timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
+    this.toolTimeoutMs = config.timeoutMs ?? 0;
     this.toolPrefix = config.toolPrefix ?? DEFAULT_TOOL_PREFIX;
   }
 
@@ -559,13 +561,17 @@ class MCPProxyImpl implements MCPProxy {
    * @param name - Tool name (without prefix)
    * @param params - Tool parameters
    */
-  async callTool(name: string, params: unknown): Promise<MCPToolResult> {
+  async callTool(name: string, params: unknown, signal?: AbortSignal): Promise<MCPToolResult> {
     this.ensureConnected();
 
-    const response = await this.sendRequest("tools/call", {
-      name,
-      arguments: params,
-    });
+    const response = await this.sendRequest(
+      "tools/call",
+      {
+        name,
+        arguments: params,
+      },
+      signal
+    );
 
     if (response.error) {
       throw new MCPProtocolError(
@@ -610,9 +616,9 @@ class MCPProxyImpl implements MCPProxy {
       parameters,
       inputSchema: mcpTool.inputSchema ? { ...mcpTool.inputSchema } : undefined,
       kind: "mcp",
-      execute: async (input: unknown, _ctx: ToolContext): Promise<ToolResult<unknown>> => {
+      execute: async (input: unknown, ctx: ToolContext): Promise<ToolResult<unknown>> => {
         try {
-          const result = await this.callTool(mcpTool.name, input);
+          const result = await this.callTool(mcpTool.name, input, ctx.abortSignal);
           if (result.isError) {
             return fail(String(result.content));
           }
@@ -630,7 +636,12 @@ class MCPProxyImpl implements MCPProxy {
   /**
    * Send a JSON-RPC request with timeout handling (T041).
    */
-  private async sendRequest(method: string, params: unknown): Promise<JSONRPCResponse> {
+  private async sendRequest(
+    method: string,
+    params: unknown,
+    signal?: AbortSignal
+  ): Promise<JSONRPCResponse> {
+    signal?.throwIfAborted();
     const id = ++this.requestId;
 
     const request: JSONRPCRequest = {
@@ -640,16 +651,33 @@ class MCPProxyImpl implements MCPProxy {
       id,
     };
 
+    const timeout = method === "tools/call" ? this.toolTimeoutMs : this.timeoutMs;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    const controller = new AbortController();
+    const abortPromise = new Promise<never>((_, reject) => {
+      onAbort = () => {
+        reject(new Error("MCP request cancelled"));
+        controller.abort();
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
     // Create timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(new MCPTimeoutError(`MCP request '${method}' timed out`, this.timeoutMs));
-      }, this.timeoutMs);
+      if (!Number.isFinite(timeout) || timeout <= 0) return;
+      timer = setTimeout(() => {
+        reject(new MCPTimeoutError(`MCP request '${method}' timed out`, timeout));
+        controller.abort();
+      }, timeout);
     });
 
     // Race between request and timeout
     try {
-      const response = await Promise.race([this.transport.send(request), timeoutPromise]);
+      const response = await Promise.race([
+        this.transport.send(request, controller.signal),
+        timeoutPromise,
+        abortPromise,
+      ]);
       return response;
     } catch (error) {
       if (error instanceof MCPTimeoutError) {
@@ -659,6 +687,9 @@ class MCPProxyImpl implements MCPProxy {
         `Failed to send MCP request '${method}': ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error : undefined
       );
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      if (onAbort) signal?.removeEventListener("abort", onAbort);
     }
   }
 

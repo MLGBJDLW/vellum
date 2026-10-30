@@ -6,11 +6,11 @@
 // They are duplicated here to avoid import complexity and ensure
 // the MCP package can be used standalone if needed.
 
-/** Default timeout for MCP operations in seconds */
-export const DEFAULT_MCP_TIMEOUT_SECONDS = 60;
+/** No application deadline for tool calls by default (0 = unlimited). */
+export const DEFAULT_MCP_TIMEOUT_SECONDS = 0;
 
 /** Minimum allowed timeout for MCP operations in seconds */
-export const MIN_MCP_TIMEOUT_SECONDS = 1;
+export const MIN_MCP_TIMEOUT_SECONDS = 0;
 
 /** Default port for OAuth callback server */
 export const DEFAULT_OAUTH_PORT = 3333;

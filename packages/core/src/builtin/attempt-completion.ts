@@ -98,7 +98,6 @@ export const attemptCompletionTool = defineTool({
       const sandboxOptions = getSandboxOptions(ctx);
       const shellResult = await executeShell(input.command, {
         cwd: ctx.workingDir,
-        timeout: 60000, // 1 minute timeout for verification
         abortSignal: ctx.abortSignal,
         sandbox: sandboxOptions,
       });

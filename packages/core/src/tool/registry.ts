@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-import type { Tool, ToolKind } from "../types/tool.js";
+import type { Tool, ToolContext, ToolKind } from "../types/tool.js";
 import { getToolInputSchema } from "./schema.js";
 
 // =============================================================================
@@ -153,7 +153,7 @@ export interface ToolRegistry {
   registerMcpTool(
     serverKey: string,
     tool: McpToolDefinition,
-    executor: (params: Record<string, unknown>) => Promise<unknown>
+    executor: (params: Record<string, unknown>, context: ToolContext) => Promise<unknown>
   ): void;
 
   /**
@@ -359,7 +359,7 @@ class ToolRegistryImpl implements ToolRegistry {
   registerMcpTool(
     serverKey: string,
     tool: McpToolDefinition,
-    executor: (params: Record<string, unknown>) => Promise<unknown>
+    executor: (params: Record<string, unknown>, context: ToolContext) => Promise<unknown>
   ): void {
     // Create the namespaced tool name
     const toolName = `mcp:${serverKey}/${tool.name}`;
@@ -380,9 +380,9 @@ class ToolRegistryImpl implements ToolRegistry {
         inputSchema: structuredClone(tool.inputSchema),
         enabled: true,
       },
-      execute: async (params, _context) => {
+      execute: async (params, context) => {
         try {
-          const result = await executor(params as unknown as Record<string, unknown>);
+          const result = await executor(params as unknown as Record<string, unknown>, context);
           return { success: true as const, output: result };
         } catch (error) {
           return {

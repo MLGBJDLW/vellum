@@ -13,7 +13,7 @@ import { CONFIG_DEFAULTS } from "../config/defaults.js";
 import { defineTool, fail, ok } from "../types/index.js";
 import { detectShell, executeShell, getSandboxOptions, type ShellResult } from "./utils/index.js";
 
-/** Default timeout for shell commands (2 minutes) */
+/** No default deadline; commands remain cancellable. */
 const DEFAULT_TIMEOUT = CONFIG_DEFAULTS.timeouts.shell;
 
 /**
@@ -22,14 +22,14 @@ const DEFAULT_TIMEOUT = CONFIG_DEFAULTS.timeouts.shell;
 export const shellParamsSchema = z.object({
   /** Command to execute */
   command: z.string().describe("The shell command to execute"),
-  /** Timeout in milliseconds (default: 120000) */
+  /** Optional deadline in milliseconds (0 = unlimited). */
   timeout: z
     .number()
     .int()
-    .positive()
+    .nonnegative()
     .optional()
     .default(DEFAULT_TIMEOUT)
-    .describe("Timeout in milliseconds (default: 120000)"),
+    .describe("Optional timeout in milliseconds. Default: 0 (no deadline)."),
   /** Working directory for command execution */
   cwd: z.string().optional().describe("Working directory for command execution"),
 });

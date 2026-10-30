@@ -340,9 +340,10 @@ export namespace LLM {
     const validated = StreamConfigSchema.parse(config);
 
     // Honor explicit generation budgets up to the selected model's actual limit.
-    // Keep a practical default without truncating every modern model at 32K.
+    // Use the advertised output window unless the caller requests a smaller budget.
     const modelInfo = getModelInfo(validated.providerType, validated.model);
-    const requestedMaxTokens = validated.maxTokens ?? MAX_OUTPUT_TOKENS;
+    const requestedMaxTokens =
+      validated.maxTokens ?? modelInfo.maxOutputTokens ?? MAX_OUTPUT_TOKENS;
     const maxTokens = modelInfo.maxOutputTokens
       ? Math.min(requestedMaxTokens, modelInfo.maxOutputTokens)
       : requestedMaxTokens;
