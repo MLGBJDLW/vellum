@@ -6,12 +6,12 @@
 export const CONFIG_DEFAULTS = {
   /** Timeout values in milliseconds */
   timeouts: {
-    /** Default timeout for most tools */
-    toolDefault: 30_000,
-    /** Shell/bash command execution */
-    shell: 120_000,
-    /** Bash tool execution */
-    bashExecution: 120_000,
+    /** Tool execution has no deadline unless explicitly configured (0 = unlimited). */
+    toolDefault: 0,
+    /** Shell/bash command execution (0 = unlimited). */
+    shell: 0,
+    /** Bash tool execution (0 = unlimited). */
+    bashExecution: 0,
     /** Web fetch operations */
     webFetch: 30_000,
     /** Web search operations */

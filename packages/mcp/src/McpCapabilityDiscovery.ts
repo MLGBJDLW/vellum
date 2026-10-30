@@ -249,8 +249,8 @@ export class McpCapabilityDiscovery {
           description: tool.description,
           inputSchema: tool.inputSchema ?? { type: "object" },
         },
-        async (params: Record<string, unknown>) => {
-          const response = await this.callTool(server.name, tool.name, params);
+        async (params, context) => {
+          const response = await this.callTool(server.name, tool.name, params, context.abortSignal);
           return response.content;
         }
       );
@@ -282,7 +282,8 @@ export class McpCapabilityDiscovery {
   async callTool(
     serverName: string,
     toolName: string,
-    args?: Record<string, unknown>
+    args?: Record<string, unknown>,
+    signal?: AbortSignal
   ): Promise<McpToolCallResponse> {
     const connection = this.connectionProvider.getConnection(serverName);
 
@@ -306,16 +307,31 @@ export class McpCapabilityDiscovery {
     const startTime = Date.now();
     const timeoutSeconds = connection.server.timeout ?? DEFAULT_MCP_TIMEOUT_SECONDS;
     const timeoutMs = timeoutSeconds * 1000;
+    const controller = new AbortController();
+    const onAbort = () => controller.abort(signal?.reason);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     try {
       // T023: Enforce timeout using Promise.race
-      const toolCallPromise = connection.client.callTool({
-        name: toolName,
-        arguments: args,
-      });
+      const toolCallPromise = connection.client.callTool(
+        {
+          name: toolName,
+          arguments: args,
+        },
+        undefined,
+        {
+          signal: controller.signal,
+          // The SDK always installs a timer. Its longest Node-safe wait avoids the
+          // hidden 60-second SDK deadline without Infinity overflowing to 1 ms.
+          timeout: 2_147_483_647,
+        }
+      );
 
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        if (timeoutMs <= 0) return;
+        timer = setTimeout(() => {
           reject(
             new McpTimeoutError(
               `Tool call "${toolName}" timed out after ${timeoutSeconds}s`,
@@ -323,6 +339,7 @@ export class McpCapabilityDiscovery {
               timeoutMs
             )
           );
+          controller.abort();
         }, timeoutMs);
       });
 
@@ -347,6 +364,9 @@ export class McpCapabilityDiscovery {
         toolName,
         { cause: error instanceof Error ? error : undefined }
       );
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
     }
   }
 

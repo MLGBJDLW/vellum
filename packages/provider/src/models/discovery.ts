@@ -38,6 +38,10 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
     const topProvider = record(data.top_provider);
     const pricing = record(data.pricing);
     const reasoning = record(data.reasoning);
+    const localReasoning = record(capabilities.reasoning);
+    const localReasoningOptions = Array.isArray(localReasoning.allowed_options)
+      ? localReasoning.allowed_options
+      : undefined;
     const supported = Array.isArray(data.supported_parameters) ? data.supported_parameters : [];
     const methods = data.supportedGenerationMethods ?? data.supportedActions;
     if (data.active === false || data.deprecated === true || data.lifecycle === "retired") continue;
@@ -73,8 +77,9 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       positive(data.max_context_length) ??
       known?.contextWindow ??
       8_192;
-    const reasoningEfforts = Array.isArray(reasoning.supported_efforts)
-      ? reasoning.supported_efforts.flatMap((effort) => {
+    const reportedEfforts = reasoning.supported_efforts ?? localReasoningOptions;
+    const reasoningEfforts = Array.isArray(reportedEfforts)
+      ? reportedEfforts.flatMap((effort) => {
           const parsed = reasoningEffortSchema.safeParse(effort);
           return parsed.success ? [parsed.data] : [];
         })
@@ -83,7 +88,9 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
             (effort) => record(effortCapability[effort]).supported === true
           )
         : known?.reasoningEfforts;
-    const defaultEffort = reasoningEffortSchema.safeParse(reasoning.default_effort);
+    const defaultEffort = reasoningEffortSchema.safeParse(
+      reasoning.default_effort ?? localReasoning.default
+    );
     const model: ModelInfo = {
       ...known,
       id,
@@ -122,6 +129,12 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
           known?.supportsVision === true),
       supportsReasoning:
         boolean(record(capabilities.thinking).supported) ??
+        (localReasoningOptions
+          ? localReasoningOptions.some((option) => option !== "off")
+          : undefined) ??
+        (Array.isArray(reasoning.supported_efforts)
+          ? reasoningEfforts?.some((effort) => effort !== "none")
+          : undefined) ??
         (localCapabilities ? localCapabilities.includes("thinking") : undefined) ??
         (Array.isArray(data.supported_parameters)
           ? supported.includes("reasoning") || supported.includes("reasoning_effort")
@@ -146,6 +159,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
         : known?.defaultReasoningEffort,
       requiresThinking:
         boolean(reasoning.mandatory) ??
+        (localReasoningOptions ? !localReasoningOptions.includes("off") : undefined) ??
         (record(capabilities.thinking).supported === true &&
         record(thinkingTypes.disabled).supported === false
           ? true

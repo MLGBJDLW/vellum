@@ -273,10 +273,14 @@ describe("McpHub Integration Tests (T050)", () => {
 
       const result = await hub.callTool("test-server", "echo", { message: "test message" });
 
-      expect(mockCallTool).toHaveBeenCalledWith({
-        name: "echo",
-        arguments: { message: "test message" },
-      });
+      expect(mockCallTool).toHaveBeenCalledWith(
+        {
+          name: "echo",
+          arguments: { message: "test message" },
+        },
+        undefined,
+        { signal: expect.any(AbortSignal), timeout: 2_147_483_647 }
+      );
       expect(result.content).toHaveLength(1);
       expect(result.content[0]).toEqual({ type: "text", text: "Echo: test" });
       expect(result.isError).toBe(false);

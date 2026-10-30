@@ -3,7 +3,7 @@
 // ============================================
 
 import { EventEmitter } from "node:events";
-import type { StreamEvent, ToolDefinition } from "@vellum/provider";
+import type { ReasoningEffort, StreamEvent, ToolDefinition } from "@vellum/provider";
 import type { TokenUsage } from "@vellum/shared";
 import type { OrchestratorCore } from "../agents/orchestrator/core.js";
 import type { SubsessionManager } from "../agents/session/subsession-manager.js";
@@ -135,6 +135,7 @@ export interface AgentLoopConfig {
   getThinkingConfig?: (modeExtendedThinking?: boolean) => {
     enabled: boolean;
     budgetTokens?: number;
+    reasoningEffort?: ReasoningEffort;
   };
   /** Maximum retry attempts for transient failures */
   maxRetries?: number;
@@ -322,6 +323,9 @@ export interface AgentLoopEvents {
   iterationStart: [iteration: number, maxIterations: number];
   /** Emitted when agentic loop continues after tool execution (T058) */
   iterationContinue: [iteration: number, toolCallCount: number];
+  /** Steering is delivered only after the current response/tool receipts are committed. */
+  steeringApplied: [messages: SessionMessage[]];
+  steeringChanged: [count: number];
   /** Emitted when agentic loop reaches max iterations (T058) */
   maxIterationsReached: [iteration: number, maxIterations: number];
   /** Emitted when delegation to a subagent starts (T059) */
@@ -469,6 +473,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   /** Current iteration count for the agentic loop (T058) */
   private iterationCount = 0;
   private activeRun: Promise<void> | undefined;
+  private pendingSteering: SessionMessage[] = [];
+  private streamRequestActive = false;
+  private steeringInterrupted = false;
   private nextIterationRequested = false;
   private interactionQueue: Promise<void> = Promise.resolve();
   private costApprovalDenied = false;
@@ -801,7 +808,47 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * Returns the conversation messages.
    */
   getMessages(): SessionMessage[] {
-    return [...this.messages];
+    return [...this.messages, ...this.pendingSteering];
+  }
+
+  /** Queue an instruction without interrupting an in-flight tool or resetting task budgets. */
+  steer(message: SessionMessage): void {
+    if (message.role !== "user") throw new Error("Steering requires a user message");
+    if (this.state === "shutdown") throw new Error("Cannot steer a shutdown agent");
+    this.pendingSteering.push(message);
+    if (this.streamRequestActive && !this.cancellation.isCancelled) {
+      this.steeringInterrupted = true;
+      this.abortController?.abort();
+      if (this.pauseSignal.isPaused()) this.resume();
+    }
+    this.emit("steeringChanged", this.pendingSteering.length);
+  }
+
+  getPendingSteeringCount(): number {
+    return this.pendingSteering.length;
+  }
+
+  private applySteering(count = this.pendingSteering.length): void {
+    if (this.pendingSteering.length === 0 || count === 0) return;
+    const messages = this.pendingSteering.splice(0, count);
+    this.messages.push(...messages);
+    this.completionAttempted = false;
+    this.resetAutoApprovalCounters();
+    this.emit("steeringApplied", messages);
+    this.emit("steeringChanged", this.pendingSteering.length);
+  }
+
+  private finishSteeredResponse(): void {
+    const partial = this.streamHandler.getState();
+    const parts: import("../session/index.js").SessionMessagePart[] = [];
+    if (partial.accumulatedReasoning.trim())
+      parts.push(SessionParts.reasoning(partial.accumulatedReasoning));
+    if (partial.accumulatedText.trim()) parts.push(SessionParts.text(partial.accumulatedText));
+    // Incomplete provider replay metadata must not resurrect undispatched tool calls.
+    if (parts.length > 0) this.messages.push(createAssistantMessage(parts));
+    this.steeringInterrupted = false;
+    this.transitionTo("idle");
+    this.nextIterationRequested = true;
   }
 
   /**
@@ -810,7 +857,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * If this is a user message, resets auto-approval counters to ensure
    * the user stays engaged with the agent's actions (safety measure).
    */
-  addMessage(message: SessionMessage): void {
+  addMessage(message: SessionMessage, options?: { steeringBefore?: number }): void {
+    if (message.role === "user" && !this.activeRun) this.applySteering(options?.steeringBefore);
     this.messages.push(message);
 
     // Reset auto-approval counters on user message for safety
@@ -1614,6 +1662,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     const pump = async () => {
       do {
         this.nextIterationRequested = false;
+        if (!this.cancellation.isCancelled) this.applySteering();
         await this.runIteration();
       } while (this.nextIterationRequested && !this.cancellation.isCancelled);
     };
@@ -1636,6 +1685,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
     // Reset stream state for this run
     this.streamHandler.resetState();
+    this.steeringInterrupted = false;
     this.lastTurnUsage = null;
     this.terminationManager.setTextOnly(false);
     this.terminationManager.setNaturalStop(false);
@@ -1712,6 +1762,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           { isRetryable: false }
         );
       }
+      // Instructions typed while preparing context can join the request directly.
+      this.applySteering();
       const messagesToSend = this.contextIntegration?.enabled
         ? this.contextIntegration.getApiMessages(this.messages)
         : this.messages;
@@ -1736,6 +1788,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       }
 
       // Create base stream from LLM
+      this.streamRequestActive = true;
       const baseStream = LLM.stream({
         providerType: this.config.providerType,
         model: this.config.model,
@@ -1763,6 +1816,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       const pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> =
         [];
       const streamResult = await this.processStreamResponse(stream, pendingToolCalls);
+      this.streamRequestActive = false;
+      if (this.steeringInterrupted && !this.cancellation.isCancelled) {
+        this.finishSteeredResponse();
+        return;
+      }
 
       // Handle stream interruption due to loop detection
       if (streamResult.interrupted) {
@@ -1904,14 +1962,20 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         }
 
         this.transitionTo("idle");
-        this.emit("complete");
+        if (this.pendingSteering.length > 0) this.nextIterationRequested = true;
+        else this.emit("complete");
       }
     } catch (error) {
+      if (this.steeringInterrupted && !this.cancellation.isCancelled) {
+        this.finishSteeredResponse();
+        return;
+      }
       const handled = await this.handleRunError(error);
       if (!handled) {
         throw error;
       }
     } finally {
+      this.streamRequestActive = false;
       unregisterCancellation?.();
       this.abortController = null;
     }
@@ -2115,6 +2179,15 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           permissionBlocked: true,
         };
       }
+      if (this.pendingSteering.length > 0) {
+        return {
+          id: call.id,
+          name: call.name,
+          result: "Not executed: superseded by a queued user instruction",
+          isError: true,
+          permissionBlocked: false,
+        };
+      }
 
       // Permission allowed - now we can emit toolStart and execute
       this.emit("toolStart", call.id, call.name, call.input);
@@ -2252,14 +2325,14 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Create execution promises with concurrency control
       const executionPromises = toolCalls.map(async (call): Promise<void> => {
         // Check for cancellation before acquiring permit
-        if (this.cancellation.isCancelled) {
+        if (this.cancellation.isCancelled || this.pendingSteering.length > 0) {
           return;
         }
 
         await acquire();
         try {
           // Double-check cancellation after acquiring permit
-          if (this.cancellation.isCancelled) {
+          if (this.cancellation.isCancelled || this.pendingSteering.length > 0) {
             return;
           }
 
@@ -2287,7 +2360,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Sequential execution (original behavior)
       for (const call of toolCalls) {
         // Check for cancellation between tool calls
-        if (this.cancellation.isCancelled) {
+        if (this.cancellation.isCancelled || this.pendingSteering.length > 0) {
           break;
         }
 
@@ -2325,7 +2398,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         toolResults.push({
           id: call.id,
           name: call.name,
-          result: "Operation cancelled before tool completed",
+          result:
+            this.pendingSteering.length > 0 && !this.cancellation.isCancelled
+              ? "Not executed: superseded by a queued user instruction"
+              : "Operation cancelled before tool completed",
           isError: true,
         });
       }
@@ -2350,6 +2426,12 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     if (this.budgetStopReason) {
       if (this.state === "tool_executing") this.transitionTo("idle");
       this.emit("complete");
+      return;
+    }
+
+    if (this.pendingSteering.length > 0) {
+      if (this.state === "tool_executing") this.transitionTo("idle");
+      this.nextIterationRequested = true;
       return;
     }
 

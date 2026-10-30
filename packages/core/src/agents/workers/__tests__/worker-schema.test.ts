@@ -47,7 +47,7 @@ describe("worker tool schema export", () => {
       }))
     );
     expect(capture.config?.tools?.[0]?.inputSchema).toMatchObject({
-      properties: { timeout: { exclusiveMinimum: 0 } },
+      properties: { timeout: { minimum: 0 } },
       required: ["command"],
     });
   });

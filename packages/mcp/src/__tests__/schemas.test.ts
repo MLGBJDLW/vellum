@@ -89,7 +89,7 @@ describe("StdioConfigSchema", () => {
   it("should reject timeout below minimum", () => {
     const config = {
       command: "node",
-      timeout: 0,
+      timeout: -1,
     };
 
     const result = StdioConfigSchema.safeParse(config);

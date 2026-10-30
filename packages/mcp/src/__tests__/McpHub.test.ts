@@ -208,6 +208,39 @@ describe("McpHub Tool System", () => {
   // ============================================
 
   describe("callTool (T023)", () => {
+    it("allows a long tool with no deadline and releases the timeout timer", async () => {
+      vi.useFakeTimers();
+      try {
+        mockCallTool.mockImplementation(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 180_000));
+          return { content: [{ type: "text", text: "done" }] };
+        });
+        hub.connections.push(createMockConnection("long-server", { timeout: 0 }));
+        const pending = hub.callTool("long-server", "work", {});
+        await vi.advanceTimersByTimeAsync(180_000);
+        expect((await pending).content).toEqual([{ type: "text", text: "done" }]);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("forwards caller cancellation into the SDK request", async () => {
+      mockCallTool.mockImplementation(
+        (_request, _schema, options) =>
+          new Promise((_resolve, reject) => {
+            options.signal.addEventListener("abort", () => reject(new Error("cancelled")), {
+              once: true,
+            });
+          })
+      );
+      hub.connections.push(createMockConnection("cancel-server", { timeout: 0 }));
+      const controller = new AbortController();
+      const pending = hub.callTool("cancel-server", "work", {}, controller.signal);
+      controller.abort();
+      await expect(pending).rejects.toThrow("cancelled");
+    });
+
     it("should call tool and return typed content", async () => {
       const mockResponse = {
         content: [{ type: "text", text: "Hello, World!" }],
@@ -220,10 +253,14 @@ describe("McpHub Tool System", () => {
 
       const result = await hub.callTool("test-server", "greet", { name: "World" });
 
-      expect(mockCallTool).toHaveBeenCalledWith({
-        name: "greet",
-        arguments: { name: "World" },
-      });
+      expect(mockCallTool).toHaveBeenCalledWith(
+        {
+          name: "greet",
+          arguments: { name: "World" },
+        },
+        undefined,
+        { signal: expect.any(AbortSignal), timeout: 2_147_483_647 }
+      );
       expect(result).toEqual({
         content: [{ type: "text", text: "Hello, World!" }],
         isError: false,

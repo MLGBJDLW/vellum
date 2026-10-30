@@ -574,6 +574,31 @@ describe("audited model catalog", () => {
   });
 
   it("uses provider lifecycle and reasoning metadata for newly discovered models", () => {
+    const local = normalizeDiscoveredModels("lmstudio", [
+      {
+        key: "local-reasoner",
+        type: "llm",
+        capabilities: {
+          reasoning: { allowed_options: ["low", "medium", "high"], default: "medium" },
+        },
+      },
+    ]);
+    expect(local[0]).toMatchObject({
+      supportsReasoning: true,
+      requiresThinking: true,
+      reasoningEfforts: ["low", "medium", "high"],
+      defaultReasoningEffort: "medium",
+    });
+    const discovered = normalizeDiscoveredModels("openai", [
+      {
+        id: "gpt-7-fixture",
+        reasoning: { supported_efforts: ["low", "high"], default_effort: "high" },
+      },
+    ]);
+    expect(discovered[0]).toMatchObject({
+      supportsReasoning: true,
+      reasoningEfforts: ["low", "high"],
+    });
     const claude = normalizeDiscoveredModels("anthropic", [
       { id: "claude-fixture-retired", lifecycle: "retired" },
       {

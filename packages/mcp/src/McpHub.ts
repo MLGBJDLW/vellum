@@ -614,9 +614,10 @@ export class McpHub implements ConnectionProvider {
   async callTool(
     serverName: string,
     toolName: string,
-    args?: Record<string, unknown>
+    args?: Record<string, unknown>,
+    signal?: AbortSignal
   ): Promise<McpToolCallResponse> {
-    return this.capabilityDiscovery.callTool(serverName, toolName, args);
+    return this.capabilityDiscovery.callTool(serverName, toolName, args, signal);
   }
 
   /**

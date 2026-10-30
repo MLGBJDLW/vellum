@@ -1,5 +1,18 @@
 # @vellum/core
 
+## 0.3.0
+
+### Minor Changes
+
+- Keep the composer available during active tasks and apply steering immediately by interrupting model generation while preserving running tools and their receipts. Restore full-width input, add a persistent sidebar control, and expose model-aware reasoning effort next to Thinking.
+
+  Remove implicit shell, tool, verification and MCP execution deadlines; propagate explicit cancellation and stream large shell output to disk with bounded memory. Refresh provider metadata, recognize local reasoning capabilities, and migrate additional retired model IDs.
+
+### Patch Changes
+
+- Updated dependencies [`adc7f89`]:
+  - @vellum/provider@0.4.2
+
 ## 0.2.2
 
 ### Patch Changes
@@ -25,14 +38,14 @@
   current values when submitting forms, and remove conflicting persistence shortcuts.
   Paint dialogs above the conversation, restore Escape dismissal, and hydrate saved
   session timestamps before rendering the session manager.
-  
+
   Refresh supported provider catalogs and discovery, preserve current model
   capabilities and reasoning transport, and share catalog updates with adapter
   model lists. Discover native local model capabilities without dropping tools or
   configured authentication, and retain SDK request timeouts for long reasoning.
   Remove implicit per-role worker limits while retaining explicit
   budgets, task deadlines, cancellation, and repetition detection.
-  
+
   Upgrade the dependency graph and terminal runtime, remove obsolete dependencies
   and CI caches, and require Node.js 22.22.1+ or 24.11.0+ on their respective release
   lines. Release jobs publish and tag the exact reviewed merge commit.

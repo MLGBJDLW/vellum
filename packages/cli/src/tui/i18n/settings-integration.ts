@@ -35,6 +35,7 @@ export type ThinkingDisplayMode = "full" | "compact";
 export interface ThinkingSettings {
   enabled?: boolean;
   budgetTokens?: number;
+  reasoningEffort?: import("@vellum/provider").ReasoningEffort;
   priority?: "global" | "mode" | "merge";
   displayMode?: ThinkingDisplayMode;
   expandedByDefault?: boolean;

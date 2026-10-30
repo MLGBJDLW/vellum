@@ -8,9 +8,12 @@
  */
 
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { createWriteStream, type WriteStream } from "node:fs";
 import * as fs from "node:fs/promises";
 import { homedir, platform } from "node:os";
 import * as path from "node:path";
+import { finished } from "node:stream/promises";
 
 import { sanitizeEnvironment } from "@vellum/sandbox";
 
@@ -242,7 +245,7 @@ export namespace TruncatedOutputManager {
    */
   export async function save(content: string): Promise<string> {
     const dir = await ensureDir();
-    const filename = `output-${Date.now()}.txt`;
+    const filename = `output-${Date.now()}-${randomUUID()}.txt`;
     const filepath = path.join(dir, filename);
 
     await fs.writeFile(filepath, content, "utf-8");
@@ -251,6 +254,13 @@ export namespace TruncatedOutputManager {
     cleanup().catch(() => {});
 
     return filepath;
+  }
+
+  /** Stream output with backpressure instead of retaining an unbounded shadow copy. */
+  export async function createCapture(): Promise<{ stream: WriteStream; filepath: string }> {
+    const dir = await ensureDir();
+    const filepath = path.join(dir, `output-${Date.now()}-${randomUUID()}.txt`);
+    return { stream: createWriteStream(filepath, { flags: "wx" }), filepath };
   }
 }
 
@@ -412,17 +422,46 @@ export async function executeShell(
     }
   }
 
+  const capture = await TruncatedOutputManager.createCapture().catch(() => undefined);
+  let captureFailed = false;
+  const captureFinished = capture
+    ? finished(capture.stream).catch(() => {
+        captureFailed = true;
+      })
+    : Promise.resolve();
+
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
-    let fullStdout = ""; // Track full output for saving when truncated
-    let fullStderr = "";
     let killed = false;
     let killSignal: NodeJS.Signals | null = null;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let childProcess: ChildProcess | undefined;
     let stdoutDroppedBytes = 0;
     let stderrDroppedBytes = 0;
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let lastChannel = "";
+    const resumeOutput = () => {
+      childProcess?.stdout?.resume();
+      childProcess?.stderr?.resume();
+    };
+    capture?.stream.on("drain", resumeOutput);
+    capture?.stream.on("error", () => {
+      captureFailed = true;
+      resumeOutput();
+    });
+    const captureChunk = (channel: string, data: Buffer) => {
+      if (!capture || captureFailed) return;
+      if (channel !== lastChannel) {
+        capture.stream.write(`\n=== ${channel} ===\n`);
+        lastChannel = channel;
+      }
+      if (!capture.stream.write(data)) {
+        childProcess?.stdout?.pause();
+        childProcess?.stderr?.pause();
+      }
+    };
 
     // Handle abort signal
     const abortHandler = () => {
@@ -439,6 +478,8 @@ export async function executeShell(
     // Set up abort listener
     if (abortSignal) {
       if (abortSignal.aborted) {
+        capture?.stream.end();
+        void captureFinished.then(() => capture && fs.unlink(capture.filepath).catch(() => {}));
         // Already aborted before we started
         resolve({
           stdout: "",
@@ -482,17 +523,11 @@ export async function executeShell(
     // Collect stdout and stream to callback
     childProcess.stdout?.on("data", (data: Buffer) => {
       const chunk = data.toString();
-      fullStdout += chunk; // Always track full output
-      if (stdout.length + data.length <= maxBuffer) {
-        stdout += chunk;
-      } else {
-        // Track dropped bytes when buffer is full
-        const availableSpace = Math.max(0, maxBuffer - stdout.length);
-        if (availableSpace > 0) {
-          stdout += chunk.slice(0, availableSpace);
-        }
-        stdoutDroppedBytes += data.length - availableSpace;
-      }
+      captureChunk("STDOUT", data);
+      const kept = Math.min(data.length, Math.max(0, maxBuffer - stdoutBytes));
+      if (kept > 0) stdout += data.subarray(0, kept).toString();
+      stdoutBytes += kept;
+      stdoutDroppedBytes += data.length - kept;
       // Stream chunk to callback if provided
       if (onStdout) {
         onStdout(chunk);
@@ -506,17 +541,11 @@ export async function executeShell(
     // Collect stderr and stream to callback
     childProcess.stderr?.on("data", (data: Buffer) => {
       const chunk = data.toString();
-      fullStderr += chunk; // Always track full output
-      if (stderr.length + data.length <= maxBuffer) {
-        stderr += chunk;
-      } else {
-        // Track dropped bytes when buffer is full
-        const availableSpace = Math.max(0, maxBuffer - stderr.length);
-        if (availableSpace > 0) {
-          stderr += chunk.slice(0, availableSpace);
-        }
-        stderrDroppedBytes += data.length - availableSpace;
-      }
+      captureChunk("STDERR", data);
+      const kept = Math.min(data.length, Math.max(0, maxBuffer - stderrBytes));
+      if (kept > 0) stderr += data.subarray(0, kept).toString();
+      stderrBytes += kept;
+      stderrDroppedBytes += data.length - kept;
       // Stream chunk to callback if provided
       if (onStderr) {
         onStderr(chunk);
@@ -569,15 +598,13 @@ export async function executeShell(
         });
       };
 
-      // If truncated, save full output to file (non-blocking)
-      if (truncated) {
-        const fullContent = `=== STDOUT ===\n${fullStdout}\n\n=== STDERR ===\n${fullStderr}`;
-        TruncatedOutputManager.save(fullContent)
-          .then((savedPath) => finalizeResult(savedPath))
-          .catch(() => finalizeResult(undefined));
-      } else {
-        finalizeResult();
-      }
+      capture?.stream.end();
+      void captureFinished.then(async () => {
+        const savedPath = truncated && !captureFailed ? capture?.filepath : undefined;
+        if (capture && !savedPath) await fs.unlink(capture.filepath).catch(() => {});
+        finalizeResult(savedPath);
+        if (savedPath) void TruncatedOutputManager.cleanup();
+      });
     });
 
     // Handle spawn errors

@@ -77,6 +77,8 @@ export interface StatusBarProps {
   readonly onModelClick?: () => void;
   /** Open Thinking controls from the displayed status. */
   readonly onThinkingClick?: () => void;
+  readonly effortLabel?: string;
+  readonly onEffortClick?: () => void;
   /** Open approval controls from the displayed trust mode. */
   readonly onApprovalClick?: () => void;
   /** Persistence status for session save indicator */
@@ -243,6 +245,8 @@ export function StatusBar({
   onModeClick,
   onModelClick,
   onThinkingClick,
+  effortLabel,
+  onEffortClick,
   onApprovalClick,
   // NOTE: persistence prop kept for API compatibility but no longer rendered in footer
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -405,6 +409,24 @@ export function StatusBar({
   }
 
   // Cost display
+  if (effortLabel) {
+    rightIndicators.push(
+      <Clickable
+        key="effort"
+        id={`statusbar-effort-${clickId}`}
+        width="auto"
+        enabled={!!onEffortClick}
+        onClick={() => onEffortClick?.()}
+      >
+        <Text color={theme.semantic.text.secondary}>
+          Effort: {effortLabel}
+          {onEffortClick ? " ▾" : ""}
+        </Text>
+      </Clickable>
+    );
+  }
+
+  // Cost display
   if (cost !== undefined && cost > 0) {
     rightIndicators.push(
       <Box key="cost">
@@ -424,18 +446,6 @@ export function StatusBar({
       </Text>
     </Box>
   );
-
-  // Sidebar toggle hint (show only if there's room - not shown when many indicators present)
-  // Skip when there are 4+ indicators to avoid terminal overflow
-  if (rightIndicators.length < 5) {
-    rightIndicators.push(
-      <Box key="sidebar-hint">
-        <Text color={theme.semantic.text.muted} dimColor>
-          Alt+K sidebar
-        </Text>
-      </Box>
-    );
-  }
 
   // Render right indicators with separators (compact layout)
   // ResilienceStatusSegment and ToolTimeoutStatusSegment are rendered first with their own conditional separators
@@ -473,6 +483,7 @@ export function StatusBar({
   return (
     <Box
       flexDirection="row"
+      flexWrap="wrap"
       justifyContent="space-between"
       width="100%"
       paddingX={showBorder ? 1 : 0}
@@ -483,7 +494,7 @@ export function StatusBar({
       {modeSection}
 
       {/* Right: Model, Context, Cost - with separator from mode section */}
-      <Box flexDirection="row" alignItems="center">
+      <Box flexDirection="row" alignItems="center" flexWrap="wrap" flexShrink={1}>
         <Text color={theme.semantic.border.muted}>{SEPARATOR}</Text>
         {renderedRightItems}
       </Box>

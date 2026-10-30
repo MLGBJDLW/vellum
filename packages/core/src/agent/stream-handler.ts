@@ -451,17 +451,13 @@ export class AgentStreamHandler {
 
     const result = await processor.processStream(wrappedStream);
 
-    if (!result.ok) {
-      processor.reset();
-      throw result.error;
-    }
-
-    if (result.ok) {
+    const message = result.ok ? result.value : processor.getPartialMessage();
+    if (message) {
       // Extract state from processed result
-      const hasTextPart = result.value.parts.some(
+      const hasTextPart = message.parts.some(
         (part) => part.type === "text" && part.content.trim().length > 0
       );
-      const hasThinkingPart = result.value.parts.some(
+      const hasThinkingPart = message.parts.some(
         (part) => part.type === "reasoning" && part.content.trim().length > 0
       );
 
@@ -472,17 +468,17 @@ export class AgentStreamHandler {
         this.state.hasThinking = true;
       }
 
-      // The collector owns processor-mode text. Copy its successful result for
+      // The collector owns processor-mode text. Copy its current result for
       // AgentLoop's canonical history without emitting the visible chunks again.
-      this.state.accumulatedText = result.value.parts
+      this.state.accumulatedText = message.parts
         .flatMap((part) => (part.type === "text" ? [part.content] : []))
         .join("");
-      this.state.accumulatedReasoning = result.value.parts
+      this.state.accumulatedReasoning = message.parts
         .flatMap((part) => (part.type === "reasoning" ? [part.content] : []))
         .join("");
 
       // Collect tool calls from parts
-      for (const part of result.value.parts) {
+      for (const part of result.ok ? message.parts : []) {
         if (part.type === "tool") {
           this.state.hasToolCalls = true;
           pendingToolCalls.push({
@@ -495,6 +491,7 @@ export class AgentStreamHandler {
     }
 
     processor.reset();
+    if (!result.ok) throw result.error;
     return { interrupted: false, pendingToolCalls };
   }
 

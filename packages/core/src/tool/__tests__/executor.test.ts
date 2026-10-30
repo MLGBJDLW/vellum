@@ -439,6 +439,53 @@ describe("ToolExecutor", () => {
   // =============================================================================
 
   describe("timeout handling", () => {
+    it.each(["read", "shell"] as const)(
+      "keeps default %s tools running beyond two minutes",
+      async (kind) => {
+        vi.useFakeTimers();
+        try {
+          const executor = new ToolExecutor();
+          executor.registerTool(
+            defineTool({
+              name: "long_task",
+              description: "Long task",
+              parameters: z.object({}),
+              kind,
+              async execute() {
+                await new Promise((resolve) => setTimeout(resolve, 180_000));
+                return ok({ done: true });
+              },
+            })
+          );
+          const pending = executor.execute("long_task", {}, createMockContext());
+          await vi.advanceTimersByTimeAsync(180_000);
+          expect((await pending).result.success).toBe(true);
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it("propagates an explicit timeout to the running tool", async () => {
+      let executionSignal: AbortSignal | undefined;
+      const executor = new ToolExecutor({ defaultTimeout: 10 });
+      executor.registerTool(
+        defineTool({
+          name: "cancel_task",
+          description: "Cancellable task",
+          parameters: z.object({}),
+          kind: "read",
+          async execute(_input, context) {
+            executionSignal = context.abortSignal;
+            return new Promise(() => {});
+          },
+        })
+      );
+      const result = await executor.execute("cancel_task", {}, createMockContext());
+      expect(result.timedOut).toBe(true);
+      expect(executionSignal?.aborted).toBe(true);
+    });
+
     it("should timeout slow tool execution", async () => {
       const slowTool = defineTool({
         name: "slow_tool",

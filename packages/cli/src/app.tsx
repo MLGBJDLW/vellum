@@ -38,10 +38,11 @@ import {
   TerminationReason,
   updateSessionMetadata,
 } from "@vellum/core";
-import { getProviderModels } from "@vellum/provider";
+import { DEFAULT_MODEL_IDS, getDefaultModelId, getProviderModels } from "@vellum/provider";
 import { createId } from "@vellum/shared";
 import { Box, Text, useApp as useInkApp, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { executeTaskCommand } from "./commands/active-run.js";
 import type { DefaultContextProvider } from "./commands/index.js";
 import {
   agentSlashCommands,
@@ -120,6 +121,7 @@ import { modeSlashCommands } from "./commands/mode.js";
 import { switchToModel } from "./commands/model.js";
 import { mouseSlashCommands } from "./commands/mouse.js";
 import { roleSlashCommands } from "./commands/role.js";
+import { getThinkingEffortOptions } from "./commands/think.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
 import { checkUpdateOnStartup } from "./commands/update.js";
 import { setShutdownCleanup } from "./shutdown.js";
@@ -159,7 +161,11 @@ import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
 import { AdaptiveLayout } from "./tui/components/ScreenReaderLayout.js";
 import { type SettingCategory, SettingsPanel } from "./tui/components/SettingsPanel.js";
-import { SIDEBAR_PANELS, SidebarHeader } from "./tui/components/Sidebar/SidebarHeader.js";
+import {
+  SIDEBAR_PANELS,
+  SidebarHeader,
+  SidebarToggle,
+} from "./tui/components/Sidebar/SidebarHeader.js";
 import { SystemStatusPanel } from "./tui/components/Sidebar/SystemStatusPanel.js";
 import { ModelStatusBar } from "./tui/components/Status/ModelStatusBar.js";
 import { FileChangesIndicator } from "./tui/components/StatusBar/FileChangesIndicator.js";
@@ -251,33 +257,6 @@ import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
 import { CursorManager } from "./tui/utils/cursor-manager.js";
 import { calculateCost, getContextWindow, getModelInfo } from "./utils/index.js";
 import { version } from "./version.js";
-
-/**
- * Get default model for a given provider
- */
-function getDefaultModelForProvider(provider: string): string {
-  const defaults: Record<string, string> = {
-    anthropic: "claude-sonnet-4-6",
-    openai: "gpt-5.4",
-    google: "gemini-3.1-flash-preview",
-    "azure-openai": "gpt-5.4",
-    gemini: "gemini-3.1-flash-preview",
-    "vertex-ai": "gemini-3.1-flash-preview",
-    cohere: "command-r-plus",
-    mistral: "mistral-large-latest",
-    groq: "llama-3.3-70b-versatile",
-    fireworks: "accounts/fireworks/models/llama-v3p1-70b-instruct",
-    together: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-    perplexity: "llama-3.1-sonar-large-128k-online",
-    bedrock: "anthropic.claude-3-5-sonnet-20241022-v2:0",
-    ollama: "llama3.2",
-    openrouter: "anthropic/claude-3.5-sonnet",
-    deepseek: "deepseek-chat",
-    qwen: "qwen-max",
-    moonshot: "moonshot-v1-8k",
-  };
-  return defaults[provider] ?? "claude-sonnet-4-6";
-}
 
 function approvalPolicyToTrustMode(policy: ApprovalPolicy): TrustMode {
   switch (policy) {
@@ -734,6 +713,16 @@ function AppContent({
   const themeContext = useTheme();
   const { messages, addMessage, clearMessages, setMessages, pendingMessage } = useMessages();
   const [isLoading, setIsLoading] = useState(false);
+  const taskSubmissionRef = useRef(false);
+  const [steeringCount, setSteeringCount] = useState(0);
+  useEffect(() => {
+    if (!agentLoopProp) return;
+    setSteeringCount(agentLoopProp.getPendingSteeringCount());
+    agentLoopProp.on("steeringChanged", setSteeringCount);
+    return () => {
+      agentLoopProp.off("steeringChanged", setSteeringCount);
+    };
+  }, [agentLoopProp]);
   const [interactivePrompt, setInteractivePrompt] = useState<InteractivePrompt | null>(null);
   const [followupPrompt, setFollowupPrompt] = useState<{
     question: string;
@@ -1398,6 +1387,16 @@ function AppContent({
 
   // Sidebar visibility states
   const [showSidebar, setShowSidebar] = useState(true);
+  const { width: terminalColumns } = useTerminalDimensions();
+  const toggleSidebarVisibility = useCallback(() => {
+    const compact = getSidebarWidth(terminalColumns) === 0;
+    const visible = !showSidebar || (compact && applicationState.focusedArea !== "tools");
+    setShowSidebar(visible);
+    dispatchApplication({
+      type: "SET_FOCUSED_AREA",
+      focusedArea: visible && compact ? "tools" : "input",
+    });
+  }, [showSidebar, terminalColumns, applicationState.focusedArea, dispatchApplication]);
   const [sidebarContent, setSidebarContent] = useState<SidebarContent>("todo");
 
   // Warning ref for thinking mode (used for model capability warnings)
@@ -1438,34 +1437,45 @@ function AppContent({
   });
   const previousTokenUsageRef = useRef({ inputTokens: 0, outputTokens: 0 });
 
-  const switchToSession = useCallback((sessionId: string, session?: Session) => {
-    sessionCacheRef.current = session ?? null;
-    previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
-    tokenUsageRef.current = {
-      inputTokens: 0,
-      outputTokens: 0,
-      thinkingTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      totalCost: 0,
-    };
-    setTokenUsage({
-      inputTokens: 0,
-      outputTokens: 0,
-      thinkingTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      totalCost: 0,
-    });
-    setTurnUsage({
-      inputTokens: 0,
-      outputTokens: 0,
-      thinkingTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    });
-    setActiveSessionId(sessionId);
-  }, []);
+  const switchToSession = useCallback(
+    (sessionId: string, session?: Session): boolean => {
+      if (taskSubmissionRef.current) {
+        addMessage({
+          role: "assistant",
+          content: "Finish or stop the current task before switching sessions.",
+        });
+        return false;
+      }
+      sessionCacheRef.current = session ?? null;
+      previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
+      tokenUsageRef.current = {
+        inputTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalCost: 0,
+      };
+      setTokenUsage({
+        inputTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalCost: 0,
+      });
+      setTurnUsage({
+        inputTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      });
+      setActiveSessionId(sessionId);
+      return true;
+    },
+    [addMessage]
+  );
 
   const refreshSessions = useCallback(async () => {
     const listService = sessionListServiceRef.current;
@@ -1838,11 +1848,13 @@ function AppContent({
   });
 
   const [thinkingModeEnabled, setThinkingModeEnabled] = useState(() => getThinkingState().enabled);
+  const [thinkingEffort, setThinkingEffort] = useState(() => getThinkingState().reasoningEffort);
 
   // Subscribe to global thinking state changes (mode toggle via /think)
   useEffect(() => {
     const unsubscribe = subscribeToThinkingState((state) => {
       setThinkingModeEnabled(state.enabled);
+      setThinkingEffort(state.reasoningEffort);
     });
     return unsubscribe;
   }, []);
@@ -2271,10 +2283,7 @@ function AppContent({
       {
         key: "k",
         alt: true,
-        handler: () => {
-          setShowSidebar((prev) => !prev);
-          dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
-        },
+        handler: toggleSidebarVisibility,
         description: "Toggle sidebar",
         scope: "global",
       },
@@ -2509,6 +2518,7 @@ function AppContent({
     return hotkeys;
   }, [
     backtrackState.canUndo,
+    toggleSidebarVisibility,
     backtrackState.canRedo,
     undoBacktrack,
     redoBacktrack,
@@ -2729,8 +2739,9 @@ function AppContent({
       if (event === "session:resume") {
         const payload = data as ResumeSessionEventData | undefined;
         if (payload?.session) {
-          switchToSession(payload.session.metadata.id, payload.session);
-          setMessages([...toUIMessages(payload.session.messages)]);
+          if (switchToSession(payload.session.metadata.id, payload.session)) {
+            setMessages([...toUIMessages(payload.session.messages)]);
+          }
         }
       }
     },
@@ -3194,7 +3205,9 @@ function AppContent({
       }
 
       try {
-        const result = await commandExecutor.execute(text);
+        const result = await executeTaskCommand(text, taskSubmissionRef.current, () =>
+          commandExecutor.execute(text)
+        );
         await handleCommandResult(result);
       } catch (error) {
         addMessage({
@@ -3223,258 +3236,275 @@ function AppContent({
         return;
       }
 
-      if (agentLoopProp) {
-        if (!credentialManager) {
-          addMessage({
-            role: "assistant",
-            content: "Credential storage is still initializing. Try again shortly.",
-          });
-          return;
-        }
-        const readiness = await switchToModel(
-          `${currentProvider}/${currentModel}`,
-          credentialManager
-        );
-        if (readiness.kind !== "success") {
-          if (readiness.kind === "interactive") {
-            addToHistory(text);
-            const saveCredential = readiness.prompt.handler;
-            await handleCommandResult({
-              ...readiness,
-              prompt: {
-                ...readiness.prompt,
-                handler: async (value: string) => {
-                  const saved = await saveCredential(value);
-                  if (saved.kind !== "success") return saved;
-                  await sendMessage(text);
-                  return { kind: "success" };
-                },
-                onCancel: () => ({
-                  kind: "success",
-                  message: "Credential setup cancelled. Your task is in input history (↑).",
-                }),
-              },
-            });
-            return;
-          }
-          await handleCommandResult(readiness);
-          return;
-        }
-      }
-
-      // Fix 4: Reset turn usage when a new turn starts
-      setTurnUsage({
-        inputTokens: 0,
-        outputTokens: 0,
-        thinkingTokens: 0,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-      });
-
-      // Apply coding-mode handler transformations (vibe/plan/spec) and keep UI phase
-      // progress in sync with SpecModeHandler's injected metadata.
-      let processedText = text;
-      try {
-        const handlerResult = await modeManager.processMessage({
-          content: text,
-          timestamp: Date.now(),
-        });
-
-        const modified = handlerResult.modifiedMessage;
-        if (modified?.content) {
-          processedText = modified.content;
-        }
-
-        const phaseNumber = modified?.metadata?.phaseNumber;
-        if (typeof phaseNumber === "number" && Number.isFinite(phaseNumber)) {
-          setSpecPhase(phaseNumber);
-        } else if (currentMode !== "spec") {
-          // Keep PhaseProgressIndicator stable when leaving spec mode.
-          setSpecPhase(1);
-        }
-
-        if (handlerResult.requiresCheckpoint) {
-          // Pause downstream processing until the user approves the checkpoint.
-          setPromptValue("");
-          setInteractivePrompt({
-            inputType: "confirm",
-            message: "Checkpoint required. Continue?",
-            defaultValue: "n",
-            handler: async (value: string): Promise<CommandResult> => {
-              const confirmed = value.toLowerCase() === "y" || value.toLowerCase() === "yes";
-              if (!confirmed) {
-                return { kind: "success", message: "Checkpoint declined." };
-              }
-
-              // Advance plan/spec handler state when possible.
-              const checkpointResult = await modeManager.processMessage({
-                content: "yes",
-                timestamp: Date.now(),
-                metadata: { advancePhase: true },
-              });
-
-              const checkpointPhase = checkpointResult.modifiedMessage?.metadata?.phaseNumber;
-              if (typeof checkpointPhase === "number" && Number.isFinite(checkpointPhase)) {
-                setSpecPhase(checkpointPhase);
-              }
-
-              return { kind: "success", message: "Checkpoint approved." };
-            },
-            onCancel: () => ({ kind: "success", message: "Checkpoint cancelled." }),
-          });
-          return;
-        }
-      } catch (error) {
-        // Mode handling should never block primary chat; fall back to raw text.
-        console.warn(
-          "[mode] Failed to process message through mode handler:",
-          error instanceof Error ? error.message : String(error)
-        );
-      }
-
-      // Add to input history
-      addToHistory(processedText);
-
-      addMessage({ role: "user", content: processedText });
-
-      // Announce for screen reader
-      announce(`You said: ${processedText}`);
-
-      const effectiveThinking = getEffectiveThinkingConfig(
-        BUILTIN_CODING_MODES[currentMode]?.extendedThinking
-      );
-      if (effectiveThinking.enabled) {
-        const modelInfo = getModelInfo(currentProvider, currentModel);
-        const warningKey = `${currentProvider}/${currentModel}`;
-        if (!modelInfo.supportsReasoning && !thinkingWarningRef.current.has(warningKey)) {
-          addMessage({
-            role: "assistant",
-            content:
-              `! Thinking mode is enabled, but ${currentProvider}/${modelInfo.name} ` +
-              "does not support reasoning. Running this request without thinking.",
-          });
-          thinkingWarningRef.current.add(warningKey);
-        }
-      }
-
-      setIsLoading(true);
-      // Thinking content is now integrated into the streaming message
-      // via the agent-adapter's handleThinking function.
-
-      // Use AgentLoop if available
-      if (agentLoopProp) {
-        // Start the fresh turn before asynchronous preparation so Stop cannot be reset.
-        agentLoopProp.addMessage(createUserMessage([SessionParts.text(processedText)]));
-        let interrupted = false;
-        const observeTermination = (reason: TerminationReason) => {
-          if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
-            interrupted = true;
-        };
-        agentLoopProp.on("terminated", observeTermination);
-        // Wire cancellation to AgentLoop
-        cancellationRef.current = {
-          cancel: (reason) => agentLoopProp.cancel(reason),
-          get isCancelled() {
-            const state = agentLoopProp.getState();
-            return state === "terminated" || state === "shutdown";
-          },
-        };
-
-        try {
-          // Refresh the existing builder so mode/role changes affect the next request
-          // without accumulating old prompts or creating another watcher.
-          await agentLoopProp
-            .getConfig()
-            .promptBuilder?.replaceExternalWorkflow(currentRole, currentMode);
-          if (interrupted) return;
-          agentLoopProp.updateRuntimeConfig({ mode: modeManager.getModeConfig(currentMode) });
-
-          // Wrap agentLoop.run() with resilience (circuit breaker + rate limiter)
-          if (resilientProvider) {
-            const result = await resilientProvider.execute(currentProvider, () =>
-              agentLoopProp.run()
-            );
-            if (!result.success && result.error) {
-              // Check if circuit is open or rate limited
-              const circuitState = resilientProvider.getCircuitState(currentProvider);
-              if (circuitState === "OPEN") {
-                addMessage({
-                  role: "assistant",
-                  content: `! Provider ${currentProvider} circuit breaker is open. Too many failures recently.`,
-                });
-              }
-              throw result.error;
-            }
-          } else {
-            // Fallback to direct execution if resilient provider not ready
-            await agentLoopProp.run();
-          }
-
-          // Messages are synced via AgentLoop adapter event handlers (handleText)
-          // User message was already added via addMessage() above
-          // Notify on completion
-          if (!interrupted) {
-            notifyTaskComplete("Response received");
-            announce("Response received");
-          }
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          // Log resilience metrics for debugging
-          if (resilientProvider) {
-            const stats = resilientProvider.getRateLimiterStats();
-            console.debug("[Resilience] Stats:", stats);
-          }
-          notifyError(errorMsg);
-          addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
-        } finally {
-          agentLoopProp.off("terminated", observeTermination);
-          setIsLoading(false);
-          cancellationRef.current = null;
-        }
+      if (taskSubmissionRef.current && agentLoopProp) {
+        addToHistory(text);
+        agentLoopProp.steer(createUserMessage([SessionParts.text(text)]));
+        announce("Instruction received. Updating the response; an active tool may finish first.");
         return;
       }
 
-      // Fallback: Create a simple cancellation controller for simulated operation
-      let cancelled = false;
-      cancellationRef.current = {
-        cancel: (reason) => {
-          cancelled = true;
-          console.log(`[Cancel] ${reason ?? "user request"}`);
-        },
-        get isCancelled() {
-          return cancelled;
-        },
-      };
+      const earlierSteeringCount = agentLoopProp?.getPendingSteeringCount() ?? 0;
+      taskSubmissionRef.current = true;
+      try {
+        if (agentLoopProp) {
+          if (!credentialManager) {
+            addMessage({
+              role: "assistant",
+              content: "Credential storage is still initializing. Try again shortly.",
+            });
+            return;
+          }
+          const readiness = await switchToModel(
+            `${currentProvider}/${currentModel}`,
+            credentialManager
+          );
+          if (readiness.kind !== "success") {
+            if (readiness.kind === "interactive") {
+              addToHistory(text);
+              const saveCredential = readiness.prompt.handler;
+              await handleCommandResult({
+                ...readiness,
+                prompt: {
+                  ...readiness.prompt,
+                  handler: async (value: string) => {
+                    const saved = await saveCredential(value);
+                    if (saved.kind !== "success") return saved;
+                    await sendMessage(text);
+                    return { kind: "success" };
+                  },
+                  onCancel: () => ({
+                    kind: "success",
+                    message: "Credential setup cancelled. Your task is in input history (↑).",
+                  }),
+                },
+              });
+              return;
+            }
+            await handleCommandResult(readiness);
+            return;
+          }
+        }
 
-      // Simulated response (with cancellation check) - fallback when no AgentLoop
-      await new Promise<void>((resolve) => {
-        const timeoutId = setTimeout(() => {
-          if (!cancelled) {
-            setTimeout(() => {
-              if (!cancelled) {
-                addMessage({ role: "assistant", content: `[Echo] ${processedText}` });
-                notifyTaskComplete("Response received");
-                announce("Response received");
+        // Fix 4: Reset turn usage when a new turn starts
+        setTurnUsage({
+          inputTokens: 0,
+          outputTokens: 0,
+          thinkingTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        });
+
+        // Apply coding-mode handler transformations (vibe/plan/spec) and keep UI phase
+        // progress in sync with SpecModeHandler's injected metadata.
+        let processedText = text;
+        try {
+          const handlerResult = await modeManager.processMessage({
+            content: text,
+            timestamp: Date.now(),
+          });
+
+          const modified = handlerResult.modifiedMessage;
+          if (modified?.content) {
+            processedText = modified.content;
+          }
+
+          const phaseNumber = modified?.metadata?.phaseNumber;
+          if (typeof phaseNumber === "number" && Number.isFinite(phaseNumber)) {
+            setSpecPhase(phaseNumber);
+          } else if (currentMode !== "spec") {
+            // Keep PhaseProgressIndicator stable when leaving spec mode.
+            setSpecPhase(1);
+          }
+
+          if (handlerResult.requiresCheckpoint) {
+            // Pause downstream processing until the user approves the checkpoint.
+            setPromptValue("");
+            setInteractivePrompt({
+              inputType: "confirm",
+              message: "Checkpoint required. Continue?",
+              defaultValue: "n",
+              handler: async (value: string): Promise<CommandResult> => {
+                const confirmed = value.toLowerCase() === "y" || value.toLowerCase() === "yes";
+                if (!confirmed) {
+                  return { kind: "success", message: "Checkpoint declined." };
+                }
+
+                // Advance plan/spec handler state when possible.
+                const checkpointResult = await modeManager.processMessage({
+                  content: "yes",
+                  timestamp: Date.now(),
+                  metadata: { advancePhase: true },
+                });
+
+                const checkpointPhase = checkpointResult.modifiedMessage?.metadata?.phaseNumber;
+                if (typeof checkpointPhase === "number" && Number.isFinite(checkpointPhase)) {
+                  setSpecPhase(checkpointPhase);
+                }
+
+                return { kind: "success", message: "Checkpoint approved." };
+              },
+              onCancel: () => ({ kind: "success", message: "Checkpoint cancelled." }),
+            });
+            return;
+          }
+        } catch (error) {
+          // Mode handling should never block primary chat; fall back to raw text.
+          console.warn(
+            "[mode] Failed to process message through mode handler:",
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+
+        // Add to input history
+        addToHistory(processedText);
+
+        // Preserve the order of the initial instruction and corrections typed during preparation.
+        agentLoopProp?.addMessage(createUserMessage([SessionParts.text(processedText)]), {
+          steeringBefore: earlierSteeringCount,
+        });
+
+        addMessage({ role: "user", content: processedText });
+
+        // Announce for screen reader
+        announce(`You said: ${processedText}`);
+
+        const effectiveThinking = getEffectiveThinkingConfig(
+          BUILTIN_CODING_MODES[currentMode]?.extendedThinking
+        );
+        if (effectiveThinking.enabled) {
+          const modelInfo = getModelInfo(currentProvider, currentModel);
+          const warningKey = `${currentProvider}/${currentModel}`;
+          if (!modelInfo.supportsReasoning && !thinkingWarningRef.current.has(warningKey)) {
+            addMessage({
+              role: "assistant",
+              content:
+                `! Thinking mode is enabled, but ${currentProvider}/${modelInfo.name} ` +
+                "does not support reasoning. Running this request without thinking.",
+            });
+            thinkingWarningRef.current.add(warningKey);
+          }
+        }
+
+        setIsLoading(true);
+        // Thinking content is now integrated into the streaming message
+        // via the agent-adapter's handleThinking function.
+
+        // Use AgentLoop if available
+        if (agentLoopProp) {
+          // Start the fresh turn before asynchronous preparation so Stop cannot be reset.
+          let interrupted = false;
+          const observeTermination = (reason: TerminationReason) => {
+            if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
+              interrupted = true;
+          };
+          agentLoopProp.on("terminated", observeTermination);
+          // Wire cancellation to AgentLoop
+          cancellationRef.current = {
+            cancel: (reason) => agentLoopProp.cancel(reason),
+            get isCancelled() {
+              const state = agentLoopProp.getState();
+              return state === "terminated" || state === "shutdown";
+            },
+          };
+
+          try {
+            // Refresh the existing builder so mode/role changes affect the next request
+            // without accumulating old prompts or creating another watcher.
+            await agentLoopProp
+              .getConfig()
+              .promptBuilder?.replaceExternalWorkflow(currentRole, currentMode);
+            if (interrupted) return;
+            agentLoopProp.updateRuntimeConfig({ mode: modeManager.getModeConfig(currentMode) });
+
+            // Wrap agentLoop.run() with resilience (circuit breaker + rate limiter)
+            if (resilientProvider) {
+              const result = await resilientProvider.execute(currentProvider, () =>
+                agentLoopProp.run()
+              );
+              if (!result.success && result.error) {
+                // Check if circuit is open or rate limited
+                const circuitState = resilientProvider.getCircuitState(currentProvider);
+                if (circuitState === "OPEN") {
+                  addMessage({
+                    role: "assistant",
+                    content: `! Provider ${currentProvider} circuit breaker is open. Too many failures recently.`,
+                  });
+                }
+                throw result.error;
               }
+            } else {
+              // Fallback to direct execution if resilient provider not ready
+              await agentLoopProp.run();
+            }
+
+            // Messages are synced via AgentLoop adapter event handlers (handleText)
+            // User message was already added via addMessage() above
+            // Notify on completion
+            if (!interrupted) {
+              notifyTaskComplete("Response received");
+              announce("Response received");
+            }
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            // Log resilience metrics for debugging
+            if (resilientProvider) {
+              const stats = resilientProvider.getRateLimiterStats();
+              console.debug("[Resilience] Stats:", stats);
+            }
+            notifyError(errorMsg);
+            addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
+          } finally {
+            agentLoopProp.off("terminated", observeTermination);
+            setIsLoading(false);
+            cancellationRef.current = null;
+          }
+          return;
+        }
+
+        // Fallback: Create a simple cancellation controller for simulated operation
+        let cancelled = false;
+        cancellationRef.current = {
+          cancel: (reason) => {
+            cancelled = true;
+            console.log(`[Cancel] ${reason ?? "user request"}`);
+          },
+          get isCancelled() {
+            return cancelled;
+          },
+        };
+
+        // Simulated response (with cancellation check) - fallback when no AgentLoop
+        await new Promise<void>((resolve) => {
+          const timeoutId = setTimeout(() => {
+            if (!cancelled) {
+              setTimeout(() => {
+                if (!cancelled) {
+                  addMessage({ role: "assistant", content: `[Echo] ${processedText}` });
+                  notifyTaskComplete("Response received");
+                  announce("Response received");
+                }
+                resolve();
+              }, 300);
+            } else {
               resolve();
-            }, 300);
-          } else {
-            resolve();
-          }
-        }, 500);
+            }
+          }, 500);
 
-        // Check for cancellation
-        const checkInterval = setInterval(() => {
-          if (cancelled) {
-            clearTimeout(timeoutId);
-            clearInterval(checkInterval);
-            resolve();
-          }
-        }, 50);
-      });
+          // Check for cancellation
+          const checkInterval = setInterval(() => {
+            if (cancelled) {
+              clearTimeout(timeoutId);
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 50);
+        });
 
-      setIsLoading(false);
-      cancellationRef.current = null;
+        setIsLoading(false);
+        cancellationRef.current = null;
+      } finally {
+        taskSubmissionRef.current = false;
+      }
     },
     [
       addToHistory,
@@ -3798,7 +3828,7 @@ function AppContent({
       setIsFirstRun(false);
       setShowOnboarding(false);
       // Task 4: Sync model with provider selection
-      const defaultModel = getDefaultModelForProvider(result.provider);
+      const defaultModel = getDefaultModelId(result.provider) ?? DEFAULT_MODEL_IDS.anthropic;
       applyModelSelection(result.provider, defaultModel);
       setCurrentMode(result.mode as CodingMode);
       void modeManager.forceSwitch(result.mode as CodingMode);
@@ -3957,8 +3987,7 @@ function AppContent({
 
   const handleSessionSelected = useCallback(
     (id: string) => {
-      announce(`Selected session: ${id}`);
-      switchToSession(id);
+      if (switchToSession(id)) announce(`Selected session: ${id}`);
       setShowSessionManager(false);
     },
     [announce, switchToSession]
@@ -4065,6 +4094,7 @@ function AppContent({
       showBranchSelector={showBranchSelector}
       onBranchOpenChange={setShowBranchSelector}
       onSelectSidebar={setSidebarContent}
+      toggleSidebarVisibility={toggleSidebarVisibility}
       closeSidebar={() => {
         setShowSidebar(false);
         dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
@@ -4106,6 +4136,8 @@ function AppContent({
       loadSessionPreviewMessages={loadSessionPreviewMessages}
       isLoading={isLoading}
       thinkingModeEnabled={thinkingModeEnabled}
+      thinkingEffort={thinkingEffort}
+      steeringCount={steeringCount}
       memoryEntries={memoryEntries}
       messages={messages}
       pendingMessage={pendingMessage}
@@ -4253,6 +4285,9 @@ interface AppContentViewProps {
   readonly initError?: Error;
   readonly isLoading: boolean;
   readonly thinkingModeEnabled: boolean;
+  readonly thinkingEffort?: ReturnType<typeof getThinkingState>["reasoningEffort"];
+  readonly toggleSidebarVisibility: () => void;
+  readonly steeringCount: number;
   readonly memoryEntries: MemoryPanelProps["entries"];
   readonly messages: readonly Message[];
   readonly pendingMessage: Message | null;
@@ -4939,6 +4974,8 @@ function AppOverlays({
 }
 
 interface AppHeaderProps {
+  readonly sidebarVisible: boolean;
+  readonly onToggleSidebar: () => void;
   readonly mouseEnabled: boolean;
   readonly onBranchOpenChange: (open: boolean) => void;
   readonly backtrackState: ReturnType<typeof useBacktrack>["backtrackState"];
@@ -4955,6 +4992,8 @@ interface AppHeaderProps {
 }
 
 function AppHeader({
+  sidebarVisible,
+  onToggleSidebar,
   mouseEnabled,
   onBranchOpenChange,
   backtrackState,
@@ -4976,10 +5015,13 @@ function AppHeader({
     <Box flexDirection="column">
       {/* Mode and Cost info moved to footer StatusBar - no longer duplicated here */}
       {initError && <InitErrorBanner error={initError} />}
-      {(currentTip || showFileChanges) && (
+      {
         <Box flexDirection="row" justifyContent="space-between">
           <Box flexGrow={1}>
             {currentTip && <TipBanner tip={currentTip} onDismiss={dismissTip} compact />}
+          </Box>
+          <Box flexShrink={0}>
+            <SidebarToggle visible={sidebarVisible} onToggle={onToggleSidebar} />
           </Box>
           {showFileChanges && (
             <Box flexDirection="row">
@@ -4991,7 +5033,7 @@ function AppHeader({
             </Box>
           )}
         </Box>
-      )}
+      }
       {currentMode === "spec" && (
         <PhaseProgressIndicator currentPhase={specPhase} showLabels showPercentage />
       )}
@@ -5038,6 +5080,7 @@ function AppContentView({
   showBranchSelector,
   onBranchOpenChange,
   onSelectSidebar,
+  toggleSidebarVisibility,
   closeSidebar,
   commandOptions,
   credentialManager,
@@ -5076,6 +5119,8 @@ function AppContentView({
   loadSessionPreviewMessages,
   isLoading,
   thinkingModeEnabled,
+  thinkingEffort,
+  steeringCount,
   memoryEntries,
   messages,
   pendingMessage,
@@ -5178,6 +5223,14 @@ function AppContentView({
   });
 
   const canOpenPicker = !isLoading && !hasBlockingOverlay;
+  const thinkingModel = getModelInfo(currentProvider, currentModel);
+  const effortOptions = getThinkingEffortOptions(currentProvider, currentModel);
+  const effortLabel =
+    effortOptions.length > 0
+      ? thinkingEffort && effortOptions.includes(thinkingEffort)
+        ? thinkingEffort
+        : `auto${thinkingModel.defaultReasoningEffort ? ` (${thinkingModel.defaultReasoningEffort})` : ""}`
+      : undefined;
 
   const footer = (
     <StatusBar
@@ -5196,6 +5249,12 @@ function AppContentView({
           : undefined
       }
       onApprovalClick={!hasBlockingOverlay ? openApprovalQueue : undefined}
+      effortLabel={effortLabel}
+      onEffortClick={
+        !hasBlockingOverlay && effortLabel
+          ? () => handleCommand({ name: "think", args: ["effort"], raw: "/think effort" })
+          : undefined
+      }
       tokens={{
         current: totalTokens,
         max: contextWindow,
@@ -5217,7 +5276,7 @@ function AppContentView({
       }}
       cost={tokenUsage.totalCost}
       trustMode={trustMode}
-      thinking={{ active: thinkingModeEnabled }}
+      thinking={{ active: thinkingModeEnabled || thinkingModel.requiresThinking === true }}
       showAllModes={false}
       persistence={persistence}
     />
@@ -5271,18 +5330,18 @@ function AppContentView({
   const commandPlaceholder = followupPrompt
     ? "Reply to follow-up..."
     : isLoading
-      ? "Thinking..."
+      ? "Add an instruction… Enter to steer"
       : "Type a message or /command...";
 
-  const commandInputDisabled =
-    (isLoading && !followupPrompt) || !!interactivePrompt || !!pendingOperation;
+  const commandInputDisabled = !!interactivePrompt || !!pendingOperation;
 
-  const commandInputFocused =
-    !sidebarFocused && (!isLoading || !!followupPrompt) && !hasBlockingOverlay;
+  const commandInputFocused = !sidebarFocused && !hasBlockingOverlay;
 
   const headerContent = (
     <MouseInteractionScope enabled={!hasModalOverlay}>
       <AppHeader
+        sidebarVisible={showSidebar && (getSidebarWidth(terminalSize.width) > 0 || sidebarFocused)}
+        onToggleSidebar={toggleSidebarVisibility}
         mouseEnabled={!isLoading && !hasModalOverlay}
         onBranchOpenChange={onBranchOpenChange}
         backtrackState={backtrackState}
@@ -5471,6 +5530,14 @@ function AppContentView({
             cwd={process.cwd()}
           />
         </Clickable>
+        {steeringCount > 0 && (
+          <Text dimColor>
+            {steeringCount} instruction{steeringCount === 1 ? "" : "s"} queued ·{" "}
+            {isLoading
+              ? "steering now; waiting for active tools if needed"
+              : "saved for the next turn"}
+          </Text>
+        )}
       </Box>
     </>
   );

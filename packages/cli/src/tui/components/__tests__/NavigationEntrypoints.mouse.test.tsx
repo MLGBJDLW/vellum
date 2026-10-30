@@ -10,7 +10,7 @@ import { ThemeProvider } from "../../theme/index.js";
 import { globalClickRegistry } from "../../utils/click-region.js";
 import { parseMouseEvent } from "../../utils/mouse-parser.js";
 import { ModeSelector } from "../ModeSelector.js";
-import { SIDEBAR_PANELS, SidebarHeader } from "../Sidebar/SidebarHeader.js";
+import { SIDEBAR_PANELS, SidebarHeader, SidebarToggle } from "../Sidebar/SidebarHeader.js";
 import { StatusBar } from "../StatusBar/StatusBar.js";
 
 afterEach(async () => {
@@ -58,6 +58,43 @@ async function send(screen: ReturnType<typeof render>, keys: string) {
 }
 
 describe("mode, status and sidebar entrypoints", () => {
+  it("keeps a clickable sidebar opener after closing and honors modal scope", async () => {
+    const toggle = vi.fn();
+    let screen!: ReturnType<typeof render>;
+    await act(async () => {
+      screen = render(wrap(<SidebarToggle visible={false} onToggle={toggle} />));
+    });
+    expect(screen.lastFrame()).toContain("Alt+K");
+    await act(async () => click(screen, "Open sidebar"));
+    expect(toggle).toHaveBeenCalledOnce();
+    await act(async () =>
+      screen.rerender(wrap(<SidebarToggle visible={true} onToggle={toggle} />, false))
+    );
+    await act(async () => click(screen, "Hide sidebar"));
+    expect(toggle).toHaveBeenCalledOnce();
+  });
+
+  it("opens the effort control independently of the Thinking toggle", async () => {
+    const effort = vi.fn();
+    const thinking = vi.fn();
+    let screen!: ReturnType<typeof render>;
+    await act(async () => {
+      screen = render(
+        wrap(
+          <StatusBar
+            thinking={{ active: true }}
+            effortLabel="high"
+            onEffortClick={effort}
+            onThinkingClick={thinking}
+          />
+        )
+      );
+    });
+    await act(async () => click(screen, "Effort: high"));
+    expect(effort).toHaveBeenCalledOnce();
+    expect(thinking).not.toHaveBeenCalled();
+  });
+
   it("renders all existing modes and chooses the clicked row on release", async () => {
     const onSelect = vi.fn();
     let screen!: ReturnType<typeof render>;

@@ -1,4 +1,4 @@
-/** OpenRouter offline shortlist from https://openrouter.ai/api/v1/models, 2026-10-29.
+/** OpenRouter offline shortlist from https://openrouter.ai/api/v1/models, 2026-10-30.
  * Regenerate: pnpm exec tsx scripts/update-openrouter-catalog.ts
  */
 import type { ModelInfo } from "../types.js";
@@ -104,14 +104,14 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: true,
-    inputPrice: 0.15,
-    outputPrice: 0.6,
+    inputPrice: 0.3,
+    outputPrice: 1.2,
     deprecated: false,
     supportsSampling: true,
     reasoningEfforts: ["max", "high", "low", "none"],
     defaultReasoningEffort: "high",
     requiresThinking: false,
-    cacheReadsPrice: 0.003,
+    cacheReadsPrice: 0.006,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
   },
@@ -177,9 +177,9 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "high",
     requiresThinking: false,
     deprecated: false,
-    inputPrice: 1.36,
-    outputPrice: 4.18,
-    cacheReadsPrice: 0.14,
+    inputPrice: 0.7,
+    outputPrice: 2.1,
+    cacheReadsPrice: 0.07,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
   },
@@ -648,7 +648,7 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     requiresThinking: true,
     deprecated: false,
     inputPrice: 0.0457,
-    outputPrice: 0.0742,
+    outputPrice: 0.0701,
     cacheReadsPrice: 0.03,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
@@ -691,9 +691,9 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "max",
     requiresThinking: true,
     deprecated: false,
-    inputPrice: 0.0699,
-    outputPrice: 1.4,
-    cacheReadsPrice: 0.0689,
+    inputPrice: 0.08,
+    outputPrice: 3.6,
+    cacheReadsPrice: 0.076,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
   },
@@ -724,7 +724,7 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     provider: "openrouter",
     name: "Qwen: Qwen3.8 2.4T A95B",
     contextWindow: 1048576,
-    maxOutputTokens: 909000,
+    maxOutputTokens: 131072,
     supportsTools: true,
     supportsVision: false,
     supportsReasoning: true,
@@ -757,9 +757,9 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "high",
     requiresThinking: false,
     deprecated: false,
-    inputPrice: 0.66,
-    outputPrice: 1.98,
-    cacheReadsPrice: 0.022,
+    inputPrice: 1.32,
+    outputPrice: 3.96,
+    cacheReadsPrice: 0.044,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
   },
@@ -934,9 +934,9 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "high",
     requiresThinking: false,
     deprecated: false,
-    inputPrice: 0.95526,
-    outputPrice: 1.91052,
-    cacheReadsPrice: 0.079605,
+    inputPrice: 0.816234,
+    outputPrice: 1.632468,
+    cacheReadsPrice: 0.0680195,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
   },

@@ -378,10 +378,10 @@ export interface ExecuteOptions {
 // T008: Default Timeouts
 // =============================================================================
 
-/** Default timeout for most tools (30 seconds) */
+/** Default deadline is disabled (0); explicit deadlines remain supported. */
 export const DEFAULT_TIMEOUT_MS = CONFIG_DEFAULTS.timeouts.toolDefault;
 
-/** Extended timeout for shell tools (120 seconds) */
+/** Shell execution has no default deadline. */
 export const SHELL_TIMEOUT_MS = CONFIG_DEFAULTS.timeouts.shell;
 
 // =============================================================================
@@ -961,7 +961,7 @@ export class ToolExecutor {
     // Set up timeout warning timer
     const warningThreshold = this.timeoutWarningThreshold;
     const warningDelay = timeout * warningThreshold;
-    if (this.eventBus && warningDelay > 0) {
+    if (this.eventBus && Number.isFinite(timeout) && warningDelay > 0) {
       warningId = setTimeout(() => {
         const elapsedMs = Date.now() - startedAt;
         this.eventBus?.emit(toolTimeoutWarning, {
@@ -976,33 +976,39 @@ export class ToolExecutor {
     }
 
     // Set up abort signal listener
+    let rejectAbort: ((error: ToolAbortedError) => void) | undefined;
     const abortHandler = () => {
+      rejectAbort?.(new ToolAbortedError(toolName));
       timeoutController.abort();
     };
-    abortSignal?.addEventListener("abort", abortHandler);
 
     try {
-      // Create promise for tool execution
-      const executionPromise = tool.execute(input, context);
-
       // Create promise for timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
+        if (!Number.isFinite(timeout) || timeout <= 0) return;
         timeoutId = setTimeout(() => {
-          timeoutController.abort();
           reject(new ToolTimeoutError(toolName, timeout));
+          timeoutController.abort();
         }, timeout);
       });
 
       // Create promise for abort signal
       const abortPromise = abortSignal
         ? new Promise<never>((_, reject) => {
+            rejectAbort = reject;
             if (abortSignal.aborted) {
-              reject(new ToolAbortedError(toolName));
+              abortHandler();
+              return;
             }
-            const onAbort = () => reject(new ToolAbortedError(toolName));
-            abortSignal.addEventListener("abort", onAbort, { once: true });
+            abortSignal.addEventListener("abort", abortHandler, { once: true });
           })
         : new Promise<never>(() => {}); // Never resolves
+
+      // The tool must receive the same cancellation that ends the executor wait.
+      const executionPromise = tool.execute(input, {
+        ...context,
+        abortSignal: timeoutController.signal,
+      });
 
       // Race execution against timeout and abort
       const result = await Promise.race([executionPromise, timeoutPromise, abortPromise]);

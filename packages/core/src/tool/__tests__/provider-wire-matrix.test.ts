@@ -241,7 +241,7 @@ describe.each(adapters)("all builtin schemas through the real %s adapter", (name
       expect(sent.map((tool) => tool.name)).toEqual(tools.map((tool) => tool.name));
       expect(sent.flatMap((tool) => invalidBounds(tool.schema, tool.name))).toEqual([]);
       expect(sent.find((tool) => tool.name === "bash")?.schema).toMatchObject({
-        properties: { timeout: { type: "integer", exclusiveMinimum: 0 } },
+        properties: { timeout: { type: "integer", minimum: 0 } },
         required: ["command"],
       });
       expect(sent.find((tool) => tool.name === "read_many_files")?.schema).toMatchObject({
