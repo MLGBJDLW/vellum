@@ -329,8 +329,9 @@ export type CircuitBreakerConfig = z.infer<typeof CircuitBreakerConfigSchema>;
 export const ThinkingConfigSchema = z.object({
   /** Enable extended thinking mode */
   enabled: z.boolean().default(false),
-  /** Token budget for thinking process (1000-128000) */
-  budgetTokens: z.number().min(1000).max(128000).default(10000),
+  /** Requested thinking budget; the provider enforces its model's actual limit. */
+  budgetTokens: z.number().int().min(1000).default(10000),
+  reasoningEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
   /** Priority for merging thinking config: global, mode, or merge */
   priority: z.enum(["global", "mode", "merge"]).default("merge"),
 });

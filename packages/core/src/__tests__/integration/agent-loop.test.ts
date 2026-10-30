@@ -100,6 +100,138 @@ describe("AgentLoop Integration (T034)", () => {
 
   describe("Happy Path", () => {
     it.each([false, true])(
+      "interrupts an unfinished thinking stream immediately for steering (processor=%s)",
+      async (useStreamProcessor) => {
+        const loop = new AgentLoop({ ...config, useStreamProcessor, enableEvidencePack: false });
+        let started!: () => void;
+        const thinking = new Promise<void>((resolve) => {
+          started = resolve;
+        });
+        let interrupted = false;
+        vi.mocked(LLM.stream)
+          .mockImplementationOnce(
+            (request) =>
+              ({
+                async *[Symbol.asyncIterator]() {
+                  yield { type: "reasoning", content: "Working on the original task" };
+                  started();
+                  await new Promise<void>((_resolve, reject) => {
+                    request.abortSignal?.addEventListener(
+                      "abort",
+                      () => {
+                        interrupted = true;
+                        reject(new Error("aborted"));
+                      },
+                      { once: true }
+                    );
+                  });
+                  throw new Error("The original stream must not finish");
+                },
+              }) as ReturnType<typeof LLM.stream>
+          )
+          .mockReturnValueOnce(
+            createMockStream([
+              { type: "text", content: "Applied the correction" },
+              { type: "done", stopReason: "end_turn" },
+            ]) as ReturnType<typeof LLM.stream>
+          );
+        loop.addMessage(createSessionMessage("user", "Original task"));
+        const run = loop.run();
+        await thinking;
+        loop.steer(createSessionMessage("user", "Correct it now"));
+        await run;
+        expect(interrupted).toBe(true);
+        expect(LLM.stream).toHaveBeenCalledTimes(2);
+        expect(
+          loop
+            .getMessages()
+            .some((message) =>
+              message.parts.some((part) => part.type === "text" && part.text === "Correct it now")
+            )
+        ).toBe(true);
+        expect(loop.getState()).toBe("idle");
+      }
+    );
+
+    it.each([false, true])(
+      "finishes active tools and skips queued tools when steered (parallel=%s)",
+      async (parallelToolExecution) => {
+        const loop = new AgentLoop({
+          ...config,
+          parallelToolExecution,
+          maxToolConcurrency: 1,
+          enableEvidencePack: false,
+        });
+        const executed: string[] = [];
+        mockToolExecutor.registerTool({
+          definition: {
+            name: "work",
+            description: "Work",
+            kind: "read",
+            parameters: z.object({ name: z.string() }),
+          },
+          async execute(input) {
+            executed.push(z.object({ name: z.string() }).parse(input).name);
+            loop.steer(createSessionMessage("user", "Use a different plan"));
+            return { success: true, output: "receipt" };
+          },
+        });
+        vi.mocked(LLM.stream)
+          .mockReturnValueOnce(
+            createMockStream([
+              { type: "toolCall", id: "first", name: "work", input: { name: "first" } },
+              { type: "toolCall", id: "second", name: "work", input: { name: "second" } },
+              { type: "done", stopReason: "tool_use" },
+            ]) as ReturnType<typeof LLM.stream>
+          )
+          .mockReturnValueOnce(
+            createMockStream([
+              { type: "text", content: "Updated plan" },
+              { type: "done", stopReason: "end_turn" },
+            ]) as ReturnType<typeof LLM.stream>
+          );
+        await loop.run();
+        expect(executed).toEqual(["first"]);
+        const history = JSON.stringify(loop.getMessages());
+        expect(history).toContain("receipt");
+        expect(history).toContain("superseded by a queued user instruction");
+        expect(history).toContain("Use a different plan");
+        expect(LLM.stream).toHaveBeenCalledTimes(2);
+      }
+    );
+
+    it("consumes steering after the current response without starting a second run", async () => {
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      loop.addMessage(createSessionMessage("user", "Original task"));
+      const complete = vi.fn();
+      loop.on("complete", complete);
+      vi.mocked(LLM.stream)
+        .mockReturnValueOnce({
+          async *[Symbol.asyncIterator]() {
+            yield { type: "text", content: "Initial response" };
+            loop.steer(createSessionMessage("user", "Use the updated requirement"));
+            yield { type: "done", stopReason: "end_turn" };
+          },
+        } as ReturnType<typeof LLM.stream>)
+        .mockReturnValueOnce(
+          createMockStream([
+            { type: "text", content: "Updated response" },
+            { type: "done", stopReason: "end_turn" },
+          ]) as ReturnType<typeof LLM.stream>
+        );
+      await loop.run();
+      expect(LLM.stream).toHaveBeenCalledTimes(2);
+      expect(loop.getMessages().map((message) => message.parts[0])).toEqual([
+        { type: "text", text: "Original task" },
+        { type: "text", text: "Initial response" },
+        { type: "text", text: "Use the updated requirement" },
+        { type: "text", text: "Updated response" },
+      ]);
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(loop.getPendingSteeringCount()).toBe(0);
+    });
+
+    it.each([false, true])(
       "does not report completion after a failed partial stream (processor=%s)",
       async (useStreamProcessor) => {
         vi.mocked(LLM.stream).mockReturnValue(

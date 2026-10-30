@@ -402,6 +402,22 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     pendingUsageRef.current = null;
   }, []); // Empty deps = stable callback
 
+  const handleSteeringApplied = useCallback(
+    (messages: ReturnType<AgentLoop["getMessages"]>) => {
+      handleComplete();
+      for (const message of messages) {
+        addMessageRef.current({
+          role: "user",
+          content: message.parts
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join("\n"),
+        });
+      }
+    },
+    [handleComplete]
+  );
+
   const handleUsage = useCallback((usage: MessageTokenUsage) => {
     const tokenUsage: MessageTokenUsage = {
       inputTokens: usage.inputTokens,
@@ -706,6 +722,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
         connectedLoopRef.current.off("text", handleText);
         connectedLoopRef.current.off("thinking", handleThinking);
         connectedLoopRef.current.off("complete", handleComplete);
+        connectedLoopRef.current.off("steeringApplied", handleSteeringApplied);
         connectedLoopRef.current.off("error", handleError);
         connectedLoopRef.current.off("usage", handleUsage);
         connectedLoopRef.current.off("toolStart", handleToolStart);
@@ -726,6 +743,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       agentLoop.on("text", handleText);
       agentLoop.on("thinking", handleThinking);
       agentLoop.on("complete", handleComplete);
+      agentLoop.on("steeringApplied", handleSteeringApplied);
       agentLoop.on("error", handleError);
       agentLoop.on("usage", handleUsage);
       agentLoop.on("toolStart", handleToolStart);
@@ -742,6 +760,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       handleText,
       handleThinking,
       handleComplete,
+      handleSteeringApplied,
       handleError,
       handleUsage,
       handleToolStart,
@@ -763,6 +782,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
       connectedLoopRef.current.off("text", handleText);
       connectedLoopRef.current.off("thinking", handleThinking);
       connectedLoopRef.current.off("complete", handleComplete);
+      connectedLoopRef.current.off("steeringApplied", handleSteeringApplied);
       connectedLoopRef.current.off("error", handleError);
       connectedLoopRef.current.off("usage", handleUsage);
       connectedLoopRef.current.off("toolStart", handleToolStart);
@@ -792,6 +812,7 @@ export function useAgentAdapter(options: UseAgentAdapterOptions = {}): UseAgentA
     handleText,
     handleThinking,
     handleComplete,
+    handleSteeringApplied,
     handleError,
     handleUsage,
     handleToolStart,

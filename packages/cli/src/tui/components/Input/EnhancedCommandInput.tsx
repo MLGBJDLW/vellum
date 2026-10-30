@@ -408,7 +408,7 @@ export function EnhancedCommandInput({
       mentionAutocomplete.fileSuggestions.suggestions.length > 0);
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width="100%">
       <TextInput
         ref={inputRef}
         value={value}

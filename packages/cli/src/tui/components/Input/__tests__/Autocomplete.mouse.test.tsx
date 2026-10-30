@@ -13,6 +13,7 @@ import { MouseInteractionScope, MouseProvider } from "../../../context/MouseCont
 import { useMouseScroll } from "../../../hooks/useMouseScroll.js";
 import { ThemeProvider } from "../../../theme/index.js";
 import { globalClickRegistry } from "../../../utils/click-region.js";
+import { Clickable } from "../../common/Clickable.js";
 import { Autocomplete } from "../Autocomplete.js";
 import { EnhancedCommandInput } from "../EnhancedCommandInput.js";
 import { MentionAutocomplete } from "../MentionAutocomplete.js";
@@ -275,6 +276,29 @@ describe("autocomplete terminal mouse interaction", () => {
     expect(screen.lastFrame()).toContain("file4.ts");
     await send(screen, `${wheel(position(screen, "file4.ts"))}\t`);
     expect(onSelect).toHaveBeenCalledExactlyOnceWith("src/file5.ts", "value");
+  });
+
+  it("fills the composer click target and accepts instructions while a response is running", async () => {
+    const onMessage = vi.fn();
+    let screen!: ReturnType<typeof render>;
+    await act(async () => {
+      screen = render(
+        wrap(
+          <Clickable id="composer" onClick={vi.fn()}>
+            <EnhancedCommandInput
+              onCommand={vi.fn()}
+              onMessage={onMessage}
+              placeholder="Add an instruction… Enter to steer"
+            />
+          </Clickable>
+        )
+      );
+    });
+    const border = (screen.lastFrame() ?? "").split("\n").find((line) => line.includes("╭")) ?? "";
+    expect(stringWidth(border.trim())).toBe(90);
+    await send(screen, "Change the requirement");
+    await send(screen, "\r");
+    expect(onMessage).toHaveBeenCalledExactlyOnceWith("Change the requirement");
   });
 
   it("completes all slash levels through the parent without executing until explicit Enter", async () => {

@@ -9,6 +9,7 @@
  */
 
 import { loadConfig } from "@vellum/core";
+import { getModelInfo, type ReasoningEffort, reasoningEffortSchema } from "@vellum/provider";
 import {
   getThinkingAutoCollapse,
   getThinkingAutoCollapseDelayMs,
@@ -26,6 +27,7 @@ import {
   type ThinkingDisplayMode,
   type ThinkingSettings,
 } from "../tui/i18n/index.js";
+import { getModelCommandConfig } from "./model.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, success } from "./types.js";
 
@@ -50,6 +52,7 @@ export type { ThinkingDisplayMode };
 export interface EffectiveThinkingConfig {
   enabled: boolean;
   budgetTokens?: number;
+  reasoningEffort?: ReasoningEffort;
 }
 
 // =============================================================================
@@ -65,6 +68,7 @@ interface ThinkingState {
   enabled: boolean;
   budgetTokens: number;
   priority: ThinkingPriority;
+  reasoningEffort?: ReasoningEffort;
 }
 
 /**
@@ -89,6 +93,7 @@ function loadInitialThinkingState(): ThinkingState {
       enabled: savedSettings.enabled ?? defaultThinkingState.enabled,
       budgetTokens: savedSettings.budgetTokens ?? defaultThinkingState.budgetTokens,
       priority: savedSettings.priority ?? defaultThinkingState.priority,
+      reasoningEffort: reasoningEffortSchema.safeParse(savedSettings.reasoningEffort).data,
     };
   }
 
@@ -103,6 +108,7 @@ function loadInitialThinkingState(): ThinkingState {
     enabled: enabled ?? defaultThinkingState.enabled,
     budgetTokens: budgetTokens ?? defaultThinkingState.budgetTokens,
     priority: priority ?? defaultThinkingState.priority,
+    reasoningEffort: result.value.thinking.reasoningEffort,
   };
 }
 
@@ -126,6 +132,7 @@ function persistThinkingState(): void {
     enabled: thinkingState.enabled,
     budgetTokens: thinkingState.budgetTokens,
     priority: thinkingState.priority,
+    reasoningEffort: thinkingState.reasoningEffort,
   };
   // Fire-and-forget - don't block UI for settings persistence
   setThinkingSettings(settings);
@@ -142,6 +149,19 @@ function persistThinkingState(): void {
  */
 export function getThinkingState(): Readonly<ThinkingState> {
   return { ...thinkingState };
+}
+
+export function setThinkingEffort(reasoningEffort: ReasoningEffort | undefined): void {
+  thinkingState = { ...thinkingState, reasoningEffort };
+  notifyListeners();
+  persistThinkingState();
+}
+
+/** The same catalog used by the request resolver owns the displayed choices. */
+export function getThinkingEffortOptions(provider: string, model: string): ReasoningEffort[] {
+  return (getModelInfo(provider, model).reasoningEfforts ?? []).filter(
+    (effort) => effort !== "none"
+  );
 }
 
 /**
@@ -347,6 +367,7 @@ export function getEffectiveThinkingConfig(
   return {
     enabled: effectiveEnabled,
     budgetTokens: effectiveEnabled ? budgetTokens : undefined,
+    reasoningEffort: effectiveEnabled ? thinkingState.reasoningEffort : undefined,
   };
 }
 
@@ -356,9 +377,6 @@ export function getEffectiveThinkingConfig(
 
 /** Minimum budget tokens */
 const MIN_BUDGET_TOKENS = 1000;
-
-/** Maximum budget tokens */
-const MAX_BUDGET_TOKENS = 128000;
 
 /** Default budget tokens */
 const DEFAULT_BUDGET_TOKENS = 10000;
@@ -443,6 +461,7 @@ export const thinkCommand: SlashCommand = {
   subcommands: [
     { name: "on", description: "Enable extended thinking" },
     { name: "off", description: "Disable extended thinking" },
+    { name: "effort", description: "Select reasoning effort for the current model" },
     { name: "mode", description: "Set display mode (full/compact)" },
     { name: "expand", description: "Set expanded by default (on/off/auto)" },
   ],
@@ -459,7 +478,7 @@ export const thinkCommand: SlashCommand = {
       name: "budget",
       shorthand: "b",
       type: "number",
-      description: `Token budget for thinking (${MIN_BUDGET_TOKENS}-${MAX_BUDGET_TOKENS})`,
+      description: `Token budget for thinking (at least ${MIN_BUDGET_TOKENS}; model limits apply)`,
       required: false,
       default: DEFAULT_BUDGET_TOKENS,
     },
@@ -468,6 +487,8 @@ export const thinkCommand: SlashCommand = {
     "/think              - Show current thinking status",
     "/think on           - Enable thinking mode",
     "/think off          - Disable thinking mode",
+    "/think effort       - Choose model-supported reasoning effort",
+    "/think effort high  - Set reasoning effort (auto uses the model default)",
     "/think on --budget 20000  - Enable with 20K token budget",
     "/think -b 50k       - Set budget to 50K tokens",
     "/think mode full    - Show full thinking content",
@@ -482,6 +503,43 @@ export const thinkCommand: SlashCommand = {
     const stateArg = ctx.parsedArgs.positional[0] as string | undefined;
     const budgetArg = ctx.parsedArgs.named.budget as string | number | undefined;
 
+    if (stateArg === "effort") {
+      const config = getModelCommandConfig();
+      if (!config)
+        return error("INVALID_ARGUMENT", "Select a model before choosing reasoning effort.");
+      const choices = getThinkingEffortOptions(config.provider, config.model);
+      if (choices.length === 0) {
+        return error(
+          "INVALID_ARGUMENT",
+          `${config.model} does not advertise reasoning effort controls.`,
+          ["Use /think on --budget <tokens> for models with a thinking token budget."]
+        );
+      }
+      const select = async (value: string): Promise<CommandResult> => {
+        const parsed = reasoningEffortSchema.safeParse(value);
+        if (value !== "auto" && (!parsed.success || !choices.includes(parsed.data))) {
+          return error("INVALID_ARGUMENT", `Supported effort: auto, ${choices.join(", ")}`);
+        }
+        setThinkingEffort(value === "auto" ? undefined : parsed.data);
+        setThinkingEnabled(true);
+        return success(`Reasoning effort: ${value}. Applies to the next model request.`);
+      };
+      const value = ctx.parsedArgs.positional[1];
+      if (typeof value === "string") return select(value);
+      return {
+        kind: "interactive",
+        prompt: {
+          inputType: "select",
+          message: `Reasoning effort · ${config.model} (higher effort trades speed for depth)`,
+          options: ["auto", ...choices],
+          defaultValue: choices.includes(thinkingState.reasoningEffort as ReasoningEffort)
+            ? thinkingState.reasoningEffort
+            : "auto",
+          handler: select,
+        },
+      };
+    }
+
     // Handle budget argument if provided
     let newBudget: number | undefined;
     if (budgetArg !== undefined) {
@@ -490,14 +548,14 @@ export const thinkCommand: SlashCommand = {
 
       if (budgetValue === null) {
         return error("INVALID_ARGUMENT", `Invalid budget value: ${budgetArg}`, [
-          `Budget must be a number between ${formatBudget(MIN_BUDGET_TOKENS)} and ${formatBudget(MAX_BUDGET_TOKENS)}.`,
+          `Budget must be an integer of at least ${formatBudget(MIN_BUDGET_TOKENS)} tokens.`,
           "Examples: 10000, 20k, 50K, 128000",
         ]);
       }
 
-      if (budgetValue < MIN_BUDGET_TOKENS || budgetValue > MAX_BUDGET_TOKENS) {
+      if (!Number.isSafeInteger(budgetValue) || budgetValue < MIN_BUDGET_TOKENS) {
         return error("INVALID_ARGUMENT", `Budget out of range: ${formatBudget(budgetValue)}`, [
-          `Budget must be between ${formatBudget(MIN_BUDGET_TOKENS)} and ${formatBudget(MAX_BUDGET_TOKENS)}.`,
+          `Budget must be an integer of at least ${formatBudget(MIN_BUDGET_TOKENS)} tokens. The provider enforces model limits.`,
         ]);
       }
 
@@ -530,6 +588,7 @@ export const thinkCommand: SlashCommand = {
         "🧠 Extended Thinking Mode",
         "",
         `   Status: ${statusIcon} ${statusText}`,
+        `   Effort: ${state.reasoningEffort ?? "auto (model default)"}`,
         `   Budget: ${formatBudget(state.budgetTokens)} tokens`,
         `   Display: ${displayMode}`,
         `   Expanded: ${expandedByDefault ? "on" : "off"}`,
