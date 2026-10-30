@@ -1,5 +1,12 @@
 # @vellum/plugin
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [`adc7f89`]:
+  - @vellum/core@0.3.0
+
 ## 0.1.6
 
 ### Patch Changes

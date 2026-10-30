@@ -1437,34 +1437,46 @@ function AppContent({
   });
   const previousTokenUsageRef = useRef({ inputTokens: 0, outputTokens: 0 });
 
-  const switchToSession = useCallback((sessionId: string, session?: Session) => {
-    sessionCacheRef.current = session ?? null;
-    previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
-    tokenUsageRef.current = {
-      inputTokens: 0,
-      outputTokens: 0,
-      thinkingTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      totalCost: 0,
-    };
-    setTokenUsage({
-      inputTokens: 0,
-      outputTokens: 0,
-      thinkingTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      totalCost: 0,
-    });
-    setTurnUsage({
-      inputTokens: 0,
-      outputTokens: 0,
-      thinkingTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    });
-    setActiveSessionId(sessionId);
-  }, []);
+  const switchToSession = useCallback(
+    (sessionId: string, session?: Session): boolean => {
+      if (taskSubmissionRef.current) {
+        announce("Finish or stop the current task before switching sessions.");
+        addMessage({
+          role: "assistant",
+          content: "Finish or stop the current task before switching sessions.",
+        });
+        return false;
+      }
+      sessionCacheRef.current = session ?? null;
+      previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
+      tokenUsageRef.current = {
+        inputTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalCost: 0,
+      };
+      setTokenUsage({
+        inputTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        totalCost: 0,
+      });
+      setTurnUsage({
+        inputTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      });
+      setActiveSessionId(sessionId);
+      return true;
+    },
+    [addMessage, announce]
+  );
 
   const refreshSessions = useCallback(async () => {
     const listService = sessionListServiceRef.current;
@@ -2728,8 +2740,9 @@ function AppContent({
       if (event === "session:resume") {
         const payload = data as ResumeSessionEventData | undefined;
         if (payload?.session) {
-          switchToSession(payload.session.metadata.id, payload.session);
-          setMessages([...toUIMessages(payload.session.messages)]);
+          if (switchToSession(payload.session.metadata.id, payload.session)) {
+            setMessages([...toUIMessages(payload.session.messages)]);
+          }
         }
       }
     },
@@ -3975,8 +3988,7 @@ function AppContent({
 
   const handleSessionSelected = useCallback(
     (id: string) => {
-      announce(`Selected session: ${id}`);
-      switchToSession(id);
+      if (switchToSession(id)) announce(`Selected session: ${id}`);
       setShowSessionManager(false);
     },
     [announce, switchToSession]
