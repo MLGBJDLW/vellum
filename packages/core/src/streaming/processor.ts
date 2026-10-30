@@ -458,6 +458,12 @@ export class StreamProcessor {
     this.gate.reset();
   }
 
+  /** Snapshot received content before resetting an interrupted stream. */
+  getPartialMessage(): AssistantMessage | undefined {
+    const result = this.collector.build();
+    return result.ok ? result.value : undefined;
+  }
+
   /**
    * Handle an error by calling hooks and dispatching UI event.
    *

@@ -15,6 +15,24 @@ export const SIDEBAR_PANELS: readonly SidebarContent[] = [
   "lsp",
 ];
 
+/** Always visible in the app header, including when the sidebar is closed. */
+export function SidebarToggle({
+  visible,
+  onToggle,
+}: {
+  readonly visible: boolean;
+  readonly onToggle: () => void;
+}): React.JSX.Element {
+  const { theme } = useTheme();
+  return (
+    <Clickable id="sidebar-toggle" width="auto" onClick={onToggle}>
+      <Text color={theme.colors.primary}>
+        [{visible ? "Hide sidebar" : "Open sidebar"} · Alt+K]
+      </Text>
+    </Clickable>
+  );
+}
+
 export interface SidebarHeaderProps {
   readonly panel: SidebarContent;
   readonly isFocused: boolean;

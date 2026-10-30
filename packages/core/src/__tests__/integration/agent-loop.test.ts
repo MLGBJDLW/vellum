@@ -99,6 +99,39 @@ describe("AgentLoop Integration (T034)", () => {
   });
 
   describe("Happy Path", () => {
+    it("orders preparation-time corrections after the initial instruction", async () => {
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      loop.steer(createSessionMessage("user", "Older queued message"));
+      const earlierSteeringCount = loop.getPendingSteeringCount();
+      loop.steer(createSessionMessage("user", "Correction typed during preparation"));
+      loop.addMessage(createSessionMessage("user", "Initial instruction"), {
+        steeringBefore: earlierSteeringCount,
+      });
+      expect(loop.getMessages().map((message) => message.parts[0])).toEqual([
+        { type: "text", text: "Older queued message" },
+        { type: "text", text: "Initial instruction" },
+        { type: "text", text: "Correction typed during preparation" },
+      ]);
+    });
+
+    it("includes preflight steering without adding an empty continuation", async () => {
+      vi.mocked(LLM.stream).mockReturnValue(
+        createMockStream([
+          { type: "text", content: "Done with the updated instruction" },
+          { type: "done", stopReason: "end_turn" },
+        ]) as ReturnType<typeof LLM.stream>
+      );
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      const complete = vi.fn();
+      loop.on("complete", complete);
+      loop.addMessage(createSessionMessage("user", "Original"));
+      const run = loop.run();
+      loop.steer(createSessionMessage("user", "Correction"));
+      await run;
+      expect(LLM.stream).toHaveBeenCalledTimes(1);
+      expect(complete).toHaveBeenCalledTimes(1);
+    });
+
     it.each([false, true])(
       "interrupts an unfinished thinking stream immediately for steering (processor=%s)",
       async (useStreamProcessor) => {
@@ -114,6 +147,7 @@ describe("AgentLoop Integration (T034)", () => {
               ({
                 async *[Symbol.asyncIterator]() {
                   yield { type: "reasoning", content: "Working on the original task" };
+                  yield { type: "text", content: "Partial answer before correction\n" };
                   started();
                   await new Promise<void>((_resolve, reject) => {
                     request.abortSignal?.addEventListener(
@@ -141,6 +175,8 @@ describe("AgentLoop Integration (T034)", () => {
         loop.steer(createSessionMessage("user", "Correct it now"));
         await run;
         expect(interrupted).toBe(true);
+        expect(JSON.stringify(loop.getMessages())).toContain("Working on the original task");
+        expect(JSON.stringify(loop.getMessages())).toContain("Partial answer before correction");
         expect(LLM.stream).toHaveBeenCalledTimes(2);
         expect(
           loop

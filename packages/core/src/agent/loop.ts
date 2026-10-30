@@ -816,7 +816,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     if (message.role !== "user") throw new Error("Steering requires a user message");
     if (this.state === "shutdown") throw new Error("Cannot steer a shutdown agent");
     this.pendingSteering.push(message);
-    if (this.activeRun && !this.cancellation.isCancelled) this.nextIterationRequested = true;
     if (this.streamRequestActive && !this.cancellation.isCancelled) {
       this.steeringInterrupted = true;
       this.abortController?.abort();
@@ -829,14 +828,14 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     return this.pendingSteering.length;
   }
 
-  private applySteering(): void {
-    if (this.pendingSteering.length === 0) return;
-    const messages = this.pendingSteering.splice(0);
+  private applySteering(count = this.pendingSteering.length): void {
+    if (this.pendingSteering.length === 0 || count === 0) return;
+    const messages = this.pendingSteering.splice(0, count);
     this.messages.push(...messages);
     this.completionAttempted = false;
     this.resetAutoApprovalCounters();
     this.emit("steeringApplied", messages);
-    this.emit("steeringChanged", 0);
+    this.emit("steeringChanged", this.pendingSteering.length);
   }
 
   private finishSteeredResponse(): void {
@@ -858,8 +857,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * If this is a user message, resets auto-approval counters to ensure
    * the user stays engaged with the agent's actions (safety measure).
    */
-  addMessage(message: SessionMessage): void {
-    if (message.role === "user" && !this.activeRun) this.applySteering();
+  addMessage(message: SessionMessage, options?: { steeringBefore?: number }): void {
+    if (message.role === "user" && !this.activeRun) this.applySteering(options?.steeringBefore);
     this.messages.push(message);
 
     // Reset auto-approval counters on user message for safety

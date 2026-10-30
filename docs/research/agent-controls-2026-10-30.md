@@ -56,3 +56,19 @@ The [October 29 catalog audit](provider-modernization-2026-10-29.md) is the star
 Focused tests cover immediate steering during unfinished thinking in both stream paths, tool-batch steering in sequential/parallel modes, ordering and single-run completion, explicit cancellation, default long tool execution, timeout propagation, shell output persistence, composer width, effort selection/persistence/request propagation, catalog discovery and model retirement. Existing provider and layout suites remain in use. No extra CI job or dependency is added.
 
 Full checks and PR review are recorded in the pull request. Tests with fixture providers establish request/lifecycle behavior; they do not establish paid-account availability or real-model answer quality.
+
+## Review round one — Standards
+
+The independent standards review identified a P1 session-ownership regression from newly available `/resume` and `/clear` during a running task, plus P2 extra requests after preflight steering and loss of partial content in the processor stream path. The app now restricts running-task commands to explicit live controls, continuation is requested only at stream/tool boundaries, and the processor snapshots partial text/reasoning before reset. Regression tests cover each repair. No additional documented style violation was found.
+
+## Review round one — Spec
+
+The independent spec review identified a P1 output-reservation risk in an attempted default-to-model-maximum change, the shared P1 session-ownership issue, P2 ordering of corrections submitted during preparation, and the P2 compact-terminal Alt+K mismatch. The output-default change was reverted: existing output reserves and explicit model-capped budgets remain. Preparation snapshots the number of older queued messages so new corrections follow the initial instruction. Mouse and Alt+K share the same sidebar action.
+
+The native CLI fixture also exposed an obsolete onboarding-only model-default table. It is removed; onboarding now uses the same provider catalog as model selection and execution.
+
+## Full CLI fixture verification
+
+A Windows ConPTY run used the built CLI against the existing deterministic local HTTP fixture, isolated profile and placeholder credentials. It exercised unfinished reasoning, immediate steering, effort selection, a blocked `/clear`, the complete response after steering, full-width input and compact sidebar reopening with Alt+K. Two interrupted reasoning requests were followed by corrected requests after about 6.8 seconds and 2.2 seconds respectively, before either original stream's normal completion. The replacement requests completed all 140 response lines. Captured requests contained the chosen `high` and `max` efforts. The process exited with code 0.
+
+This is full CLI/terminal-frame evidence, not a claim of Windows Terminal GUI automation. Injected mouse reports through the tool's PTY did not activate controls in this run; mouse actions are verified separately through real Ink layout hit regions. No live provider completion or release download was used.

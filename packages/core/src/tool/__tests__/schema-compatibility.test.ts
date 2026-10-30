@@ -25,13 +25,13 @@ describe("tool schema wire compatibility", () => {
     registry.register(bashTool);
     const schema = registry.getDefinitions()[0]?.parameters;
     expect(schema).toMatchObject({
-      properties: { timeout: { type: "integer", exclusiveMinimum: 0 } },
+      properties: { timeout: { type: "integer", minimum: 0 } },
       required: ["command"],
     });
     expect(invalidBounds(schema)).toEqual([]);
-    expect(bashTool.definition.parameters.parse({ command: "pwd" }).timeout).toBe(120000);
+    expect(bashTool.definition.parameters.parse({ command: "pwd" }).timeout).toBe(0);
     expect(bashTool.definition.parameters.safeParse({ command: "pwd", timeout: 0 }).success).toBe(
-      false
+      true
     );
   });
 

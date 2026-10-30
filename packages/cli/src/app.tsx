@@ -38,10 +38,11 @@ import {
   TerminationReason,
   updateSessionMetadata,
 } from "@vellum/core";
-import { getProviderModels } from "@vellum/provider";
+import { DEFAULT_MODEL_IDS, getDefaultModelId, getProviderModels } from "@vellum/provider";
 import { createId } from "@vellum/shared";
 import { Box, Text, useApp as useInkApp, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { executeTaskCommand } from "./commands/active-run.js";
 import type { DefaultContextProvider } from "./commands/index.js";
 import {
   agentSlashCommands,
@@ -160,7 +161,11 @@ import { OnboardingWizard } from "./tui/components/OnboardingWizard.js";
 import { PhaseProgressIndicator } from "./tui/components/PhaseProgressIndicator.js";
 import { AdaptiveLayout } from "./tui/components/ScreenReaderLayout.js";
 import { type SettingCategory, SettingsPanel } from "./tui/components/SettingsPanel.js";
-import { SIDEBAR_PANELS, SidebarHeader } from "./tui/components/Sidebar/SidebarHeader.js";
+import {
+  SIDEBAR_PANELS,
+  SidebarHeader,
+  SidebarToggle,
+} from "./tui/components/Sidebar/SidebarHeader.js";
 import { SystemStatusPanel } from "./tui/components/Sidebar/SystemStatusPanel.js";
 import { ModelStatusBar } from "./tui/components/Status/ModelStatusBar.js";
 import { FileChangesIndicator } from "./tui/components/StatusBar/FileChangesIndicator.js";
@@ -252,33 +257,6 @@ import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
 import { CursorManager } from "./tui/utils/cursor-manager.js";
 import { calculateCost, getContextWindow, getModelInfo } from "./utils/index.js";
 import { version } from "./version.js";
-
-/**
- * Get default model for a given provider
- */
-function getDefaultModelForProvider(provider: string): string {
-  const defaults: Record<string, string> = {
-    anthropic: "claude-sonnet-4-6",
-    openai: "gpt-5.4",
-    google: "gemini-3.1-flash-preview",
-    "azure-openai": "gpt-5.4",
-    gemini: "gemini-3.1-flash-preview",
-    "vertex-ai": "gemini-3.1-flash-preview",
-    cohere: "command-r-plus",
-    mistral: "mistral-large-latest",
-    groq: "llama-3.3-70b-versatile",
-    fireworks: "accounts/fireworks/models/llama-v3p1-70b-instruct",
-    together: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-    perplexity: "llama-3.1-sonar-large-128k-online",
-    bedrock: "anthropic.claude-3-5-sonnet-20241022-v2:0",
-    ollama: "llama3.2",
-    openrouter: "anthropic/claude-3.5-sonnet",
-    deepseek: "deepseek-chat",
-    qwen: "qwen-max",
-    moonshot: "moonshot-v1-8k",
-  };
-  return defaults[provider] ?? "claude-sonnet-4-6";
-}
 
 function approvalPolicyToTrustMode(policy: ApprovalPolicy): TrustMode {
   switch (policy) {
@@ -1409,6 +1387,16 @@ function AppContent({
 
   // Sidebar visibility states
   const [showSidebar, setShowSidebar] = useState(true);
+  const { width: terminalColumns } = useTerminalDimensions();
+  const toggleSidebarVisibility = useCallback(() => {
+    const compact = getSidebarWidth(terminalColumns) === 0;
+    const visible = !showSidebar || (compact && applicationState.focusedArea !== "tools");
+    setShowSidebar(visible);
+    dispatchApplication({
+      type: "SET_FOCUSED_AREA",
+      focusedArea: visible && compact ? "tools" : "input",
+    });
+  }, [showSidebar, terminalColumns, applicationState.focusedArea, dispatchApplication]);
   const [sidebarContent, setSidebarContent] = useState<SidebarContent>("todo");
 
   // Warning ref for thinking mode (used for model capability warnings)
@@ -2284,10 +2272,7 @@ function AppContent({
       {
         key: "k",
         alt: true,
-        handler: () => {
-          setShowSidebar((prev) => !prev);
-          dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
-        },
+        handler: toggleSidebarVisibility,
         description: "Toggle sidebar",
         scope: "global",
       },
@@ -2522,6 +2507,7 @@ function AppContent({
     return hotkeys;
   }, [
     backtrackState.canUndo,
+    toggleSidebarVisibility,
     backtrackState.canRedo,
     undoBacktrack,
     redoBacktrack,
@@ -3207,7 +3193,9 @@ function AppContent({
       }
 
       try {
-        const result = await commandExecutor.execute(text);
+        const result = await executeTaskCommand(text, taskSubmissionRef.current, () =>
+          commandExecutor.execute(text)
+        );
         await handleCommandResult(result);
       } catch (error) {
         addMessage({
@@ -3243,6 +3231,7 @@ function AppContent({
         return;
       }
 
+      const earlierSteeringCount = agentLoopProp?.getPendingSteeringCount() ?? 0;
       taskSubmissionRef.current = true;
       try {
         if (agentLoopProp) {
@@ -3357,6 +3346,11 @@ function AppContent({
         // Add to input history
         addToHistory(processedText);
 
+        // Preserve the order of the initial instruction and corrections typed during preparation.
+        agentLoopProp?.addMessage(createUserMessage([SessionParts.text(processedText)]), {
+          steeringBefore: earlierSteeringCount,
+        });
+
         addMessage({ role: "user", content: processedText });
 
         // Announce for screen reader
@@ -3386,7 +3380,6 @@ function AppContent({
         // Use AgentLoop if available
         if (agentLoopProp) {
           // Start the fresh turn before asynchronous preparation so Stop cannot be reset.
-          agentLoopProp.addMessage(createUserMessage([SessionParts.text(processedText)]));
           let interrupted = false;
           const observeTermination = (reason: TerminationReason) => {
             if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
@@ -3823,7 +3816,7 @@ function AppContent({
       setIsFirstRun(false);
       setShowOnboarding(false);
       // Task 4: Sync model with provider selection
-      const defaultModel = getDefaultModelForProvider(result.provider);
+      const defaultModel = getDefaultModelId(result.provider) ?? DEFAULT_MODEL_IDS.anthropic;
       applyModelSelection(result.provider, defaultModel);
       setCurrentMode(result.mode as CodingMode);
       void modeManager.forceSwitch(result.mode as CodingMode);
@@ -4090,7 +4083,7 @@ function AppContent({
       showBranchSelector={showBranchSelector}
       onBranchOpenChange={setShowBranchSelector}
       onSelectSidebar={setSidebarContent}
-      onSidebarVisibilityChange={setShowSidebar}
+      toggleSidebarVisibility={toggleSidebarVisibility}
       closeSidebar={() => {
         setShowSidebar(false);
         dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" });
@@ -4282,7 +4275,7 @@ interface AppContentViewProps {
   readonly isLoading: boolean;
   readonly thinkingModeEnabled: boolean;
   readonly thinkingEffort?: ReturnType<typeof getThinkingState>["reasoningEffort"];
-  readonly onSidebarVisibilityChange: (visible: boolean) => void;
+  readonly toggleSidebarVisibility: () => void;
   readonly steeringCount: number;
   readonly memoryEntries: MemoryPanelProps["entries"];
   readonly messages: readonly Message[];
@@ -5017,9 +5010,7 @@ function AppHeader({
             {currentTip && <TipBanner tip={currentTip} onDismiss={dismissTip} compact />}
           </Box>
           <Box flexShrink={0}>
-            <Clickable id="sidebar-toggle" width="auto" onClick={onToggleSidebar}>
-              <Text color="cyan">[{sidebarVisible ? "Hide sidebar" : "Open sidebar"} · Alt+K]</Text>
-            </Clickable>
+            <SidebarToggle visible={sidebarVisible} onToggle={onToggleSidebar} />
           </Box>
           {showFileChanges && (
             <Box flexDirection="row">
@@ -5078,7 +5069,7 @@ function AppContentView({
   showBranchSelector,
   onBranchOpenChange,
   onSelectSidebar,
-  onSidebarVisibilityChange,
+  toggleSidebarVisibility,
   closeSidebar,
   commandOptions,
   credentialManager,
@@ -5339,15 +5330,7 @@ function AppContentView({
     <MouseInteractionScope enabled={!hasModalOverlay}>
       <AppHeader
         sidebarVisible={showSidebar && (getSidebarWidth(terminalSize.width) > 0 || sidebarFocused)}
-        onToggleSidebar={() => {
-          const visible =
-            !showSidebar || (getSidebarWidth(terminalSize.width) === 0 && !sidebarFocused);
-          onSidebarVisibilityChange(visible);
-          dispatchApplication({
-            type: "SET_FOCUSED_AREA",
-            focusedArea: visible && getSidebarWidth(terminalSize.width) === 0 ? "tools" : "input",
-          });
-        }}
+        onToggleSidebar={toggleSidebarVisibility}
         mouseEnabled={!isLoading && !hasModalOverlay}
         onBranchOpenChange={onBranchOpenChange}
         backtrackState={backtrackState}
