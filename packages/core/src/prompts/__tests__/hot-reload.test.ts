@@ -446,7 +446,11 @@ Content.`
   // ===========================================================================
   describe("statistics", () => {
     it("tracks invalidation count", async () => {
-      hotReload = createHotReload();
+      let onReload!: () => void;
+      const invalidated = new Promise<void>((resolve) => {
+        onReload = resolve;
+      });
+      hotReload = createHotReload({ onReload });
       hotReload.start();
 
       const initialStats = hotReload.getStats();
@@ -463,8 +467,6 @@ category: role
 Content 1.`
       );
 
-      await waitForWatcher(150);
-
       writeFileSync(
         join(tempWorkspace, ".vellum", "prompts", "stat2.md"),
         `---
@@ -475,7 +477,7 @@ category: role
 Content 2.`
       );
 
-      await waitForWatcher(150);
+      await invalidated;
 
       const finalStats = hotReload.getStats();
       expect(finalStats.invalidations).toBeGreaterThan(0);

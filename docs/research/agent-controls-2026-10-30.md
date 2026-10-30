@@ -72,3 +72,9 @@ The native CLI fixture also exposed an obsolete onboarding-only model-default ta
 A Windows ConPTY run used the built CLI against the existing deterministic local HTTP fixture, isolated profile and placeholder credentials. It exercised unfinished reasoning, immediate steering, effort selection, a blocked `/clear`, the complete response after steering, full-width input and compact sidebar reopening with Alt+K. Two interrupted reasoning requests were followed by corrected requests after about 6.8 seconds and 2.2 seconds respectively, before either original stream's normal completion. The replacement requests completed all 140 response lines. Captured requests contained the chosen `high` and `max` efforts. The process exited with code 0.
 
 This is full CLI/terminal-frame evidence, not a claim of Windows Terminal GUI automation. Injected mouse reports through the tool's PTY did not activate controls in this run; mouse actions are verified separately through real Ink layout hit regions. No live provider completion or release download was used.
+
+## Final review closure
+
+The second standards pass confirmed all three findings closed (11 focused checks passed). The second spec pass confirmed the output, ordering, duplicate-request, sidebar and partial-content fixes (13 checks passed), then identified an older Ctrl+S session-picker route that bypassed slash-command protection. The common `switchToSession` boundary now rejects switches while a submission owns the task, and resume replaces messages only after a successful switch. Final targeted verification confirmed that P1 closed. No P1/P2 remains from these reviews.
+
+Full-suite execution also exposed an existing hot-reload statistics test that sampled the filesystem watcher after fixed sleeps. It now awaits the actual reload callback, preserving the assertion and existing test timeout while removing the timing race. No CI job, dependency or test threshold was added.
