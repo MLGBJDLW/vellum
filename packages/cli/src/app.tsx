@@ -1440,7 +1440,6 @@ function AppContent({
   const switchToSession = useCallback(
     (sessionId: string, session?: Session): boolean => {
       if (taskSubmissionRef.current) {
-        announce("Finish or stop the current task before switching sessions.");
         addMessage({
           role: "assistant",
           content: "Finish or stop the current task before switching sessions.",
@@ -1475,7 +1474,7 @@ function AppContent({
       setActiveSessionId(sessionId);
       return true;
     },
-    [addMessage, announce]
+    [addMessage]
   );
 
   const refreshSessions = useCallback(async () => {
