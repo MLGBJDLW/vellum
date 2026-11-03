@@ -1373,6 +1373,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * Delegates to TerminationManager.
    */
   resetTerminationTracking(): void {
+    this.lastTruncatedText = "";
     this.terminationManager.resetTerminationTracking();
     // GAP 2 FIX: Reset completion state as well
     this.completionAttempted = false;

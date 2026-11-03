@@ -99,6 +99,33 @@ describe("AgentLoop Integration (T034)", () => {
   });
 
   describe("Happy Path", () => {
+    it("resets continuation progress when a new task follows cancellation", async () => {
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      const stopContinuation = (iteration: number) => {
+        if (iteration === 2) loop.cancel();
+      };
+      loop.on("iterationStart", stopContinuation);
+      vi.mocked(LLM.stream).mockImplementation(async function* () {
+        yield { type: "text", content: "Part one" };
+        yield { type: "done", stopReason: "max_tokens" };
+      });
+      loop.addMessage(createSessionMessage("user", "First task"));
+      await loop.run();
+      loop.off("iterationStart", stopContinuation);
+      vi.mocked(LLM.stream)
+        .mockReset()
+        .mockImplementationOnce(async function* () {
+          yield { type: "text", content: "Part one" };
+          yield { type: "done", stopReason: "max_tokens" };
+        })
+        .mockImplementationOnce(async function* () {
+          yield { type: "text", content: "Finished second task" };
+          yield { type: "done", stopReason: "end_turn" };
+        });
+      loop.addMessage(createSessionMessage("user", "Second task"));
+      await loop.run();
+      expect(LLM.stream).toHaveBeenCalledTimes(2);
+    });
     it.each([false, true])(
       "honors explicit step limits on output continuations (%s)",
       async (useStreamProcessor) => {
