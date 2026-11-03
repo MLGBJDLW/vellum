@@ -249,32 +249,50 @@ export function SystemStatusPanel({
 
   if (compact) {
     return (
-      <Box flexDirection="row" borderStyle="single" borderColor={borderColor} paddingX={0} gap={1}>
-        <StatusItem label="M" value={mcpStatus} color={mcpColor} labelColor={labelColor} compact />
-        <StatusItem label="L" value={lspStatus} color={lspColor} labelColor={labelColor} compact />
-        <StatusItem
-          label="R"
-          value={rateStatus}
-          color={rateColor}
-          labelColor={labelColor}
-          compact
-        />
-        <StatusItem
-          label="S"
-          value={snapStatus}
-          color={snapColor}
-          labelColor={labelColor}
-          compact
-        />
-        {persistence && (
-          <PersistenceStatusIndicator
-            status={persistence.status}
-            unsavedCount={persistence.unsavedCount}
-            lastSavedAt={persistence.lastSavedAt}
+      <Box flexDirection="column" borderStyle="single" borderColor={borderColor} paddingX={0}>
+        <Text wrap="truncate-end">
+          Ctx: {contextText}
+          {context?.estimated ? " ~" : ""}
+        </Text>
+        <Box flexDirection="row" gap={1}>
+          <StatusItem
+            label="M"
+            value={mcpStatus}
+            color={mcpColor}
+            labelColor={labelColor}
             compact
           />
-        )}
-        {state.vimMode && <Text color={colors.accent}>VIM</Text>}
+          <StatusItem
+            label="L"
+            value={lspStatus}
+            color={lspColor}
+            labelColor={labelColor}
+            compact
+          />
+          <StatusItem
+            label="R"
+            value={rateStatus}
+            color={rateColor}
+            labelColor={labelColor}
+            compact
+          />
+          <StatusItem
+            label="S"
+            value={snapStatus}
+            color={snapColor}
+            labelColor={labelColor}
+            compact
+          />
+          {persistence && (
+            <PersistenceStatusIndicator
+              status={persistence.status}
+              unsavedCount={persistence.unsavedCount}
+              lastSavedAt={persistence.lastSavedAt}
+              compact
+            />
+          )}
+          {state.vimMode && <Text color={colors.accent}>VIM</Text>}
+        </Box>
       </Box>
     );
   }

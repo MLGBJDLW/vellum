@@ -100,6 +100,29 @@ describe("AgentLoop Integration (T034)", () => {
 
   describe("Happy Path", () => {
     it.each([false, true])(
+      "honors explicit step limits on output continuations (%s)",
+      async (useStreamProcessor) => {
+        let calls = 0;
+        vi.mocked(LLM.stream).mockImplementation(async function* () {
+          yield { type: "text", content: `Partial output ${++calls}` };
+          yield { type: "done", stopReason: calls < 4 ? "max_tokens" : "end_turn" };
+        });
+        const loop = new AgentLoop({
+          ...config,
+          useStreamProcessor,
+          enableEvidencePack: false,
+          terminationLimits: { maxSteps: 1 },
+        });
+        const terminated = vi.fn();
+        loop.on("terminated", terminated);
+        loop.addMessage(createSessionMessage("user", "Work with a one-step budget"));
+        await loop.run();
+        expect(LLM.stream).toHaveBeenCalledTimes(1);
+        expect(loop.getTerminationContext().stepCount).toBe(1);
+        expect(terminated).toHaveBeenCalled();
+      }
+    );
+    it.each([false, true])(
       "continues token-limited output without prematurely completing (%s)",
       async (useStreamProcessor) => {
         vi.mocked(LLM.stream)

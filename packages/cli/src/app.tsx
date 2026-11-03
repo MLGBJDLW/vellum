@@ -2906,6 +2906,7 @@ function AppContent({
           }
           if (result.clearScreen) {
             clearMessages();
+            setContextTokens(undefined);
             void clearSession();
           }
           break;
@@ -3787,6 +3788,7 @@ function AppContent({
       agentLoopProp?.setModel(selectedProvider, selectedModel);
       setCurrentProvider(selectedProvider);
       setCurrentModel(selectedModel);
+      setContextTokens(undefined);
       setShowModelSelector(false);
       announce(`Model changed to ${selectedModel} (${selectedProvider})`);
     },
@@ -5217,7 +5219,7 @@ function AppContentView({
       tokens: contextTokens,
       estimated: contextEstimated,
       window:
-        getModelInfo(currentProvider, currentModel).name === "Unknown Model"
+        getModelInfo(currentProvider, currentModel).contextWindowKnown === false
           ? undefined
           : contextWindow,
     },

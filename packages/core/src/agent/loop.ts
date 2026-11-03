@@ -1918,12 +1918,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
       // GAP 3 & 4 FIX: Update termination flags based on stream result
       // Set hasTextOnly if we got a response with no tool calls
-      if (pendingToolCalls.length === 0) {
-        this.terminationManager.setTextOnly(true);
-      }
+      const outputLimited = streamState.stopReason === "max_tokens";
+      this.terminationManager.setTextOnly(pendingToolCalls.length === 0 && !outputLimited);
       // Set hasNaturalStop - the stream completed normally (done event received)
       // This flag indicates the LLM finished its turn without requesting more action
-      this.terminationManager.setNaturalStop(pendingToolCalls.length === 0);
+      this.terminationManager.setNaturalStop(pendingToolCalls.length === 0 && !outputLimited);
 
       // Determine next state based on stream completion
       if (this.cancellation.isCancelled) {
@@ -1971,7 +1970,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         this.lastTruncatedText = continueOutput ? truncatedText : "";
         this.transitionTo("idle");
         if (this.pendingSteering.length > 0) this.nextIterationRequested = true;
-        else if (continueOutput) {
+        else if (continueOutput && !this.terminationManager.checkTermination().shouldTerminate) {
           this.messages.push(
             createUserMessage([
               SessionParts.text(

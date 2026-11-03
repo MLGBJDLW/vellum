@@ -65,6 +65,8 @@ export const modelInfoSchema = z.object({
   provider: z.custom<ProviderType>(),
   /** Maximum context window in tokens */
   contextWindow: z.number().int().positive(),
+  /** False when contextWindow is only an internal conservative fallback. */
+  contextWindowKnown: z.boolean().optional(),
   /** Maximum output tokens the model can generate */
   maxOutputTokens: z.number().int().positive().optional(),
   /** Required wire API when the provider offers more than one protocol. */

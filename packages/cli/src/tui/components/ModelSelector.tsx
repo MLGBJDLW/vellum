@@ -372,7 +372,7 @@ export function ModelSelector({
       {showDetails && (
         <Text dimColor wrap="truncate">
           {focusedModel
-            ? `${icons.context} ${formatContextWindow(focusedModel.model.contextWindow)} ctx • ${formatPrice(focusedModel.model.inputPrice)} in • ${formatPrice(focusedModel.model.outputPrice)} out`
+            ? `${icons.context} ${focusedModel.model.contextWindowKnown === false ? "Unknown" : formatContextWindow(focusedModel.model.contextWindow)} ctx • ${formatPrice(focusedModel.model.inputPrice)} in • ${formatPrice(focusedModel.model.outputPrice)} out`
             : " "}
         </Text>
       )}

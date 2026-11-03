@@ -99,15 +99,23 @@ function visibleReasoningDetails(details: Record<string, unknown>[]): string {
 }
 
 function normalizeChatUsage(
-  usage: (ChatCompletion["usage"] & { prompt_cache_hit_tokens?: number }) | null | undefined
+  usage:
+    | (ChatCompletion["usage"] & {
+        prompt_cache_hit_tokens?: number;
+        prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+      })
+    | null
+    | undefined
 ): TokenUsage {
   const cacheReadTokens =
     usage?.prompt_tokens_details?.cached_tokens ?? usage?.prompt_cache_hit_tokens;
   const thinkingTokens = usage?.completion_tokens_details?.reasoning_tokens;
+  const cacheWriteTokens = usage?.prompt_tokens_details?.cache_write_tokens;
   return {
     inputTokens: usage?.prompt_tokens ?? 0,
     outputTokens: usage?.completion_tokens ?? 0,
     ...(cacheReadTokens !== undefined && { cacheReadTokens }),
+    ...(cacheWriteTokens !== undefined && { cacheWriteTokens }),
     ...(thinkingTokens !== undefined && { thinkingTokens }),
   };
 }
@@ -965,6 +973,7 @@ export class OpenAIProvider {
     > = new Map();
 
     let usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+    let usageReported = false;
     let stopReason: StopReason = "end_turn";
     let finished = false;
     let reasoningContent = "";
@@ -1124,6 +1133,7 @@ export class OpenAIProvider {
 
       // Track usage from final chunk
       if (chunk.usage) {
+        usageReported = true;
         usage = normalizeChatUsage(chunk.usage);
       }
     }
@@ -1151,7 +1161,7 @@ export class OpenAIProvider {
       type: "usage",
       ...usage,
     };
-    yield usageEvent;
+    if (usageReported) yield usageEvent;
 
     // Emit new end event
     const endEvent: StreamEndEvent = { type: "end", stopReason };

@@ -98,7 +98,8 @@ function formatPrice(pricePer1M: number | undefined): string {
  */
 function formatModelInfo(_provider: string, model: ModelInfo, isCurrent: boolean): string {
   const marker = isCurrent ? " (current)" : "";
-  const ctx = formatContextWindow(model.contextWindow);
+  const ctx =
+    model.contextWindowKnown === false ? "Unknown" : formatContextWindow(model.contextWindow);
   const priceIn = formatPrice(model.inputPrice);
   const priceOut = formatPrice(model.outputPrice);
   return `    ${model.name}${marker} [${ctx} ctx, ${priceIn}/${priceOut}]`;
@@ -183,7 +184,7 @@ function showModelInfo(): CommandResult {
     const info = getModelInfo(currentConfig.provider, currentConfig.model);
     lines.push(`Current: ${currentConfig.provider}/${info.name}`);
     lines.push(
-      `  Context: ${formatContextWindow(info.contextWindow)} | ` +
+      `  Context: ${info.contextWindowKnown === false ? "Unknown" : formatContextWindow(info.contextWindow)} | ` +
         `Input: ${formatPrice(info.inputPrice)} | ` +
         `Output: ${formatPrice(info.outputPrice)}`
     );
@@ -337,7 +338,7 @@ export async function switchToModel(
     }
     return success(
       `Switched to ${info.name}\n` +
-        `  Context: ${formatContextWindow(info.contextWindow)} | ` +
+        `  Context: ${info.contextWindowKnown === false ? "Unknown" : formatContextWindow(info.contextWindow)} | ` +
         `Input: ${formatPrice(info.inputPrice)} | ` +
         `Output: ${formatPrice(info.outputPrice)}`
     );

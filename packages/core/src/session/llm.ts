@@ -130,10 +130,6 @@ function resolveThinkingConfig(
     }
   }
 
-  if (resolvedEffort === "none") {
-    return undefined;
-  }
-
   const result: { enabled: true; budgetTokens?: number; reasoningEffort?: ReasoningEffort } = {
     enabled: true,
   };

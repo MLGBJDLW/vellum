@@ -69,14 +69,13 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
     // Groq's /models endpoint also includes speech and moderation-only products.
     if (provider === "groq" && /whisper|orpheus|prompt-guard|llama-guard|safeguard/.test(id))
       continue;
-    const contextWindow =
+    const reportedContextWindow =
       positive(data.context_length) ??
       positive(data.context_window) ??
       positive(data.max_input_tokens) ??
       positive(data.inputTokenLimit) ??
-      positive(data.max_context_length) ??
-      known?.contextWindow ??
-      8_192;
+      positive(data.max_context_length);
+    const contextWindow = reportedContextWindow ?? known?.contextWindow ?? 8_192;
     const reportedEfforts = reasoning.supported_efforts ?? localReasoningOptions;
     const reasoningEfforts = Array.isArray(reportedEfforts)
       ? reportedEfforts.flatMap((effort) => {
@@ -107,6 +106,8 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
               ? data.name
               : (known?.name ?? id),
       contextWindow,
+      contextWindowKnown:
+        reportedContextWindow !== undefined || (!!known && known.contextWindowKnown !== false),
       maxOutputTokens:
         positive(topProvider.max_completion_tokens) ??
         positive(data.max_completion_tokens) ??

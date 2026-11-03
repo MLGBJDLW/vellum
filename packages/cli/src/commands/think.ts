@@ -106,8 +106,12 @@ const listeners: Set<ThinkingStateListener> = new Set();
  */
 function persistThinkingState(): void {
   const settings: ThinkingSettings = {
+    ...getThinkingSettings(),
     reasoningEffort: thinkingState.reasoningEffort,
   };
+  delete settings.enabled;
+  delete settings.budgetTokens;
+  delete settings.priority;
   // Fire-and-forget - don't block UI for settings persistence
   setThinkingSettings(settings);
 }
@@ -279,7 +283,7 @@ export function getEffectiveThinkingConfig(
     ? getModelInfo(model.provider, model.model).supportsReasoning !== false
     : true;
   return {
-    enabled: supportsReasoning && thinkingState.reasoningEffort !== "none",
+    enabled: supportsReasoning,
     reasoningEffort: thinkingState.reasoningEffort,
   };
 }

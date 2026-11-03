@@ -1,5 +1,10 @@
 import { LLM } from "@vellum/core";
-import type { CompletionParams, LLMProvider, ProviderRegistry } from "@vellum/provider";
+import {
+  type CompletionParams,
+  type LLMProvider,
+  OpenAIProvider,
+  type ProviderRegistry,
+} from "@vellum/provider";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setThinkingSettings } from "../../tui/i18n/index.js";
 import { setModelCommandConfig } from "../model.js";
@@ -15,12 +20,45 @@ vi.mock("../../tui/i18n/index.js", async (original) => ({
 afterEach(() => {
   resetThinkingState();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const context = (...positional: string[]) =>
   ({ parsedArgs: { positional, named: {} } }) as unknown as CommandContext;
 
 describe("model-aware thinking effort", () => {
+  it("sends none explicitly and falls back after a model switch", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return new Response(
+          `data: ${JSON.stringify({ type: "response.completed", response: { id: "resp_test", status: "completed", output: [] } })}\n\n`,
+          { headers: { "content-type": "text/event-stream" } }
+        );
+      })
+    );
+    const provider = new OpenAIProvider();
+    await provider.initialize({ apiKey: "sk-fixture-only" });
+    LLM.initialize({ get: async () => provider } as unknown as ProviderRegistry);
+    setModelCommandConfig("openai", "gpt-6.1-terra");
+    expect((await thinkCommand.execute(context("effort", "none"))).kind).toBe("success");
+    for (const model of ["gpt-6.1-terra", "gpt-6.1-sol"]) {
+      setModelCommandConfig("openai", model);
+      for await (const _ of LLM.stream({
+        providerType: "openai",
+        model,
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: getEffectiveThinkingConfig(),
+      })) {
+        /* consume */
+      }
+    }
+    expect(bodies[0]?.reasoning).toEqual({ effort: "none" });
+    expect(bodies[1]?.reasoning).toEqual({ effort: "medium" });
+  });
+
   it("persists an effort selected in the menu and passes it to the model request", async () => {
     setModelCommandConfig("openai", "gpt-6.1-sol");
     const menu = await thinkCommand.execute(context("effort"));

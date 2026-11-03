@@ -530,6 +530,16 @@ describe("current provider contracts", () => {
 });
 
 describe("audited model catalog", () => {
+  it("marks missing discovery capacity as an internal fallback", () => {
+    expect(
+      normalizeDiscoveredModels("lmstudio", [{ id: "unknown-context-model", type: "llm" }])[0]
+    ).toMatchObject({ contextWindowKnown: false });
+    expect(
+      normalizeDiscoveredModels("lmstudio", [
+        { id: "known-context-model", type: "llm", max_context_length: 65536 },
+      ])[0]
+    ).toMatchObject({ contextWindow: 65536, contextWindowKnown: true });
+  });
   it.each([
     ["anthropic", () => new AnthropicProvider()],
     ["openai", () => new OpenAIProvider()],

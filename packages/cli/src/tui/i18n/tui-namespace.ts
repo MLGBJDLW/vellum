@@ -14,6 +14,7 @@ import type { TranslationFunction, UseTUITranslationReturn } from "./types.js";
  * English translations (embedded for bundling compatibility).
  */
 const EN_TRANSLATIONS: Record<string, unknown> = {
+  tip: { dismiss: "Dismiss", relatedLesson: "Related lesson" },
   persistence: { saving: "Saving", saved: "Saved", saveError: "Save failed", unsaved: "Unsaved" },
   status: {
     model: "Model",
@@ -255,6 +256,7 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
  * Chinese translations (embedded for bundling compatibility).
  */
 const ZH_TRANSLATIONS: Record<string, unknown> = {
+  tip: { dismiss: "关闭", relatedLesson: "相关教程" },
   persistence: { saving: "保存中", saved: "已保存", saveError: "保存失败", unsaved: "未保存" },
   todo: {
     title: "任务",

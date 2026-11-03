@@ -7,6 +7,7 @@
  * @see REQ-COST-003 - Cost calculation utilities
  */
 
+import { getUsageInputTokens } from "@vellum/provider";
 import { getPricing, getTieredPricing } from "./pricing.js";
 import type { CostBreakdown, CostCalculationParams, TokenUsage } from "./types.js";
 
@@ -68,11 +69,11 @@ export function calculateCostBreakdown(params: CostCalculationParams): CostBreak
   const adjustedInputTokens = adjustInputTokensForProvider(
     provider,
     usage.inputTokens,
-    usage.cacheReadTokens ?? 0
+    (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
   );
 
   // Get tiered pricing if applicable
-  const contextTokens = usage.contextTokens ?? usage.inputTokens;
+  const contextTokens = usage.contextTokens ?? getUsageInputTokens(provider, usage);
   const { inputPrice, outputPrice } = getTieredPricing(pricing, contextTokens);
 
   // Calculate each cost component
@@ -306,7 +307,7 @@ function createEmptyCostBreakdown(): CostBreakdown {
  *
  * - Anthropic: cache tokens are separate from input tokens
  * - OpenAI: cached tokens are included in prompt tokens (need to subtract)
- * - Google/DeepSeek: cache tokens are separate
+ * - Google and compatible APIs: cached tokens are included in prompt tokens
  */
 function adjustInputTokensForProvider(
   provider: string,
