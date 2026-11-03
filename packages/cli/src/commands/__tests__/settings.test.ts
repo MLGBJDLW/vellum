@@ -75,8 +75,6 @@ describe("settings panel command entry", () => {
   it.each([
     ["mode", "orch"],
     ["theme", "light"],
-    ["think.enabled", "true"],
-    ["think.budget", "12000"],
     ["diff-mode", "side-by-side"],
     ["mode", ""],
   ])("does not open a panel while setting %s to %s", async (key, value) => {

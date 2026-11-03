@@ -695,14 +695,9 @@ export {
   getEffectiveThinkingConfig,
   getThinkingState,
   resetThinkingState,
-  setThinkingBudget,
-  setThinkingEnabled,
-  setThinkingPriority,
   subscribeToThinkingState,
-  type ThinkingPriority,
   thinkCommand,
   thinkSlashCommands,
-  toggleThinking,
 } from "./think.js";
 
 // =============================================================================

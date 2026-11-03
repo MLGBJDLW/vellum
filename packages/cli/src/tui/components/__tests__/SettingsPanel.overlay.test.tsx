@@ -100,7 +100,7 @@ describe("settings over the actual history compositor", () => {
     ["mode", "Coding Mode"],
     ["theme", "Vim Mode"],
     ["diff", "Diff View Mode"],
-    ["thinking", "Budget Tokens"],
+    ["thinking", "Reasoning effort"],
   ] as const)(
     "keeps %s body painted while long command reports enter MessageList",
     async (category, bodyLabel) => {

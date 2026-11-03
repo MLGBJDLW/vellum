@@ -29,7 +29,7 @@ describe("model-aware thinking effort", () => {
     expect(menu.prompt.options).toEqual(["auto", "low", "medium", "high", "xhigh", "max"]);
     expect((await menu.prompt.handler("high")).kind).toBe("success");
     expect(setThinkingSettings).toHaveBeenLastCalledWith(
-      expect.objectContaining({ enabled: true, reasoningEffort: "high" })
+      expect.objectContaining({ reasoningEffort: "high" })
     );
     let request: CompletionParams | undefined;
     const provider = {

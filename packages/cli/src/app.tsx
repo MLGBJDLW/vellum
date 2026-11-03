@@ -18,6 +18,7 @@ import type {
 } from "@vellum/core";
 import {
   BUILTIN_CODING_MODES,
+  calculateCostBreakdown,
   createCostService,
   createModeManager,
   createRoleManager,
@@ -38,7 +39,13 @@ import {
   TerminationReason,
   updateSessionMetadata,
 } from "@vellum/core";
-import { DEFAULT_MODEL_IDS, getDefaultModelId, getProviderModels } from "@vellum/provider";
+import {
+  DEFAULT_MODEL_IDS,
+  getDefaultModelId,
+  getProviderModels,
+  getUsageInputTokens,
+  getUsageOutputTokens,
+} from "@vellum/provider";
 import { createId } from "@vellum/shared";
 import { Box, Text, useApp as useInkApp, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -108,7 +115,6 @@ import {
   subscribeToThinkingState,
   themeSlashCommands,
   thinkSlashCommands,
-  toggleThinking,
   trustSlashCommands,
   tutorialCommand,
   uninstallCommand,
@@ -149,6 +155,7 @@ import { LoadingIndicator } from "./tui/components/common/Spinner.js";
 import { LspConfirmDialog } from "./tui/components/Dialogs/LspConfirmDialog.js";
 import type { AutocompleteOption } from "./tui/components/Input/Autocomplete.js";
 import { EnhancedCommandInput } from "./tui/components/Input/EnhancedCommandInput.js";
+import { getNextStepSuggestion } from "./tui/components/Input/next-step.js";
 import type { SlashCommand } from "./tui/components/Input/slash-command-utils.js";
 import { TextInput } from "./tui/components/Input/TextInput.js";
 import { InitErrorBanner, McpPanel } from "./tui/components/index.js";
@@ -1419,6 +1426,8 @@ function AppContent({
     cacheWriteTokens: 0,
     totalCost: 0 as number | undefined,
   });
+  const [contextTokens, setContextTokens] = useState<number | undefined>();
+  const [contextEstimated, setContextEstimated] = useState(false);
   const [tokenUsage, setTokenUsage] = useState({
     inputTokens: 0,
     outputTokens: 0,
@@ -1447,6 +1456,7 @@ function AppContent({
         return false;
       }
       sessionCacheRef.current = session ?? null;
+      setContextTokens(undefined);
       previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
       tokenUsageRef.current = {
         inputTokens: 0,
@@ -1847,13 +1857,11 @@ function AppContent({
     loadMemories,
   });
 
-  const [thinkingModeEnabled, setThinkingModeEnabled] = useState(() => getThinkingState().enabled);
   const [thinkingEffort, setThinkingEffort] = useState(() => getThinkingState().reasoningEffort);
 
   // Subscribe to global thinking state changes (mode toggle via /think)
   useEffect(() => {
     const unsubscribe = subscribeToThinkingState((state) => {
-      setThinkingModeEnabled(state.enabled);
       setThinkingEffort(state.reasoningEffort);
     });
     return unsubscribe;
@@ -2316,17 +2324,7 @@ function AppContent({
         description: direction < 0 ? "Previous sidebar panel" : "Next sidebar panel",
         scope: "global" as const,
       })),
-      {
-        key: "t",
-        ctrl: true,
-        handler: () => {
-          const newState = toggleThinking();
-          announce(newState ? "Thinking mode enabled" : "Thinking mode disabled");
-        },
-        description: "Toggle thinking mode",
-        scope: "global",
-      },
-      // Alt+T alternative for todo panel (thinking uses Ctrl+T)
+      // Alt+T opens the todo panel
       {
         key: "t",
         alt: true,
@@ -3868,10 +3866,15 @@ function AppContent({
     ) => {
       const usageProvider = source?.providerType ?? currentProvider;
       const usageModel = source?.model ?? currentModel;
+      // Delegated calls contribute spend but do not replace the main context window.
+      if (!source) {
+        setContextTokens(getUsageInputTokens(usageProvider, usage));
+        setContextEstimated(false);
+      }
       // Update turn usage (per-turn tracking)
       setTurnUsage({
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
+        inputTokens: getUsageInputTokens(usageProvider, usage),
+        outputTokens: getUsageOutputTokens(usageProvider, usage),
         thinkingTokens: usage.thinkingTokens ?? 0,
         cacheReadTokens: usage.cacheReadTokens ?? 0,
         cacheWriteTokens: usage.cacheWriteTokens ?? 0,
@@ -3879,15 +3882,15 @@ function AppContent({
 
       // Update cumulative usage
       setTokenUsage((prev) => {
-        const turnCost = calculateCost(
-          usageProvider,
-          usageModel,
-          usage.inputTokens,
-          usage.outputTokens
-        );
+        const calculated = calculateCostBreakdown({
+          provider: usageProvider,
+          model: usageModel,
+          usage,
+        }).total;
+        const turnCost = Number.isFinite(calculated) ? calculated : undefined;
         const newUsage = {
-          inputTokens: prev.inputTokens + usage.inputTokens,
-          outputTokens: prev.outputTokens + usage.outputTokens,
+          inputTokens: prev.inputTokens + getUsageInputTokens(usageProvider, usage),
+          outputTokens: prev.outputTokens + getUsageOutputTokens(usageProvider, usage),
           thinkingTokens: prev.thinkingTokens + (usage.thinkingTokens ?? 0),
           cacheReadTokens: prev.cacheReadTokens + (usage.cacheReadTokens ?? 0),
           cacheWriteTokens: prev.cacheWriteTokens + (usage.cacheWriteTokens ?? 0),
@@ -3914,10 +3917,16 @@ function AppContent({
       );
     };
 
+    const invalidateContext = (result: { tokenCount?: number }) => {
+      setContextTokens(result.tokenCount);
+      setContextEstimated(true);
+    };
+    agentLoopProp.on("contextManaged", invalidateContext);
     agentLoopProp.on("usage", handleUsage);
 
     return () => {
       agentLoopProp.off("usage", handleUsage);
+      agentLoopProp.off("contextManaged", invalidateContext);
     };
   }, [agentLoopProp, currentModel, currentProvider, costService]);
 
@@ -4109,6 +4118,8 @@ function AppContent({
       closeCheckpointDiff={closeCheckpointDiff}
       onOpenCheckpointDiff={openCheckpointDiff}
       contextWindow={contextWindow}
+      contextTokens={contextTokens}
+      contextEstimated={contextEstimated}
       currentMode={currentMode}
       currentModel={currentModel}
       currentProvider={currentProvider}
@@ -4135,7 +4146,6 @@ function AppContent({
       interactivePrompt={interactivePrompt}
       loadSessionPreviewMessages={loadSessionPreviewMessages}
       isLoading={isLoading}
-      thinkingModeEnabled={thinkingModeEnabled}
       thinkingEffort={thinkingEffort}
       steeringCount={steeringCount}
       memoryEntries={memoryEntries}
@@ -4252,6 +4262,8 @@ interface AppContentViewProps {
   readonly closeCheckpointDiff: () => void;
   readonly onOpenCheckpointDiff: (hash: string) => void;
   readonly contextWindow: number;
+  readonly contextTokens?: number;
+  readonly contextEstimated: boolean;
   readonly currentMode: CodingMode;
   readonly currentModel: string;
   readonly currentProvider: string;
@@ -4284,7 +4296,6 @@ interface AppContentViewProps {
   ) => Promise<readonly SessionPreviewMessage[] | null>;
   readonly initError?: Error;
   readonly isLoading: boolean;
-  readonly thinkingModeEnabled: boolean;
   readonly thinkingEffort?: ReturnType<typeof getThinkingState>["reasoningEffort"];
   readonly toggleSidebarVisibility: () => void;
   readonly steeringCount: number;
@@ -4395,6 +4406,7 @@ function renderSidebarContent({
   onClose,
   panelWidth,
   panelHeight,
+  context,
   sidebarContent,
   todoItems,
   refreshTodos,
@@ -4415,6 +4427,7 @@ function renderSidebarContent({
   readonly onClose: () => void;
   readonly panelWidth: number;
   readonly panelHeight: number;
+  readonly context?: { tokens?: number; window?: number; estimated?: boolean };
   readonly sidebarContent: SidebarContent;
   readonly todoItems: readonly TodoItemData[];
   readonly refreshTodos: () => void;
@@ -4534,6 +4547,7 @@ function renderSidebarContent({
           </Box>
         )}
         <SystemStatusPanel
+          context={context}
           compact={panelHeight < 14}
           persistence={persistence}
           snapshotCount={snapshots.snapshots.length}
@@ -5092,6 +5106,8 @@ function AppContentView({
   closeCheckpointDiff,
   onOpenCheckpointDiff,
   contextWindow,
+  contextTokens,
+  contextEstimated,
   currentMode,
   currentModel,
   currentProvider,
@@ -5118,7 +5134,6 @@ function AppContentView({
   interactivePrompt,
   loadSessionPreviewMessages,
   isLoading,
-  thinkingModeEnabled,
   thinkingEffort,
   steeringCount,
   memoryEntries,
@@ -5198,6 +5213,14 @@ function AppContentView({
   const sidebarWidth = getSidebarWidth(terminalSize.width) || terminalSize.width;
 
   const sidebar = renderSidebarContent({
+    context: {
+      tokens: contextTokens,
+      estimated: contextEstimated,
+      window:
+        getModelInfo(currentProvider, currentModel).name === "Unknown Model"
+          ? undefined
+          : contextWindow,
+    },
     announce,
     showSidebar,
     isFocused: sidebarFocused,
@@ -5208,7 +5231,7 @@ function AppContentView({
     panelWidth: Math.max(12, sidebarWidth - 3),
     panelHeight: Math.max(
       6,
-      terminalSize.height - (taskChain && taskChain.nodes.size > 0 ? 20 : 13)
+      terminalSize.height - (taskChain && taskChain.nodes.size > 0 ? 22 : 15)
     ),
     sidebarContent,
     todoItems,
@@ -5240,14 +5263,6 @@ function AppContentView({
       modelName={currentModel}
       onModeClick={canOpenPicker ? openModeSelector : undefined}
       onModelClick={canOpenPicker ? openModelSelector : undefined}
-      onThinkingClick={
-        canOpenPicker
-          ? () => {
-              const enabled = toggleThinking();
-              announce(enabled ? "Thinking mode enabled" : "Thinking mode disabled");
-            }
-          : undefined
-      }
       onApprovalClick={!hasBlockingOverlay ? openApprovalQueue : undefined}
       effortLabel={effortLabel}
       onEffortClick={
@@ -5276,7 +5291,6 @@ function AppContentView({
       }}
       cost={tokenUsage.totalCost}
       trustMode={trustMode}
-      thinking={{ active: thinkingModeEnabled || thinkingModel.requiresThinking === true }}
       showAllModes={false}
       persistence={persistence}
     />
@@ -5515,6 +5529,11 @@ function AppContentView({
           onClick={() => dispatchApplication({ type: "SET_FOCUSED_AREA", focusedArea: "input" })}
         >
           <EnhancedCommandInput
+            suggestion={
+              !isLoading && !followupPrompt && !interactivePrompt
+                ? getNextStepSuggestion(messages)
+                : undefined
+            }
             onMessage={handleMessage}
             onCommand={handleCommand}
             commands={commandOptions}

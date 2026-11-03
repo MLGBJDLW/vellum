@@ -14,12 +14,9 @@ import type React from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   getThinkingDisplayMode,
-  getThinkingState,
   setDisplayMode,
   subscribeToDisplayMode,
-  subscribeToThinkingState,
   type ThinkingDisplayMode,
-  toggleThinking,
 } from "../../commands/think.js";
 import { useMouseInteractionEnabled } from "../context/MouseContext.js";
 import { useMouseScroll } from "../hooks/useMouseScroll.js";
@@ -51,8 +48,6 @@ export interface ModelSelectorProps {
   readonly showDetails?: boolean;
   /** Filter to specific providers (optional) */
   readonly providers?: readonly string[];
-  /** Callback when thinking mode is toggled (optional) */
-  readonly onThinkingToggle?: (enabled: boolean) => void;
 }
 
 /**
@@ -172,7 +167,6 @@ export function ModelSelector({
   isActive = true,
   showDetails = true,
   providers,
-  onThinkingToggle,
 }: ModelSelectorProps): React.ReactElement {
   const { theme } = useTheme();
   const { t } = useTUITranslation();
@@ -184,18 +178,9 @@ export function ModelSelector({
   const mouseInteractionEnabled = useMouseInteractionEnabled();
 
   // Thinking state management
-  const [thinkingEnabled, setThinkingEnabled] = useState(() => getThinkingState().enabled);
   const [displayMode, setLocalDisplayMode] = useState<ThinkingDisplayMode>(() =>
     getThinkingDisplayMode()
   );
-
-  // Subscribe to thinking state changes
-  useEffect(() => {
-    const unsubscribe = subscribeToThinkingState((state) => {
-      setThinkingEnabled(state.enabled);
-    });
-    return unsubscribe;
-  }, []);
 
   // Subscribe to display mode changes
   useEffect(() => {
@@ -204,12 +189,6 @@ export function ModelSelector({
     });
     return unsubscribe;
   }, []);
-
-  // Handle thinking toggle
-  const handleThinkingToggle = useCallback(() => {
-    const newState = toggleThinking();
-    onThinkingToggle?.(newState);
-  }, [onThinkingToggle]);
 
   // Handle display mode toggle
   const handleDisplayModeToggle = useCallback(() => {
@@ -289,12 +268,6 @@ export function ModelSelector({
       (input: string, key) => {
         if (!isActive || modelOptions.length === 0) return;
 
-        // Toggle thinking with 't' or 'T'
-        if (input === "t" || input === "T") {
-          handleThinkingToggle();
-          return;
-        }
-
         // Toggle display mode with 'd' or 'D'
         if (input === "d" || input === "D") {
           handleDisplayModeToggle();
@@ -336,16 +309,7 @@ export function ModelSelector({
           }
         }
       },
-      [
-        isActive,
-        focusModel,
-        visibleCount,
-        stdin,
-        modelOptions,
-        onSelect,
-        handleThinkingToggle,
-        handleDisplayModeToggle,
-      ]
+      [isActive, focusModel, visibleCount, stdin, modelOptions, onSelect, handleDisplayModeToggle]
     ),
     { isActive }
   );
@@ -363,32 +327,13 @@ export function ModelSelector({
       </Text>
       <Box marginBottom={1}>
         <Clickable
-          id={`${selectorId}-thinking`}
-          onClick={handleThinkingToggle}
+          id={`${selectorId}-display`}
+          onClick={handleDisplayModeToggle}
           enabled={isActive}
           width="auto"
         >
-          <Text wrap="truncate">
-            Thinking:{" "}
-            <Text color={thinkingEnabled ? "green" : "gray"}>
-              {thinkingEnabled ? "◆ On" : "◇ Off"}
-            </Text>{" "}
-            [T]
-          </Text>
+          <Text wrap="truncate">{`Display: ${displayMode === "full" ? "Full" : "Compact"} [D]`}</Text>
         </Clickable>
-        {thinkingEnabled && (
-          <>
-            <Text>{"  "}</Text>
-            <Clickable
-              id={`${selectorId}-display`}
-              onClick={handleDisplayModeToggle}
-              enabled={isActive}
-              width="auto"
-            >
-              <Text wrap="truncate">{`Display: ${displayMode === "full" ? "Full" : "Compact"} [D]`}</Text>
-            </Clickable>
-          </>
-        )}
       </Box>
       <Box ref={modelListRef} flexDirection="column" height={visibleCount} flexShrink={0}>
         {visibleModels.map((option, offset) => {

@@ -21,6 +21,15 @@ vi.mock("../../i18n/index.js", () => ({
   setThemeInSettings: vi.fn(),
 }));
 
+vi.mock("../../../commands/model.js", () => ({
+  getModelCommandConfig: () => ({ provider: "openai", model: "gpt-6.1-sol" }),
+}));
+vi.mock("../../../commands/think.js", () => ({
+  getThinkingState: () => ({}),
+  getThinkingEffortOptions: () => ["low", "high"],
+  setThinkingEffort: setThinkingSettings,
+}));
+
 afterEach(() => {
   act(() => cleanup());
   vi.clearAllMocks();
@@ -48,15 +57,11 @@ async function send(stdin: { write: (data: string) => void }, input: string) {
 }
 
 describe("SettingsPanel terminal editing", () => {
-  it("accepts bracketed paste and confirms its current value in the same input chunk", async () => {
+  it("cycles reasoning effort with Space without a separate budget editor", async () => {
     const { stdin, lastFrame } = mount();
-    await send(stdin, "\x1b[B");
-    await send(stdin, "\r");
-    await send(stdin, "\x1b[200~999\x1b[201~\r");
-    expect(setThinkingSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ budgetTokens: 10000999 })
-    );
-    expect(lastFrame()).not.toContain("[200~");
+    await send(stdin, " ");
+    expect(setThinkingSettings).toHaveBeenCalledWith("low");
+    expect(lastFrame()).not.toContain("Budget Tokens");
   });
 
   it("does not route pasted shortcut characters to inactive settings or navigation", async () => {

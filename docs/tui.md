@@ -81,9 +81,9 @@ Use `/mouse` or `/mouse status` to inspect the current mouse mode. Mode changes 
 
 With full mouse mode enabled, drag the scrollbar thumb to move through chat history, or click the track above or below it to page. Scrolling away from the bottom pauses following: incoming streamed text and typing in the composer preserve the reading position. Click **Reading history · Click to return to latest**, click the new-message banner, or scroll back to the bottom to resume following.
 
-Click the model or mode in the status bar to open its selector, then click an available row to select it. In the model selector, the wheel moves focus within the visible list; `Enter` confirms the focused model. The **Thinking** and **Display: Full/Compact** controls can also be clicked. Approval and option dialogs accept clicks on their available choices. While a dialog is open, background controls do not receive those clicks.
+Click the model or mode in the status bar to open its selector, then click an available row to select it. In the model selector, the wheel moves focus within the visible list; `Enter` confirms the focused model. The **Display: Full/Compact** control can also be clicked. Approval and option dialogs accept clicks on their available choices. While a dialog is open, background controls do not receive those clicks.
 
-The mode menu offers all four existing modes (`orch`, `vibe`, `plan`, `spec`). Click the status bar's Thinking indicator to toggle it for the current session, or click the approval indicator to view pending approvals. Opening this queue does not change the approval policy.
+The mode menu offers all four existing modes (`orch`, `vibe`, `plan`, `spec`). Click the status bar's Effort selector to choose model-supported reasoning effort, or click the approval indicator to view pending approvals. Opening this queue does not change the approval policy.
 
 | Surface | Mouse actions |
 |---|---|
@@ -287,7 +287,6 @@ import { StatusBar } from "@butlerw/vellum";
 | `model` | `ModelIndicatorProps` | - | Model information |
 | `tokens` | `TokenCounterProps` | - | Token usage |
 | `trustMode` | `"ask" \| "auto" \| "full"` | - | Trust mode |
-| `thinking` | `ThinkingModeIndicatorProps` | - | Thinking status |
 | `showBorder` | `boolean` | `false` | Show border |
 
 ---
@@ -867,3 +866,12 @@ Locale files are located in `locales/{lang}/tui.json`.
 ## API Reference
 
 For complete TypeScript types and API documentation, see the source files in `packages/cli/src/tui/`.
+
+## Conversation continuity (0.6.1)
+
+- When the latest assistant reply includes an explicit `Next step:` or `下一步：`, the empty composer offers it as a dim draft. Press Tab to accept, edit freely, then Enter to send. Suggestions never start a request automatically.
+- During a running task, Enter submits steering immediately through the existing task driver. Active tools finish safely before the correction takes effect; a mouse click is unnecessary.
+- Use `/think effort` or the footer Effort selector. `auto` uses the model default, and `none` is offered only if the model advertises it. `/think on`, `/think off`, `--budget`, `Ctrl+T`, the model selector's T toggle and `think.enabled`/`think.budget` settings are removed. Existing saved enable/budget/priority fields are ignored by the CLI; remove them when migrating configuration. Display controls remain independent.
+- Sidebar Status shows the latest main-agent prompt occupancy and the selected model's context window. It never compares cumulative session token spend to one context window. After compaction, tokenizer measurements are explicitly marked as estimates; delegated requests do not replace the main-agent measurement. Unknown limits remain unknown.
+- Footer input/output totals include cache and reasoning exactly once. Cache hit percentage is cache reads divided by total input tokens; cache writes are not hits. Costs use the existing detailed pricing calculator and are prefixed with `~` because catalog estimates are not provider invoices.
+- A response stopped by the provider's output-token limit continues through the same task loop. Empty or identical repeated output does not trigger unlimited continuation. Cancellation, explicit budgets and loop detection still apply.

@@ -2,8 +2,7 @@
  * Think Slash Command (Thinking Mode Toggle)
  *
  * Provides slash command for managing extended thinking/reasoning mode:
- * - /think [on|off] - Toggle or set thinking mode
- * - /think [on] --budget <tokens> - Set thinking budget
+ * - /think effort - Select model-supported reasoning effort
  *
  * @module cli/commands/think
  */
@@ -35,14 +34,6 @@ import { error, success } from "./types.js";
 // Types
 // =============================================================================
 
-/**
- * Priority for merging thinking configuration.
- * - "global": Global /think state takes precedence
- * - "mode": Mode's extendedThinking setting takes precedence
- * - "merge": Either enabled means thinking is enabled
- */
-export type ThinkingPriority = "global" | "mode" | "merge";
-
 /** Re-export ThinkingDisplayMode for consumers */
 export type { ThinkingDisplayMode };
 
@@ -65,20 +56,13 @@ export interface EffectiveThinkingConfig {
  * In a full implementation, this would be persisted to config.
  */
 interface ThinkingState {
-  enabled: boolean;
-  budgetTokens: number;
-  priority: ThinkingPriority;
   reasoningEffort?: ReasoningEffort;
 }
 
 /**
  * Default thinking state
  */
-const defaultThinkingState: ThinkingState = {
-  enabled: false,
-  budgetTokens: 10000,
-  priority: "merge",
-};
+const defaultThinkingState: ThinkingState = {};
 
 /**
  * Load initial thinking state from settings file first, then config file.
@@ -90,9 +74,6 @@ function loadInitialThinkingState(): ThinkingState {
   const savedSettings = getThinkingSettings();
   if (savedSettings) {
     return {
-      enabled: savedSettings.enabled ?? defaultThinkingState.enabled,
-      budgetTokens: savedSettings.budgetTokens ?? defaultThinkingState.budgetTokens,
-      priority: savedSettings.priority ?? defaultThinkingState.priority,
       reasoningEffort: reasoningEffortSchema.safeParse(savedSettings.reasoningEffort).data,
     };
   }
@@ -103,11 +84,7 @@ function loadInitialThinkingState(): ThinkingState {
     return { ...defaultThinkingState };
   }
 
-  const { enabled, budgetTokens, priority } = result.value.thinking;
   return {
-    enabled: enabled ?? defaultThinkingState.enabled,
-    budgetTokens: budgetTokens ?? defaultThinkingState.budgetTokens,
-    priority: priority ?? defaultThinkingState.priority,
     reasoningEffort: result.value.thinking.reasoningEffort,
   };
 }
@@ -129,9 +106,6 @@ const listeners: Set<ThinkingStateListener> = new Set();
  */
 function persistThinkingState(): void {
   const settings: ThinkingSettings = {
-    enabled: thinkingState.enabled,
-    budgetTokens: thinkingState.budgetTokens,
-    priority: thinkingState.priority,
     reasoningEffort: thinkingState.reasoningEffort,
   };
   // Fire-and-forget - don't block UI for settings persistence
@@ -159,43 +133,7 @@ export function setThinkingEffort(reasoningEffort: ReasoningEffort | undefined):
 
 /** The same catalog used by the request resolver owns the displayed choices. */
 export function getThinkingEffortOptions(provider: string, model: string): ReasoningEffort[] {
-  return (getModelInfo(provider, model).reasoningEfforts ?? []).filter(
-    (effort) => effort !== "none"
-  );
-}
-
-/**
- * Set the thinking enabled state.
- *
- * @param enabled - Whether thinking is enabled
- */
-export function setThinkingEnabled(enabled: boolean): void {
-  thinkingState = { ...thinkingState, enabled };
-  notifyListeners();
-  persistThinkingState();
-}
-
-/**
- * Set the thinking budget tokens.
- *
- * @param budgetTokens - Number of tokens for thinking budget
- */
-export function setThinkingBudget(budgetTokens: number): void {
-  thinkingState = { ...thinkingState, budgetTokens };
-  notifyListeners();
-  persistThinkingState();
-}
-
-/**
- * Toggle thinking mode on/off.
- *
- * @returns New enabled state
- */
-export function toggleThinking(): boolean {
-  thinkingState = { ...thinkingState, enabled: !thinkingState.enabled };
-  notifyListeners();
-  persistThinkingState();
-  return thinkingState.enabled;
+  return [...(getModelInfo(provider, model).reasoningEfforts ?? [])];
 }
 
 /**
@@ -227,17 +165,6 @@ function notifyListeners(): void {
 export function resetThinkingState(): void {
   thinkingState = { ...defaultThinkingState };
   notifyListeners();
-}
-
-/**
- * Set the thinking priority.
- *
- * @param priority - Priority for merging thinking config
- */
-export function setThinkingPriority(priority: ThinkingPriority): void {
-  thinkingState = { ...thinkingState, priority };
-  notifyListeners();
-  persistThinkingState();
 }
 
 // =============================================================================
@@ -344,71 +271,22 @@ function notifyDisplayModeListeners(mode: ThinkingDisplayMode): void {
 export function getEffectiveThinkingConfig(
   modeExtendedThinking?: boolean
 ): EffectiveThinkingConfig {
-  const { enabled: globalEnabled, budgetTokens, priority } = thinkingState;
-  const modeEnabled = modeExtendedThinking ?? false;
-
-  let effectiveEnabled: boolean;
-
-  switch (priority) {
-    case "global":
-      // Global /think state takes precedence
-      effectiveEnabled = globalEnabled;
-      break;
-    case "mode":
-      // Mode's extendedThinking takes precedence
-      effectiveEnabled = modeEnabled;
-      break;
-    default:
-      // Either enabled means thinking is enabled
-      effectiveEnabled = globalEnabled || modeEnabled;
-      break;
-  }
-
+  // Effort is the sole request control. Legacy on/off and budgets do not
+  // override model defaults; adapters derive any required wire-level budget.
+  void modeExtendedThinking;
+  const model = getModelCommandConfig();
+  const supportsReasoning = model
+    ? getModelInfo(model.provider, model.model).supportsReasoning !== false
+    : true;
   return {
-    enabled: effectiveEnabled,
-    budgetTokens: effectiveEnabled ? budgetTokens : undefined,
-    reasoningEffort: effectiveEnabled ? thinkingState.reasoningEffort : undefined,
+    enabled: supportsReasoning && thinkingState.reasoningEffort !== "none",
+    reasoningEffort: thinkingState.reasoningEffort,
   };
 }
 
 // =============================================================================
 // Constants
 // =============================================================================
-
-/** Minimum budget tokens */
-const MIN_BUDGET_TOKENS = 1000;
-
-/** Default budget tokens */
-const DEFAULT_BUDGET_TOKENS = 10000;
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-/**
- * Parse budget value from string.
- *
- * @param value - String value to parse (e.g., "20000", "20k", "20K")
- * @returns Parsed number or null if invalid
- */
-function parseBudget(value: string): number | null {
-  // Handle k/K suffix for thousands
-  const normalized = value.toLowerCase().trim();
-  let multiplier = 1;
-  let numStr = normalized;
-
-  if (normalized.endsWith("k")) {
-    multiplier = 1000;
-    numStr = normalized.slice(0, -1);
-  }
-
-  const num = Number.parseFloat(numStr);
-  if (Number.isNaN(num) || !Number.isFinite(num)) {
-    return null;
-  }
-
-  return Math.round(num * multiplier);
-}
 
 /**
  * Parse delay value from string.
@@ -425,42 +303,14 @@ function parseDelayMs(value: string): number | null {
   return Math.round(num);
 }
 
-/**
- * Format budget for display.
- *
- * @param tokens - Number of tokens
- * @returns Formatted string (e.g., "10K", "128K")
- */
-function formatBudget(tokens: number): string {
-  if (tokens >= 1000) {
-    return `${(tokens / 1000).toFixed(0)}K`;
-  }
-  return `${tokens}`;
-}
-
-// =============================================================================
-// /think Command
-// =============================================================================
-
-/**
- * /think command - Toggle or configure extended thinking mode.
- *
- * Usage:
- *   /think           - Show current status and toggle
- *   /think on        - Enable thinking mode
- *   /think off       - Disable thinking mode
- *   /think on --budget 20000  - Enable with custom budget
- *   /think --budget 20k       - Set budget (keeps current on/off state)
- */
+/** Configure model reasoning effort and the presentation of reasoning text. */
 export const thinkCommand: SlashCommand = {
   name: "think",
-  description: "Toggle extended thinking/reasoning mode",
+  description: "Configure reasoning effort and display",
   kind: "builtin",
   category: "workflow",
   aliases: ["thinking"],
   subcommands: [
-    { name: "on", description: "Enable extended thinking" },
-    { name: "off", description: "Disable extended thinking" },
     { name: "effort", description: "Select reasoning effort for the current model" },
     { name: "mode", description: "Set display mode (full/compact)" },
     { name: "expand", description: "Set expanded by default (on/off/auto)" },
@@ -469,28 +319,14 @@ export const thinkCommand: SlashCommand = {
     {
       name: "state",
       type: "string",
-      description: "Enable/disable thinking or configure display/expand modes",
+      description: "Configure effort or display/expand modes",
       required: false,
-    },
-  ],
-  namedArgs: [
-    {
-      name: "budget",
-      shorthand: "b",
-      type: "number",
-      description: `Token budget for thinking (at least ${MIN_BUDGET_TOKENS}; model limits apply)`,
-      required: false,
-      default: DEFAULT_BUDGET_TOKENS,
     },
   ],
   examples: [
     "/think              - Show current thinking status",
-    "/think on           - Enable thinking mode",
-    "/think off          - Disable thinking mode",
     "/think effort       - Choose model-supported reasoning effort",
     "/think effort high  - Set reasoning effort (auto uses the model default)",
-    "/think on --budget 20000  - Enable with 20K token budget",
-    "/think -b 50k       - Set budget to 50K tokens",
     "/think mode full    - Show full thinking content",
     "/think mode compact - Show compact thinking header only",
     "/think expand on    - Thinking blocks start expanded",
@@ -501,7 +337,12 @@ export const thinkCommand: SlashCommand = {
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
     const stateArg = ctx.parsedArgs.positional[0] as string | undefined;
-    const budgetArg = ctx.parsedArgs.named.budget as string | number | undefined;
+    if (ctx.parsedArgs.named.budget !== undefined || stateArg === "on" || stateArg === "off") {
+      return error(
+        "INVALID_ARGUMENT",
+        "Use /think effort; on/off and thinking budgets have been removed."
+      );
+    }
 
     if (stateArg === "effort") {
       const config = getModelCommandConfig();
@@ -512,7 +353,7 @@ export const thinkCommand: SlashCommand = {
         return error(
           "INVALID_ARGUMENT",
           `${config.model} does not advertise reasoning effort controls.`,
-          ["Use /think on --budget <tokens> for models with a thinking token budget."]
+          ["This model uses its provider default reasoning settings."]
         );
       }
       const select = async (value: string): Promise<CommandResult> => {
@@ -521,7 +362,7 @@ export const thinkCommand: SlashCommand = {
           return error("INVALID_ARGUMENT", `Supported effort: auto, ${choices.join(", ")}`);
         }
         setThinkingEffort(value === "auto" ? undefined : parsed.data);
-        setThinkingEnabled(true);
+
         return success(`Reasoning effort: ${value}. Applies to the next model request.`);
       };
       const value = ctx.parsedArgs.positional[1];
@@ -540,73 +381,10 @@ export const thinkCommand: SlashCommand = {
       };
     }
 
-    // Handle budget argument if provided
-    let newBudget: number | undefined;
-    if (budgetArg !== undefined) {
-      const budgetValue =
-        typeof budgetArg === "number" ? budgetArg : parseBudget(String(budgetArg));
-
-      if (budgetValue === null) {
-        return error("INVALID_ARGUMENT", `Invalid budget value: ${budgetArg}`, [
-          `Budget must be an integer of at least ${formatBudget(MIN_BUDGET_TOKENS)} tokens.`,
-          "Examples: 10000, 20k, 50K, 128000",
-        ]);
-      }
-
-      if (!Number.isSafeInteger(budgetValue) || budgetValue < MIN_BUDGET_TOKENS) {
-        return error("INVALID_ARGUMENT", `Budget out of range: ${formatBudget(budgetValue)}`, [
-          `Budget must be an integer of at least ${formatBudget(MIN_BUDGET_TOKENS)} tokens. The provider enforces model limits.`,
-        ]);
-      }
-
-      newBudget = budgetValue;
-    }
-
-    // If no state argument, show current status or toggle
     if (!stateArg) {
-      // If budget was provided, just update budget
-      if (newBudget !== undefined) {
-        setThinkingBudget(newBudget);
-        const state = getThinkingState();
-        return success(
-          `🧠 Thinking budget set to ${formatBudget(state.budgetTokens)} tokens.\n` +
-            `   Status: ${state.enabled ? "◆ On" : "◇ Off"}`
-        );
-      }
-
-      // Show current status
-      const state = getThinkingState();
-      const displayMode = getThinkingDisplayMode();
-      const expandedByDefault = getThinkingExpandedByDefault();
-      const autoCollapse = getThinkingAutoCollapse();
-      const autoCollapseDelayMs = getThinkingAutoCollapseDelayMs();
-      const statusIcon = state.enabled ? "◆" : "◇";
-      const statusText = state.enabled ? "On" : "Off";
-      const autoCollapseText = autoCollapse ? `on (${autoCollapseDelayMs}ms)` : "off";
-
-      const lines = [
-        "🧠 Extended Thinking Mode",
-        "",
-        `   Status: ${statusIcon} ${statusText}`,
-        `   Effort: ${state.reasoningEffort ?? "auto (model default)"}`,
-        `   Budget: ${formatBudget(state.budgetTokens)} tokens`,
-        `   Display: ${displayMode}`,
-        `   Expanded: ${expandedByDefault ? "on" : "off"}`,
-        `   Auto-collapse: ${autoCollapseText}`,
-        "",
-        "Commands:",
-        "   /think on       - Enable thinking",
-        "   /think off      - Disable thinking",
-        "   /think -b 20k   - Set budget to 20K tokens",
-        "   /think mode full|compact - Set display mode",
-        "   /think expand on|off|auto [delayMs] - Set expanded behavior",
-        "",
-        "Shortcuts:",
-        "   Ctrl+T          - Toggle thinking on/off",
-        "   T (in /model)   - Toggle in model selector",
-      ];
-
-      return success(lines.join("\n"));
+      return success(
+        `Reasoning effort: ${thinkingState.reasoningEffort ?? "auto (model default)"}\nUse /think effort to choose effort, /think mode or /think expand to configure display.`
+      );
     }
 
     // Parse state argument
@@ -704,29 +482,10 @@ export const thinkCommand: SlashCommand = {
       ]);
     }
 
-    if (normalizedState === "on" || normalizedState === "1" || normalizedState === "true") {
-      setThinkingEnabled(true);
-      if (newBudget !== undefined) {
-        setThinkingBudget(newBudget);
-      }
-      const state = getThinkingState();
-      return success(
-        `🧠 ◆ Thinking mode enabled.\n   Budget: ${formatBudget(state.budgetTokens)} tokens`
-      );
-    }
-
-    if (normalizedState === "off" || normalizedState === "0" || normalizedState === "false") {
-      setThinkingEnabled(false);
-      if (newBudget !== undefined) {
-        setThinkingBudget(newBudget);
-      }
-      return success("🧠 ◇ Thinking mode disabled.");
-    }
-
     // Invalid state argument
     return error("INVALID_ARGUMENT", `Invalid state: ${stateArg}`, [
-      "Valid states: on, off, mode, expand",
-      "Example: /think on --budget 20000",
+      "Valid settings: effort, mode, expand",
+      "Example: /think effort high",
       "Example: /think mode compact",
       "Example: /think expand auto 1000",
     ]);

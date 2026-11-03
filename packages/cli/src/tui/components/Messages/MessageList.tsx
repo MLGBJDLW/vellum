@@ -419,11 +419,17 @@ const InlineToolCall = memo(function InlineToolCall({
  *
  * Uses StreamingIndicator for consistent styling across all streaming phases.
  */
-const ThinkingIndicator = memo(function ThinkingIndicator() {
+const ThinkingIndicator = memo(function ThinkingIndicator({ startedAt }: { startedAt: number }) {
   // Use StreamingIndicator for consistent styling
   return (
     <Box marginBottom={1} paddingX={1}>
-      <StreamingIndicator phase="thinking" showPhaseTime narrow showCancelHint />
+      <StreamingIndicator
+        phase="thinking"
+        startedAt={startedAt}
+        showPhaseTime
+        narrow
+        showCancelHint
+      />
     </Box>
   );
 });
@@ -577,7 +583,10 @@ const MessageItem = memo(function MessageItem({
       {/* Message content */}
       <Box marginLeft={2} marginTop={0}>
         <MarkdownRenderer
-          content={message.content || (message.isStreaming ? "" : "(empty)")}
+          content={
+            message.content ||
+            (message.isStreaming || message.thinking || message.toolCalls?.length ? "" : "(empty)")
+          }
           compact
           textColor={roleColor}
           isStreaming={message.isStreaming}
@@ -677,6 +686,9 @@ const MessageList = memo(function MessageList({
   // Merge isStreaming and isLoading for backward compatibility
   // isStreaming takes precedence over deprecated isLoading
   const isLoadingInternal = isStreaming ?? isLoading ?? false;
+  const taskClock = useRef({ active: false, startedAt: Date.now() });
+  if (isLoadingInternal && !taskClock.current.active) taskClock.current.startedAt = Date.now();
+  taskClock.current.active = isLoadingInternal;
 
   const { theme } = useTheme();
 
@@ -1077,7 +1089,7 @@ const MessageList = memo(function MessageList({
         </Box>
 
         {/* Thinking indicator - shows while agent is processing before first token */}
-        {showThinkingIndicator && <ThinkingIndicator />}
+        {showThinkingIndicator && <ThinkingIndicator startedAt={taskClock.current.startedAt} />}
 
         {!following && (
           <Box flexShrink={0}>

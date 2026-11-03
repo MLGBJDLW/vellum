@@ -141,11 +141,10 @@ describe("selector mouse controls", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it("clicks Thinking and Full/Compact independently without writing real settings", async () => {
+  it("switches Full/Compact without an obsolete reasoning toggle", async () => {
     const model = getProviderModels("anthropic")[0];
     if (!model) throw new Error("Expected provider model");
     const context = harness();
-    const onThinkingToggle = vi.fn();
     let screen!: ReturnType<typeof render>;
     await act(async () => {
       screen = render(
@@ -155,25 +154,18 @@ describe("selector mouse controls", () => {
             currentModel={model.id}
             providers={["anthropic"]}
             onSelect={vi.fn()}
-            onThinkingToggle={onThinkingToggle}
           />
         )
       );
     });
-    let target = position(screen, "Display: Full");
+    const target = position(screen, "Display: Full");
     await act(async () => {
       clickAt(target.col, target.row);
     });
     expect(thinking.setMode).toHaveBeenCalledExactlyOnceWith("compact");
     expect(thinking.toggle).not.toHaveBeenCalled();
     expect(screen.lastFrame()).toContain("Display: Compact");
-    target = position(screen, "Thinking:");
-    await act(async () => {
-      clickAt(target.col, target.row);
-    });
-    expect(thinking.toggle).toHaveBeenCalledTimes(1);
-    expect(onThinkingToggle).toHaveBeenCalledExactlyOnceWith(false);
-    expect(screen.lastFrame()).not.toContain("Display:");
+    expect(screen.lastFrame()).not.toContain("Thinking:");
   });
 
   it("moves model focus only for wheel input within the live list bounds", async () => {

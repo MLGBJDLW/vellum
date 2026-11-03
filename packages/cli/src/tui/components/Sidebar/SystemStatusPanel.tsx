@@ -30,6 +30,8 @@ import {
  * Props for the SystemStatusPanel component
  */
 export interface SystemStatusPanelProps {
+  /** Latest main-agent request, never cumulative spend or delegated usage. */
+  readonly context?: { tokens?: number; window?: number; estimated?: boolean };
   /** Compact mode for narrow sidebars */
   readonly compact?: boolean;
   /** Optional snapshot count from session */
@@ -189,6 +191,7 @@ function getSnapStatus(snapshotCount: number | undefined, colors: ThemeColors): 
  * ```
  */
 export function SystemStatusPanel({
+  context,
   compact = false,
   snapshotCount,
   updateVersion,
@@ -239,6 +242,10 @@ export function SystemStatusPanel({
 
   const labelColor = theme.semantic.text.secondary;
   const borderColor = theme.semantic.border.default;
+  const contextText =
+    context?.tokens === undefined
+      ? "awaiting usage"
+      : `${context.tokens.toLocaleString("en-US")}/${context.window?.toLocaleString("en-US") ?? "?"}${context.window ? ` (${Math.round((context.tokens / context.window) * 100)}%)` : ""}`;
 
   if (compact) {
     return (
@@ -277,6 +284,14 @@ export function SystemStatusPanel({
       <Text color={theme.semantic.text.secondary} bold>
         Status
       </Text>
+      <Text color={labelColor} wrap="truncate-end">
+        Context: {contextText}
+      </Text>
+      {context?.tokens !== undefined && (
+        <Text dimColor>
+          {context.estimated ? "estimated after compaction" : "last request · input tokens"}
+        </Text>
+      )}
       <StatusItem label="MCP" value={mcpStatus} color={mcpColor} labelColor={labelColor} />
       <StatusItem label="LSP" value={lspStatus} color={lspColor} labelColor={labelColor} />
       <StatusItem label="Rate" value={rateStatus} color={rateColor} labelColor={labelColor} />

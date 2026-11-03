@@ -49,6 +49,8 @@ export interface EnhancedCommandInputProps {
   readonly categoryLabels?: Record<string, string>;
   /** Placeholder text shown when input is empty */
   readonly placeholder?: string;
+  /** Next-step draft accepted with Tab; never submitted implicitly. */
+  readonly suggestion?: string;
   /** Disable input interactions */
   readonly disabled?: boolean;
   /** Whether the input is focused (default: true) */
@@ -109,6 +111,7 @@ export function EnhancedCommandInput({
   categoryOrder,
   categoryLabels,
   placeholder = "Type a message, /command, or @mention...",
+  suggestion,
   disabled = false,
   focused = true,
   multiline = false,
@@ -415,6 +418,7 @@ export function EnhancedCommandInput({
         onChange={handleChange}
         onSubmit={handleSubmit}
         placeholder={placeholder}
+        suggestion={activeAutocomplete === null ? suggestion : undefined}
         disabled={disabled}
         focused={focused}
         multiline={multiline}

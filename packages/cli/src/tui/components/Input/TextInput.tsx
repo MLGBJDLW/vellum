@@ -50,6 +50,8 @@ export interface TextInputProps {
   readonly onSubmit?: (value: string) => void;
   /** Placeholder text shown when value is empty */
   readonly placeholder?: string;
+  /** Optional next-step draft; Tab accepts it without submitting. */
+  readonly suggestion?: string;
   /** Enable multiline input mode */
   readonly multiline?: boolean;
   /** Disable input interactions */
@@ -167,6 +169,7 @@ function TextInputComponent({
   onChange: onValueChange,
   onSubmit,
   placeholder = "",
+  suggestion,
   multiline = false,
   disabled = false,
   maxLength,
@@ -670,11 +673,15 @@ function TextInputComponent({
     if (suppressTab) {
       return false; // Let parent handle it
     }
+    if (suggestion && valueRef.current.length === 0) {
+      handleInput(suggestion);
+      return true;
+    }
     if (multiline) {
       handleInput("  ");
     }
     return true;
-  }, [multiline, handleInput, suppressTab]);
+  }, [multiline, handleInput, suppressTab, suggestion]);
 
   /**
    * Process a key event and dispatch to appropriate handler.
@@ -799,7 +806,8 @@ function TextInputComponent({
   // ==========================================================================
 
   const isEmpty = value.length === 0;
-  const showPlaceholder = isEmpty && placeholder;
+  const displayPlaceholder = suggestion ? `${suggestion}  [Tab]` : placeholder;
+  const showPlaceholder = isEmpty && displayPlaceholder;
   const displayValue = mask ? value.replace(/[\s\S]/g, mask) : value;
 
   // Split value into lines for multiline display
@@ -893,11 +901,11 @@ function TextInputComponent({
           <Text color={theme.semantic.text.muted}>
             {focused ? (
               <>
-                <Text inverse>{placeholder[0] || " "}</Text>
-                {placeholder.slice(1)}
+                <Text inverse>{displayPlaceholder[0] || " "}</Text>
+                {displayPlaceholder.slice(1)}
               </>
             ) : (
-              placeholder
+              displayPlaceholder
             )}
           </Text>
         </Box>

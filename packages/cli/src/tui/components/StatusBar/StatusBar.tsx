@@ -23,7 +23,6 @@ import { ModelIndicator } from "./ModelIndicator.js";
 import type { PersistenceStatusIndicatorProps } from "./PersistenceStatusIndicator.js";
 import { ResilienceStatusSegment } from "./ResilienceIndicator.js";
 import { SandboxIndicator } from "./SandboxIndicator.js";
-import { ThinkingModeIndicator, type ThinkingModeIndicatorProps } from "./ThinkingModeIndicator.js";
 import { TokenBreakdown, type TokenStats } from "./TokenBreakdown.js";
 import { ToolTimeoutStatusSegment } from "./ToolTimeoutIndicator.js";
 import { TrustModeIndicator, type TrustModeIndicatorProps } from "./TrustModeIndicator.js";
@@ -63,8 +62,6 @@ export interface StatusBarProps {
   readonly trustMode?: TrustModeIndicatorProps["mode"];
   /** Sandbox policy for file system access boundaries */
   readonly sandboxPolicy?: SandboxPolicy;
-  /** Thinking mode status */
-  readonly thinking?: ThinkingModeIndicatorProps;
   /** Current cost in dollars */
   readonly cost?: number;
   /** Whether to show a border (default: false for unified footer) */
@@ -76,7 +73,6 @@ export interface StatusBarProps {
   /** Open the model picker from the displayed model. */
   readonly onModelClick?: () => void;
   /** Open Thinking controls from the displayed status. */
-  readonly onThinkingClick?: () => void;
   readonly effortLabel?: string;
   readonly onEffortClick?: () => void;
   /** Open approval controls from the displayed trust mode. */
@@ -238,13 +234,11 @@ export function StatusBar({
   tokens,
   trustMode,
   sandboxPolicy,
-  thinking,
   cost,
   showBorder = false,
   showAllModes = false,
   onModeClick,
   onModelClick,
-  onThinkingClick,
   effortLabel,
   onEffortClick,
   onApprovalClick,
@@ -389,25 +383,6 @@ export function StatusBar({
     );
   }
 
-  // Thinking mode (if provided)
-  if (thinking) {
-    rightIndicators.push(
-      <Clickable
-        key="thinking"
-        id={`statusbar-thinking-${clickId}`}
-        width="auto"
-        enabled={!!onThinkingClick}
-        onClick={() => onThinkingClick?.()}
-      >
-        <ThinkingModeIndicator
-          active={thinking.active}
-          budget={thinking.budget}
-          used={thinking.used}
-        />
-      </Clickable>
-    );
-  }
-
   // Cost display
   if (effortLabel) {
     rightIndicators.push(
@@ -430,7 +405,7 @@ export function StatusBar({
   if (cost !== undefined && cost > 0) {
     rightIndicators.push(
       <Box key="cost">
-        <Text color={theme.colors.success}>{formatCost(cost)}</Text>
+        <Text color={theme.colors.success}>~{formatCost(cost)}</Text>
       </Box>
     );
   }
@@ -471,7 +446,7 @@ export function StatusBar({
   }
 
   // Empty state
-  if (!modelName && !tokens && !cost && !trustMode && !thinking && !sandboxPolicy) {
+  if (!modelName && !tokens && !cost && !trustMode && !sandboxPolicy && !effortLabel) {
     return (
       <Box flexDirection="row" justifyContent="space-between" width="100%">
         {modeSection}

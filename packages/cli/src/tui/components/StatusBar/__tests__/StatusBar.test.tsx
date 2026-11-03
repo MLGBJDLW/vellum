@@ -22,7 +22,6 @@ import { describe, expect, it } from "vitest";
 import { ThemeProvider } from "../../../theme/index.js";
 import { ModelIndicator } from "../ModelIndicator.js";
 import { StatusBar } from "../StatusBar.js";
-import { ThinkingModeIndicator } from "../ThinkingModeIndicator.js";
 import { TokenCounter } from "../TokenCounter.js";
 import { TrustModeIndicator } from "../TrustModeIndicator.js";
 
@@ -94,7 +93,6 @@ describe("ModelIndicator", () => {
         <ModelIndicator provider="mistral" model="mistral-large" />
       );
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("◆");
       expect(frame).toContain("Mistral");
     });
 
@@ -302,114 +300,6 @@ describe("TrustModeIndicator", () => {
 // ThinkingModeIndicator Tests
 // =============================================================================
 
-describe("ThinkingModeIndicator", () => {
-  describe("Active/Inactive States", () => {
-    it("should render active state with filled diamond icon", () => {
-      const { lastFrame } = renderWithTheme(<ThinkingModeIndicator active={true} />);
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("◆");
-      expect(frame).toContain("Think");
-    });
-
-    it("should render inactive state with diamond outline icon", () => {
-      const { lastFrame } = renderWithTheme(<ThinkingModeIndicator active={false} />);
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("◇");
-      expect(frame).toContain("Think");
-    });
-  });
-
-  describe("Budget Display", () => {
-    it("should show budget when active with budget provided", () => {
-      const { lastFrame } = renderWithTheme(
-        <ThinkingModeIndicator active={true} budget={10000} used={5000} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("5.0K");
-      expect(frame).toContain("10K");
-    });
-
-    it("should not show budget when inactive even if provided", () => {
-      const { lastFrame } = renderWithTheme(
-        <ThinkingModeIndicator active={false} budget={10000} used={5000} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("Think");
-      expect(frame).not.toContain("10K");
-    });
-
-    it("should show zero used when not provided", () => {
-      const { lastFrame } = renderWithTheme(<ThinkingModeIndicator active={true} budget={10000} />);
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("0");
-      expect(frame).toContain("10K");
-    });
-  });
-
-  describe("Budget Thresholds", () => {
-    it("should display normal color below 80% budget usage", () => {
-      const { lastFrame } = renderWithTheme(
-        <ThinkingModeIndicator active={true} budget={10000} used={7900} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("7.9K");
-    });
-
-    it("should handle warning state at 80% budget usage", () => {
-      const { lastFrame } = renderWithTheme(
-        <ThinkingModeIndicator active={true} budget={10000} used={8000} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("8.0K");
-    });
-
-    it("should handle error state at 95% budget usage", () => {
-      const { lastFrame } = renderWithTheme(
-        <ThinkingModeIndicator active={true} budget={10000} used={9500} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("9.5K");
-    });
-
-    it("should handle 100% budget usage", () => {
-      const { lastFrame } = renderWithTheme(
-        <ThinkingModeIndicator active={true} budget={10000} used={10000} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("10K");
-    });
-  });
-
-  describe("Token Formatting", () => {
-    it("should format small token counts without suffix", () => {
-      const { lastFrame } = renderWithTheme(
-        <ThinkingModeIndicator active={true} budget={500} used={100} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("100");
-      expect(frame).toContain("500");
-    });
-
-    it("should format large token counts with K suffix", () => {
-      const { lastFrame } = renderWithTheme(
-        <ThinkingModeIndicator active={true} budget={50000} used={25000} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("25K");
-      expect(frame).toContain("50K");
-    });
-
-    it("should format million token counts with M suffix", () => {
-      const { lastFrame } = renderWithTheme(
-        <ThinkingModeIndicator active={true} budget={2000000} used={1000000} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("1.0M");
-      expect(frame).toContain("2.0M");
-    });
-  });
-});
-
 // =============================================================================
 // StatusBar Integration Tests
 // =============================================================================
@@ -423,7 +313,6 @@ describe("StatusBar", () => {
           modelName="claude-3-opus"
           tokens={{ current: 5000, max: 100000 }}
           trustMode="auto"
-          thinking={{ active: true, budget: 10000, used: 2500 }}
           cost={0.02}
         />
       );
@@ -439,7 +328,6 @@ describe("StatusBar", () => {
       // Trust mode (with "Approval: " prefix - core assertion for this component)
       expect(frame).toContain("Approval:");
       // Thinking mode
-      expect(frame).toContain("Think");
     });
 
     it("should render separators between indicators", () => {
@@ -477,18 +365,6 @@ describe("StatusBar", () => {
       const frame = lastFrame() ?? "";
       expect(frame).toContain("●");
       expect(frame).toContain("Approval: Full");
-    });
-
-    it("should render with thinking indicator when model is present", () => {
-      const { lastFrame } = renderWithTheme(
-        <StatusBar
-          mode="vibe"
-          modelName="claude-3"
-          thinking={{ active: true, budget: 5000, used: 1000 }}
-        />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("◆");
     });
 
     it("should render with model and tokens", () => {
@@ -569,38 +445,6 @@ describe("StatusBar", () => {
       const frame = lastFrame() ?? "";
       expect(frame).toContain("●");
       expect(frame).toContain("Approval: Full");
-    });
-  });
-
-  describe("Combined Thinking Modes in Status Bar", () => {
-    it("should show active thinking without budget", () => {
-      const { lastFrame } = renderWithTheme(
-        <StatusBar mode="vibe" modelName="claude-3" thinking={{ active: true }} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("◆");
-    });
-
-    it("should show active thinking with budget", () => {
-      const { lastFrame } = renderWithTheme(
-        <StatusBar
-          mode="vibe"
-          modelName="claude-3"
-          thinking={{ active: true, budget: 10000, used: 5000 }}
-        />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("◆");
-      expect(frame).toContain("5.0K");
-      expect(frame).toContain("10K");
-    });
-
-    it("should show inactive thinking", () => {
-      const { lastFrame } = renderWithTheme(
-        <StatusBar mode="vibe" modelName="claude-3" thinking={{ active: false }} />
-      );
-      const frame = lastFrame() ?? "";
-      expect(frame).toContain("◇"); // inactive thinking icon
     });
   });
 

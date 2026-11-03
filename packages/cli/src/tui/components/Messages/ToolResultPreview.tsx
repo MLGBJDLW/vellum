@@ -11,6 +11,7 @@ import { Box, Text } from "ink";
 import type React from "react";
 import { memo, useMemo } from "react";
 import { useTheme } from "../../theme/index.js";
+import { sanitize } from "../../utils/textSanitizer.js";
 
 // =============================================================================
 // Constants
@@ -95,7 +96,7 @@ function formatDirectoryItem(item: unknown): DisplayLine {
  * Creates a plain display line from text.
  */
 function plainLine(text: string): DisplayLine {
-  return { text };
+  return { text: sanitize(text, { stripAllAnsi: true }) };
 }
 
 /**
@@ -107,6 +108,15 @@ function resultToLines(result: unknown): DisplayLine[] {
   }
 
   if (typeof result === "string") {
+    // Session persistence serializes structured tool output as JSON.
+    if (result.trimStart().startsWith("{")) {
+      try {
+        const parsed: unknown = JSON.parse(result);
+        if (parsed && typeof parsed === "object") return resultToLines(parsed);
+      } catch {
+        // Ordinary text beginning with a brace is still valid output.
+      }
+    }
     return result.split("\n").map(plainLine);
   }
 
@@ -125,6 +135,15 @@ function resultToLines(result: unknown): DisplayLine[] {
   if (typeof result === "object") {
     // Check for content field (common in tool results)
     const obj = result as Record<string, unknown>;
+    if (typeof obj.stdout === "string" || typeof obj.stderr === "string") {
+      const output = [obj.stdout, obj.stderr].filter(
+        (part): part is string => typeof part === "string" && part.length > 0
+      );
+      if (typeof obj.exitCode === "number" && obj.exitCode !== 0)
+        output.push(`Exit code: ${obj.exitCode}`);
+      if (typeof obj.outputFile === "string") output.push(`Full output: ${obj.outputFile}`);
+      return output.join("\n").split(/\r?\n/).map(plainLine);
+    }
     if (typeof obj.content === "string") {
       return obj.content.split("\n").map(plainLine);
     }

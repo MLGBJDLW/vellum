@@ -59,7 +59,7 @@ describe("ModelSelector viewport with the complete model catalog", () => {
       const frame = view.lastFrame() ?? "";
       expect(frame.split("\n").length).toBeLessThanOrEqual(height);
       expect(frame.split("\n").every((line) => stringWidth(line) <= width)).toBe(true);
-      expect(frame).toContain("Thinking:");
+      expect(frame).toContain("Display:");
       expect(frame).toContain("Enter");
       return frame;
     };

@@ -55,6 +55,32 @@ async function write(stdin: { write: (data: string) => void }, data: string) {
 }
 
 describe("TextInput terminal input", () => {
+  it("accepts a ghost draft with Tab and submits only on Enter", async () => {
+    const submit = vi.fn();
+    function Draft() {
+      const [value, setValue] = useState("");
+      return (
+        <ThemeProvider>
+          <BracketedPasteProvider>
+            <MouseProvider enabled={false}>
+              <TextInput
+                value={value}
+                onChange={setValue}
+                onSubmit={submit}
+                suggestion="Run the tests"
+              />
+            </MouseProvider>
+          </BracketedPasteProvider>
+        </ThemeProvider>
+      );
+    }
+    const screen = renderInput(<Draft />);
+    expect(screen.lastFrame()).toContain("Run the tests");
+    await write(screen.stdin, "\t");
+    expect(submit).not.toHaveBeenCalled();
+    await write(screen.stdin, "\r");
+    expect(submit).toHaveBeenCalledWith("Run the tests");
+  });
   it.each([true, false])(
     "honors a parent's clear-on-submit policy (%s) before later keys",
     async (clear) => {

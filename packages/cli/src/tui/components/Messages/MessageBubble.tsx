@@ -241,7 +241,12 @@ export function MessageBubble({
         {/* Message content */}
         <Box marginLeft={showAvatar ? 2 : 0} marginTop={compact ? 0 : 0}>
           <MarkdownRenderer
-            content={message.content || (message.isStreaming ? "" : "(empty)")}
+            content={
+              message.content ||
+              (message.isStreaming || message.thinking || message.toolCalls?.length
+                ? ""
+                : "(empty)")
+            }
             compact={compact}
             textColor={roleColor}
             isStreaming={message.isStreaming}

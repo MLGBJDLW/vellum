@@ -117,6 +117,10 @@ export function TokenBreakdown({
         total.cacheReadTokens || total.cacheWriteTokens
           ? formatTokenCount((total.cacheReadTokens ?? 0) + (total.cacheWriteTokens ?? 0))
           : null,
+      cachePercent:
+        total.inputTokens > 0
+          ? `${Math.min(100, Math.round(((total.cacheReadTokens ?? 0) / total.inputTokens) * 100))}% hit`
+          : undefined,
     }),
     [total]
   );
@@ -156,7 +160,10 @@ export function TokenBreakdown({
     if (formattedTotal.cache) {
       parts.push(
         <Text key="cache" color={theme.semantic.text.secondary}>
-          cache: <Text color={theme.semantic.text.muted}>{formattedTotal.cache}</Text>
+          cache:{" "}
+          <Text color={theme.semantic.text.muted}>
+            {formattedTotal.cache} {formattedTotal.cachePercent}
+          </Text>
         </Text>
       );
     }
