@@ -74,25 +74,15 @@ describe("mode, status and sidebar entrypoints", () => {
     expect(toggle).toHaveBeenCalledOnce();
   });
 
-  it("opens the effort control independently of the Thinking toggle", async () => {
+  it("opens the single effort control", async () => {
     const effort = vi.fn();
-    const thinking = vi.fn();
     let screen!: ReturnType<typeof render>;
     await act(async () => {
-      screen = render(
-        wrap(
-          <StatusBar
-            thinking={{ active: true }}
-            effortLabel="high"
-            onEffortClick={effort}
-            onThinkingClick={thinking}
-          />
-        )
-      );
+      screen = render(wrap(<StatusBar effortLabel="high" onEffortClick={effort} />));
     });
     await act(async () => click(screen, "Effort: high"));
     expect(effort).toHaveBeenCalledOnce();
-    expect(thinking).not.toHaveBeenCalled();
+    expect(screen.lastFrame()).not.toContain("Think");
   });
 
   it("renders all existing modes and chooses the clicked row on release", async () => {
@@ -138,8 +128,8 @@ describe("mode, status and sidebar entrypoints", () => {
       wrap(
         <StatusBar
           trustMode="ask"
-          thinking={{ active: false }}
-          onThinkingClick={interactive ? thinking : undefined}
+          effortLabel="high"
+          onEffortClick={interactive ? thinking : undefined}
           onApprovalClick={interactive ? approval : undefined}
         />
       );
@@ -147,7 +137,7 @@ describe("mode, status and sidebar entrypoints", () => {
       screen = render(content(true));
     });
     await act(async () => {
-      click(screen, "Think");
+      click(screen, "Effort: high");
     });
     expect(thinking).toHaveBeenCalledTimes(1);
     expect(approval).not.toHaveBeenCalled();
@@ -159,7 +149,7 @@ describe("mode, status and sidebar entrypoints", () => {
       screen.rerender(content(false));
     });
     await act(async () => {
-      click(screen, "Think");
+      click(screen, "Effort: high");
       click(screen, "Approval: Ask");
     });
     expect(thinking).toHaveBeenCalledTimes(1);
@@ -315,8 +305,8 @@ describe("mode, status and sidebar entrypoints", () => {
             <ModeSelector currentMode="orch" onSelect={mode} />
             <StatusBar
               trustMode="ask"
-              thinking={{ active: true }}
-              onThinkingClick={thinking}
+              effortLabel="high"
+              onEffortClick={thinking}
               onApprovalClick={approval}
             />
             <SidebarHeader panel="todo" isFocused onSelectPanel={select} onClose={close} />
@@ -326,7 +316,7 @@ describe("mode, status and sidebar entrypoints", () => {
       );
     });
     await act(async () => {
-      for (const label of ["[2] vibe", "Think", "Approval: Ask", "[‹]", "[›]", "[×]"])
+      for (const label of ["[2] vibe", "Effort: high", "Approval: Ask", "[‹]", "[›]", "[×]"])
         click(screen, label);
     });
     for (const callback of [mode, thinking, approval, select, close])

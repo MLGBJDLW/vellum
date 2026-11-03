@@ -15,7 +15,7 @@
  * @module @vellum/core/agent/stream-handler
  */
 
-import type { ProviderResponseMetadata, StreamEvent } from "@vellum/provider";
+import type { ProviderResponseMetadata, StopReason, StreamEvent } from "@vellum/provider";
 import type { TokenUsage } from "@vellum/shared";
 import { ErrorCode, VellumError } from "../errors/index.js";
 import type { Logger } from "../logger/logger.js";
@@ -59,6 +59,7 @@ export interface StreamState {
   /** Accumulated reasoning content */
   accumulatedReasoning: string;
   providerMetadata?: ProviderResponseMetadata;
+  stopReason?: StopReason;
 }
 
 /**
@@ -309,6 +310,8 @@ export class AgentStreamHandler {
         throw streamEventError(event);
 
       case "done":
+      case "end":
+        this.state.stopReason = event.stopReason;
         // Stream complete - handled by caller after loop exits
         break;
     }
@@ -373,7 +376,8 @@ export class AgentStreamHandler {
         return undefined;
 
       case "done":
-        return { type: "end", stopReason: "end_turn" };
+      case "end":
+        return { type: "end", stopReason: event.stopReason };
 
       default:
         return undefined;
@@ -537,6 +541,7 @@ export class AgentStreamHandler {
   ): AsyncIterable<Result<StreamEvent, Error>> {
     try {
       for await (const event of stream) {
+        if (event.type === "done" || event.type === "end") this.state.stopReason = event.stopReason;
         if (event.type === "provider_metadata") {
           this.state.providerMetadata = event.metadata;
           continue;

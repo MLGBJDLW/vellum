@@ -78,6 +78,7 @@ const DEFAULT_MODEL_INFO: ModelInfo = {
   name: "Unknown Model",
   provider: "openai", // Default provider
   contextWindow: 128000, // Reasonable default
+  contextWindowKnown: false,
   maxOutputTokens: 8192,
   supportsVision: false,
   supportsReasoning: false,

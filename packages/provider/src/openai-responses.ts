@@ -202,7 +202,7 @@ export async function* mapResponsesStream(
             yield { type: "toolCall", ...tool };
           }
         }
-        yield { type: "usage", ...result.usage };
+        if (event.response.usage) yield { type: "usage", ...result.usage };
         yield { type: "end", stopReason: result.stopReason };
         yield { type: "done", stopReason: result.stopReason };
         return;

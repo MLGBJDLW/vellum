@@ -112,6 +112,32 @@ function anthropicEvents(argumentsJson?: string, complete = true) {
 }
 
 describe("native provider completion boundaries", () => {
+  it("does not invent zero usage when a compatible server omits it", async () => {
+    mockSse([{ choices: [{ index: 0, delta: { content: "Done" }, finish_reason: "stop" }] }]);
+    const result = await collect(new OpenAIProvider(), "gpt-4.1");
+    expect(result.error).toBeUndefined();
+    expect(result.events.some((event) => event.type === "usage")).toBe(false);
+  });
+  it("preserves provider cache-write accounting in the final usage chunk", async () => {
+    mockSse([
+      { choices: [{ index: 0, delta: { content: "Done" }, finish_reason: "stop" }] },
+      {
+        choices: [],
+        usage: {
+          prompt_tokens: 1000,
+          completion_tokens: 100,
+          prompt_tokens_details: { cached_tokens: 500, cache_write_tokens: 200 },
+        },
+      },
+    ]);
+    const result = await collect(new OpenAIProvider(), "gpt-4.1");
+    expect(result.error).toBeUndefined();
+    expect(result.events.find((event) => event.type === "usage")).toMatchObject({
+      inputTokens: 1000,
+      cacheReadTokens: 500,
+      cacheWriteTokens: 200,
+    });
+  });
   it.each([false, true])("rejects Google EOF before a finish reason (tool=%s)", async (tool) => {
     mockSse([
       {

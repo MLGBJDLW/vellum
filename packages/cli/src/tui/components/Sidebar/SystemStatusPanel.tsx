@@ -30,6 +30,8 @@ import {
  * Props for the SystemStatusPanel component
  */
 export interface SystemStatusPanelProps {
+  /** Latest main-agent request, never cumulative spend or delegated usage. */
+  readonly context?: { tokens?: number; window?: number; estimated?: boolean };
   /** Compact mode for narrow sidebars */
   readonly compact?: boolean;
   /** Optional snapshot count from session */
@@ -189,6 +191,7 @@ function getSnapStatus(snapshotCount: number | undefined, colors: ThemeColors): 
  * ```
  */
 export function SystemStatusPanel({
+  context,
   compact = false,
   snapshotCount,
   updateVersion,
@@ -239,35 +242,57 @@ export function SystemStatusPanel({
 
   const labelColor = theme.semantic.text.secondary;
   const borderColor = theme.semantic.border.default;
+  const contextText =
+    context?.tokens === undefined
+      ? "awaiting usage"
+      : `${context.tokens.toLocaleString("en-US")}/${context.window?.toLocaleString("en-US") ?? "?"}${context.window ? ` (${Math.round((context.tokens / context.window) * 100)}%)` : ""}`;
 
   if (compact) {
     return (
-      <Box flexDirection="row" borderStyle="single" borderColor={borderColor} paddingX={0} gap={1}>
-        <StatusItem label="M" value={mcpStatus} color={mcpColor} labelColor={labelColor} compact />
-        <StatusItem label="L" value={lspStatus} color={lspColor} labelColor={labelColor} compact />
-        <StatusItem
-          label="R"
-          value={rateStatus}
-          color={rateColor}
-          labelColor={labelColor}
-          compact
-        />
-        <StatusItem
-          label="S"
-          value={snapStatus}
-          color={snapColor}
-          labelColor={labelColor}
-          compact
-        />
-        {persistence && (
-          <PersistenceStatusIndicator
-            status={persistence.status}
-            unsavedCount={persistence.unsavedCount}
-            lastSavedAt={persistence.lastSavedAt}
+      <Box flexDirection="column" borderStyle="single" borderColor={borderColor} paddingX={0}>
+        <Text wrap="truncate-end">
+          Ctx: {contextText}
+          {context?.estimated ? " ~" : ""}
+        </Text>
+        <Box flexDirection="row" gap={1}>
+          <StatusItem
+            label="M"
+            value={mcpStatus}
+            color={mcpColor}
+            labelColor={labelColor}
             compact
           />
-        )}
-        {state.vimMode && <Text color={colors.accent}>VIM</Text>}
+          <StatusItem
+            label="L"
+            value={lspStatus}
+            color={lspColor}
+            labelColor={labelColor}
+            compact
+          />
+          <StatusItem
+            label="R"
+            value={rateStatus}
+            color={rateColor}
+            labelColor={labelColor}
+            compact
+          />
+          <StatusItem
+            label="S"
+            value={snapStatus}
+            color={snapColor}
+            labelColor={labelColor}
+            compact
+          />
+          {persistence && (
+            <PersistenceStatusIndicator
+              status={persistence.status}
+              unsavedCount={persistence.unsavedCount}
+              lastSavedAt={persistence.lastSavedAt}
+              compact
+            />
+          )}
+          {state.vimMode && <Text color={colors.accent}>VIM</Text>}
+        </Box>
       </Box>
     );
   }
@@ -277,6 +302,14 @@ export function SystemStatusPanel({
       <Text color={theme.semantic.text.secondary} bold>
         Status
       </Text>
+      <Text color={labelColor} wrap="truncate-end">
+        Context: {contextText}
+      </Text>
+      {context?.tokens !== undefined && (
+        <Text dimColor>
+          {context.estimated ? "estimated after compaction" : "last request · input tokens"}
+        </Text>
+      )}
       <StatusItem label="MCP" value={mcpStatus} color={mcpColor} labelColor={labelColor} />
       <StatusItem label="LSP" value={lspStatus} color={lspColor} labelColor={labelColor} />
       <StatusItem label="Rate" value={rateStatus} color={rateColor} labelColor={labelColor} />

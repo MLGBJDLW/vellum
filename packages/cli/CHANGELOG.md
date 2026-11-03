@@ -1,5 +1,13 @@
 # @butlerw/vellum
 
+## 0.6.1
+
+### Patch Changes
+
+- Add Tab-accepted next-step drafts, show main-conversation context usage and cache hit percentages, and use provider-aware cached/reasoning token accounting for cost estimates. Refresh current gateway models and distinguish unknown model capacities from internal fallbacks.
+  
+  Fix language-server installation corrupting the terminal, render readable shell output, preserve thinking elapsed time, and continue output-limited responses through existing task limits. Keep Enter-based steering and consolidate reasoning controls around model-supported effort; remove redundant on/off, budget and toggle controls while preserving display preferences.
+
 ## 0.6.0
 
 ### Minor Changes

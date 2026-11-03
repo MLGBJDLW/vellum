@@ -38,6 +38,8 @@ export type StreamingPhase =
  * Props for the StreamingIndicator component.
  */
 export interface StreamingIndicatorProps {
+  /** Task-owned timestamp survives phase changes and indicator remounts. */
+  readonly startedAt?: number;
   /** Current streaming phase */
   readonly phase: StreamingPhase;
   /** Optional custom label override */
@@ -149,6 +151,7 @@ function areStreamingPropsEqual(
 ): boolean {
   return (
     prev.phase === next.phase &&
+    prev.startedAt === next.startedAt &&
     prev.label === next.label &&
     prev.toolName === next.toolName &&
     prev.showPhaseTime === next.showPhaseTime &&
@@ -193,6 +196,7 @@ function areStreamingPropsEqual(
  * ```
  */
 function StreamingIndicatorImpl({
+  startedAt,
   phase,
   label,
   toolName,
@@ -207,7 +211,7 @@ function StreamingIndicatorImpl({
   const { isActive, resetKey } = useStreamingPhase(phase);
 
   // Track elapsed time for current phase
-  const elapsedTime = useElapsedTime(isActive, resetKey);
+  const elapsedTime = useElapsedTime(isActive, startedAt ?? resetKey, startedAt);
 
   // Don't render in idle state
   if (phase === "idle") {

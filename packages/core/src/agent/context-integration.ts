@@ -31,6 +31,8 @@ import type { SessionMessage, SessionMessagePart } from "../session/index.js";
  * Result of context management operation
  */
 export interface ContextManageResult {
+  /** Estimated retained context tokens, when the tokenizer has measured them. */
+  tokenCount?: number;
   /** Managed session messages ready for API */
   messages: SessionMessage[];
   /** Current context state */
@@ -385,6 +387,7 @@ export function createContextIntegration(config: ContextIntegrationConfig): Cont
 
         return {
           messages: managedMessages,
+          tokenCount: result.tokenCount,
           state: result.state,
           actions: [...result.actions],
           modified: result.actions.length > 0,

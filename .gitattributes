@@ -8,3 +8,5 @@
 packages/cli/__fixtures__/** -text
 .husky/* text eol=lf
 .husky/_/* text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

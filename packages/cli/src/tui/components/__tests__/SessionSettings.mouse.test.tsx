@@ -19,7 +19,7 @@ import { SessionListPanel } from "../session/SessionListPanel.js";
 import { SessionPicker } from "../session/SessionPicker.js";
 
 const settings = vi.hoisted(() => ({
-  thinking: { enabled: true, budgetTokens: 10000 },
+  thinking: { reasoningEffort: "auto" },
   setThinking: vi.fn(),
   setMode: vi.fn(),
 }));
@@ -40,6 +40,18 @@ vi.mock("../../i18n/index.js", () => ({
   setDiffViewMode: vi.fn(),
   setModeInSettings: settings.setMode,
   setThemeInSettings: vi.fn(),
+}));
+
+vi.mock("../../../commands/model.js", () => ({
+  getModelCommandConfig: () => ({ provider: "openai", model: "gpt-6.1-sol" }),
+}));
+vi.mock("../../../commands/think.js", () => ({
+  getThinkingState: () => settings.thinking,
+  getThinkingEffortOptions: () => ["low", "high"],
+  setThinkingEffort: (reasoningEffort: string) => {
+    settings.setThinking(reasoningEffort);
+    settings.thinking = { reasoningEffort };
+  },
 }));
 
 const sessions = Array.from({ length: 16 }, (_, index) => ({
@@ -118,7 +130,7 @@ async function click(screen: ReturnType<typeof render>, label: string) {
 }
 
 beforeEach(() => {
-  settings.thinking = { enabled: true, budgetTokens: 10000 };
+  settings.thinking = { reasoningEffort: "auto" };
   vi.clearAllMocks();
 });
 afterEach(async () => {
@@ -271,15 +283,15 @@ describe("panel mouse actions", () => {
     await act(async () => {
       screen = render(context.wrap(panel(false)));
     });
-    const target = position(screen, "Extended Thinking");
-    await click(screen, "Extended Thinking");
+    const target = position(screen, "Reasoning effort");
+    await click(screen, "Reasoning effort");
     await click(screen, "Esc to close");
     await act(async () => {
       context.wheel(target.col, target.row);
     });
     expect(settings.setThinking).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
-    expect(screen.lastFrame()).toContain("▶ Extended Thinking");
+    expect(screen.lastFrame()).toContain("▶ Reasoning effort");
     await act(async () => {
       screen.rerender(context.wrap(panel(true), true));
     });
@@ -290,7 +302,7 @@ describe("panel mouse actions", () => {
     await act(async () => {
       screen.rerender(context.wrap(panel(true)));
     });
-    expect(screen.lastFrame()).toContain("▶ Extended Thinking");
+    expect(screen.lastFrame()).toContain("▶ Reasoning effort");
     expect(settings.setThinking).not.toHaveBeenCalled();
   });
 
@@ -493,29 +505,18 @@ describe("panel mouse actions", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it("clicks settings tabs and editable rows, refreshes toggle values, and confirms number edits", async () => {
+  it("clicks settings tabs and cycles only the model-supported effort choices", async () => {
     const context = harness();
     const close = vi.fn();
     let screen!: ReturnType<typeof render>;
     await act(async () => {
       screen = render(context.wrap(<SettingsPanel initialCategory="thinking" onClose={close} />));
     });
-    await click(screen, "Extended Thinking");
-    expect(settings.setThinking).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ enabled: false })
-    );
-    await click(screen, "Extended Thinking");
-    expect(settings.setThinking).toHaveBeenLastCalledWith(
-      expect.objectContaining({ enabled: true })
-    );
-    await click(screen, "Budget Tokens");
-    await act(async () => {
-      screen.stdin.write("\x1b[200~99\x1b[201~");
-    });
-    await click(screen, "confirm");
-    expect(settings.setThinking).toHaveBeenLastCalledWith(
-      expect.objectContaining({ budgetTokens: 1000099 })
-    );
+    await click(screen, "Reasoning effort");
+    expect(settings.setThinking).toHaveBeenCalledExactlyOnceWith("low");
+    await click(screen, "Reasoning effort");
+    expect(settings.setThinking).toHaveBeenLastCalledWith("high");
+    expect(screen.lastFrame()).not.toContain("Budget Tokens");
     await click(screen, "Coding Mode");
     await click(screen, "vibe");
     expect(settings.setMode).toHaveBeenCalledExactlyOnceWith("plan");

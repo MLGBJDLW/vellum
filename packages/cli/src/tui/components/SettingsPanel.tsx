@@ -9,9 +9,16 @@
 
 import type { CodingMode } from "@vellum/core";
 import { loadConfig } from "@vellum/core";
+import { reasoningEffortSchema } from "@vellum/provider";
 import { Box, type DOMElement, Text } from "ink";
 import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { getModelCommandConfig } from "../../commands/model.js";
+import {
+  getThinkingEffortOptions,
+  getThinkingState,
+  setThinkingEffort,
+} from "../../commands/think.js";
 import { useMouseScroll } from "../hooks/useMouseScroll.js";
 import { useInput } from "../hooks/useTerminalInput.js";
 import {
@@ -22,13 +29,10 @@ import {
   getModelSettings,
   getSavedLanguage,
   getThemeFromSettings,
-  getThinkingSettings,
   setAlternateBufferEnabled,
   setDiffViewMode,
   setModeInSettings,
   setThemeInSettings,
-  setThinkingSettings,
-  type ThinkingSettings,
 } from "../i18n/index.js";
 import { useTheme } from "../theme/index.js";
 import { Clickable, getVisibleClickBounds } from "./common/Clickable.js";
@@ -123,7 +127,6 @@ function useSettingsItems(category: SettingCategory, revision: number): SettingI
     const config = configResult.ok ? configResult.value : null;
 
     // Get user settings
-    const thinkingSettings = getThinkingSettings();
     const modelSettings = getModelSettings();
     const savedLanguage = getSavedLanguage();
     const diffViewMode = getDiffViewMode();
@@ -251,46 +254,21 @@ function useSettingsItems(category: SettingCategory, revision: number): SettingI
           },
         ];
 
-      case "thinking":
+      case "thinking": {
+        const model = getModelCommandConfig();
+        const choices = model ? getThinkingEffortOptions(model.provider, model.model) : [];
         return [
           {
-            key: "enabled",
-            label: "Extended Thinking",
-            value: thinkingSettings?.enabled ?? config?.thinking?.enabled ?? false,
-            type: "boolean",
-            editable: true,
-            onChange: (v) => {
-              const current = getThinkingSettings();
-              setThinkingSettings({ ...current, enabled: v as boolean } as ThinkingSettings);
-            },
-          },
-          {
-            key: "budgetTokens",
-            label: "Budget Tokens",
-            value: thinkingSettings?.budgetTokens ?? config?.thinking?.budgetTokens ?? 10000,
-            type: "number",
-            editable: true,
-            onChange: (v) => {
-              const current = getThinkingSettings();
-              setThinkingSettings({ ...current, budgetTokens: v as number } as ThinkingSettings);
-            },
-          },
-          {
-            key: "priority",
-            label: "Priority",
-            value: thinkingSettings?.priority ?? config?.thinking?.priority ?? "merge",
+            key: "reasoningEffort",
+            label: "Reasoning effort",
             type: "select",
-            options: ["global", "mode", "merge"],
-            editable: true,
-            onChange: (v) => {
-              const current = getThinkingSettings();
-              setThinkingSettings({
-                ...current,
-                priority: v as "global" | "mode" | "merge",
-              } as ThinkingSettings);
-            },
+            value: getThinkingState().reasoningEffort ?? "auto",
+            options: ["auto", ...choices],
+            editable: choices.length > 0,
+            onChange: (value) => setThinkingEffort(reasoningEffortSchema.safeParse(value).data),
           },
         ];
+      }
 
       default:
         return [];

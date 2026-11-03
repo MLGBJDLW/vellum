@@ -47,10 +47,7 @@ export {
   type SandboxIndicatorProps,
 } from "./SandboxIndicator.js";
 export { type ExtendedTokenProps, StatusBar, type StatusBarProps } from "./StatusBar.js";
-export {
-  ThinkingModeIndicator,
-  type ThinkingModeIndicatorProps,
-} from "./ThinkingModeIndicator.js";
+
 export {
   TokenBreakdown,
   type TokenBreakdownProps,

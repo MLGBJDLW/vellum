@@ -784,6 +784,7 @@ export class GoogleProvider implements Provider {
   ): AsyncIterable<StreamEvent> {
     // Track state for tool calls
     let usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+    let usageReported = false;
     let stopReason: StopReason = "end_turn";
     let finished = false;
     let toolCallIndex = 0;
@@ -897,6 +898,7 @@ export class GoogleProvider implements Provider {
 
       // Track usage metadata
       if (chunk.usageMetadata) {
+        usageReported = true;
         usage = normalizeGoogleUsage(chunk.usageMetadata, usage);
       }
     }
@@ -927,7 +929,7 @@ export class GoogleProvider implements Provider {
       type: "usage",
       ...usage,
     };
-    yield usageEvent;
+    if (usageReported) yield usageEvent;
 
     // Emit new end event
     const endEvent: StreamEndEvent = { type: "end", stopReason };

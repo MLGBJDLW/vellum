@@ -56,11 +56,12 @@ export interface EnhancedLoadingIndicatorProps {
  * @param resetKey - Key that triggers timer reset when changed
  * @returns Elapsed time in seconds
  */
-export function useElapsedTime(isActive: boolean, resetKey?: unknown): number {
+export function useElapsedTime(isActive: boolean, resetKey?: unknown, startedAt?: number): number {
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevResetKeyRef = useRef(resetKey);
   const prevIsActiveRef = useRef(isActive);
+  const startRef = useRef(startedAt ?? Date.now());
 
   useEffect(() => {
     let shouldResetTime = false;
@@ -77,19 +78,22 @@ export function useElapsedTime(isActive: boolean, resetKey?: unknown): number {
     }
 
     if (shouldResetTime) {
+      startRef.current = startedAt ?? Date.now();
       setElapsedTime(0);
     }
     prevIsActiveRef.current = isActive;
 
     // Manage interval
     if (isActive) {
+      if (startedAt !== undefined) startRef.current = startedAt;
+      const update = () =>
+        setElapsedTime(Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)));
+      update();
       // Clear previous interval
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      timerRef.current = setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
-      }, 1000);
+      timerRef.current = setInterval(update, 1000);
     } else {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -103,7 +107,7 @@ export function useElapsedTime(isActive: boolean, resetKey?: unknown): number {
         timerRef.current = null;
       }
     };
-  }, [isActive, resetKey]);
+  }, [isActive, resetKey, startedAt]);
 
   return elapsedTime;
 }

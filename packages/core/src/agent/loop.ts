@@ -23,6 +23,7 @@ import type { PromptBuilder } from "../prompts/prompt-builder.js";
 import {
   createAssistantMessage,
   createToolResultMessage,
+  createUserMessage,
   LLM,
   type LLMStreamEvent,
   type SessionMessage,
@@ -477,6 +478,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private streamRequestActive = false;
   private steeringInterrupted = false;
   private nextIterationRequested = false;
+  private lastTruncatedText = "";
   private interactionQueue: Promise<void> = Promise.resolve();
   private costApprovalDenied = false;
   private requestBudgetQueue: Promise<void> = Promise.resolve();
@@ -1371,6 +1373,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * Delegates to TerminationManager.
    */
   resetTerminationTracking(): void {
+    this.lastTruncatedText = "";
     this.terminationManager.resetTerminationTracking();
     // GAP 2 FIX: Reset completion state as well
     this.completionAttempted = false;
@@ -1916,12 +1919,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
       // GAP 3 & 4 FIX: Update termination flags based on stream result
       // Set hasTextOnly if we got a response with no tool calls
-      if (pendingToolCalls.length === 0) {
-        this.terminationManager.setTextOnly(true);
-      }
+      const outputLimited = streamState.stopReason === "max_tokens";
+      this.terminationManager.setTextOnly(pendingToolCalls.length === 0 && !outputLimited);
       // Set hasNaturalStop - the stream completed normally (done event received)
       // This flag indicates the LLM finished its turn without requesting more action
-      this.terminationManager.setNaturalStop(pendingToolCalls.length === 0);
+      this.terminationManager.setNaturalStop(pendingToolCalls.length === 0 && !outputLimited);
 
       // Determine next state based on stream completion
       if (this.cancellation.isCancelled) {
@@ -1961,9 +1963,24 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           this.messages.push(assistantMessage);
         }
 
+        const truncatedText = finalStreamState.accumulatedText.trim();
+        const continueOutput =
+          finalStreamState.stopReason === "max_tokens" &&
+          truncatedText.length > 0 &&
+          truncatedText !== this.lastTruncatedText;
+        this.lastTruncatedText = continueOutput ? truncatedText : "";
         this.transitionTo("idle");
         if (this.pendingSteering.length > 0) this.nextIterationRequested = true;
-        else this.emit("complete");
+        else if (continueOutput && !this.terminationManager.checkTermination().shouldTerminate) {
+          this.messages.push(
+            createUserMessage([
+              SessionParts.text(
+                "The response reached the output token limit. Continue from where you stopped without repeating completed work."
+              ),
+            ])
+          );
+          this.nextIterationRequested = true;
+        } else this.emit("complete");
       }
     } catch (error) {
       if (this.steeringInterrupted && !this.cancellation.isCancelled) {

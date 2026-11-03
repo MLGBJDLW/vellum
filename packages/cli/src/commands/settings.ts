@@ -24,8 +24,6 @@ import {
   setDiffViewMode,
   setModeInSettings,
   setThemeInSettings,
-  setThinkingSettings,
-  type ThinkingSettings,
 } from "../tui/i18n/index.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, success } from "./types.js";
@@ -138,9 +136,7 @@ function getAllSettings(): Record<SettingsCategory, Record<string, unknown>> {
       viewMode: diffViewMode ?? config?.diffViewMode ?? "unified",
     },
     think: {
-      enabled: thinkingSettings?.enabled ?? config?.thinking?.enabled ?? false,
-      budgetTokens: thinkingSettings?.budgetTokens ?? config?.thinking?.budgetTokens ?? 10000,
-      priority: thinkingSettings?.priority ?? config?.thinking?.priority ?? "merge",
+      effort: thinkingSettings?.reasoningEffort ?? config?.thinking?.reasoningEffort ?? "auto",
     },
     vim: {
       enabled: false, // Vim mode is managed via /vim command
@@ -236,21 +232,6 @@ const SETTABLE_KEYS: Record<string, (value: string) => CommandResult> = {
   },
   diffMode: (value: string) =>
     (SETTABLE_KEYS["diff-mode"] ?? (() => error("UNKNOWN_ERROR", "Handler not found")))(value),
-  "think.enabled": (value: string) => {
-    const enabled = value === "true" || value === "on" || value === "1";
-    const current = getThinkingSettings();
-    setThinkingSettings({ ...current, enabled } as ThinkingSettings);
-    return success(`Extended thinking ${enabled ? "enabled" : "disabled"}`);
-  },
-  "think.budget": (value: string) => {
-    const budget = parseInt(value, 10);
-    if (Number.isNaN(budget) || budget < 1000 || budget > 128000) {
-      return error("INVALID_ARGUMENT", "Budget must be a number between 1000 and 128000");
-    }
-    const current = getThinkingSettings();
-    setThinkingSettings({ ...current, budgetTokens: budget } as ThinkingSettings);
-    return success(`Thinking budget set to: ${budget} tokens`);
-  },
   alternateBuffer: (value: string) => {
     const enabled = value === "true" || value === "on" || value === "1";
     setAlternateBufferEnabled(enabled);
@@ -313,7 +294,6 @@ export const settingsCommand: SlashCommand = {
     "/settings model                - Show model settings",
     "/settings theme dark           - Set theme to dark",
     "/settings mode vibe            - Set coding mode to vibe",
-    "/settings think.enabled true   - Enable extended thinking",
     "/settings diff-mode unified    - Set diff view mode",
   ],
   subcommands: [
@@ -324,8 +304,6 @@ export const settingsCommand: SlashCommand = {
     // Note: 'theme' and 'mode' are already included via VALID_CATEGORIES
     // Additional settable keys that aren't categories:
     { name: "diff-mode", description: "Set diff view mode (unified, side-by-side)" },
-    { name: "think.enabled", description: "Enable/disable extended thinking" },
-    { name: "think.budget", description: "Set thinking budget tokens" },
   ],
 
   execute: async (ctx: CommandContext): Promise<CommandResult> => {
