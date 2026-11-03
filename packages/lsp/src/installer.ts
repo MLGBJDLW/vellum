@@ -87,10 +87,19 @@ export class ServerInstaller extends EventEmitter {
   private run(command: string, args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
       const proc = spawn(command, args, {
-        stdio: "inherit",
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
         cwd: process.cwd(),
         shell: process.platform === "win32",
       });
+
+      // Ink owns stdout. Drain both pipes without retaining unbounded install logs.
+      let diagnostic = "";
+      const collect = (chunk: string) => {
+        diagnostic = (diagnostic + chunk).slice(-8192);
+      };
+      proc.stdout?.setEncoding("utf8").on("data", collect);
+      proc.stderr?.setEncoding("utf8").on("data", collect);
 
       const timeout = setTimeout(() => {
         proc.kill();
@@ -102,7 +111,7 @@ export class ServerInstaller extends EventEmitter {
         if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`Installation failed with code ${code}`));
+          reject(new Error(`Installation failed with code ${code}: ${diagnostic.trim()}`));
         }
       });
 
