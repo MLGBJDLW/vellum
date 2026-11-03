@@ -99,6 +99,30 @@ describe("AgentLoop Integration (T034)", () => {
   });
 
   describe("Happy Path", () => {
+    it.each([false, true])(
+      "continues token-limited output without prematurely completing (%s)",
+      async (useStreamProcessor) => {
+        vi.mocked(LLM.stream)
+          .mockImplementationOnce(async function* () {
+            yield { type: "text", content: "Part one" };
+            yield { type: "done", stopReason: "max_tokens" };
+          })
+          .mockImplementationOnce(async function* () {
+            yield { type: "text", content: "Part two" };
+            yield { type: "done", stopReason: "end_turn" };
+          });
+        const loop = new AgentLoop({ ...config, useStreamProcessor, enableEvidencePack: false });
+        const complete = vi.fn();
+        loop.on("complete", complete);
+        loop.addMessage(createSessionMessage("user", "Complete the long task"));
+        await loop.run();
+        expect(LLM.stream).toHaveBeenCalledTimes(2);
+        expect(complete).toHaveBeenCalledOnce();
+        expect(loop.getMessages().filter((message) => message.role === "assistant")).toHaveLength(
+          2
+        );
+      }
+    );
     it("orders preparation-time corrections after the initial instruction", async () => {
       const loop = new AgentLoop({ ...config, enableEvidencePack: false });
       loop.steer(createSessionMessage("user", "Older queued message"));

@@ -23,6 +23,7 @@ import type { PromptBuilder } from "../prompts/prompt-builder.js";
 import {
   createAssistantMessage,
   createToolResultMessage,
+  createUserMessage,
   LLM,
   type LLMStreamEvent,
   type SessionMessage,
@@ -477,6 +478,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private streamRequestActive = false;
   private steeringInterrupted = false;
   private nextIterationRequested = false;
+  private lastTruncatedText = "";
   private interactionQueue: Promise<void> = Promise.resolve();
   private costApprovalDenied = false;
   private requestBudgetQueue: Promise<void> = Promise.resolve();
@@ -1961,9 +1963,24 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           this.messages.push(assistantMessage);
         }
 
+        const truncatedText = finalStreamState.accumulatedText.trim();
+        const continueOutput =
+          finalStreamState.stopReason === "max_tokens" &&
+          truncatedText.length > 0 &&
+          truncatedText !== this.lastTruncatedText;
+        this.lastTruncatedText = continueOutput ? truncatedText : "";
         this.transitionTo("idle");
         if (this.pendingSteering.length > 0) this.nextIterationRequested = true;
-        else this.emit("complete");
+        else if (continueOutput) {
+          this.messages.push(
+            createUserMessage([
+              SessionParts.text(
+                "The response reached the output token limit. Continue from where you stopped without repeating completed work."
+              ),
+            ])
+          );
+          this.nextIterationRequested = true;
+        } else this.emit("complete");
       }
     } catch (error) {
       if (this.steeringInterrupted && !this.cancellation.isCancelled) {
