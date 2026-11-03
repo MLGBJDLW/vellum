@@ -21,6 +21,20 @@ import type { TokenUsage } from "../types.js";
 // =============================================================================
 
 describe("calculateCostBreakdown", () => {
+  it("does not charge cache-hit prompt tokens twice for DeepSeek", () => {
+    const uncached = calculateCostBreakdown({
+      provider: "deepseek",
+      model: "deepseek-flash",
+      usage: { inputTokens: 1000, outputTokens: 0 },
+    });
+    const cached = calculateCostBreakdown({
+      provider: "deepseek",
+      model: "deepseek-flash",
+      usage: { inputTokens: 1000, outputTokens: 0, cacheReadTokens: 500 },
+    });
+    expect(cached.input).toBeCloseTo(uncached.input / 2);
+    expect(cached.total).toBeLessThan(uncached.total);
+  });
   it("calculates basic input/output cost for Claude 3.5 Sonnet", () => {
     const breakdown = calculateCostBreakdown({
       model: "claude-3-5-sonnet-20241022",

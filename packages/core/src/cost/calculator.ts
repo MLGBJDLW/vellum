@@ -314,12 +314,10 @@ function adjustInputTokensForProvider(
   cacheReadTokens: number
 ): number {
   switch (provider.toLowerCase()) {
-    case "openai":
-      // OpenAI includes cached tokens in prompt_tokens, subtract to avoid double-counting
-      return Math.max(0, inputTokens - cacheReadTokens);
-    default:
-      // These providers report cache tokens separately
+    case "anthropic":
       return inputTokens;
+    default:
+      return Math.max(0, inputTokens - cacheReadTokens);
   }
 }
 

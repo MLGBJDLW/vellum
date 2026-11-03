@@ -243,3 +243,4 @@ export { InstrumentedProvider, instrumentProvider } from "./telemetry.js";
 // =============================================================================
 
 export * from "./models/index.js";
+export { getUsageInputTokens, getUsageOutputTokens } from "./usage.js";
