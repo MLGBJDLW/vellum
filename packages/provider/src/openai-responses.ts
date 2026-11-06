@@ -5,6 +5,7 @@ import type {
   ResponseInput,
   ResponseStreamEvent,
 } from "openai/resources/responses/responses";
+import { getModelInfo } from "./models/index.js";
 import type { ReasoningEffort } from "./models/types.js";
 import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
 import type {
@@ -94,7 +95,21 @@ export function buildResponsesRequest(
   };
   // New API effort values are valid wire values even when the installed SDK's
   // generated TypeScript union predates the model (e.g. GPT-6's "max").
-  if (effort) Object.assign(request, { reasoning: { effort } });
+  const modelInfo = getModelInfo(provider, params.model);
+  const includeSummary =
+    provider === "openai" &&
+    modelInfo.api === "responses" &&
+    modelInfo.supportsReasoning &&
+    effort !== "none" &&
+    params.thinking?.enabled !== false;
+  if (effort || includeSummary) {
+    Object.assign(request, {
+      reasoning: {
+        ...(effort ? { effort } : {}),
+        ...(includeSummary ? { summary: "auto" } : {}),
+      },
+    });
+  }
   return request;
 }
 
@@ -129,6 +144,11 @@ export function normalizeResponsesResult(
       .filter((item) => item.type === "reasoning")
       .map((item) => ({ ...item })),
   };
+  const thinking = response.output
+    .flatMap((item) =>
+      item.type === "reasoning" ? (item.summary ?? []).map((summary) => summary.text) : []
+    )
+    .join("\n");
   return {
     content:
       response.output_text ??
@@ -146,6 +166,7 @@ export function normalizeResponsesResult(
       thinkingTokens: response.usage?.output_tokens_details?.reasoning_tokens,
     },
     stopReason: stopReason(response),
+    ...(thinking ? { thinking } : {}),
     ...(toolCalls.length ? { toolCalls } : {}),
     providerMetadata: metadata,
   };

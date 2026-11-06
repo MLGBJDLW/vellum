@@ -16,7 +16,7 @@ import type { CommandContext, CommandError, CommandResult, CommandSuccess } from
 // Mock @vellum/provider
 vi.mock("@vellum/provider", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@vellum/provider")>()),
-  getSupportedProviders: () => ["anthropic", "openai", "google", "ollama", "lmstudio"],
+  getSupportedProviders: () => ["anthropic", "openai", "google", "groq", "ollama", "lmstudio"],
   getProviderModels: (provider: string) => {
     const models: Record<
       string,
@@ -258,6 +258,24 @@ describe("/model command", () => {
   });
 
   describe("Edge cases", () => {
+    it("rejects retired routes even when the vendor has no replacement", async () => {
+      const ctx = createMockContext(["groq/groq/compound"]);
+      const result = await modelCommand.execute(ctx);
+      expect(result.kind).toBe("error");
+      if (result.kind === "error") expect(result.message).toContain("has been retired by groq");
+      expect(ctx.credentials.resolve).not.toHaveBeenCalled();
+      expect(onModelChangeMock).not.toHaveBeenCalled();
+    });
+
+    it("keeps vendor replacement suggestions and custom routes distinct", async () => {
+      const retired = await modelCommand.execute(createMockContext(["openai/gpt-5.2-codex"]));
+      expect(retired.kind).toBe("error");
+      expect(JSON.stringify(retired)).toContain("/model openai/gpt-5.6-sol");
+      const custom = await modelCommand.execute(createMockContext(["groq/custom-compound"]));
+      expect(custom.kind).toBe("success");
+      expect(onModelChangeMock).toHaveBeenCalledExactlyOnceWith("groq", "custom-compound");
+    });
+
     it("does not claim a switch when the active runtime rejects it", async () => {
       setModelCommandConfig("anthropic", "claude-sonnet-5-5", async () => {
         throw new Error("Finish the current task before changing models.");

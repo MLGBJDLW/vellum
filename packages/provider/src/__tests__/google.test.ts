@@ -43,8 +43,8 @@ describe("GoogleProvider", () => {
     it("should return list of supported models", () => {
       const provider = new GoogleProvider();
       const models = provider.listModels();
-      expect(models).toContain("gemini-2.5-pro");
-      expect(models).toContain("gemini-2.5-flash");
+      expect(models).not.toContain("gemini-2.5-pro");
+      expect(models).not.toContain("gemini-2.5-flash");
       expect(models).toContain("gemini-4-argon");
       expect(models).toContain("gemini-3.8-flash");
     });
@@ -239,7 +239,7 @@ describe("GoogleProvider", () => {
     it("should return model info for known models", async () => {
       const provider = new GoogleProvider();
       const models = await provider.listModelsAsync();
-      const flash = models.find((m) => m.id === "gemini-2.5-flash");
+      const flash = models.find((m) => m.id === "gemini-3.8-flash");
       expect(flash).toBeDefined();
       expect(flash?.supportsTools).toBe(true);
       expect(flash?.supportsVision).toBe(true);
@@ -249,7 +249,7 @@ describe("GoogleProvider", () => {
     it("should return model info with large context windows", async () => {
       const provider = new GoogleProvider();
       const models = await provider.listModelsAsync();
-      const pro = models.find((m) => m.id === "gemini-2.5-pro");
+      const pro = models.find((m) => m.id === "gemini-4-argon");
       expect(pro).toBeDefined();
       expect(pro?.contextWindow).toBe(1048576); // 1M tokens
     });

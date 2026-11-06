@@ -601,16 +601,13 @@ export class AnthropicProvider implements Provider {
         : undefined;
 
     // Build base request
-    // Current SDKs omit sampling fields; older supported Claude models still accept them.
-    const request: MessageCreateParams & { temperature?: number; top_p?: number } = {
+    // The SDK's 2026-10-21 API version rejects sampling fields for every model,
+    // including older Claude models that still support budget-based thinking.
+    const request: MessageCreateParams = {
       model: params.model,
       messages: messages as Anthropic.MessageParam[],
       max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
       ...(system && { system }),
-      ...(modelInfo.supportsSampling !== false &&
-        params.temperature !== undefined && { temperature: params.temperature }),
-      ...(modelInfo.supportsSampling !== false &&
-        params.topP !== undefined && { top_p: params.topP }),
       ...(params.stopSequences && { stop_sequences: params.stopSequences }),
     };
 
@@ -630,8 +627,6 @@ export class AnthropicProvider implements Provider {
             "high",
         },
       });
-      delete request.temperature;
-      delete request.top_p;
     } else if (thinkingConfig && request.max_tokens > 1024) {
       (
         request as MessageCreateParams & { thinking?: { type: string; budget_tokens: number } }
@@ -642,9 +637,6 @@ export class AnthropicProvider implements Provider {
           Math.min(thinkingConfig.budgetTokens, request.max_tokens - 1)
         ),
       };
-      // Extended thinking requires temperature = 1
-      request.temperature = 1;
-      delete request.top_p;
     }
 
     return request;

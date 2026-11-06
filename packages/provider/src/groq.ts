@@ -1,4 +1,6 @@
-import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+import { ErrorCode } from "@vellum/shared";
+import { ProviderError } from "./errors.js";
+import { DEFAULT_MODEL_IDS, getModelReplacement, isRetiredModel } from "./models/catalog.js";
 
 /**
  * Groq Provider
@@ -39,6 +41,18 @@ import type { CompletionParams, ModelInfo } from "./types.js";
  */
 export class GroqProvider extends OpenAICompatibleProvider {
   protected override buildExtraBody(params: CompletionParams): Record<string, unknown> | undefined {
+    if (isRetiredModel("groq", params.model)) {
+      const replacement = getModelReplacement("groq", params.model);
+      throw new ProviderError(
+        `Groq model ${params.model} has retired. ${replacement ? `Use ${replacement}.` : "Select an available model with /model."}`,
+        {
+          category: "api_error",
+          code: ErrorCode.INVALID_ARGUMENT,
+          retryable: false,
+          context: { provider: "groq", model: params.model },
+        }
+      );
+    }
     if (!getModelInfo("groq", params.model).supportsReasoning) return params.extraBody;
     // GPT-OSS rejects reasoning_format; other Groq reasoning routes use parsed output.
     const format = params.model.startsWith("openai/gpt-oss-")
