@@ -300,6 +300,8 @@ export interface CompletionResult {
   content: string;
   /** Token usage statistics */
   usage: TokenUsage;
+  /** False when the provider omitted usage and `usage` holds only compatibility defaults. */
+  usageReported?: boolean;
   /** Reason why generation stopped */
   stopReason: StopReason;
   /** Thinking/reasoning content (if thinking was enabled) */

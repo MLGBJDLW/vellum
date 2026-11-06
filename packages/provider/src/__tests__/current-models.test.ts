@@ -73,6 +73,54 @@ function deferred<T>() {
 }
 
 describe("current provider contracts", () => {
+  it("never executes partial tool calls on incomplete Responses, streamed or not", async () => {
+    const incomplete = {
+      ...responseBody,
+      model: "gpt-5.5-pro",
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      usage: undefined,
+    };
+    mockJson(incomplete);
+    const provider = new OpenAIProvider();
+    await provider.initialize({ apiKey: "fixture" });
+    const events = [];
+    for await (const event of provider.stream({
+      model: "gpt-5.5-pro",
+      messages: [{ role: "user", content: "Find it" }],
+    }))
+      events.push(event);
+    expect(
+      events.some((event) => event.type === "toolCall" || event.type === "tool_call_end")
+    ).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "done", stopReason: "max_tokens" });
+    expect(events.some((event) => event.type === "usage")).toBe(false);
+
+    const partial = {
+      type: "function_call",
+      id: "fc_test",
+      call_id: "call_test",
+      name: "lookup",
+      arguments: '{"query":',
+      status: "incomplete",
+    };
+    async function* stream() {
+      yield { type: "response.output_item.done", item: partial, output_index: 0 };
+      yield { type: "response.incomplete", response: { ...incomplete, output: [partial] } };
+    }
+    const streamed = [];
+    for await (const event of mapResponsesStream(
+      stream() as Parameters<typeof mapResponsesStream>[0],
+      "openai",
+      "gpt-6.1-sol"
+    ))
+      streamed.push(event);
+    expect(streamed.at(-1)).toMatchObject({ type: "done", stopReason: "max_tokens" });
+    expect(
+      streamed.some((event) => event.type === "toolCall" || event.type === "tool_call_end")
+    ).toBe(false);
+  });
+
   it("retries a summary-specific denial before output, remembers it, and preserves effort", async () => {
     const requests: Record<string, unknown>[] = [];
     vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {

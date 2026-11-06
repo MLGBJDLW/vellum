@@ -121,6 +121,11 @@ function stopReason(response: Response): StopReason {
       ? "max_tokens"
       : "content_filter";
   }
+  if (response.status !== "completed") {
+    throw new Error(
+      `Responses request ended without completion (${response.status ?? "unknown status"})`
+    );
+  }
   if (response.output.some((item) => item.type === "function_call")) return "tool_use";
   return "end_turn";
 }
@@ -130,8 +135,13 @@ export function normalizeResponsesResult(
   provider: string,
   model: string
 ): CompletionResult {
+  const reason = stopReason(response);
   const toolCalls = response.output.flatMap((item) => {
-    if (item.type !== "function_call") return [];
+    // A truncated call may contain valid JSON but still be missing arguments or
+    // sibling calls. Release the validated batch only after a completed turn.
+    if (reason !== "tool_use" || item.type !== "function_call") return [];
+    if (item.status && item.status !== "completed")
+      throw new Error(`Unfinished tool call ${item.name} in completed response`);
     const input: unknown = JSON.parse(item.arguments);
     if (!input || typeof input !== "object" || Array.isArray(input))
       throw new Error(`Invalid arguments for tool ${item.name}`);
@@ -165,7 +175,8 @@ export function normalizeResponsesResult(
       cacheReadTokens: response.usage?.input_tokens_details?.cached_tokens,
       thinkingTokens: response.usage?.output_tokens_details?.reasoning_tokens,
     },
-    stopReason: stopReason(response),
+    ...(!response.usage ? { usageReported: false } : {}),
+    stopReason: reason,
     ...(thinking ? { thinking } : {}),
     ...(toolCalls.length ? { toolCalls } : {}),
     providerMetadata: metadata,
@@ -200,15 +211,6 @@ export async function* mapResponsesStream(
         }
         break;
       }
-      case "response.output_item.done":
-        if (event.item.type === "function_call") {
-          const input: unknown = JSON.parse(event.item.arguments);
-          if (!input || typeof input !== "object" || Array.isArray(input))
-            throw new Error(`Invalid arguments for tool ${event.item.name}`);
-          // The item can finish before the enclosing response fails. Keep its
-          // completion pending until response.completed confirms the whole turn.
-        }
-        break;
       case "response.completed":
       case "response.incomplete": {
         const result = normalizeResponsesResult(event.response, provider, model);

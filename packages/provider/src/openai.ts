@@ -993,6 +993,7 @@ export class OpenAIProvider {
     return {
       content,
       usage,
+      ...(!response.usage ? { usageReported: false } : {}),
       stopReason,
       ...(thinking !== undefined && { thinking }),
       ...(toolCalls.length > 0 && { toolCalls }),
@@ -1284,7 +1285,7 @@ export class OpenAIProvider {
       }
 
       // Yield usage with new flat structure
-      if (result.usage) {
+      if (result.usageReported !== false) {
         const usageEvent: StreamUsageEvent = {
           type: "usage",
           ...result.usage,
