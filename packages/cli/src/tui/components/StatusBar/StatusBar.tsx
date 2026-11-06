@@ -7,7 +7,7 @@
  * @module tui/components/StatusBar/StatusBar
  */
 
-import type { CodingMode, SandboxPolicy } from "@vellum/core";
+import type { AgentLevel, CodingMode, SandboxPolicy } from "@vellum/core";
 import { Box, Text } from "ink";
 import { useId, useMemo } from "react";
 import { version } from "../../../version.js";
@@ -17,7 +17,6 @@ import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { Clickable } from "../common/Clickable.js";
 import { GradientText } from "../common/GradientText.js";
-import type { AgentLevel } from "./AgentModeIndicator.js";
 import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 import { ModelIndicator } from "./ModelIndicator.js";
 import type { PersistenceStatusIndicatorProps } from "./PersistenceStatusIndicator.js";
@@ -50,8 +49,6 @@ export interface ExtendedTokenProps extends ContextProgressProps {
 export interface StatusBarProps {
   /** Current coding mode */
   readonly mode?: CodingMode;
-  /** Agent name for display (e.g., 'orchestrator', 'coder') */
-  readonly agentName?: string;
   /** Agent level for spec mode (0=orchestrator, 1=sub-orchestrator, 2=worker) */
   readonly agentLevel?: AgentLevel;
   /** Model name (e.g., 'claude-sonnet-4') */
@@ -98,33 +95,6 @@ const MODES_CONFIG: Array<{ mode: CodingMode; icon: string; label: string }> = [
   { mode: "plan", icon: "◑", label: "plan" },
   { mode: "spec", icon: "◒", label: "spec" },
 ];
-
-/** Agent name to abbreviation mapping for status bar display */
-const AGENT_ABBREVIATIONS: Record<string, string> = {
-  "orch-agent": "Orch",
-  // Mode-based agents (fallback when no role override)
-  "vibe-agent": "Vibe",
-  "plan-agent": "Plan",
-  "spec-orchestrator": "Orch",
-
-  // Spec Workflow Workers
-  researcher: "Rsrch",
-  requirements: "Reqs",
-  design: "Dsgn",
-  tasks: "Tasks",
-  validator: "Valid",
-
-  // Role-based agents (direct role mappings)
-  coder: "Code",
-  qa: "QA",
-  writer: "Write",
-  analyst: "Anlst",
-  architect: "Arch",
-  devops: "DevOp",
-  security: "Sec",
-  orchestrator: "Orch",
-  base: "Base",
-};
 
 // =============================================================================
 // Helper Components
@@ -211,7 +181,7 @@ function formatCost(cost: number): string {
  *
  * Features:
  * - All modes shown with active one highlighted
- * - Agent level indicator for spec mode (L0/L1/L2)
+ * - One mode control with its level (L0/L1/L2)
  * - Model name only (no provider prefix)
  * - Context progress with visual bar
  * - Cost display
@@ -228,7 +198,6 @@ function formatCost(cost: number): string {
  */
 export function StatusBar({
   mode = "orch",
-  agentName,
   agentLevel,
   modelName,
   tokens,
@@ -252,11 +221,6 @@ export function StatusBar({
 
   // Use primary/accent color for status bar border
   const borderColor = theme.colors.primary;
-
-  // Get agent abbreviation for display (fallback: first 5 chars)
-  const agentAbbrev = agentName
-    ? (AGENT_ABBREVIATIONS[agentName] ?? agentName.slice(0, 5))
-    : undefined;
 
   // Render mode selector (all modes shown, active highlighted)
   const visibleModes = showAllModes
@@ -284,7 +248,8 @@ export function StatusBar({
       <Box key="modes" flexDirection="row" alignItems="center">
         {visibleModes.map((modeConfig, index) => {
           const isActive = modeConfig.mode === mode;
-          const modeText = `${modeConfig.icon} ${modeConfig.label}`;
+          const level = isActive && agentLevel !== undefined ? `·L${agentLevel}` : "";
+          const modeText = `${modeConfig.icon} ${modeConfig.label}${level}`;
 
           return (
             <Text key={modeConfig.mode}>
@@ -299,17 +264,6 @@ export function StatusBar({
             </Text>
           );
         })}
-        {/* Agent level indicator: │Orch·L0 */}
-        {agentAbbrev !== undefined && agentLevel !== undefined && (
-          <Text>
-            <Text color={theme.semantic.border.muted}>│</Text>
-            <GradientText
-              text={`${agentAbbrev}·L${agentLevel}`}
-              colors={[theme.brand.primary, theme.brand.secondary]}
-              bold
-            />
-          </Text>
-        )}
       </Box>
     </Clickable>
   );

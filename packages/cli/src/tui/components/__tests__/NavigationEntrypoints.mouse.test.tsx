@@ -74,6 +74,17 @@ describe("mode, status and sidebar entrypoints", () => {
     expect(toggle).toHaveBeenCalledOnce();
   });
 
+  it("opens the mode picker from the single mode and level label", async () => {
+    const mode = vi.fn();
+    let screen!: ReturnType<typeof render>;
+    await act(async () => {
+      screen = render(wrap(<StatusBar mode="orch" agentLevel={0} onModeClick={mode} />));
+    });
+    expect(screen.lastFrame()?.match(/L0/g)).toHaveLength(1);
+    await act(async () => click(screen, "orch·L0"));
+    expect(mode).toHaveBeenCalledExactlyOnceWith("orch");
+  });
+
   it("opens the single effort control", async () => {
     const effort = vi.fn();
     let screen!: ReturnType<typeof render>;
