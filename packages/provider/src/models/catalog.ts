@@ -29,7 +29,7 @@ import type { ModelInfo } from "./types.js";
 /**
  * Model catalog organized by provider
  */
-export const MODEL_CATALOG: Map<ProviderType, ModelInfo[]> = new Map([
+const bundledCatalog: ReadonlyArray<readonly [ProviderType, ModelInfo[]]> = [
   ["anthropic", ANTHROPIC_MODELS],
   ["openai", OPENAI_MODELS],
   ["google", GOOGLE_MODELS],
@@ -47,30 +47,19 @@ export const MODEL_CATALOG: Map<ProviderType, ModelInfo[]> = new Map([
   ["baichuan", BAICHUAN_MODELS],
   ["doubao", DOUBAO_MODELS],
   ["minimax", MINIMAX_MODELS],
-]);
+];
+
+// Refresh replaces a provider's available view, not its bundled metadata.
+export const MODEL_CATALOG = new Map<ProviderType, ModelInfo[]>(bundledCatalog);
+
+export function getBundledModelMetadata(provider: ProviderType): ModelInfo[] {
+  return bundledCatalog.find(([key]) => key === provider)?.[1] ?? [];
+}
 
 /**
  * Flattened list of all models across all providers
  */
-export const ALL_MODELS: ModelInfo[] = [
-  ...ANTHROPIC_MODELS,
-  ...OPENAI_MODELS,
-  ...GOOGLE_MODELS,
-  ...DEEPSEEK_MODELS,
-  ...GROQ_MODELS,
-  ...XAI_MODELS,
-  ...QWEN_MODELS,
-  ...OLLAMA_MODELS,
-  ...LMSTUDIO_MODELS,
-  ...OPENROUTER_MODELS,
-  ...ZHIPU_MODELS,
-  ...MOONSHOT_MODELS,
-  ...MISTRAL_MODELS,
-  ...YI_MODELS,
-  ...BAICHUAN_MODELS,
-  ...DOUBAO_MODELS,
-  ...MINIMAX_MODELS,
-];
+export const ALL_MODELS: ModelInfo[] = [...MODEL_CATALOG.values()].flat();
 
 /**
  * Get models for a specific provider from the catalog
@@ -128,6 +117,14 @@ const RETIRED_MODEL_REPLACEMENTS: Partial<Record<ProviderType, Record<string, st
     "o1-preview": "gpt-6.1-sol",
     "o3-mini": "gpt-6-luna",
     "codex-mini-latest": "gpt-6-luna",
+    "gpt-5-codex": "gpt-5.6-sol",
+    "gpt-5.1-codex": "gpt-5.6-sol",
+    "gpt-5.1-codex-max": "gpt-5.6-sol",
+    "gpt-5.1-codex-mini": "gpt-5.6-terra",
+    "gpt-5.2-codex": "gpt-5.6-sol",
+    "o4-mini": "gpt-5.6-terra",
+    "o4-mini-2025-04-16": "gpt-5.6-terra",
+    "gpt-4o-2024-05-13": "gpt-5.6-sol",
   },
   google: {
     "gemini-1.5-pro": "gemini-4-argon",
@@ -159,6 +156,14 @@ export function getModelReplacement(
   modelId: string
 ): string | undefined {
   return RETIRED_MODEL_REPLACEMENTS[provider as ProviderType]?.[modelId];
+}
+
+/** Retired products without a compatible vendor replacement must not be rediscovered. */
+export function isRetiredModel(provider: ProviderType | string, modelId: string): boolean {
+  return (
+    getModelReplacement(provider, modelId) !== undefined ||
+    (provider === "groq" && (modelId === "groq/compound" || modelId === "groq/compound-mini"))
+  );
 }
 
 /**

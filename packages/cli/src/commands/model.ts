@@ -13,6 +13,7 @@ import {
   getModelReplacement,
   getProviderModels,
   getSupportedProviders,
+  isRetiredModel,
   type ModelInfo,
   ProviderRegistry,
   type ProviderType,
@@ -286,9 +287,9 @@ export async function switchToModel(
 
   const normalizedProvider = provider.toLowerCase();
   const replacement = getModelReplacement(normalizedProvider, modelId);
-  if (replacement)
+  if (isRetiredModel(normalizedProvider, modelId))
     return error("INVALID_ARGUMENT", `${modelId} has been retired by ${normalizedProvider}.`, [
-      `/model ${normalizedProvider}/${replacement}`,
+      replacement ? `/model ${normalizedProvider}/${replacement}` : `/model ${normalizedProvider}`,
     ]);
   const info = getModelInfo(normalizedProvider, modelId);
 

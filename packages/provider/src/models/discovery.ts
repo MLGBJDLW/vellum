@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ProviderType } from "../types.js";
-import { ALL_MODELS, getModelReplacement, getProviderModels, MODEL_CATALOG } from "./catalog.js";
+import { ALL_MODELS, getBundledModelMetadata, isRetiredModel, MODEL_CATALOG } from "./catalog.js";
 import { type ModelInfo, reasoningEffortSchema } from "./types.js";
 
 const recordSchema = z.record(z.string(), z.unknown());
@@ -21,15 +21,28 @@ const boolean = (value: unknown): boolean | undefined =>
 /** Normalize provider discovery without inventing capabilities or prices. */
 export function normalizeDiscoveredModels(provider: ProviderType, records: unknown[]): ModelInfo[] {
   const result = new Map<string, ModelInfo>();
+  // Keep metadata for still-callable deprecated models and avoid rescanning the
+  // provider catalog for every discovery record (large gateways return hundreds).
+  const knownModels = new Map<string, ModelInfo>();
+  for (const model of [
+    ...getBundledModelMetadata(provider),
+    ...(MODEL_CATALOG.get(provider) ?? []),
+  ]) {
+    knownModels.set(model.id, model);
+    for (const alias of model.aliases ?? []) knownModels.set(alias, model);
+  }
   for (const value of records) {
     const data = record(value);
     const rawId = data.id ?? data.name ?? data.key;
     if (typeof rawId !== "string" || rawId.length === 0) continue;
     const id = provider === "google" ? rawId.replace(/^models\//, "") : rawId;
-    if (getModelReplacement(provider, id)) continue;
-    const known = getProviderModels(provider).find(
-      (model) => model.id === id || model.aliases?.includes(id)
-    );
+    if (isRetiredModel(provider, id)) continue;
+    // An account may expose a dated OpenAI snapshot without its rolling alias.
+    const known =
+      knownModels.get(id) ??
+      (provider === "openai"
+        ? knownModels.get(id.replace(/-\d{4}-?\d{2}-?\d{2}$/, ""))
+        : undefined);
     const capabilities = record(data.capabilities);
     const localCapabilities = Array.isArray(data.capabilities) ? data.capabilities : undefined;
     const thinkingTypes = record(record(capabilities.thinking).types);
@@ -44,7 +57,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       : undefined;
     const supported = Array.isArray(data.supported_parameters) ? data.supported_parameters : [];
     const methods = data.supportedGenerationMethods ?? data.supportedActions;
-    if (data.active === false || data.deprecated === true || data.lifecycle === "retired") continue;
+    if (data.active === false || data.lifecycle === "retired") continue;
     if (
       (provider === "ollama" || provider === "lmstudio") &&
       (data.type === "embedding" ||
@@ -92,6 +105,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
     );
     const model: ModelInfo = {
       ...known,
+      ...(known && known.id !== id ? { aliases: undefined } : {}),
       id,
       provider,
       ...(provider === "openai" && /^(gpt-[5-9]|o[134])/.test(id)
@@ -140,7 +154,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
         (Array.isArray(data.supported_parameters)
           ? supported.includes("reasoning") || supported.includes("reasoning_effort")
           : known?.supportsReasoning === true),
-      supportsStreaming: true,
+      supportsStreaming: boolean(capabilities.streaming) ?? known?.supportsStreaming ?? true,
       supportsPromptCache:
         price(pricing.input_cache_read) !== undefined ||
         price(pricing.input_cache_write) !== undefined ||
@@ -148,6 +162,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       ...(Array.isArray(data.supported_parameters)
         ? { supportsSampling: supported.includes("temperature") || supported.includes("top_p") }
         : {}),
+      ...(provider === "anthropic" ? { supportsSampling: false } : {}),
       thinkingMode:
         record(thinkingTypes.adaptive).supported === true
           ? "adaptive"
@@ -165,7 +180,11 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
         record(thinkingTypes.disabled).supported === false
           ? true
           : known?.requiresThinking),
-      deprecated: data.lifecycle === "deprecated",
+      deprecated:
+        boolean(data.deprecated) ??
+        (data.lifecycle === "active" || data.lifecycle === "deprecated"
+          ? data.lifecycle === "deprecated"
+          : (known?.deprecated ?? false)),
       inputPrice: price(pricing.prompt) ?? known?.inputPrice,
       outputPrice: price(pricing.completion) ?? known?.outputPrice,
       cacheReadsPrice: price(pricing.input_cache_read) ?? known?.cacheReadsPrice,

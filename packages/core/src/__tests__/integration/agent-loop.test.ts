@@ -14,8 +14,10 @@ import { z } from "zod";
 import { ORCH_MODE, VIBE_MODE } from "../../agent/coding-modes.js";
 import { AgentLoop, type AgentLoopConfig } from "../../agent/loop.js";
 import { AgentRetryManager } from "../../agent/retry-manager.js";
+import { detectShell as detectExecutionShell } from "../../builtin/utils/shell-helpers.js";
 import { CostService } from "../../cost/service.js";
 import { ErrorCode } from "../../errors/index.js";
+import { PromptBuilder } from "../../prompts/prompt-builder.js";
 import type { SessionMessage } from "../../session/index.js";
 import { UnifiedToolContainer } from "../../tool/container.js";
 import { type PermissionChecker, ToolExecutor } from "../../tool/index.js";
@@ -99,6 +101,39 @@ describe("AgentLoop Integration (T034)", () => {
   });
 
   describe("Happy Path", () => {
+    it.each([false, true])(
+      "provides the execution environment with a custom builder (%s)",
+      async (withBuilder) => {
+        vi.mocked(LLM.stream).mockImplementation(async function* () {
+          yield { type: "text", content: "Ready" };
+          yield { type: "done", stopReason: "end_turn" };
+        });
+        const loop = new AgentLoop({
+          ...config,
+          enableEvidencePack: false,
+          promptBuilder: withBuilder
+            ? new PromptBuilder().withBase("Custom instructions")
+            : undefined,
+          tools: ["bash", "shell"].map((name) => ({
+            name,
+            description: name,
+            inputSchema: { type: "object", properties: {} },
+          })),
+        });
+        loop.addMessage(createSessionMessage("user", "Inspect this workspace"));
+        await loop.run();
+        const request = vi.mocked(LLM.stream).mock.calls[0]?.[0];
+        expect(request?.system).toContain(`Working directory: ${config.cwd}`);
+        expect(request?.system).toContain(`Platform: ${process.platform}`);
+        expect(request?.system).toContain(`Shell: ${detectExecutionShell().shell}`);
+        expect(request?.system).toContain(
+          "When command execution is available, use the 'shell' tool"
+        );
+        expect(request?.tools?.map((tool) => tool.name)).toEqual(
+          process.platform === "win32" ? ["shell"] : ["bash", "shell"]
+        );
+      }
+    );
     it("resets continuation progress when a new task follows cancellation", async () => {
       const loop = new AgentLoop({ ...config, enableEvidencePack: false });
       const stopContinuation = (iteration: number) => {

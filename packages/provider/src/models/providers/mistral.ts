@@ -95,7 +95,7 @@ export const MISTRAL_MODELS: ModelInfo[] = [
     contextWindow: 1000000,
     maxOutputTokens: 128000,
     supportsTools: true,
-    supportsVision: false,
+    supportsVision: true,
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: true,
@@ -103,7 +103,8 @@ export const MISTRAL_MODELS: ModelInfo[] = [
     outputPrice: 1.2,
     cacheReadsPrice: 0.007,
     deprecated: false,
-    description: "Mistral-hosted text route; capabilities differ from DeepSeek's direct endpoint.",
+    description:
+      "Mistral-hosted text and image-input route; uses Mistral's output limits and pricing.",
   },
   {
     id: "mistral-large-2512",

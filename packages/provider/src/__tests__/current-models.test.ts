@@ -5,7 +5,13 @@ import { DoubaoProvider } from "../doubao.js";
 import { GoogleProvider } from "../google.js";
 import { GroqProvider } from "../groq.js";
 import { MistralProvider } from "../mistral.js";
-import { DEFAULT_MODEL_IDS, getProviderModels, MODEL_CATALOG } from "../models/catalog.js";
+import {
+  DEFAULT_MODEL_IDS,
+  getModelReplacement,
+  getProviderModels,
+  isRetiredModel,
+  MODEL_CATALOG,
+} from "../models/catalog.js";
 import { normalizeDiscoveredModels, updateDiscoveredModels } from "../models/discovery.js";
 import { calculateCost, getModelInfo } from "../models/index.js";
 import { modelInfoSchema } from "../models/types.js";
@@ -67,6 +73,207 @@ function deferred<T>() {
 }
 
 describe("current provider contracts", () => {
+  it("never executes partial tool calls on incomplete Responses, streamed or not", async () => {
+    const incomplete = {
+      ...responseBody,
+      model: "gpt-5.5-pro",
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      usage: undefined,
+    };
+    mockJson(incomplete);
+    const provider = new OpenAIProvider();
+    await provider.initialize({ apiKey: "fixture" });
+    const events = [];
+    for await (const event of provider.stream({
+      model: "gpt-5.5-pro",
+      messages: [{ role: "user", content: "Find it" }],
+    }))
+      events.push(event);
+    expect(
+      events.some((event) => event.type === "toolCall" || event.type === "tool_call_end")
+    ).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "done", stopReason: "max_tokens" });
+    expect(events.some((event) => event.type === "usage")).toBe(false);
+
+    const partial = {
+      type: "function_call",
+      id: "fc_test",
+      call_id: "call_test",
+      name: "lookup",
+      arguments: '{"query":',
+      status: "incomplete",
+    };
+    async function* stream() {
+      yield { type: "response.output_item.done", item: partial, output_index: 0 };
+      yield { type: "response.incomplete", response: { ...incomplete, output: [partial] } };
+    }
+    const streamed = [];
+    for await (const event of mapResponsesStream(
+      stream() as Parameters<typeof mapResponsesStream>[0],
+      "openai",
+      "gpt-6.1-sol"
+    ))
+      streamed.push(event);
+    expect(streamed.at(-1)).toMatchObject({ type: "done", stopReason: "max_tokens" });
+    expect(
+      streamed.some((event) => event.type === "toolCall" || event.type === "tool_call_end")
+    ).toBe(false);
+  });
+
+  it("retries a summary-specific denial before output, remembers it, and preserves effort", async () => {
+    const requests: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      requests.push(body);
+      return body.reasoning?.summary
+        ? Response.json(
+            {
+              error: {
+                message: "Your organization must be verified to use reasoning summaries.",
+                param: "reasoning.summary",
+                code: "unsupported_parameter",
+              },
+            },
+            { status: 403 }
+          )
+        : Response.json(responseBody);
+    });
+    const provider = new OpenAIProvider();
+    await provider.initialize({ apiKey: "fixture" });
+    const params: CompletionParams = {
+      model: "gpt-6.1-sol",
+      messages: [{ role: "user", content: "Inspect" }],
+      thinking: { enabled: true, reasoningEffort: "high" },
+    };
+    await provider.complete(params);
+    await provider.complete(params);
+    expect(requests.map((body) => body.reasoning)).toEqual([
+      { effort: "high", summary: "auto" },
+      { effort: "high" },
+      { effort: "high" },
+    ]);
+
+    const denied = vi.fn(async () =>
+      Response.json({ error: { message: "Model access denied" } }, { status: 403 })
+    );
+    vi.stubGlobal("fetch", denied);
+    await provider.initialize({ apiKey: "another-fixture" });
+    await expect(provider.complete(params)).rejects.toThrow(/access denied/i);
+    expect(denied).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a persisted retired Groq route before any network request", async () => {
+    const fetch = mockJson({});
+    const provider = new GroqProvider();
+    await provider.initialize({ apiKey: "fixture" });
+    const params = {
+      model: "groq/compound",
+      messages: [{ role: "user" as const, content: "Hello" }],
+    };
+    await expect(provider.complete(params)).rejects.toMatchObject({
+      retryable: false,
+      message: expect.stringContaining("Select an available model with /model"),
+    });
+    await expect(provider.stream(params)[Symbol.asyncIterator]().next()).rejects.toMatchObject({
+      retryable: false,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("opts in to public reasoning summaries only for supported direct OpenAI reasoning", () => {
+    const params = {
+      model: "gpt-6.1-sol",
+      messages: [{ role: "user" as const, content: "Inspect" }],
+    };
+    expect(buildResponsesRequest(params, "openai").reasoning).toEqual({ summary: "auto" });
+    expect(
+      buildResponsesRequest({ ...params, model: "gpt-6.1-terra" }, "openai", "none").reasoning
+    ).toEqual({ effort: "none" });
+    expect(
+      buildResponsesRequest({ ...params, thinking: { enabled: false } }, "openai").reasoning
+    ).toBeUndefined();
+    expect(
+      buildResponsesRequest({ ...params, model: "custom-model" }, "openai").reasoning
+    ).toBeUndefined();
+    expect(
+      buildResponsesRequest({ ...params, model: "grok-4.7" }, "xai", "high").reasoning
+    ).toEqual({ effort: "high" });
+  });
+
+  it("uses non-streaming Responses for models without streaming and preserves tool replay", async () => {
+    const fetch = mockJson({
+      ...responseBody,
+      model: "gpt-5.5-pro",
+      output: responseBody.output.map((item) =>
+        item.type === "reasoning"
+          ? { ...item, summary: [{ type: "summary_text", text: "Checking weather sources" }] }
+          : item
+      ),
+    });
+    const provider = new OpenAIProvider();
+    await provider.initialize({ apiKey: "fixture" });
+    const events = [];
+    for await (const event of provider.stream({
+      model: "gpt-5.5-pro",
+      messages: [{ role: "user", content: "Look it up" }],
+    }))
+      events.push(event);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/responses");
+    expect(JSON.parse(String(init.body)).stream).not.toBe(true);
+    expect(events.find((event) => event.type === "provider_metadata")).toMatchObject({
+      metadata: {
+        provider: "openai",
+        model: "gpt-5.5-pro",
+        replay: [{ type: "reasoning", encrypted_content: "opaque-reasoning" }],
+      },
+    });
+    expect(events.find((event) => event.type === "tool_call_delta")).toMatchObject({
+      id: "call_test",
+      arguments: '{"query":"weather"}',
+    });
+    expect(events.find((event) => event.type === "usage")).toMatchObject({
+      inputTokens: 12,
+      outputTokens: 8,
+    });
+    expect(events.find((event) => event.type === "reasoning")).toMatchObject({
+      content: "Checking weather sources",
+    });
+    expect(events.at(-1)).toMatchObject({ type: "done", stopReason: "tool_use" });
+  });
+
+  it.each([false, true])(
+    "omits removed Claude sampling fields for legacy budget thinking (%s)",
+    async (enabled) => {
+      const fetch = mockJson({
+        id: "msg_test",
+        type: "message",
+        role: "assistant",
+        model: "claude-haiku-4-5-20251001",
+        content: [{ type: "text", text: "Done" }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+      const provider = new AnthropicProvider();
+      await provider.initialize({ apiKey: "fixture" });
+      await provider.complete({
+        model: "claude-haiku-4-5-20251001",
+        messages: [{ role: "user", content: "Hello" }],
+        temperature: 0.5,
+        topP: 0.8,
+        maxTokens: 4096,
+        thinking: { enabled, budgetTokens: 1024 },
+      });
+      const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+      const body = JSON.parse(String(init.body));
+      expect(new Headers(init.headers).get("anthropic-version")).toBe("2026-10-21");
+      expect(body).not.toHaveProperty("temperature");
+      expect(body).not.toHaveProperty("top_p");
+      if (enabled) expect(body.thinking).toEqual({ type: "enabled", budget_tokens: 1024 });
+    }
+  );
+
   it.each([true, false])(
     "sends the Doubao thinking toggle at the request root (%s)",
     async (enabled) => {
@@ -306,7 +513,7 @@ describe("current provider contracts", () => {
       model: params.model,
       store: false,
       max_output_tokens: 65_536,
-      reasoning: { effort: "max" },
+      reasoning: { effort: "max", summary: "auto" },
       tools: [{ type: "function", name: "lookup" }],
     });
     expect(body).not.toHaveProperty("temperature");
@@ -530,6 +737,87 @@ describe("current provider contracts", () => {
 });
 
 describe("audited model catalog", () => {
+  it("excludes shut-down routes without migrating still-callable deprecated models", () => {
+    expect(
+      normalizeDiscoveredModels("openai", [
+        { id: "gpt-5.2-codex" },
+        { id: "o4-mini-2025-04-16" },
+        { id: "gpt-4o-2024-05-13" },
+        { id: "gpt-5.3-codex" },
+        { id: "gpt-6.1-sol" },
+      ]).map((model) => model.id)
+    ).toEqual(["gpt-5.3-codex", "gpt-6.1-sol"]);
+    expect(getModelReplacement("openai", "gpt-5.2-codex")).toBe("gpt-5.6-sol");
+    expect(getModelReplacement("openai", "gpt-5.3-codex")).toBeUndefined();
+    expect(getModelInfo("openai", "gpt-5.3-codex").deprecated).toBe(true);
+    expect(getProviderModels("openai").some((model) => model.id === "gpt-5.3-codex")).toBe(false);
+    expect(isRetiredModel("groq", "groq/compound")).toBe(true);
+    expect(
+      normalizeDiscoveredModels("groq", [{ id: "groq/compound" }, { id: "groq/compound-mini" }])
+    ).toEqual([]);
+    expect(isRetiredModel("openrouter", "openai/gpt-5.2-codex")).toBe(false);
+  });
+
+  it("retains known lifecycle and capacity through sparse discovery and honors explicit reactivation", () => {
+    expect(normalizeDiscoveredModels("openai", [{ id: "gpt-5.5-pro" }])[0]).toMatchObject({
+      supportsStreaming: false,
+      api: "responses",
+    });
+    const previous = MODEL_CATALOG.get("openai");
+    try {
+      updateDiscoveredModels(
+        "openai",
+        normalizeDiscoveredModels("openai", [{ id: "gpt-6.1-sol" }])
+      );
+      const snapshot = normalizeDiscoveredModels("openai", [{ id: "gpt-5.5-pro-2026-04-23" }]);
+      updateDiscoveredModels("openai", snapshot);
+      expect(getModelInfo("openai", "gpt-5.5-pro-2026-04-23")).toMatchObject({
+        supportsStreaming: false,
+        api: "responses",
+        contextWindow: 1050000,
+      });
+    } finally {
+      if (previous) updateDiscoveredModels("openai", previous);
+    }
+    const models = normalizeDiscoveredModels("openai", [{ id: "gpt-4o" }]);
+    expect(models[0]).toMatchObject({
+      deprecated: true,
+      contextWindow: 128000,
+      supportsTools: true,
+    });
+    expect(
+      normalizeDiscoveredModels("openai", [{ id: "gpt-4o", lifecycle: "active" }])[0]
+    ).toMatchObject({ deprecated: false, contextWindow: 128000 });
+    expect(
+      normalizeDiscoveredModels("anthropic", [{ id: "claude-fixture", deprecated: true }])[0]
+        ?.deprecated
+    ).toBe(true);
+    expect(
+      normalizeDiscoveredModels("google", [{ name: "models/gemini-3.7-flash" }])[0]
+    ).toMatchObject({ contextWindow: 1048576, supportsTools: true, supportsReasoning: true });
+  });
+
+  it("includes published text routes with their provider-specific limits", () => {
+    expect(getModelInfo("openai", "gpt-5.5")).toMatchObject({
+      api: "responses",
+      contextWindow: 1050000,
+    });
+    expect(getModelInfo("openai", "gpt-5.4-pro")).toMatchObject({
+      inputPrice: 30,
+      outputPrice: 180,
+      contextWindow: 1050000,
+      reasoningEfforts: ["medium", "high", "xhigh"],
+    });
+    expect(getModelInfo("anthropic", "claude-opus-5")).toMatchObject({
+      thinkingMode: "adaptive",
+      maxOutputTokens: 128000,
+    });
+    expect(getModelInfo("doubao", "deepseek-v4-1-flash-261017")).toMatchObject({
+      supportsVision: true,
+      maxOutputTokens: 393216,
+    });
+  });
+
   it("marks missing discovery capacity as an internal fallback", () => {
     expect(
       normalizeDiscoveredModels("lmstudio", [{ id: "unknown-context-model", type: "llm" }])[0]

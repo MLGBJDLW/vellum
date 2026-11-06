@@ -1,6 +1,6 @@
 import stringWidth from "string-width";
 import { describe, expect, it } from "vitest";
-import { getThinkingActivity } from "../thinkingActivity.js";
+import { createThinkingActivityTracker, getThinkingActivity } from "../thinkingActivity.js";
 
 describe("getThinkingActivity", () => {
   it("uses the latest complete heading, not a partial streaming title", () => {
@@ -28,18 +28,69 @@ describe("getThinkingActivity", () => {
     );
   });
 
-  it("derives a conservative label from complete activity phrases and avoids raw partial tokens", () => {
+  it("recognizes ANSI-colored code fences before considering headings", () => {
+    const content =
+      "**Reviewing source**\n\u001b[31m```md\u001b[0m\n# Fake heading inside code\n```\n";
+    expect(getThinkingActivity(content, true)).toBe("Reviewing source");
+  });
+
+  it("preserves concrete actions from complete phrases and avoids raw partial tokens", () => {
     expect(getThinkingActivity("I am checking the parser output.\npartialvariable_xyz", true)).toBe(
-      "Checking the approach"
+      "Checking the parser output"
     );
     expect(getThinkingActivity("I need to test this assumption.\n", true)).toBe(
-      "Planning next steps"
+      "Test this assumption"
     );
-    expect(getThinkingActivity("正在分析请求。\n", true)).toBe("分析问题");
+    expect(getThinkingActivity("I’ll check the failing test.", true)).toBe(
+      "Check the failing test"
+    );
+    expect(getThinkingActivity("I'll inspect the trace.", true)).toBe("Inspect the trace");
+    expect(getThinkingActivity("We need to reproduce the crash.", true)).toBe(
+      "Reproduce the crash"
+    );
+    expect(getThinkingActivity("我们先核对模型目录。", true)).toBe("我们先核对模型目录");
+    expect(getThinkingActivity("正在分析请求。\n", true)).toBe("正在分析请求");
     expect(getThinkingActivity("arbitrary_partial_reasoning_token", true)).toBe(
       "Working through the request"
     );
     expect(getThinkingActivity("Unstructured completed prose.", false)).toBe("Reasoning complete");
+  });
+
+  it("updates plain prose intents before a newline and keeps the last complete action", () => {
+    const track = createThinkingActivityTracker();
+    const first = "I will inspect the parser. ";
+    expect(track(first, true)).toBe("Inspect the parser");
+    expect(track(`${first}Next: Run the focused`, true)).toBe("Inspect the parser");
+    expect(track(`${first}Next: Run the focused tests.`, true)).toBe("Run the focused tests");
+    expect(track("接下来检查模型目录。然后继续。", true)).toBe("接下来检查模型目录");
+  });
+
+  it("keeps filenames and inline code intact in completed intents", () => {
+    expect(getThinkingActivity("I will inspect package.json. Next: Test `parser.ts`. ", true)).toBe(
+      "Test parser.ts"
+    );
+    expect(getThinkingActivity("I will inspect package.json.", true)).toBe("Inspect package.json");
+  });
+
+  it("tracks fences across chunks and resets when a block is replaced", () => {
+    const track = createThinkingActivityTracker();
+    let content = "**Inspecting code**\n```ts\n";
+    expect(track(content, true)).toBe("Inspecting code");
+    content += "I will fake a task.\n".repeat(1000);
+    expect(track(content, true)).toBe("Inspecting code");
+    content += "```\nI will verify the result. ";
+    expect(track(content, true)).toBe("Verify the result");
+    expect(track("**A new message**", false)).toBe("A new message");
+  });
+
+  it("keeps long streamed lines bounded without discarding their latest complete action", () => {
+    const track = createThinkingActivityTracker();
+    let content = "**Inspecting code**\n";
+    track(content, true);
+    content += "ordinary detail ".repeat(2000);
+    expect(track(content, true)).toBe("Inspecting code");
+    content += ". I will check the final output. ";
+    expect(track(content, true)).toBe("Check the final output");
   });
 
   it("fits CJK and emoji in terminal cells without splitting a grapheme", () => {

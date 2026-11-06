@@ -5,6 +5,7 @@ import type {
   ResponseInput,
   ResponseStreamEvent,
 } from "openai/resources/responses/responses";
+import { getModelInfo } from "./models/index.js";
 import type { ReasoningEffort } from "./models/types.js";
 import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
 import type {
@@ -94,7 +95,21 @@ export function buildResponsesRequest(
   };
   // New API effort values are valid wire values even when the installed SDK's
   // generated TypeScript union predates the model (e.g. GPT-6's "max").
-  if (effort) Object.assign(request, { reasoning: { effort } });
+  const modelInfo = getModelInfo(provider, params.model);
+  const includeSummary =
+    provider === "openai" &&
+    modelInfo.api === "responses" &&
+    modelInfo.supportsReasoning &&
+    effort !== "none" &&
+    params.thinking?.enabled !== false;
+  if (effort || includeSummary) {
+    Object.assign(request, {
+      reasoning: {
+        ...(effort ? { effort } : {}),
+        ...(includeSummary ? { summary: "auto" } : {}),
+      },
+    });
+  }
   return request;
 }
 
@@ -106,6 +121,11 @@ function stopReason(response: Response): StopReason {
       ? "max_tokens"
       : "content_filter";
   }
+  if (response.status !== "completed") {
+    throw new Error(
+      `Responses request ended without completion (${response.status ?? "unknown status"})`
+    );
+  }
   if (response.output.some((item) => item.type === "function_call")) return "tool_use";
   return "end_turn";
 }
@@ -115,8 +135,13 @@ export function normalizeResponsesResult(
   provider: string,
   model: string
 ): CompletionResult {
+  const reason = stopReason(response);
   const toolCalls = response.output.flatMap((item) => {
-    if (item.type !== "function_call") return [];
+    // A truncated call may contain valid JSON but still be missing arguments or
+    // sibling calls. Release the validated batch only after a completed turn.
+    if (reason !== "tool_use" || item.type !== "function_call") return [];
+    if (item.status && item.status !== "completed")
+      throw new Error(`Unfinished tool call ${item.name} in completed response`);
     const input: unknown = JSON.parse(item.arguments);
     if (!input || typeof input !== "object" || Array.isArray(input))
       throw new Error(`Invalid arguments for tool ${item.name}`);
@@ -129,6 +154,11 @@ export function normalizeResponsesResult(
       .filter((item) => item.type === "reasoning")
       .map((item) => ({ ...item })),
   };
+  const thinking = response.output
+    .flatMap((item) =>
+      item.type === "reasoning" ? (item.summary ?? []).map((summary) => summary.text) : []
+    )
+    .join("\n");
   return {
     content:
       response.output_text ??
@@ -145,7 +175,9 @@ export function normalizeResponsesResult(
       cacheReadTokens: response.usage?.input_tokens_details?.cached_tokens,
       thinkingTokens: response.usage?.output_tokens_details?.reasoning_tokens,
     },
-    stopReason: stopReason(response),
+    ...(!response.usage ? { usageReported: false } : {}),
+    stopReason: reason,
+    ...(thinking ? { thinking } : {}),
     ...(toolCalls.length ? { toolCalls } : {}),
     providerMetadata: metadata,
   };
@@ -179,15 +211,6 @@ export async function* mapResponsesStream(
         }
         break;
       }
-      case "response.output_item.done":
-        if (event.item.type === "function_call") {
-          const input: unknown = JSON.parse(event.item.arguments);
-          if (!input || typeof input !== "object" || Array.isArray(input))
-            throw new Error(`Invalid arguments for tool ${event.item.name}`);
-          // The item can finish before the enclosing response fails. Keep its
-          // completion pending until response.completed confirms the whole turn.
-        }
-        break;
       case "response.completed":
       case "response.incomplete": {
         const result = normalizeResponsesResult(event.response, provider, model);

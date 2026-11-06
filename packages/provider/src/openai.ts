@@ -169,6 +169,7 @@ export class OpenAIProvider {
 
   // LLMProvider interface properties
   private client: OpenAI | null = null;
+  private modelsWithoutSummaries = new Set<string>();
   private initialized = false;
   private apiKey: string | undefined;
   private configured = false;
@@ -308,6 +309,7 @@ export class OpenAIProvider {
         organization: provider === "openai" ? this.initialOptions.organization : null,
         project: provider === "openai" ? undefined : null,
       });
+      this.modelsWithoutSummaries = new Set<string>();
 
       this.apiKey = apiKey;
       this.initialized = true;
@@ -344,9 +346,10 @@ export class OpenAIProvider {
           this.getProviderTypeForModelInfo(),
           this.resolveReasoningEffort(params)
         );
-        const response = await this.ensureInitialized().responses.create(request, {
-          signal: params.abortSignal,
-        });
+        const client = this.ensureInitialized();
+        const response = await this.withOptionalSummary(request, (body) =>
+          client.responses.create(body, { signal: params.abortSignal })
+        );
         return normalizeResponsesResult(response, this.getProviderTypeForModelInfo(), params.model);
       }
       const isOSeries = this.isOSeriesModel(params.model);
@@ -386,8 +389,8 @@ export class OpenAIProvider {
   /**
    * Generate a streaming completion
    *
-   * For O-series models (o1, o3), this falls back to non-streaming
-   * and yields the result as a single response.
+   * Models that do not support streaming use one completion request and emit
+   * equivalent events, including tool arguments and opaque reasoning replay.
    *
    * @param params - Completion parameters
    * @returns AsyncIterable of stream events
@@ -396,19 +399,22 @@ export class OpenAIProvider {
   async *stream(params: CompletionParams): AsyncIterable<StreamEvent> {
     this.ensureInitialized();
 
-    if (getModelInfo(this.getProviderTypeForModelInfo(), params.model).api === "responses") {
+    const modelInfo = getModelInfo(this.getProviderTypeForModelInfo(), params.model);
+    if (modelInfo.supportsStreaming === false) {
+      yield* this.streamCompletionFallback(params);
+      return;
+    }
+
+    if (modelInfo.api === "responses") {
       try {
         const request = buildResponsesRequest(
           params,
           this.getProviderTypeForModelInfo(),
           this.resolveReasoningEffort(params)
         );
-        const stream = await this.ensureInitialized().responses.create(
-          {
-            ...request,
-            stream: true,
-          },
-          { signal: params.abortSignal }
+        const client = this.ensureInitialized();
+        const stream = await this.withOptionalSummary(request, (body) =>
+          client.responses.create({ ...body, stream: true }, { signal: params.abortSignal })
         );
         yield* mapResponsesStream(stream, this.getProviderTypeForModelInfo(), params.model);
       } catch (error) {
@@ -421,7 +427,7 @@ export class OpenAIProvider {
 
     // O-series models don't support streaming - fall back to non-streaming
     if (isOSeries) {
-      yield* this.streamOSeriesFallback(params);
+      yield* this.streamCompletionFallback(params);
       return;
     }
 
@@ -579,7 +585,10 @@ export class OpenAIProvider {
       };
       if (getModelInfo(this.getProviderTypeForModelInfo(), params.model).api === "responses") {
         await testClient.responses.create(
-          buildResponsesRequest(params, this.getProviderTypeForModelInfo())
+          buildResponsesRequest(
+            { ...params, thinking: { enabled: false } },
+            this.getProviderTypeForModelInfo()
+          )
         );
       } else {
         await testClient.chat.completions.create(
@@ -606,6 +615,37 @@ export class OpenAIProvider {
   // ===========================================================================
   // Private Methods
   // ===========================================================================
+
+  /** A model can allow inference but disallow public summaries for this account.
+   * Only retry a summary-specific rejection while opening the request (before
+   * streaming starts); never retry errors observed while consuming its output. */
+  private async withOptionalSummary<T>(
+    request: ReturnType<typeof buildResponsesRequest>,
+    send: (body: ReturnType<typeof buildResponsesRequest>) => Promise<T>
+  ): Promise<T> {
+    if (!request.model || !request.reasoning?.summary) return send(request);
+    const unavailable = this.modelsWithoutSummaries;
+    if (!unavailable.has(request.model)) {
+      try {
+        return await send(request);
+      } catch (error) {
+        if (!(error instanceof OpenAI.APIError) || (error.status !== 400 && error.status !== 403))
+          throw error;
+        const detail = `${error.param ?? ""} ${error.code ?? ""} ${error.message}`;
+        if (
+          !/reasoning[. _-]summar(?:y|ies)|reasoning summaries|summarizer/i.test(detail) ||
+          !/verif|unsupported|not supported|does not support|not available|not allowed|permission|access denied/i.test(
+            detail
+          )
+        )
+          throw error;
+        unavailable.add(request.model);
+      }
+    }
+    const { reasoning, ...base } = request;
+    const { summary: _summary, ...rest } = reasoning;
+    return send(Object.keys(rest).length ? { ...base, reasoning: rest } : base);
+  }
 
   /**
    * Ensure the provider is initialized before making requests
@@ -953,6 +993,7 @@ export class OpenAIProvider {
     return {
       content,
       usage,
+      ...(!response.usage ? { usageReported: false } : {}),
       stopReason,
       ...(thinking !== undefined && { thinking }),
       ...(toolCalls.length > 0 && { toolCalls }),
@@ -1173,13 +1214,17 @@ export class OpenAIProvider {
   }
 
   /**
-   * Stream fallback for O-series models (which don't support streaming)
+   * Stream fallback for models without streaming support.
    *
    * Makes a non-streaming request and yields the result as events
    */
-  private async *streamOSeriesFallback(params: CompletionParams): AsyncIterable<StreamEvent> {
+  private async *streamCompletionFallback(params: CompletionParams): AsyncIterable<StreamEvent> {
     try {
       const result = await this.complete(params);
+
+      if (result.providerMetadata) {
+        yield { type: "provider_metadata", metadata: result.providerMetadata };
+      }
 
       // Yield text content
       if (result.content) {
@@ -1214,6 +1259,13 @@ export class OpenAIProvider {
           };
           yield startEvent;
 
+          yield {
+            type: "tool_call_delta",
+            id: toolCall.id,
+            arguments: JSON.stringify(toolCall.input),
+            index,
+          };
+
           const endEvent: StreamToolCallEndEvent = {
             type: "tool_call_end",
             id: toolCall.id,
@@ -1233,11 +1285,13 @@ export class OpenAIProvider {
       }
 
       // Yield usage with new flat structure
-      const usageEvent: StreamUsageEvent = {
-        type: "usage",
-        ...result.usage,
-      };
-      yield usageEvent;
+      if (result.usageReported !== false) {
+        const usageEvent: StreamUsageEvent = {
+          type: "usage",
+          ...result.usage,
+        };
+        yield usageEvent;
+      }
 
       // Emit new end event
       const streamEndEvent: StreamEndEvent = {
@@ -1253,7 +1307,7 @@ export class OpenAIProvider {
       };
       yield doneEvent;
     } catch (error) {
-      throw this.handleError(error, "Streaming request failed (O-series fallback)");
+      throw this.handleError(error, "Streaming request failed (completion fallback)");
     }
   }
 

@@ -515,6 +515,7 @@ For tasks > 30 seconds, provide brief status updates:
 - 8-10 words maximum
 - Start with what you're doing
 - Include progress indicators when applicable
+- When the stage changes, you may start an existing user-visible progress update or summary with a short heading that names the next action in the user's language.
 
 #### Examples
 

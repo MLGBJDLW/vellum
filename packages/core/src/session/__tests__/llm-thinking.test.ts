@@ -168,8 +168,8 @@ describe("LLM.stream thinking gating", () => {
     });
     LLM.initialize({ get: async () => provider } as unknown as ProviderRegistry);
     for await (const _ of LLM.stream({
-      providerType: "groq",
-      model: "groq/compound",
+      providerType: "yi",
+      model: "yi-vision",
       messages: [{ role: "user", content: "Hello" }],
       tools: [{ name: "read_file", description: "Read", inputSchema: {} }],
     })) {

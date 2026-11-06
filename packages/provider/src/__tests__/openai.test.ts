@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getModelInfo } from "../models/index.js";
 import { OpenAIProvider } from "../openai.js";
 import type { CompletionParams, ProviderCredential } from "../types.js";
 
@@ -252,22 +253,23 @@ describe("OpenAIProvider", () => {
   });
 
   describe("O-series model handling", () => {
-    it("should identify O-series models", () => {
+    it("should keep retired and deprecated O-series models out of the picker", () => {
       const provider = new OpenAIProvider();
       const models = provider.listModels();
       expect(models).not.toContain("o1");
       expect(models).not.toContain("o1-mini");
-      expect(models).toContain("o3");
+      expect(models).not.toContain("o3");
       expect(models).not.toContain("o3-mini");
+      expect(models).not.toContain("o4-mini");
     });
 
-    it("should return model info with supportsReasoning for O-series", async () => {
-      const provider = new OpenAIProvider();
-      const models = await provider.listModelsAsync();
-      const o1 = models.find((m) => m.id === "o3");
-      expect(o1).toBeDefined();
-      expect(o1?.supportsReasoning).toBe(true);
-      expect(o1?.supportsStreaming).toBe(true); // Responses streams reasoning models
+    it("preserves reasoning metadata for explicitly configured deprecated O-series", () => {
+      expect(getModelInfo("openai", "o3")).toMatchObject({
+        deprecated: true,
+        supportsReasoning: true,
+        supportsStreaming: true,
+        api: "responses",
+      });
     });
 
     it("should return model info with supportsStreaming for standard models", async () => {

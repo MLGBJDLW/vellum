@@ -1,5 +1,12 @@
 # @vellum/provider
 
+## 0.4.3
+
+### Patch Changes
+
+- Audit all 17 provider adapters, add 19 documented model routes, and remove eight confirmed shutdowns. Preserve capacity, lifecycle, and streaming metadata during explicit model refreshes, including known dated snapshots.
+- Support public OpenAI reasoning summaries and non-streaming Responses models, and stop sending retired sampling parameters to the Anthropic API. Reject retired Groq Compound routes before a request is sent.
+
 ## 0.4.2
 
 ### Patch Changes

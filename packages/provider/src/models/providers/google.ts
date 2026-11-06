@@ -1,4 +1,4 @@
-/** google catalog audited 2026-10-29. Sources: docs/research/provider-model-audit.md. */
+/** google catalog audited 2026-11-06. Sources: docs/research/provider-catalog-2026-11-06.md. */
 import type { ModelInfo } from "../types.js";
 export const GOOGLE_MODELS: ModelInfo[] = [
   {
@@ -39,6 +39,7 @@ export const GOOGLE_MODELS: ModelInfo[] = [
     outputPrice: 3.75,
     cacheReadsPrice: 0.075,
     description: "Promotional standard rates through 2026-12-31.",
+    aliases: ["gemini-3.7-flash"],
   },
   {
     id: "gemini-3.6-flash",
@@ -58,6 +59,7 @@ export const GOOGLE_MODELS: ModelInfo[] = [
     outputPrice: 3.75,
     cacheReadsPrice: 0.075,
     description: "Promotional standard rates through 2026-12-31.",
+    aliases: ["gemini-3.5-flash"],
   },
   {
     id: "gemini-3.5-flash-lite",
@@ -178,8 +180,9 @@ export const GOOGLE_MODELS: ModelInfo[] = [
         cacheReadsPrice: 0.625,
       },
     ],
-    deprecated: false,
-    description: "Restricted to existing users; use Gemini 3.8 Flash for new projects.",
+    deprecated: true,
+    description:
+      "Deprecated; existing-user access only. API alias routing changes on 2026-12-01; review the provider migration guide.",
     reasoningEfforts: ["low", "medium", "high"],
     defaultReasoningEffort: "medium",
   },
@@ -194,12 +197,13 @@ export const GOOGLE_MODELS: ModelInfo[] = [
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: true,
-    inputPrice: 0.15,
-    outputPrice: 0.6,
-    cacheReadsPrice: 0.075,
+    inputPrice: 0.3,
+    outputPrice: 2.5,
+    cacheReadsPrice: 0.03,
     cacheWritesPrice: 1,
-    deprecated: false,
-    description: "Restricted to existing users; use Gemini 3.8 Flash for new projects.",
+    deprecated: true,
+    description:
+      "Deprecated; existing-user access only. API alias routing changes on 2026-12-01; review the provider migration guide.",
     reasoningEfforts: ["low", "medium", "high"],
     defaultReasoningEffort: "medium",
   },

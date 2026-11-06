@@ -27,7 +27,7 @@ import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { Clickable } from "../common/Clickable.js";
 import { SPINNER_STYLES, Spinner } from "../common/Spinner.js";
 import { StreamingText } from "./StreamingText.js";
-import { getThinkingActivity } from "./thinkingActivity.js";
+import { createThinkingActivityTracker } from "./thinkingActivity.js";
 
 // Spinner frames for tool call status
 const TOOL_SPINNER_FRAMES = ["-", "\\", "|", "/"];
@@ -348,9 +348,11 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 
   // Memoized values
   const charCount = useMemo(() => content.length, [content]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A different message identity must reset the parser state.
+  const activityTracker = useMemo(() => createThinkingActivityTracker(), [persistenceId]);
   const activity = useMemo(
-    () => getThinkingActivity(content, isStreaming, collapsedPreviewChars),
-    [content, isStreaming, collapsedPreviewChars]
+    () => activityTracker(content, isStreaming, collapsedPreviewChars),
+    [activityTracker, content, isStreaming, collapsedPreviewChars]
   );
 
   // Don't render if no content

@@ -23,13 +23,17 @@ import { useTheme } from "../../theme/index.js";
  */
 export interface ContextProgressProps {
   /** Current token count */
-  readonly current: number;
+  readonly current?: number;
   /** Maximum token limit */
-  readonly max: number;
+  readonly max?: number;
   /** Whether to show the label "Context:" (default: true) */
   readonly showLabel?: boolean;
   /** Width of progress bar in characters (default: 10) */
   readonly barWidth?: number;
+  /** Place counts on a second line for narrow sidebars. */
+  readonly stacked?: boolean;
+  /** Mark values estimated after compaction. */
+  readonly estimated?: boolean;
 }
 
 // =============================================================================
@@ -72,9 +76,20 @@ function formatTokenCount(count: number): string {
 /**
  * Calculates the percentage of tokens used.
  */
-function calculatePercentage(current: number, max: number): number {
-  if (max <= 0) return 0;
-  return Math.min(Math.round((current / max) * 100), 100);
+function calculatePercentage(
+  current: number | undefined,
+  max: number | undefined
+): number | undefined {
+  if (
+    current === undefined ||
+    !Number.isFinite(current) ||
+    current < 0 ||
+    max === undefined ||
+    !Number.isFinite(max) ||
+    max <= 0
+  )
+    return undefined;
+  return Math.round((current / max) * 100);
 }
 
 /**
@@ -98,8 +113,11 @@ function getProgressColor(percentage: number, theme: ReturnType<typeof useTheme>
  * Generates the progress bar string.
  */
 function generateProgressBar(percentage: number, width: number): { filled: string; empty: string } {
-  const filledCount = Math.round((percentage / 100) * width);
-  const emptyCount = width - filledCount;
+  const safeWidth = Number.isFinite(width)
+    ? Math.max(1, Math.min(80, Math.floor(width)))
+    : DEFAULT_BAR_WIDTH;
+  const filledCount = Math.round((Math.max(0, Math.min(percentage, 100)) / 100) * safeWidth);
+  const emptyCount = safeWidth - filledCount;
   return {
     filled: BAR_FILLED.repeat(filledCount),
     empty: BAR_EMPTY.repeat(emptyCount),
@@ -135,33 +153,42 @@ export function ContextProgress({
   max,
   showLabel = true,
   barWidth = DEFAULT_BAR_WIDTH,
+  stacked = false,
+  estimated = false,
 }: ContextProgressProps): React.JSX.Element {
   const { theme } = useTheme();
 
   const percentage = useMemo(() => calculatePercentage(current, max), [current, max]);
 
   const progressBar = useMemo(
-    () => generateProgressBar(percentage, barWidth),
+    () => generateProgressBar(percentage ?? 0, barWidth),
     [percentage, barWidth]
   );
-
-  const progressColor = useMemo(() => getProgressColor(percentage, theme), [percentage, theme]);
-
-  const formattedCurrent = useMemo(() => formatTokenCount(current), [current]);
-  const formattedMax = useMemo(() => formatTokenCount(max), [max]);
+  const progressColor =
+    percentage === undefined ? theme.semantic.text.muted : getProgressColor(percentage, theme);
+  const formattedCurrent =
+    current !== undefined && Number.isFinite(current) && current >= 0
+      ? formatTokenCount(current)
+      : "?";
+  const formattedMax =
+    max !== undefined && Number.isFinite(max) && max > 0 ? formatTokenCount(max) : "?";
 
   return (
-    <Box>
-      {showLabel && <Text color={theme.semantic.text.muted}>Context: </Text>}
-      <Text color={progressColor}>{progressBar.filled}</Text>
-      <Text color={theme.semantic.text.muted}>{progressBar.empty}</Text>
-      <Text color={theme.semantic.text.muted}> </Text>
-      <Text color={progressColor}>{percentage}%</Text>
-      <Text color={theme.semantic.text.muted}> (</Text>
-      <Text color={theme.semantic.text.secondary}>{formattedCurrent}</Text>
-      <Text color={theme.semantic.text.muted}>/</Text>
-      <Text color={theme.semantic.text.secondary}>{formattedMax}</Text>
-      <Text color={theme.semantic.text.muted}>)</Text>
+    <Box flexDirection={stacked ? "column" : "row"}>
+      {showLabel && <Text color={theme.semantic.text.muted}>Context{stacked ? "" : ": "}</Text>}
+      <Box flexDirection="row">
+        <Text color={progressColor}>{progressBar.filled}</Text>
+        <Text color={theme.semantic.text.muted}>{progressBar.empty} </Text>
+        <Text color={progressColor}>
+          {estimated ? "~" : ""}
+          {percentage === undefined ? "?" : `${percentage}%`}
+        </Text>
+      </Box>
+      <Text color={theme.semantic.text.secondary} wrap="truncate-end">
+        {stacked ? "" : " ("}
+        {formattedCurrent}/{formattedMax}
+        {stacked ? " tokens" : ")"}
+      </Text>
     </Box>
   );
 }

@@ -83,7 +83,7 @@ With full mouse mode enabled, drag the scrollbar thumb to move through chat hist
 
 Click the model or mode in the status bar to open its selector, then click an available row to select it. In the model selector, the wheel moves focus within the visible list; `Enter` confirms the focused model. The **Display: Full/Compact** control can also be clicked. Approval and option dialogs accept clicks on their available choices. While a dialog is open, background controls do not receive those clicks.
 
-The mode menu offers all four existing modes (`orch`, `vibe`, `plan`, `spec`). Click the status bar's Effort selector to choose model-supported reasoning effort, or click the approval indicator to view pending approvals. Opening this queue does not change the approval policy.
+The mode menu offers all four existing modes (`orch`, `vibe`, `plan`, `spec`). The bottom-left footer has one mode control, including its execution level (for example, `orch·L0`); the duplicate agent label has been removed. Click the status bar's Effort selector to choose model-supported reasoning effort, or click the approval indicator to view pending approvals. Opening this queue does not change the approval policy.
 
 | Surface | Mouse actions |
 |---|---|
@@ -96,7 +96,9 @@ The mode menu offers all four existing modes (`orch`, `vibe`, `plan`, `spec`). C
 
 Wheel input belongs to the visible list under the pointer. Only the frontmost overlay receives input. Token counts, costs, health indicators, and other passive readouts remain display-only.
 
-Click a Thinking header, or press `Alt+E` for the active block, to expand or collapse it. This works during streaming and in **Compact** display mode. A collapsed block occupies one row, such as `▸ Thinking · Checking input routing`. Its activity title comes from the latest complete provider heading, or a conservative local activity label when no heading is available; incomplete streamed fragments are not used as titles. Expanding shows all received thinking content with its existing inline formatting. Manual expansion or collapse is preserved as streaming continues and completes.
+Click a Thinking header, or press `Alt+E` for the active block, to expand or collapse it. This works during streaming and in **Compact** display mode. A collapsed block occupies one row, such as `▸ Thinking · Checking input routing`. Its activity title preserves the latest complete provider heading or concrete intent sentence, such as `Inspect package.json` or `Run the focused tests`. Complete sentences update the title even before the next newline; partial fragments and fenced code never become titles. This uses the received model content without extra model requests, and parsing remains bounded during long streams. Expanding shows all received thinking content with its existing inline formatting. Manual expansion or collapse is preserved as streaming continues and completes.
+
+The sidebar shows actual last-request context occupancy as a progress bar: green below 50%, yellow from 50% to 79%, and red at 80% or above. The numeric percentage and token counts remain visible without relying on color. `~` marks estimates after compaction; `?` marks unknown usage or an unknown model limit. Over-capacity values retain their actual percentage while the bar stops at full. Cumulative session tokens remain a separate footer readout.
 
 In Windows Terminal, hold `Shift` while dragging to select text with the terminal's native selection when Vellum is capturing the mouse. Use `/mouse off` when you want the terminal to handle all mouse input.
 

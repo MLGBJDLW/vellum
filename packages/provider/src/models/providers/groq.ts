@@ -1,10 +1,5 @@
-/**
- * groq text/tool model catalog, audited 2026-10-29.
- * Sources, exclusions and endpoint constraints: docs/research/provider-model-audit.md.
- * Account/region availability still requires provider discovery; missing prices are unknown.
- */
+/** groq catalog audited 2026-11-06. Sources: docs/research/provider-catalog-2026-11-06.md. */
 import type { ModelInfo } from "../types.js";
-
 export const GROQ_MODELS: ModelInfo[] = [
   {
     id: "qwen/qwen3.8-27b",
@@ -54,32 +49,6 @@ export const GROQ_MODELS: ModelInfo[] = [
     supportsPromptCache: false,
     deprecated: false,
     description: "Enterprise preview; contact Groq for access and pricing.",
-  },
-  {
-    id: "groq/compound",
-    name: "Groq Compound",
-    provider: "groq",
-    contextWindow: 131072,
-    maxOutputTokens: 8192,
-    supportsTools: false,
-    supportsVision: false,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    supportsPromptCache: false,
-    deprecated: false,
-  },
-  {
-    id: "groq/compound-mini",
-    name: "Groq Compound Mini",
-    provider: "groq",
-    contextWindow: 131072,
-    maxOutputTokens: 4096,
-    supportsTools: false,
-    supportsVision: false,
-    supportsReasoning: false,
-    supportsStreaming: true,
-    supportsPromptCache: false,
-    deprecated: false,
   },
   {
     id: "openai/gpt-oss-120b",

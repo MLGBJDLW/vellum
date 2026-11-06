@@ -6,6 +6,7 @@
 
 import { EventEmitter } from "node:events";
 import * as fs from "node:fs/promises";
+import { homedir } from "node:os";
 import * as path from "node:path";
 import { type FSWatcher, watch } from "chokidar";
 import {
@@ -327,11 +328,14 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
 
     let currentDir = this.startPath;
     let depth = 0;
+    const home = this.normalizePath(homedir());
 
     while (depth < this.maxParentDepth) {
-      if (await this.isBoundary(currentDir)) {
+      const atHome = this.normalizePath(currentDir) === home;
+      if (await this.isBoundary(currentDir, atHome && currentDir !== this.startPath)) {
         return currentDir;
       }
+      if (atHome) break;
 
       const parentDir = path.dirname(currentDir);
       if (parentDir === currentDir) {
@@ -348,8 +352,11 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
   /**
    * Check if a directory contains any stop boundary markers.
    */
-  private async isBoundary(dirPath: string): Promise<boolean> {
+  private async isBoundary(dirPath: string, ancestorIsHome: boolean): Promise<boolean> {
     for (const boundary of DEFAULT_STOP_BOUNDARIES) {
+      // ~/.vellum contains global settings. It does not make the entire profile
+      // a workspace for an unmarked directory launched somewhere beneath it.
+      if (ancestorIsHome && boundary === ".vellum") continue;
       const boundaryPath = path.join(dirPath, boundary);
       try {
         await fs.access(boundaryPath);

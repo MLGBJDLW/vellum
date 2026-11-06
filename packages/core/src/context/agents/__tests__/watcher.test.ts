@@ -11,7 +11,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AgentsWatcher } from "../watcher.js";
 
@@ -369,15 +369,23 @@ describe("AgentsWatcher", () => {
       expect(watcher.getWatchedPaths()).toEqual([]);
     });
 
-    it("should return watched paths when running", async () => {
-      watcher = new AgentsWatcher(tempDir);
-      await watcher.start();
-
-      const watchedPaths = watcher.getWatchedPaths();
-
-      // The exact paths depend on chokidar's internal state
-      // Just verify it returns an array
-      expect(Array.isArray(watchedPaths)).toBe(true);
+    it("keeps an unmarked workspace local when the profile has global Vellum settings", async () => {
+      const workspace = path.join(tempDir, "projects", "scratch");
+      const homeInstructions = path.join(tempDir, "AGENTS.md");
+      const localInstructions = path.join(workspace, "AGENTS.md");
+      await createFile(homeInstructions, "Global");
+      await createFile(localInstructions, "Local");
+      await createFile(path.join(tempDir, ".vellum", "settings.json"), "{}");
+      vi.stubEnv(process.platform === "win32" ? "USERPROFILE" : "HOME", tempDir);
+      try {
+        watcher = new AgentsWatcher(workspace);
+        await watcher.start();
+        const watchedPaths = watcher.getWatchedPaths();
+        expect(watchedPaths).toContain(localInstructions);
+        expect(watchedPaths).not.toContain(homeInstructions);
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
   });
 
@@ -391,7 +399,8 @@ describe("AgentsWatcher", () => {
 
       watcher = new AgentsWatcher(nestedDir, { debounceMs: 50 });
 
-      // Set up listener BEFORE starting to avoid race conditions
+      await watcher.start();
+      // Start the event deadline when the watcher is ready to receive changes.
       const changePromise = new Promise<string[]>((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error("Watcher did not trigger change event in time"));
@@ -401,9 +410,6 @@ describe("AgentsWatcher", () => {
           resolve(paths);
         });
       });
-
-      await watcher.start();
-      await wait(200); // Wait for watcher to fully stabilize (parent watchers need more time)
 
       // Create AGENTS.md in parent directory (src)
       await createFile(path.join(tempDir, "src", "AGENTS.md"), "# Parent content");

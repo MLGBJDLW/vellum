@@ -16,7 +16,7 @@ import { readFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { basename } from "node:path";
 import { FrontmatterParser, promptFrontmatterSchema } from "@vellum/shared";
-import { detectShell } from "../shell/index.js";
+import { detectExecutionShell } from "../shell/execution.js";
 import { promptParseError, promptYamlError } from "./errors.js";
 import type { PromptCategory, PromptLoaded, PromptLocation, PromptVariables } from "./types.js";
 
@@ -280,7 +280,7 @@ export class PromptParser {
     const os = platform();
     return {
       os,
-      shell: detectShell().shell,
+      shell: detectExecutionShell().shell,
       cwd: process.cwd(),
       date: new Date().toISOString().split("T")[0] ?? "",
       mode: "vibe",

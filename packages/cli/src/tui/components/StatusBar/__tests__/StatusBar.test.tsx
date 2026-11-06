@@ -5,13 +5,11 @@
  * - ModelIndicator: Provider icons and model display
  * - TokenCounter: Token usage with color thresholds
  * - TrustModeIndicator: Trust mode icons and colors
- * - ThinkingModeIndicator: Thinking mode states and budget
  *
  * Tests focus on:
  * - All indicators display correctly
  * - Token color thresholds (warning > 80%, error > 95%)
  * - Trust mode icons (ask/auto/full)
- * - Thinking mode states with optional budget
  *
  * @module tui/components/StatusBar/__tests__/StatusBar.test
  */
@@ -486,59 +484,19 @@ describe("StatusBar", () => {
     });
   });
 
-  // ===========================================================================
-  // T016, T017, T018: Mode-Agent Decoupling Tests
-  // ===========================================================================
-
-  describe("Mode-Agent Decoupling (T016-T018)", () => {
-    describe("T016: No Level Display", () => {
-      it("should render mode name only, no level indicators", () => {
-        const { lastFrame } = renderWithTheme(<StatusBar mode="spec" modelName="claude-3" />);
-        const frame = lastFrame() ?? "";
-        // Mode name should be visible
-        expect(frame).toContain("spec");
-        // Level indicators should NOT be visible
-        expect(frame).not.toContain("L0");
-        expect(frame).not.toContain("L1");
-        expect(frame).not.toContain("L2");
-        expect(frame).not.toContain("orchestrator");
-        expect(frame).not.toContain("workflow");
-        expect(frame).not.toContain("worker");
-        expect(frame).not.toContain("orch");
-      });
-
-      it("should NOT render level even when agentLevel prop is provided", () => {
-        const { lastFrame } = renderWithTheme(
-          <StatusBar mode="spec" modelName="claude-3" agentLevel={0} />
-        );
-        const frame = lastFrame() ?? "";
-        // Mode name should be visible
-        expect(frame).toContain("spec");
-        // Level indicators should NOT be visible
-        expect(frame).not.toContain("L0");
-        expect(frame).not.toContain("orch");
-      });
-
-      it("should render all modes without level indicators", () => {
-        for (const mode of ["vibe", "plan", "spec"] as const) {
-          const { lastFrame } = renderWithTheme(<StatusBar mode={mode} modelName="claude-3" />);
-          const frame = lastFrame() ?? "";
-          expect(frame).toContain(mode);
-          expect(frame).not.toMatch(/L[0-2]/);
-        }
-      });
-    });
-
-    // T017: agentLevel prop is deprecated but silently ignored (no warning logged)
-    // The prop is kept for API compatibility
-    describe("T017: Deprecated agentLevel prop", () => {
-      it("should accept agentLevel prop without error", () => {
-        // agentLevel is deprecated but should not cause errors
-        const { lastFrame } = renderWithTheme(
-          <StatusBar mode="spec" modelName="claude-3" agentLevel={1} />
-        );
-        expect(lastFrame()).toBeDefined();
-      });
-    });
+  it("keeps the execution level in the single mode label", () => {
+    for (const [mode, level] of [
+      ["orch", 0],
+      ["plan", 1],
+      ["vibe", 2],
+    ] as const) {
+      const { lastFrame } = renderWithTheme(
+        <StatusBar mode={mode} modelName="test-model" agentLevel={level} />
+      );
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain(`${mode}·L${level}`);
+      expect(frame.match(/L[0-2]/g)).toHaveLength(1);
+      expect(frame).not.toContain("Orch");
+    }
   });
 });

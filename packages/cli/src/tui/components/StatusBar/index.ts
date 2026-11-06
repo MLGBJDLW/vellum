@@ -4,12 +4,6 @@
  * Components for displaying status information in the Vellum TUI.
  */
 
-export {
-  type AgentLevel,
-  AgentModeIndicator,
-  type AgentModeIndicatorProps,
-  type AgentType,
-} from "./AgentModeIndicator.js";
 export { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 export {
   FileChangesIndicator,

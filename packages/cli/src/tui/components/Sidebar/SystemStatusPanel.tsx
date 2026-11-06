@@ -17,6 +17,7 @@ import { useApp } from "../../context/AppContext.js";
 import { useLspOptional } from "../../context/LspContext.js";
 import { useMcp } from "../../context/McpContext.js";
 import { useTheme } from "../../theme/index.js";
+import { ContextProgress } from "../StatusBar/ContextProgress.js";
 import {
   PersistenceStatusIndicator,
   type PersistenceStatusIndicatorProps,
@@ -242,18 +243,20 @@ export function SystemStatusPanel({
 
   const labelColor = theme.semantic.text.secondary;
   const borderColor = theme.semantic.border.default;
-  const contextText =
-    context?.tokens === undefined
-      ? "awaiting usage"
-      : `${context.tokens.toLocaleString("en-US")}/${context.window?.toLocaleString("en-US") ?? "?"}${context.window ? ` (${Math.round((context.tokens / context.window) * 100)}%)` : ""}`;
+  const contextMeter = (
+    <ContextProgress
+      current={context?.tokens}
+      max={context?.window}
+      estimated={context?.estimated}
+      barWidth={compact ? 8 : 12}
+      stacked
+    />
+  );
 
   if (compact) {
     return (
       <Box flexDirection="column" borderStyle="single" borderColor={borderColor} paddingX={0}>
-        <Text wrap="truncate-end">
-          Ctx: {contextText}
-          {context?.estimated ? " ~" : ""}
-        </Text>
+        {contextMeter}
         <Box flexDirection="row" gap={1}>
           <StatusItem
             label="M"
@@ -302,14 +305,14 @@ export function SystemStatusPanel({
       <Text color={theme.semantic.text.secondary} bold>
         Status
       </Text>
-      <Text color={labelColor} wrap="truncate-end">
-        Context: {contextText}
+      {contextMeter}
+      <Text color={labelColor} dimColor wrap="truncate-end">
+        {context?.tokens === undefined
+          ? "awaiting usage"
+          : context.estimated
+            ? "estimated after compaction"
+            : "last request · input"}
       </Text>
-      {context?.tokens !== undefined && (
-        <Text dimColor>
-          {context.estimated ? "estimated after compaction" : "last request · input tokens"}
-        </Text>
-      )}
       <StatusItem label="MCP" value={mcpStatus} color={mcpColor} labelColor={labelColor} />
       <StatusItem label="LSP" value={lspStatus} color={lspColor} labelColor={labelColor} />
       <StatusItem label="Rate" value={rateStatus} color={rateColor} labelColor={labelColor} />

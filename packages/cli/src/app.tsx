@@ -4069,18 +4069,13 @@ function AppContent({
     return "";
   }, [interactivePrompt]);
 
-  // Get agent level from AgentConfig via registry
-  // Derive active worker agent name from taskChain if available, otherwise use currentRole or mode's default agent
-  const modeAgentName = BUILTIN_CODING_MODES[currentMode].agentName;
-  const activeWorkerAgent = currentTaskId && taskChain?.nodes.get(currentTaskId)?.agentSlug;
-  const agentName = activeWorkerAgent ?? currentRole ?? modeAgentName;
+  // The single mode control includes its execution level.
   const agentLevel =
     currentMode === "orch" || currentMode === "spec" ? 0 : currentMode === "plan" ? 1 : 2;
 
   return (
     <AppContentView
       agentLevel={agentLevel}
-      agentName={agentName}
       announce={announce}
       alternateBufferEnabled={alternateBufferEnabled}
       activeApproval={activeApproval}
@@ -4219,7 +4214,6 @@ type ToolApprovalState = ReturnType<typeof useToolApprovalController>;
 
 interface AppContentViewProps {
   readonly agentLevel?: 0 | 1 | 2;
-  readonly agentName?: string;
   readonly announce: (message: string) => void;
   readonly alternateBufferEnabled: boolean;
   readonly activeApproval: ToolApprovalState["activeApproval"];
@@ -5071,7 +5065,6 @@ function AppHeader({
 
 function AppContentView({
   agentLevel,
-  agentName,
   announce,
   alternateBufferEnabled,
   activeApproval,
@@ -5260,7 +5253,6 @@ function AppContentView({
   const footer = (
     <StatusBar
       mode={currentMode}
-      agentName={agentName}
       agentLevel={agentLevel}
       modelName={currentModel}
       onModeClick={canOpenPicker ? openModeSelector : undefined}

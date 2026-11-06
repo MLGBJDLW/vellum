@@ -15,6 +15,7 @@ export {
   getModelReplacement,
   getProviderModels,
   hasModels,
+  isRetiredModel,
   MODEL_CATALOG,
 } from "./catalog.js";
 export { normalizeDiscoveredModels, updateDiscoveredModels } from "./discovery.js";
