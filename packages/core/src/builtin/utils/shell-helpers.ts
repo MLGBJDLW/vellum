@@ -16,6 +16,9 @@ import * as path from "node:path";
 import { finished } from "node:stream/promises";
 
 import { sanitizeEnvironment } from "@vellum/sandbox";
+import { detectExecutionShell as detectShell } from "../../shell/execution.js";
+
+export { detectShell };
 
 /** Timeout before sending SIGKILL after SIGTERM (ms) */
 const SIGKILL_TIMEOUT_MS = 5000;
@@ -265,31 +268,6 @@ export namespace TruncatedOutputManager {
 }
 
 /**
- * Detects the appropriate shell for the current platform.
- *
- * @returns The shell command and arguments for the current OS
- */
-export function detectShell(): { shell: string; shellArgs: string[] } {
-  const isWindows = platform() === "win32";
-
-  if (isWindows) {
-    // Check for PowerShell Core first (pwsh), then Windows PowerShell
-    const pwshPath = process.env.PWSH_PATH ?? "pwsh";
-    return {
-      shell: pwshPath,
-      shellArgs: ["-NoProfile", "-NonInteractive", "-Command"],
-    };
-  }
-
-  // Unix-like systems: prefer bash, fall back to sh
-  const bashPath = process.env.BASH_PATH ?? "/bin/bash";
-  return {
-    shell: bashPath,
-    shellArgs: ["-c"],
-  };
-}
-
-/**
  * Executes a shell command with timeout and abort support.
  *
  * Features:
@@ -345,14 +323,20 @@ export async function executeShell(
   const { shell, shellArgs } = customShell
     ? { shell: customShell, shellArgs: ["-c"] }
     : detectShell();
+  // Windows PowerShell 5.1 otherwise sends ASCII to native programs even in
+  // UTF-8 terminals. Keep both pipe directions consistent with Node's decoder.
+  const commandText = /(?:^|[/\\])(?:pwsh|powershell)(?:\.exe)?$/i.test(shell)
+    ? `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); ${command}`
+    : command;
 
   // Background process: spawn detached, unref, return immediately
   if (isBackground) {
-    const childProcess = spawn(shell, [...shellArgs, command], {
+    const childProcess = spawn(shell, [...shellArgs, commandText], {
       cwd,
       env: sanitizeEnvironment({ ...process.env, ...env }),
       stdio: "ignore", // Detach all stdio
       detached: true,
+      windowsHide: true,
     });
 
     const pid = childProcess.pid;
@@ -390,7 +374,7 @@ export async function executeShell(
     );
 
     try {
-      const result = await executor.execute(shell, [...shellArgs, command], {
+      const result = await executor.execute(shell, [...shellArgs, commandText], {
         timeoutMs: timeout,
         abortSignal,
         maxOutputBytes: maxBuffer,
@@ -497,11 +481,12 @@ export async function executeShell(
     // Spawn the process with detached: true to create a new process group
     // This allows killing the entire process tree on timeout/abort
     const isWindows = platform() === "win32";
-    childProcess = spawn(shell, [...shellArgs, command], {
+    childProcess = spawn(shell, [...shellArgs, commandText], {
       cwd,
       env: sanitizeEnvironment({ ...process.env, ...env }),
       stdio: ["pipe", "pipe", "pipe"],
       detached: !isWindows, // Unix: create new process group; Windows: handled by taskkill /t
+      windowsHide: true,
     });
 
     // Helper to reset/set timeout (used for inactivity-based timeout)

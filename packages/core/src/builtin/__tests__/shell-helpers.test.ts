@@ -6,6 +6,7 @@
 
 import { readFile, unlink } from "node:fs/promises";
 import { platform } from "node:os";
+import { win32 } from "node:path";
 import { describe, expect, it } from "vitest";
 import { detectShell, executeShell } from "../utils/shell-helpers.js";
 
@@ -137,6 +138,22 @@ describe("shell-helpers", () => {
   });
 
   describe("executeShell - basic functionality", () => {
+    it.skipIf(platform() !== "win32")(
+      "preserves Unicode in Windows PowerShell native pipelines",
+      async () => {
+        const legacyPowerShell = win32.join(
+          process.env.SystemRoot ?? "C:\\Windows",
+          "System32/WindowsPowerShell/v1.0/powershell.exe"
+        );
+        const nodePath = process.execPath.replace(/'/g, "''");
+        const result = await executeShell(
+          `([char]0x4E2D).ToString() | & '${nodePath}' -e 'process.stdin.pipe(process.stdout)'`,
+          { shell: legacyPowerShell, timeout: 10000 }
+        );
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.trim()).toBe("中");
+      }
+    );
     it("should execute simple command and return result", async () => {
       const isWindows = platform() === "win32";
       const command = isWindows ? 'Write-Output "test"' : 'echo "test"';

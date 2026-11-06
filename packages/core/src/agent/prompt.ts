@@ -18,7 +18,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { z } from "zod";
-import { detectShell } from "../shell/index.js";
+import { detectExecutionShell } from "../shell/execution.js";
 
 // =============================================================================
 // Constants
@@ -98,11 +98,15 @@ export function buildEnvironmentInfo(
     `Here is some useful information about the environment you are running in:`,
     `<env>`,
     `  Working directory: ${config.cwd}`,
-    `  Is directory a git repo: ${config.isGitRepo ? "yes" : "no"}`,
+    `  Is directory a git repo: ${config.isGitRepo === undefined ? "unknown" : config.isGitRepo ? "yes" : "no"}`,
     `  Platform: ${process.platform}`,
-    `  Shell: ${detectShell().shell}`,
+    `  Shell: ${detectExecutionShell().shell}`,
     `  Today's date: ${new Date().toDateString()}`,
     `</env>`,
+    "When command execution is available, use the 'shell' tool for this environment. Only call tools advertised in this session.",
+    process.platform === "win32"
+      ? "This is native Windows. Write PowerShell syntax, use $env:NAME for environment variables, and use native paths. The bash tool is unavailable; do not try bash, WSL, or POSIX commands as a fallback. Separate dependent commands with explicit exit-code checks."
+      : "Write commands for the execution shell shown above; the terminal's login shell may differ.",
   ];
 
   if (config.fileTree) {

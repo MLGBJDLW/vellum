@@ -66,7 +66,7 @@ import type { LLMLoopVerifier } from "./llm-loop-verifier.js";
 import type { CombinedLoopResult } from "./loop-detection.js";
 import { SimpleActivityTracker } from "./mode-switching.js";
 import type { ModeConfig } from "./modes.js";
-import { fromPromptBuilder } from "./prompt.js";
+import { buildEnvironmentInfo, fromPromptBuilder } from "./prompt.js";
 import { AgentRetryManager } from "./retry-manager.js";
 import { AgentSkillsIntegration } from "./skills-integration.js";
 import type { AgentState, StateContext } from "./state.js";
@@ -990,6 +990,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     const configuredTools = this.config.tools.filter(
       (tool) =>
         (tool.name !== "attempt_completion" || currentMode === "orch") &&
+        (tool.name !== "bash" || process.platform !== "win32") &&
         (tool.name !== "ask_followup_question" || this.config.interactive === true)
     );
 
@@ -1448,6 +1449,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         promptSize: systemPrompt.length,
       });
     }
+
+    // Always send the executor's actual environment, including for custom prompts
+    // and delegated agents, before the first model request.
+    systemPrompt += `\n\n${buildEnvironmentInfo({ cwd: this.config.cwd })}`;
 
     // Append AGENTS.md prompt sections
     if (this.agentsIntegration?.getState() === "ready") {
