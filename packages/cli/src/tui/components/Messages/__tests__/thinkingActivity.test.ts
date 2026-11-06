@@ -41,6 +41,14 @@ describe("getThinkingActivity", () => {
     expect(getThinkingActivity("I need to test this assumption.\n", true)).toBe(
       "Test this assumption"
     );
+    expect(getThinkingActivity("I’ll check the failing test.", true)).toBe(
+      "Check the failing test"
+    );
+    expect(getThinkingActivity("I'll inspect the trace.", true)).toBe("Inspect the trace");
+    expect(getThinkingActivity("We need to reproduce the crash.", true)).toBe(
+      "Reproduce the crash"
+    );
+    expect(getThinkingActivity("我们先核对模型目录。", true)).toBe("我们先核对模型目录");
     expect(getThinkingActivity("正在分析请求。\n", true)).toBe("正在分析请求");
     expect(getThinkingActivity("arbitrary_partial_reasoning_token", true)).toBe(
       "Working through the request"

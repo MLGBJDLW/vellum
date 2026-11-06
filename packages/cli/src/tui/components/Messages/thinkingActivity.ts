@@ -20,6 +20,9 @@ function fitTitle(title: string, maxWidth: number): string {
   return `${result.trimEnd()}…`;
 }
 
+const intentPrefix =
+  /^(?:I(?:['’]m| am)|We(?:['’]re| are)|(?:I|We)(?:['’]ll| (?:will|should|need to|plan to))|Let(?:['’]s| me))\s+/i;
+
 /** Keep the model's concrete action, rather than mapping it to a generic label. */
 function actionTitle(text: string): string | undefined {
   const phrase = text
@@ -27,15 +30,17 @@ function actionTitle(text: string): string | undefined {
     .replace(/^(?:Next(?: step)?|接下来|下一步)\s*[:：]\s*/i, "")
     .trim();
   const isAction =
-    /^(?:I(?:'m| am| will| should| need to| plan to)|Let(?:'s| me)|(?:Now[,，]?\s+)?(?:Checking|Verifying|Testing|Validating|Reading|Inspecting|Reviewing|Examining|Comparing|Evaluating|Writing|Drafting|Preparing|Summarizing|Analyzing|Investigating|Understanding|Planning|Updating|Fixing|Implementing|Running|Searching|Check|Verify|Test|Read|Inspect|Review|Compare|Update|Fix|Implement|Run|Search))\b/i.test(
+    intentPrefix.test(phrase) ||
+    /^(?:Now[,，]?\s+)?(?:Checking|Verifying|Testing|Validating|Reading|Inspecting|Reviewing|Examining|Comparing|Evaluating|Writing|Drafting|Preparing|Summarizing|Analyzing|Investigating|Understanding|Planning|Updating|Fixing|Implementing|Running|Searching|Check|Verify|Test|Read|Inspect|Review|Compare|Update|Fix|Implement|Run|Search)\b/i.test(
       phrase
     ) ||
-    /^(?:正在|我(?:需要|将|会|计划)|接下来|下一步|检查|验证|测试|阅读|查看|审查|分析|研究|理解|比较|评估|整理|撰写|总结|修改|修复|运行|实现|更新)/u.test(
+    /^(?:正在|我们?(?:先|需要|将|会|计划)|接下来|下一步|检查|验证|测试|阅读|查看|审查|分析|研究|理解|比较|评估|整理|撰写|总结|修改|修复|运行|实现|更新)/u.test(
       phrase
     );
   if (!isAction) return undefined;
   const title = phrase
-    .replace(/^(?:I(?:'m| am| will| should| need to| plan to)\s+|Now[,，]?\s+)/i, "")
+    .replace(intentPrefix, "")
+    .replace(/^Now[,，]?\s+/i, "")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/[.!?。！？]+$/, "")
