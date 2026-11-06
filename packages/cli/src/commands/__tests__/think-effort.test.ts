@@ -56,7 +56,7 @@ describe("model-aware thinking effort", () => {
       }
     }
     expect(bodies[0]?.reasoning).toEqual({ effort: "none" });
-    expect(bodies[1]?.reasoning).toEqual({ effort: "medium" });
+    expect(bodies[1]?.reasoning).toEqual({ effort: "medium", summary: "auto" });
   });
 
   it("persists an effort selected in the menu and passes it to the model request", async () => {
