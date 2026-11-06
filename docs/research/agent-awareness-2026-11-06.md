@@ -99,3 +99,18 @@ unknown context values, and mode navigation. Reuse existing targeted test suites
 the current CI matrix; no additional CI jobs or upstream dependencies are warranted
 by this research. Provider inventories and retirement evidence are tracked in the
 separate provider catalog audit.
+
+## Local acceptance
+
+The first-request regression originally received only the mode prompt; it now
+receives the working directory, OS, and actual execution shell with both default
+and custom prompts. A native Windows PowerShell 5.1 pipeline round-tripped `中`
+through a Node child process after setting the child process's UTF-8 encodings.
+
+An isolated Windows terminal session ran the built CLI against a loopback HTTP
+fixture. Its single model request included the Windows environment and did not
+advertise `bash`. The collapsed header updated as the fixture supplied new intent
+sentences, the footer showed one `orch·L0` control, and the narrow sidebar showed
+`12%` and `120K/1.0M tokens` for the reported request. The fixture completed all
+20 output lines and `/exit` returned code 0. No provider inference or release
+download was used for this check.

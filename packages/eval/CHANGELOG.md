@@ -1,5 +1,13 @@
 # @vellum/eval
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [[`c194fa5`](https://github.com/MLGBJDLW/vellum/commit/c194fa5cead41ec7e8993a4c274837237520fd77)]:
+  - @vellum/core@0.3.1
+  - @vellum/provider@0.4.3
+
 ## 0.1.4
 
 ### Patch Changes

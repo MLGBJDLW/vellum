@@ -1,5 +1,14 @@
 # @butlerw/vellum
 
+## 0.7.0
+
+### Minor Changes
+
+- Thinking headers follow the model's latest concrete action or heading. Incremental parsing keeps long streams responsive and skips fenced code.
+- The sidebar shows context usage as a colored bar with a percentage and token counts. Estimates are marked with `~`, and unknown values stay unknown. The footer has one mode and level control.
+- The first model request includes the actual operating system, workspace, and execution shell. On native Windows, the agent uses PowerShell and no longer receives the Unix-only bash tool. Windows PowerShell preserves Unicode in native pipelines.
+- Refresh the 17-provider catalog: add 19 documented routes, remove eight confirmed shutdowns, and preserve custom models and account-specific discovery. Update reasoning summaries, non-streaming models, and current Anthropic request parameters.
+
 ## 0.6.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@vellum/eval",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "Agent evaluation framework for Vellum CLI",
   "type": "module",
