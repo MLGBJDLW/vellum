@@ -71,6 +71,11 @@ function lineTitle(rawLine: string, complete: boolean): string | undefined {
   return title;
 }
 
+function getFence(rawLine: string): string | undefined {
+  const line = sanitize(rawLine.slice(0, MAX_PENDING_CHARS), { stripAllAnsi: true });
+  return /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+}
+
 /** Incrementally scan appended provider text; only the unfinished line is revisited.
  * No model calls or edits to reasoning content are needed. Oversized prose lines
  * are bounded so a long unbroken response cannot stall every terminal repaint.
@@ -103,12 +108,12 @@ export function createThinkingActivityTracker() {
       pending += part;
       if (pending.length > MAX_PENDING_CHARS) {
         // Preserve the opening fence even for an exceptionally long code line.
-        if (!pendingTruncated && !fence) fence = /^\s*(`{3,}|~{3,})/.exec(pending)?.[1];
+        if (!pendingTruncated && !fence) fence = getFence(pending);
         pending = pending.slice(-MAX_PENDING_CHARS);
         pendingTruncated = true;
       }
       const complete = index < lines.length - 1;
-      const fenceMatch = !pendingTruncated ? /^\s*(`{3,}|~{3,})/.exec(pending)?.[1] : undefined;
+      const fenceMatch = !pendingTruncated ? getFence(pending) : undefined;
       if (complete) {
         if (fenceMatch) {
           if (!fence) fence = fenceMatch;

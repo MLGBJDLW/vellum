@@ -28,6 +28,12 @@ describe("getThinkingActivity", () => {
     );
   });
 
+  it("recognizes ANSI-colored code fences before considering headings", () => {
+    const content =
+      "**Reviewing source**\n\u001b[31m```md\u001b[0m\n# Fake heading inside code\n```\n";
+    expect(getThinkingActivity(content, true)).toBe("Reviewing source");
+  });
+
   it("preserves concrete actions from complete phrases and avoids raw partial tokens", () => {
     expect(getThinkingActivity("I am checking the parser output.\npartialvariable_xyz", true)).toBe(
       "Checking the parser output"
