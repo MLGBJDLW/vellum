@@ -5,6 +5,7 @@
 ### Patch Changes
 
 - Share execution-shell detection between the model's environment context and the shell executor. Include it in the first request, including custom prompts. Native Windows uses PowerShell 7 when available, with Windows PowerShell as fallback; the bash tool is omitted. Preserve Unicode when piping to native programs.
+- Avoid treating global `~/.vellum` settings as a project root when watching an unmarked folder for instruction changes.
 - Updated dependency: `@vellum/provider@0.4.3`.
 
 ## 0.3.0
