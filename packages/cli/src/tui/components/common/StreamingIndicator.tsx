@@ -15,9 +15,8 @@ import { Box, Text } from "ink";
 import type React from "react";
 import { memo, useEffect, useRef, useState } from "react";
 import { useTheme } from "../../theme/index.js";
-import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { formatDuration, useElapsedTime } from "./EnhancedLoadingIndicator.js";
-import { SPINNER_STYLES, Spinner } from "./Spinner.js";
+import { Spinner } from "./Spinner.js";
 
 // =============================================================================
 // Types
@@ -88,18 +87,6 @@ export const PHASE_ICONS: Record<StreamingPhase, string> = {
   waiting_confirmation: "[.]",
 } as const;
 
-/**
- * Spinner styles for each phase.
- */
-export const PHASE_SPINNER_STYLES: Record<StreamingPhase, readonly string[]> = {
-  idle: SPINNER_STYLES.braille,
-  thinking: SPINNER_STYLES.dots,
-  generating: SPINNER_STYLES.braille,
-  tool_call: SPINNER_STYLES.arc,
-  tool_executing: SPINNER_STYLES.arc,
-  waiting_confirmation: SPINNER_STYLES.bounce,
-} as const;
-
 // =============================================================================
 // Hook
 // =============================================================================
@@ -166,10 +153,7 @@ function areStreamingPropsEqual(
 /**
  * StreamingIndicator - Context-aware streaming phase indicator.
  *
- * Shows different states with appropriate labels and spinners:
- * - Thinking phase: Brain-style spinner, "Thinking..."
- * - Generating phase: Braille spinner, "Generating..."
- * - Tool execution: Arc spinner, "Using [tool name]..."
+ * Uses one Vellum ink mark with a stable, readable label for each phase.
  *
  * Memoized to prevent re-renders from parent context updates.
  * Internal elapsed time updates are isolated via useElapsedTime hook.
@@ -233,9 +217,6 @@ function StreamingIndicatorImpl({
     return PHASE_LABELS[phase];
   })();
 
-  // Get phase-specific spinner frames
-  const spinnerFrames = PHASE_SPINNER_STYLES[phase];
-
   // Build meta content
   const buildMetaContent = (): string | null => {
     const parts: string[] = [];
@@ -253,50 +234,8 @@ function StreamingIndicatorImpl({
 
   const meta = buildMetaContent();
 
-  // Determine colors based on phase
-  const getPhaseColor = (): string => {
-    if (spinnerColor) return spinnerColor;
-
-    switch (phase) {
-      case "thinking":
-        return theme.colors.warning ?? "yellow";
-      case "generating":
-        return theme.colors.info ?? "cyan";
-      case "tool_call":
-      case "tool_executing":
-        return theme.colors.success ?? "green";
-      case "waiting_confirmation":
-        return theme.colors.warning ?? "yellow";
-      default:
-        return theme.colors.info ?? "cyan";
-    }
-  };
-
-  const phaseColor = getPhaseColor();
-
-  const highlightColor = theme.brand.highlight ?? "#FFD700";
-  const shouldShimmerLabel =
-    phase === "thinking" ||
-    phase === "generating" ||
-    phase === "tool_call" ||
-    phase === "tool_executing";
-
-  const renderLabel = () => {
-    if (!shouldShimmerLabel) {
-      return <Text color={phaseColor}> {displayLabel}</Text>;
-    }
-    return (
-      <BannerShimmerText
-        baseColor={phaseColor}
-        highlightColor={highlightColor}
-        shimmerConfig={{ cycleDuration: 2000 }}
-        shimmerWidth={0.2}
-        bold
-      >
-        {` ${displayLabel}`}
-      </BannerShimmerText>
-    );
-  };
+  const phaseColor = spinnerColor ?? theme.semantic.text.primary;
+  const renderLabel = () => <Text color={phaseColor}> {displayLabel}</Text>;
 
   if (narrow) {
     // Narrow layout: stack vertically with icon
@@ -305,7 +244,7 @@ function StreamingIndicatorImpl({
     return (
       <Box flexDirection="column">
         <Box>
-          <Spinner color={phaseColor} frames={spinnerFrames} />
+          <Spinner color={phaseColor} />
           {icon && <Text> {icon}</Text>}
           {renderLabel()}
         </Box>
@@ -322,7 +261,7 @@ function StreamingIndicatorImpl({
   // Normal layout: horizontal
   return (
     <Box flexDirection="row" alignItems="center">
-      <Spinner color={phaseColor} frames={spinnerFrames} />
+      <Spinner color={phaseColor} />
       {renderLabel()}
       {meta && (
         <>

@@ -272,8 +272,8 @@ export function EnhancedLoadingIndicator({
     return (
       <Box flexDirection="column">
         <Box>
-          <Spinner color={spinnerColor ?? theme.colors.info} frames={spinnerFrames} />
-          <Text color={theme.colors.info}> {label}</Text>
+          <Spinner color={spinnerColor} frames={spinnerFrames} />
+          <Text color={theme.semantic.text.primary}> {label}</Text>
         </Box>
         {meta && (
           <Box>
@@ -288,8 +288,8 @@ export function EnhancedLoadingIndicator({
   // Normal layout: horizontal
   return (
     <Box flexDirection="row" alignItems="center">
-      <Spinner color={spinnerColor ?? theme.colors.info} frames={spinnerFrames} />
-      <Text color={theme.colors.info}> {label}</Text>
+      <Spinner color={spinnerColor} frames={spinnerFrames} />
+      <Text color={theme.semantic.text.primary}> {label}</Text>
       {meta && (
         <>
           <Text> </Text>

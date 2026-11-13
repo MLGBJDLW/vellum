@@ -45,7 +45,6 @@ import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { isEndKey, isHomeKey } from "../../types/ink-extended.js";
 import { estimateMessageHeight } from "../../utils/heightEstimator.js";
-import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { Clickable } from "../common/Clickable.js";
 import { MaxSizedBox } from "../common/MaxSizedBox.js";
 import { Spinner } from "../common/Spinner.js";
@@ -67,8 +66,6 @@ import { ToolResultPreview } from "./ToolResultPreview.js";
 // Constants
 // =============================================================================
 
-/** ASCII text spinner animation frames for running tools (no Unicode/emoji) */
-const SPINNER_FRAMES = ["-", "\\", "|", "/"] as const;
 const THINKING_TOGGLE_HINT = "Alt+E";
 // Unique across list remounts, matching useCollapsible's persisted action receipt.
 let nextThinkingToggleSignal = 0;
@@ -303,7 +300,7 @@ interface InlineToolCallProps {
 
 /**
  * Renders an inline tool call with status indicator (spinner/checkmark/error).
- * Gemini-style: shows tool name with animated spinner while running,
+ * Shows the shared ink mark while running,
  * checkmark when completed, X when error.
  */
 const InlineToolCall = memo(function InlineToolCall({
@@ -323,7 +320,7 @@ const InlineToolCall = memo(function InlineToolCall({
   switch (toolCall.status) {
     case "running":
     case "pending":
-      statusIcon = <Spinner frames={SPINNER_FRAMES} color={accentColor} />;
+      statusIcon = <Spinner />;
       statusColor = accentColor;
       break;
     case "completed":
@@ -357,29 +354,16 @@ const InlineToolCall = memo(function InlineToolCall({
     toolCall.result !== undefined &&
     toolCall.result !== null;
 
-  // Shimmer effect for running tools - use accent as base, highlight gold as shimmer peak
-  const isRunning = toolCall.status === "running" || toolCall.status === "pending";
-
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
-        <Text color={statusColor}>{statusIcon}</Text>
+        <Box width={3} flexShrink={0}>
+          <Text color={statusColor}>{statusIcon}</Text>
+        </Box>
         <Text> </Text>
-        {isRunning ? (
-          <BannerShimmerText
-            baseColor={accentColor}
-            highlightColor="#FFD700"
-            shimmerConfig={{ cycleDuration: 2000 }}
-            shimmerWidth={0.2}
-            bold
-          >
-            {toolCall.name}
-          </BannerShimmerText>
-        ) : (
-          <Text color={accentColor} bold>
-            {toolCall.name}
-          </Text>
-        )}
+        <Text color={accentColor} bold>
+          {toolCall.name}
+        </Text>
         {hasDiffStats && diffMeta && (
           <>
             <Text> </Text>
@@ -908,7 +892,7 @@ const MessageList = memo(function MessageList({
     ]
   );
   const mutedColor = theme.semantic.text.muted;
-  const accentColor = theme.colors.accent;
+  const accentColor = theme.semantic.text.secondary;
   const successColor = theme.colors.success;
   const errorColor = theme.colors.error;
   // Use muted color for thinking/reasoning content (dimmed appearance)
