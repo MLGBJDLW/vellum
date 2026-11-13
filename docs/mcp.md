@@ -175,16 +175,6 @@ Default timeout is 30 seconds.
 2. **Check tool list**: Use `/mcp tools <server-name>`
 3. **Restart server**: Use `/mcp restart <server-name>`
 
-Discovery follows every page of tools, resources, templates, and prompts. Tool
-filters remain active during refresh. If a server repeats a pagination cursor or
-a later page fails, the refresh reports an error and keeps the last complete
-inventory. Failed startup closes its client and transport before reporting the
-connection failure.
-
-Structured tool output is retained even when the server returns no text blocks.
-Server-reported tool errors become failed receipts with the original diagnostics,
-allowing the assistant to correct the request instead of treating it as success.
-
 ### Authentication Errors
 
 1. **Re-authenticate**: Delete cached tokens and restart

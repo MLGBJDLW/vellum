@@ -67,6 +67,9 @@ Local and aggregator availability depends on the configured endpoint.
 - MCP tools and optional language-server tools for software work
 - Environment, system keychain, and encrypted-file credential storage
 - Persistent sessions with context management
+- A scrolling composer that preserves long drafts on narrow terminals
+- Cancellable model discovery, including account-owned OpenAI fine-tunes
+- Complete MCP inventories and structured tool results with accurate error receipts
 - English and Chinese interface text
 
 ## Documentation
@@ -79,6 +82,7 @@ Local and aggregator availability depends on the configured endpoint.
 - [MCP](docs/mcp.md), [LSP](docs/lsp.md), and [terminal UI](docs/tui.md)
 - [Harness source comparison](docs/research/agent-harness.md)
 - [Durable subagents and recovery](docs/research/durable-subagents.md)
+- [MCP discovery and result reliability](docs/research/mcp-reliability-2026-11-13.md)
 
 ## Development
 
