@@ -9,14 +9,13 @@
 
 import type { AgentLevel, CodingMode, SandboxPolicy } from "@vellum/core";
 import { Box, Text } from "ink";
-import { useId, useMemo } from "react";
+import { useId } from "react";
 import { version } from "../../../version.js";
 import { useResilienceOptional } from "../../context/ResilienceContext.js";
 import { useToolTimeoutOptional } from "../../context/ToolTimeoutContext.js";
 import { useTUITranslation } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
 import { Clickable } from "../common/Clickable.js";
-import { GradientText } from "../common/GradientText.js";
 import { ContextProgress, type ContextProgressProps } from "./ContextProgress.js";
 import { ModelIndicator } from "./ModelIndicator.js";
 import type { PersistenceStatusIndicatorProps } from "./PersistenceStatusIndicator.js";
@@ -227,16 +226,13 @@ export function StatusBar({
     ? MODES_CONFIG
     : MODES_CONFIG.filter((modeConfig) => modeConfig.mode === mode);
 
-  // Mode-specific gradient colors
-  const modeGradients: Record<CodingMode, readonly string[]> = useMemo(
-    () => ({
-      orch: [theme.colors.primary, theme.colors.info],
-      vibe: [theme.colors.success, "#34d399", "#6ee7b7"], // Green gradient
-      plan: [theme.colors.info, "#60a5fa", "#93c5fd"], // Blue gradient
-      spec: [theme.colors.primary, "#8b5cf6", "#a78bfa"], // Purple gradient
-    }),
-    [theme.colors]
-  );
+  // A mode and its level are one control, with one theme-owned color.
+  const modeColors: Record<CodingMode, string> = {
+    orch: theme.colors.primary,
+    vibe: theme.colors.success,
+    plan: theme.colors.info,
+    spec: theme.colors.primary,
+  };
 
   const modeSection = (
     <Clickable
@@ -255,7 +251,9 @@ export function StatusBar({
             <Text key={modeConfig.mode}>
               {index > 0 && " "}
               {isActive ? (
-                <GradientText text={modeText} colors={modeGradients[modeConfig.mode]} bold />
+                <Text color={modeColors[modeConfig.mode]} bold>
+                  {modeText}
+                </Text>
               ) : (
                 <Text color={theme.semantic.text.muted} dimColor>
                   {modeText}

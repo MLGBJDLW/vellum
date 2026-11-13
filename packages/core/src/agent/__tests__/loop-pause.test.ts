@@ -121,6 +121,56 @@ describe("AgentLoop pause/resume", () => {
     vi.restoreAllMocks();
   });
 
+  it("does not send the preceding session's transcript or queued steering after a session change", async () => {
+    vi.mocked(LLM.stream).mockReturnValue(
+      createMockStream([
+        { type: "text", content: "Done" },
+        { type: "done", stopReason: "end_turn" },
+      ]) as ReturnType<typeof LLM.stream>
+    );
+    const loop = new AgentLoop(baseConfig);
+    const userMessage = (text: string) => ({
+      id: text,
+      role: "user" as const,
+      parts: [{ type: "text" as const, text }],
+      metadata: { createdAt: Date.now() },
+    });
+    loop.addMessage(userMessage("Previous secret plan"));
+    loop.steer(userMessage("Previous queued instruction"));
+    loop.updateRuntimeConfig({ sessionId: "fresh-session" });
+    loop.addMessage(userMessage("Fresh task"));
+    await loop.run();
+    const sent = JSON.stringify(vi.mocked(LLM.stream).mock.calls[0]?.[0].messages);
+    expect(sent).toContain("Fresh task");
+    expect(sent).not.toContain("Previous");
+    expect(loop.getPendingSteeringCount()).toBe(0);
+  });
+
+  it("sends only the resumed conversation and new prompt to the next model request", async () => {
+    vi.mocked(LLM.stream).mockReturnValue(
+      createMockStream([
+        { type: "text", content: "Done" },
+        { type: "done", stopReason: "end_turn" },
+      ]) as ReturnType<typeof LLM.stream>
+    );
+    const loop = new AgentLoop(baseConfig);
+    const message = (text: string) => ({
+      id: text,
+      role: "user" as const,
+      parts: [{ type: "text" as const, text }],
+      metadata: { createdAt: Date.now() },
+    });
+    loop.addMessage(message("Unrelated previous task"));
+    loop.replaceSession("resumed-session", [message("Restored plan")]);
+    loop.addMessage(message("Continue restored plan"));
+    await loop.run();
+    const sent = JSON.stringify(vi.mocked(LLM.stream).mock.calls[0]?.[0].messages);
+    expect(sent).toContain("Restored plan");
+    expect(sent).toContain("Continue restored plan");
+    expect(sent).not.toContain("Unrelated previous task");
+    expect(loop.getContext().sessionId).toBe("resumed-session");
+  });
+
   // =========================================================================
   // Test 1: should transition to paused state when pause() called during streaming
   // =========================================================================
@@ -160,6 +210,8 @@ describe("AgentLoop pause/resume", () => {
 
       // Wait for streaming to start
       await waitForCondition(() => stateChanges.includes("idle->streaming"));
+
+      expect(() => loop.replaceSession("other-session", [])).toThrow("Finish or stop");
 
       // Now pause while streaming
       loop.pause();

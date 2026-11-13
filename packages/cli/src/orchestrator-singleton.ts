@@ -73,22 +73,38 @@ export interface OrchestratorSingletonConfig {
  */
 export function getOrCreateOrchestrator(config?: OrchestratorSingletonConfig): OrchestratorCore {
   if (!orchestratorInstance) {
-    modeRegistryInstance = createModeRegistry();
-    const subsessionManager = config?.toolContainer
-      ? createSubsessionManager({
-          contextIsolator: createContextIsolator(),
-          permissionInheritance: createPermissionInheritance(),
-          resourceQuotaManager: createResourceQuotaManager(),
-          baseToolRegistry: config.toolContainer,
-        })
-      : undefined;
-    const rootSession = subsessionManager?.create({
-      agentSlug: "orch",
-      level: 0,
-      initialContext: { localMemory: { cwd: config?.toolContainer?.getCwd() } },
-    });
-    orchestratorInstance = createOrchestrator({
-      modeRegistry: modeRegistryInstance,
+    activateOrchestratorRuntime(createOrchestratorRuntime(config));
+  }
+  return orchestratorInstance as OrchestratorCore;
+}
+
+export interface OrchestratorRuntime {
+  orchestrator: OrchestratorCore;
+  modeRegistry: ModeRegistry;
+}
+
+/** Prepare a project runtime without replacing the active CLI singleton. */
+export function createOrchestratorRuntime(
+  config?: OrchestratorSingletonConfig
+): OrchestratorRuntime {
+  const modeRegistry = createModeRegistry();
+  const subsessionManager = config?.toolContainer
+    ? createSubsessionManager({
+        contextIsolator: createContextIsolator(),
+        permissionInheritance: createPermissionInheritance(),
+        resourceQuotaManager: createResourceQuotaManager(),
+        baseToolRegistry: config.toolContainer,
+      })
+    : undefined;
+  const rootSession = subsessionManager?.create({
+    agentSlug: "orch",
+    level: 0,
+    initialContext: { localMemory: { cwd: config?.toolContainer?.getCwd() } },
+  });
+  return {
+    modeRegistry,
+    orchestrator: createOrchestrator({
+      modeRegistry,
       subsessionManager,
       parentSessionId: rootSession?.id,
       maxConcurrentSubagents: config?.maxConcurrentSubagents ?? 3,
@@ -96,9 +112,14 @@ export function getOrCreateOrchestrator(config?: OrchestratorSingletonConfig): O
       persistence: createTaskPersistence(
         join(config?.toolContainer?.getCwd() ?? process.cwd(), ".vellum", "tasks")
       ),
-    });
-  }
-  return orchestratorInstance;
+    }),
+  };
+}
+
+/** Publish an already prepared runtime; its owner handles the previous cleanup. */
+export function activateOrchestratorRuntime(runtime: OrchestratorRuntime | null): void {
+  orchestratorInstance = runtime?.orchestrator ?? null;
+  modeRegistryInstance = runtime?.modeRegistry ?? null;
 }
 
 /**
@@ -150,7 +171,6 @@ export async function resetOrchestrator(): Promise<void> {
   const previous = orchestratorInstance;
   await previous?.shutdown();
   if (orchestratorInstance === previous) {
-    orchestratorInstance = null;
-    modeRegistryInstance = null;
+    activateOrchestratorRuntime(null);
   }
 }

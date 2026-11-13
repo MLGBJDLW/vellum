@@ -36,6 +36,8 @@ import { HighlightedText } from "./HighlightedText.js";
  * Props for the TextInput component.
  */
 export interface TextInputHandle {
+  /** Read the editor value, including keys received before React commits. */
+  readonly getValue: () => string;
   /** Complete an external edit synchronously, before the next framed key. */
   readonly replaceValue: (value: string) => void;
 }
@@ -225,6 +227,7 @@ function TextInputComponent({
   useImperativeHandle(
     ref,
     () => ({
+      getValue: () => valueRef.current,
       replaceValue(next: string) {
         const normalized = normalizeInputValue(next, multiline);
         const replacement = maxLength === undefined ? normalized : normalized.slice(0, maxLength);

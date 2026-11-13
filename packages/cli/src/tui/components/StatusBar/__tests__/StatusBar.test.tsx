@@ -14,14 +14,21 @@
  * @module tui/components/StatusBar/__tests__/StatusBar.test
  */
 
+import { parchmentTheme } from "@vellum/shared";
+import { Text } from "ink";
 import { render } from "ink-testing-library";
 import type React from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/index.js";
 import { ModelIndicator } from "../ModelIndicator.js";
 import { StatusBar } from "../StatusBar.js";
 import { TokenCounter } from "../TokenCounter.js";
 import { TrustModeIndicator } from "../TrustModeIndicator.js";
+
+vi.mock("ink", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ink")>();
+  return { ...actual, Text: vi.fn(actual.Text) };
+});
 
 // =============================================================================
 // Test Helpers
@@ -33,6 +40,19 @@ import { TrustModeIndicator } from "../TrustModeIndicator.js";
 function renderWithTheme(element: React.ReactElement) {
   return render(<ThemeProvider>{element}</ThemeProvider>);
 }
+
+it("keeps the complete parchment mode and agent level in one theme color", () => {
+  vi.mocked(Text).mockClear();
+  renderWithTheme(<StatusBar mode="orch" agentLevel={0} />);
+  expect(Text).toHaveBeenCalledWith(
+    expect.objectContaining({
+      children: "● orch·L0",
+      color: parchmentTheme.colors.primary,
+      bold: true,
+    }),
+    undefined
+  );
+});
 
 // =============================================================================
 // ModelIndicator Tests

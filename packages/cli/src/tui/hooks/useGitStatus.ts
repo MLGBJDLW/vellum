@@ -11,7 +11,7 @@
 
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 const execAsync = promisify(exec);
 
@@ -162,7 +162,7 @@ async function fetchGitStatusAsync(cwd: string): Promise<{
  * }
  * ```
  */
-export function useGitStatus(): GitStatus {
+export function useGitStatus(cwd = process.cwd()): GitStatus {
   const [status, setStatus] = useState<GitStatus>({
     branch: null,
     isDirty: false,
@@ -173,35 +173,36 @@ export function useGitStatus(): GitStatus {
     isGitRepo: false,
   });
 
-  // Track mounted state to prevent state updates after unmount
-  const mountedRef = useRef(true);
-
-  // Async status update function
-  const updateStatusAsync = useCallback(async (cwd: string) => {
-    if (!mountedRef.current) return;
-
-    const result = await fetchGitStatusAsync(cwd);
-
-    if (mountedRef.current) {
-      setStatus({
-        ...result,
-        isLoading: false,
-        isGitRepo: true,
-      });
-    }
-  }, []);
-
   useEffect(() => {
-    mountedRef.current = true;
-    const cwd = process.cwd();
+    let active = true;
+    let fetching = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    setStatus({
+      branch: null,
+      isDirty: false,
+      changedFiles: 0,
+      additions: 0,
+      deletions: 0,
+      isLoading: true,
+      isGitRepo: false,
+    });
+    const updateStatusAsync = async () => {
+      if (!active || fetching) return;
+      fetching = true;
+      try {
+        const result = await fetchGitStatusAsync(cwd);
+        if (active) setStatus({ ...result, isLoading: false, isGitRepo: true });
+      } finally {
+        fetching = false;
+      }
+    };
 
     // Async initialization
     const init = async () => {
       // Early exit if not a git repo
       const isRepo = await isGitRepositoryAsync(cwd);
 
-      if (!mountedRef.current) return;
+      if (!active) return;
 
       if (!isRepo) {
         setStatus({
@@ -217,12 +218,12 @@ export function useGitStatus(): GitStatus {
       }
 
       // Initial fetch
-      await updateStatusAsync(cwd);
+      await updateStatusAsync();
 
       // Poll for updates (only if still mounted)
-      if (mountedRef.current) {
+      if (active) {
         intervalId = setInterval(() => {
-          void updateStatusAsync(cwd);
+          void updateStatusAsync();
         }, REFRESH_INTERVAL_MS);
       }
     };
@@ -230,12 +231,12 @@ export function useGitStatus(): GitStatus {
     void init();
 
     return () => {
-      mountedRef.current = false;
+      active = false;
       if (intervalId) {
         clearInterval(intervalId);
       }
     };
-  }, [updateStatusAsync]);
+  }, [cwd]);
 
   return status;
 }

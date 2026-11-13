@@ -243,13 +243,13 @@ export function toSessionMessage(uiMessage: Message): SessionMessage {
     }
   }
 
-  // Add tool results if present (for tool messages)
-  if (uiMessage.toolCalls && uiMessage.role === "tool") {
+  // Live tool groups and resumed tool rows carry the same execution receipts.
+  if (uiMessage.toolCalls && (uiMessage.role === "tool" || uiMessage.role === "tool_group")) {
     for (const toolCall of uiMessage.toolCalls) {
       parts.push({
         type: "tool_result",
         toolId: toolCall.id,
-        content: toolCall.result ?? "",
+        content: toolCall.result ?? toolCall.error ?? "",
         isError: toolCall.status === "error",
       });
     }

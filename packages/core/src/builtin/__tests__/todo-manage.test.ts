@@ -3,10 +3,11 @@
  */
 
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ToolContext } from "../../types/tool.js";
 import { todoManageTool } from "../todo-manage.js";
+import { getSessionTodoPath } from "../todo-storage.js";
 
 describe("todoManageTool", () => {
   let ctx: ToolContext;
@@ -15,9 +16,9 @@ describe("todoManageTool", () => {
 
   beforeEach(async () => {
     testDir = join(process.cwd(), `.test-todo-${Date.now()}`);
-    todoFilePath = join(testDir, ".vellum", "todos.json");
+    todoFilePath = getSessionTodoPath(testDir, "test-session");
 
-    await mkdir(join(testDir, ".vellum"), { recursive: true });
+    await mkdir(dirname(todoFilePath), { recursive: true });
 
     ctx = {
       workingDir: testDir,
@@ -320,10 +321,7 @@ describe("todoManageTool", () => {
     it("should check write permission for add action", async () => {
       await todoManageTool.execute({ action: "add", text: "test", filter: "all" }, ctx);
 
-      expect(ctx.checkPermission).toHaveBeenCalledWith(
-        "write",
-        expect.stringContaining("todos.json")
-      );
+      expect(ctx.checkPermission).toHaveBeenCalledWith("write", todoFilePath);
     });
 
     it("should not check permission for list action", async () => {

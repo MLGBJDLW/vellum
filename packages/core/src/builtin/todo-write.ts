@@ -8,13 +8,14 @@
  * @module builtin/todo-write
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { z } from "zod";
 import { defineTool, fail, ok } from "../types/index.js";
-
-/** Path to the TODO storage file relative to working directory */
-const TODO_FILE_PATH = ".vellum/todos.json";
+import {
+  getSessionTodoPath,
+  type StoredSessionTodo,
+  saveSessionTodos,
+  withSessionTodoMutation,
+} from "./todo-storage.js";
 
 /**
  * Status values for todo items (matches Cursor pattern)
@@ -67,20 +68,7 @@ export type TodoWriteInput = z.input<typeof todoWriteParamsSchema>;
  * Internal storage format for todo items
  * Extends TodoWriteItem with timestamps
  */
-export interface StoredTodoItem extends TodoWriteItem {
-  /** ISO timestamp when the todo was created */
-  createdAt: string;
-  /** ISO timestamp when the todo was last updated */
-  updatedAt: string;
-  /** ISO timestamp when the todo was completed (if applicable) */
-  completedAt?: string;
-}
-
-/** Internal TODO storage structure */
-interface TodoStorage {
-  /** Array of stored TODO items */
-  items: StoredTodoItem[];
-}
+export type StoredTodoItem = StoredSessionTodo;
 
 /** Output type for todo_write tool */
 export interface TodoWriteOutput {
@@ -94,36 +82,6 @@ export interface TodoWriteOutput {
   todos: StoredTodoItem[];
   /** Whether merge mode was used */
   merged: boolean;
-}
-
-/**
- * Load TODOs from storage file
- */
-async function loadTodos(filePath: string): Promise<TodoStorage> {
-  try {
-    const content = await readFile(filePath, { encoding: "utf-8" });
-    const data = JSON.parse(content) as TodoStorage;
-    // Validate structure
-    if (!Array.isArray(data.items)) {
-      return { items: [] };
-    }
-    return data;
-  } catch {
-    // File doesn't exist or is invalid - return empty storage
-    return { items: [] };
-  }
-}
-
-/**
- * Save TODOs to storage file
- */
-async function saveTodos(filePath: string, storage: TodoStorage): Promise<void> {
-  // Ensure directory exists
-  const dir = dirname(filePath);
-  await mkdir(dir, { recursive: true });
-
-  // Write with pretty formatting for readability
-  await writeFile(filePath, JSON.stringify(storage, null, 2), { encoding: "utf-8" });
 }
 
 /**
@@ -173,7 +131,7 @@ function mergeTodos(
         description: item.description,
         updatedAt: now,
         // Set completedAt if transitioning to completed
-        completedAt: nowCompleted && !wasCompleted ? now : existingItem.completedAt,
+        completedAt: nowCompleted ? (!wasCompleted ? now : existingItem.completedAt) : undefined,
       });
       updated++;
     } else {
@@ -264,7 +222,7 @@ export const todoWriteTool = defineTool({
 
 Best Practice (Cursor pattern):
 - Before starting new work, use todo_write(merge=true) to mark completed tasks and add new ones
-- This maintains task history and allows tracking progress across sessions`,
+- Progress is preserved when resuming this session; other sessions keep separate plans`,
   parameters: todoWriteParamsSchema,
   kind: "write",
   category: "productivity",
@@ -278,7 +236,7 @@ Best Practice (Cursor pattern):
     const { todos, merge = false } = input;
 
     // Resolve file path
-    const todoFilePath = join(ctx.workingDir, TODO_FILE_PATH);
+    const todoFilePath = getSessionTodoPath(ctx.workingDir, ctx.sessionId);
 
     // Check permission
     const hasPermission = await ctx.checkPermission("write", todoFilePath);
@@ -287,27 +245,32 @@ Best Practice (Cursor pattern):
     }
 
     try {
-      let result: { items: StoredTodoItem[]; added: number; updated: number };
+      return await withSessionTodoMutation(ctx.workingDir, ctx.sessionId, async (storage) => {
+        if (ctx.abortSignal.aborted) return fail("Operation was cancelled");
+        let result: { items: StoredTodoItem[]; added: number; updated: number };
 
-      if (merge) {
-        // Merge mode: load existing and merge
-        const storage = await loadTodos(todoFilePath);
-        result = mergeTodos(storage.items, todos);
-      } else {
-        // Replace mode: just convert incoming todos
-        const items = replaceTodos(todos);
-        result = { items, added: items.length, updated: 0 };
-      }
+        if (merge) {
+          // Merge mode: load existing and merge
+          result = mergeTodos(storage.items, todos);
+        } else {
+          // Replace mode: just convert incoming todos
+          const items = replaceTodos(todos);
+          result = { items, added: items.length, updated: 0 };
+        }
 
-      // Save the result
-      await saveTodos(todoFilePath, { items: result.items });
+        // Save the result
+        await saveSessionTodos(ctx.workingDir, ctx.sessionId, {
+          nextId: merge ? storage.nextId : 1,
+          items: result.items,
+        });
 
-      return ok({
-        added: result.added,
-        updated: result.updated,
-        total: result.items.length,
-        todos: result.items,
-        merged: merge,
+        return ok({
+          added: result.added,
+          updated: result.updated,
+          total: result.items.length,
+          todos: result.items,
+          merged: merge,
+        });
       });
     } catch (error) {
       if (error instanceof Error) {

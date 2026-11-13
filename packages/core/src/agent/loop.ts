@@ -3,6 +3,8 @@
 // ============================================
 
 import { EventEmitter } from "node:events";
+import { realpath, stat } from "node:fs/promises";
+import { resolve } from "node:path";
 import type { ReasoningEffort, StreamEvent, ToolDefinition } from "@vellum/provider";
 import type { TokenUsage } from "@vellum/shared";
 import type { DelegationUpdate } from "../agents/orchestrator/checkpoint.js";
@@ -102,6 +104,17 @@ export interface AgentSessionBudget {
 }
 
 export interface AgentLoopConfig {
+  /** Prepare replacement project services without changing the live workspace. */
+  prepareWorkspace?: (cwd: string) => Promise<{
+    promptBuilder: PromptBuilder;
+    tools: ToolDefinition[];
+    toolExecutor: ToolExecutor;
+    orchestrator: OrchestratorCore;
+    /** Commit must preserve the previous runtime if it fails. */
+    commit: () => Promise<void>;
+    /** Dispose an uncommitted replacement. */
+    dispose: () => Promise<void>;
+  }>;
   /** Persist receipt-complete history before advancing to another model turn. */
   onMessagesCheckpoint?: (messages: SessionMessage[], iterations: number) => Promise<void>;
   /** Session identifier */
@@ -287,6 +300,7 @@ export interface AgentLoopConfig {
  * Events emitted by the AgentLoop.
  */
 export interface AgentLoopEvents {
+  workspaceChanged: [cwd: string];
   /** Emitted when state changes */
   stateChange: [from: AgentState, to: AgentState, context: StateContext];
   /** Emitted when an error occurs */
@@ -430,7 +444,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private lastTurnUsage: TokenUsage | null = null;
 
   /** Tool executor instance (T014) */
-  private readonly toolExecutor: ToolExecutor;
+  private toolExecutor: ToolExecutor;
 
   /** Pending tool calls awaiting permission (T015) */
   private pendingPermission: {
@@ -472,6 +486,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
   /** Skills integration for loading, matching, and prompt building (T053) */
   private readonly skillsIntegration: AgentSkillsIntegration;
+  private workspaceSwitchPending = false;
+  private agentsInitialization?: Promise<void>;
 
   /** ModeManager for coding mode integration (T057) */
   private readonly modeManager?: import("./mode-manager.js").ModeManager;
@@ -644,7 +660,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         allowAllIfNoConfig: true, // Don't break existing behavior if no AGENTS.md found
       });
       // Initialize asynchronously - errors are logged but don't fail construction
-      this.agentsIntegration
+      this.agentsInitialization = this.agentsIntegration
         .initialize(config.cwd)
         .then(() => {
           this.logger?.debug("AGENTS.md integration initialized", {
@@ -787,9 +803,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     return this.config;
   }
 
-  /** Update the existing idle runtime without discarding history or budgets. */
+  /** Update an idle runtime; a different session ID starts an isolated conversation. */
   updateRuntimeConfig(
-    update: Partial<Pick<AgentLoopConfig, "providerType" | "model" | "mode" | "promptBuilder">>
+    update: Partial<
+      Pick<AgentLoopConfig, "providerType" | "model" | "mode" | "promptBuilder" | "sessionId">
+    >
   ): void {
     if (this.activeRun || !["idle", "terminated", "recovering"].includes(this.state)) {
       throw new Error(
@@ -800,11 +818,130 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     const model = update.model ?? this.config.model;
     if (!providerType.trim() || !model.trim())
       throw new Error("Provider and model must not be empty");
+    if (update.sessionId !== undefined && update.sessionId !== this.config.sessionId) {
+      this.replaceSession(update.sessionId, []);
+    }
     if (model !== this.config.model || providerType !== this.config.providerType) {
       this.contextIntegration?.updateModel?.(model, providerType);
       this.costManager.getIntegration()?.setModel(providerType, model);
     }
     Object.assign(this.config, update, { providerType, model });
+    if (update.sessionId) this.context.sessionId = update.sessionId;
+  }
+
+  getWorkingDirectory(): string {
+    return this.config.cwd;
+  }
+
+  getRuntimeSessionId(): string {
+    return this.config.sessionId;
+  }
+
+  /** Replace an idle conversation atomically; changing its ID alone must never retain history. */
+  replaceSession(sessionId: string, messages: readonly SessionMessage[]): void {
+    if (!sessionId.trim()) throw new Error("Session ID must not be empty");
+    if (this.activeRun || !["idle", "terminated", "recovering"].includes(this.state)) {
+      throw new Error("Finish or stop the current task before switching sessions");
+    }
+    this.clearDelegations();
+    this.config.sessionId = sessionId;
+    this.messages = [...messages];
+    this.pendingSteering = [];
+    this.context = createStateContext(sessionId);
+    this.cancellation = new CancellationToken();
+    this.abortController = null;
+    this.lastTurnUsage = null;
+    this.currentRequestId = undefined;
+    this.llmRequestStartTime = undefined;
+    this.streamRequestActive = false;
+    this.steeringInterrupted = false;
+    this.nextIterationRequested = false;
+    this.lastTruncatedText = "";
+    this.completionAttempted = false;
+    this.budgetStopReason = undefined;
+    this.costApprovalDenied = false;
+    this.pauseSignal.reset();
+    this.streamHandler.resetState();
+    this.streamProcessor?.reset();
+    this.contextIntegration?.reset();
+    this.contextIntegration?.updateModel?.(this.config.model, this.config.providerType);
+    this.skillsIntegration.setActiveSkills([]);
+    this.resetIterationCount();
+    this.resetTerminationTracking();
+    this.resetRetryCounter();
+    this.resetAutoApprovalCounters();
+    // Preserve cumulative cost/request guardrails; a session switch cannot bypass them.
+    if (this.state !== "idle") this.transitionTo("idle");
+    this.emit("steeringChanged", 0);
+  }
+
+  /** Called only by an isolated parent tool invocation, after normal permission checks. */
+  private async switchWorkspace(path: string, signal: AbortSignal): Promise<string> {
+    if (!this.config.prepareWorkspace)
+      throw new Error("This runtime does not support workspace switching");
+    if (this.config.parentSessionId || (this.config.agentLevel ?? 0) > 0)
+      throw new Error("Only the primary agent can switch workspaces");
+    if (this.workspaceSwitchPending) throw new Error("A workspace switch is already in progress");
+    if (
+      this.getDelegations().some((entry) => ["queued", "running", "waiting"].includes(entry.status))
+    )
+      throw new Error("Finish or stop delegated work before switching workspaces");
+    this.workspaceSwitchPending = true;
+    let replacement:
+      | Awaited<ReturnType<NonNullable<AgentLoopConfig["prepareWorkspace"]>>>
+      | undefined;
+    let agents: SessionAgentsIntegration | undefined;
+    let committed = false;
+    try {
+      const cwd = await realpath(resolve(this.config.cwd, path));
+      if (!(await stat(cwd)).isDirectory())
+        throw new Error("Workspace must be an existing directory");
+      if (cwd === this.config.cwd) return cwd;
+      await this.agentsInitialization;
+      if (this.config.enableAgentsIntegration) {
+        agents = new SessionAgentsIntegration({ allowAllIfNoConfig: true });
+        await agents.initialize(cwd);
+      }
+      replacement = await this.config.prepareWorkspace(cwd);
+      if (this.cancellation.isCancelled || signal.aborted)
+        throw new Error("Workspace switch cancelled");
+      await replacement.commit();
+      committed = true;
+      const oldAgents = this.agentsIntegration;
+      this.agentsIntegration = agents;
+      this.config.cwd = cwd;
+      this.config.projectRoot = cwd;
+      this.config.promptBuilder = replacement.promptBuilder;
+      this.config.tools = replacement.tools;
+      this.config.orchestrator = replacement.orchestrator;
+      this.config.toolExecutor = replacement.toolExecutor;
+      this.toolExecutor = replacement.toolExecutor;
+      this.delegations.clear();
+      if (this.config.enableEvidencePack !== false) {
+        this.evidencePackSystem = new EvidencePackSystem({
+          workspaceRoot: cwd,
+          contextWindow: 128000,
+          tokenBudget: 4000,
+        });
+      }
+      // Wait for the previous skill initialization before publishing the new project manager.
+      await this.skillsIntegration
+        .setWorkspace(cwd)
+        .catch((error) => this.logger?.warn("Failed to reload workspace skills", { error }));
+      await oldAgents
+        ?.dispose()
+        .catch((error) =>
+          this.logger?.warn("Failed to dispose previous project watcher", { error })
+        );
+      this.emit("workspaceChanged", cwd);
+      return cwd;
+    } finally {
+      if (!committed) {
+        await agents?.dispose().catch(() => {});
+        await replacement?.dispose().catch(() => {});
+      }
+      this.workspaceSwitchPending = false;
+    }
   }
 
   setModel(providerType: string, model: string): void {
@@ -1021,6 +1158,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       ("codingMode" in this.config.mode ? this.config.mode.codingMode : undefined);
     const configuredTools = this.config.tools.filter(
       (tool) =>
+        (tool.name !== "switch_workspace" ||
+          (!!this.config.prepareWorkspace &&
+            !this.config.parentSessionId &&
+            (this.config.agentLevel ?? 0) === 0)) &&
         (tool.name !== "attempt_completion" || currentMode === "orch") &&
         (tool.name !== "bash" || process.platform !== "win32") &&
         (tool.name !== "ask_followup_question" || this.config.interactive === true)
@@ -2112,7 +2253,16 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     },
     allowCompletion = true
   ): Promise<SingleToolCallResult> {
-    if (call.name === "attempt_completion" && !allowCompletion) {
+    if (call.name.toLowerCase() === "switch_workspace" && !allowCompletion) {
+      return {
+        id: call.id,
+        name: call.name,
+        result: "Call switch_workspace alone, after all other tools have finished.",
+        isError: true,
+        permissionBlocked: false,
+      };
+    }
+    if (call.name.toLowerCase() === "attempt_completion" && !allowCompletion) {
       return {
         id: call.id,
         name: call.name,
@@ -2583,6 +2733,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
     return {
       workingDir: this.config.cwd,
+      switchWorkspace: this.config.prepareWorkspace
+        ? (path, signal) => this.switchWorkspace(path, signal)
+        : undefined,
       sessionId: this.config.sessionId,
       messageId: this.context.messageId,
       callId,

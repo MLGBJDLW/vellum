@@ -1035,12 +1035,10 @@ describe("Error Recovery", () => {
     agentLoop.simulateComplete();
     await waitTicks(2);
 
-    // Try save - the hook catches errors internally
+    // Explicit callers receive failure so they cannot leave the session unsaved.
     if (sessionAdapter) {
-      await sessionAdapter.saveSession();
+      await expect(sessionAdapter.saveSession()).rejects.toThrow("Timeout");
     }
-    // Wait for the timeout to complete
-    await new Promise((resolve) => setTimeout(resolve, 150));
 
     // Verify save was attempted
     expect(timeoutStorage.save).toHaveBeenCalled();

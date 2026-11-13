@@ -23,6 +23,7 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { LspHub, loadLspConfig, ServerInstaller } from "@vellum/lsp";
 import chalk from "chalk";
+import { getWorkspaceLspHub } from "../lsp-runtime.js";
 import type { CommandContext, CommandResult, SlashCommand } from "./types.js";
 import { error, pending, success } from "./types.js";
 
@@ -164,20 +165,17 @@ const LSP_SERVERS: Record<
 // Module State
 // =============================================================================
 
-let hubInstance: LspHub | null = null;
-
 /**
  * Get or create LspHub instance
  */
 function getHub(workspaceRoot?: string): LspHub {
+  const activeHub = getWorkspaceLspHub();
+  if (activeHub) return activeHub;
   const root = workspaceRoot ?? process.cwd();
-  if (!hubInstance) {
-    hubInstance = LspHub.getInstance({
-      getGlobalConfigPath: async () => join(homedir(), ".vellum", "lsp.json"),
-      getProjectConfigPath: async () => join(resolve(root), ".vellum", "lsp.json"),
-    });
-  }
-  return hubInstance;
+  return LspHub.getInstance({
+    getGlobalConfigPath: async () => join(homedir(), ".vellum", "lsp.json"),
+    getProjectConfigPath: async () => join(resolve(root), ".vellum", "lsp.json"),
+  });
 }
 
 // =============================================================================
@@ -479,8 +477,7 @@ async function handleStop(ctx: CommandContext, target?: string): Promise<Command
     await hub.initialize();
 
     if (target.toLowerCase() === "all") {
-      await hub.dispose();
-      hubInstance = null;
+      for (const server of hub.getServers()) await hub.stopServer(server.id);
       return success(chalk.green("✓ All servers stopped"));
     }
 
@@ -746,7 +743,7 @@ async function handleUpdate(ctx: CommandContext, _target?: string): Promise<Comm
 
         for (const server of servers) {
           const info = LSP_SERVERS[server.id];
-          if (!info || info.method !== "npm") continue;
+          if (info?.method !== "npm") continue;
 
           const pkgName = info.package;
           const outdated = outdatedInfo[pkgName];

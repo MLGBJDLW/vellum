@@ -20,6 +20,7 @@ import {
   type ToolRegistryLike,
   unregisterLspTools,
 } from "@vellum/lsp";
+import { getWorkspaceLspHub, subscribeWorkspaceLsp } from "../lsp-runtime.js";
 
 // =============================================================================
 // Types
@@ -278,7 +279,9 @@ export class LspIntegrationManager extends EventEmitter {
    * Get the current integration state
    */
   getState(): LspIntegrationState {
-    if (!this.hub || !this.initialized) {
+    const hub = this.getHub();
+    const ownedByWorkspace = hub !== null && hub === getWorkspaceLspHub();
+    if (!hub || (!this.initialized && !ownedByWorkspace)) {
       return {
         initialized: false,
         runningServers: [],
@@ -286,13 +289,13 @@ export class LspIntegrationManager extends EventEmitter {
       };
     }
 
-    const servers = this.hub.getServers();
+    const servers = hub.getServers();
     const runningServers = servers.filter((s) => s.status.status === "running").map((s) => s.id);
 
     return {
       initialized: true,
       runningServers,
-      toolsRegistered: this.toolRegistry !== null,
+      toolsRegistered: ownedByWorkspace || this.toolRegistry !== null,
     };
   }
 
@@ -302,7 +305,7 @@ export class LspIntegrationManager extends EventEmitter {
    * @returns LspHub instance or null if not initialized
    */
   getHub(): LspHub | null {
-    return this.hub;
+    return getWorkspaceLspHub() ?? this.hub;
   }
 
   /**
@@ -311,10 +314,11 @@ export class LspIntegrationManager extends EventEmitter {
    * @returns Array of LSP tool definitions, or empty array if not initialized
    */
   getTools(): unknown[] {
-    if (!this.hub) {
+    const hub = this.getHub();
+    if (!hub) {
       return [];
     }
-    return createLspTools(this.hub);
+    return createLspTools(hub);
   }
 
   /**
@@ -325,12 +329,13 @@ export class LspIntegrationManager extends EventEmitter {
    * @returns Whether the server started successfully
    */
   async startServer(serverId: string, workspaceRoot?: string): Promise<boolean> {
-    if (!this.hub) {
+    const hub = this.getHub();
+    if (!hub) {
       return false;
     }
 
     try {
-      await this.hub.startServer(serverId, workspaceRoot);
+      await hub.startServer(serverId, workspaceRoot);
       return true;
     } catch (error) {
       this.options.logger?.warn?.(`Failed to start LSP server: ${serverId}`, {
@@ -347,12 +352,13 @@ export class LspIntegrationManager extends EventEmitter {
    * @returns Whether the server stopped successfully
    */
   async stopServer(serverId: string): Promise<boolean> {
-    if (!this.hub) {
+    const hub = this.getHub();
+    if (!hub) {
       return false;
     }
 
     try {
-      await this.hub.stopServer(serverId);
+      await hub.stopServer(serverId);
       return true;
     } catch (error) {
       this.options.logger?.warn?.(`Failed to stop LSP server: ${serverId}`, {
@@ -393,6 +399,7 @@ export class LspIntegrationManager extends EventEmitter {
 // =============================================================================
 
 let globalManager: LspIntegrationManager | null = null;
+let unsubscribeWorkspace: (() => void) | null = null;
 
 /**
  * Get or create the global LSP integration manager
@@ -400,6 +407,7 @@ let globalManager: LspIntegrationManager | null = null;
 export function getLspManager(): LspIntegrationManager {
   if (!globalManager) {
     globalManager = new LspIntegrationManager();
+    unsubscribeWorkspace = subscribeWorkspaceLsp(() => globalManager?.emitStateChanged());
   }
   return globalManager;
 }
@@ -420,6 +428,8 @@ export async function initializeLsp(
  * Dispose of the global LSP manager
  */
 export async function disposeLsp(): Promise<void> {
+  unsubscribeWorkspace?.();
+  unsubscribeWorkspace = null;
   if (globalManager) {
     await globalManager.dispose();
     globalManager = null;

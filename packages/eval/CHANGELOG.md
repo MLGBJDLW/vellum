@@ -1,5 +1,12 @@
 # @vellum/eval
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vellum/core@0.4.1
+
 ## 0.1.6
 
 ### Patch Changes

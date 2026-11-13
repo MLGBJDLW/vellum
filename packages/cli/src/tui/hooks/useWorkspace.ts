@@ -44,13 +44,12 @@ export interface WorkspaceInfo {
  * }
  * ```
  */
-export function useWorkspace(): WorkspaceInfo {
+export function useWorkspace(cwd = process.cwd()): WorkspaceInfo {
   return useMemo(() => {
-    const cwd = process.cwd();
     const name = path.basename(cwd);
     return {
       name,
       path: cwd,
     };
-  }, []);
+  }, [cwd]);
 }

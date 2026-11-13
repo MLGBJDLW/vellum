@@ -85,16 +85,13 @@ export {
   LoadingIndicator,
   type LoadingIndicatorProps,
   SPINNER_FRAMES,
-  SPINNER_STYLES,
   Spinner,
   type SpinnerProps,
-  type SpinnerType,
 } from "./Spinner.js";
 // StreamingIndicator (Context-aware streaming phase indicator)
 export {
   PHASE_ICONS,
   PHASE_LABELS,
-  PHASE_SPINNER_STYLES,
   StreamingIndicator,
   type StreamingIndicatorProps,
   type StreamingPhase,

@@ -21,6 +21,7 @@ import {
 } from "../hooks/useSidebarPanelData.js";
 
 function Harness(props: {
+  readonly scopeKey?: string;
   readonly sidebarVisible: boolean;
   readonly sidebarContent: "todo" | "memory" | "tools" | "mcp";
   readonly executions: readonly ToolExecution[];
@@ -28,6 +29,7 @@ function Harness(props: {
   readonly loadMemories: () => Promise<readonly MemoryEntry[]>;
 }): React.JSX.Element {
   const { todoItems, memoryEntries } = useSidebarPanelData({
+    scopeKey: props.scopeKey,
     sidebarVisible: props.sidebarVisible,
     sidebarContent: props.sidebarContent,
     executions: props.executions,
@@ -39,6 +41,58 @@ function Harness(props: {
 }
 
 describe("sidebar panel data", () => {
+  it("clears the old plan as soon as another session is selected", async () => {
+    const loadMemories = vi.fn().mockResolvedValue([]);
+    const loadOld = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 1, title: "Old plan", status: "pending", createdAt: "2026-01-01T00:00:00Z" },
+      ]);
+    let finishNew!: (items: readonly TodoItemData[]) => void;
+    const loadNew = () =>
+      new Promise<readonly TodoItemData[]>((resolve) => {
+        finishNew = resolve;
+      });
+    const props = {
+      sidebarVisible: false,
+      sidebarContent: "tools" as const,
+      executions: [],
+      loadMemories,
+    };
+    const { lastFrame, rerender, unmount } = render(
+      <Harness {...props} scopeKey="old" loadTodos={loadOld} />
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("todos:1"));
+    rerender(<Harness {...props} scopeKey="new" loadTodos={loadNew} />);
+    await vi.waitFor(() => expect(lastFrame()).toContain("todos:0"));
+    finishNew([]);
+    unmount();
+  });
+
+  it("ignores a previous session's late task refresh", async () => {
+    let finishOld!: (items: readonly TodoItemData[]) => void;
+    const loadOld = () =>
+      new Promise<readonly TodoItemData[]>((resolve) => {
+        finishOld = resolve;
+      });
+    const loadNew = vi.fn().mockResolvedValue([]);
+    const props = {
+      sidebarVisible: false,
+      sidebarContent: "tools" as const,
+      executions: [],
+      loadMemories: vi.fn().mockResolvedValue([]),
+    };
+    const { lastFrame, rerender, unmount } = render(
+      <Harness {...props} scopeKey="old" loadTodos={loadOld} />
+    );
+    rerender(<Harness {...props} scopeKey="new" loadTodos={loadNew} />);
+    await vi.waitFor(() => expect(loadNew).toHaveBeenCalled());
+    finishOld([{ id: 1, title: "Old plan", status: "pending", createdAt: "2026-01-01T00:00:00Z" }]);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(lastFrame()).toContain("todos:0");
+    unmount();
+  });
+
   it("should identify the last completed tool execution id", () => {
     const executions: ToolExecution[] = [
       { id: "1", toolName: "read_file", params: {}, status: "running" },

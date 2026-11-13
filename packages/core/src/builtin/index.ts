@@ -258,6 +258,7 @@ export {
   smartEditParamsSchema,
   smartEditTool,
 } from "./smart-edit-tool.js";
+export { switchWorkspaceTool } from "./switch-workspace.js";
 // Productivity tools
 export {
   type TodoItem,
@@ -266,6 +267,7 @@ export {
   todoManageParamsSchema,
   todoManageTool,
 } from "./todo-manage.js";
+export { getSessionTodoPath, loadSessionTodos, type StoredSessionTodo } from "./todo-storage.js";
 export {
   type StoredTodoItem,
   type TodoStatus,
@@ -330,6 +332,7 @@ import type { ToolRegistry } from "../tool/registry.js";
  * - Agent delegation: delegate_agent
  */
 export const ALL_BUILTIN_TOOLS = [
+  switchWorkspaceTool,
   applyDiffTool,
   applyPatchTool,
   askFollowupQuestionTool,
@@ -422,6 +425,7 @@ import { searchFilesTool } from "./search-files.js";
 import { shellTool } from "./shell.js";
 import { skillTool } from "./skill-tool.js";
 import { smartEditTool } from "./smart-edit-tool.js";
+import { switchWorkspaceTool } from "./switch-workspace.js";
 import { todoManageTool } from "./todo-manage.js";
 import { todoWriteTool } from "./todo-write.js";
 import { webFetchTool } from "./web-fetch.js";

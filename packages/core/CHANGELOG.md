@@ -1,5 +1,11 @@
 # @vellum/core
 
+## 0.4.1
+
+### Patch Changes
+
+- Isolate task plans and transcript loading by session, submit complete slash commands on the first Enter, and preserve new input while commands run. Unify footer colors and tool activity around theme-aware Vellum ink motion with reduced-motion and ASCII support. Add coordinated workspace switching for the interactive primary agent, keeping project services, tools and the workspace header synchronized without restarting the conversation.
+
 ## 0.4.0
 
 ### Minor Changes

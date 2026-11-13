@@ -126,6 +126,15 @@ export class AgentSkillsIntegration {
     await this.skillManagerInitPromise;
   }
 
+  async setWorkspace(cwd: string): Promise<void> {
+    await this.skillManagerInitPromise;
+    this.config.cwd = cwd;
+    this.activeSkills = [];
+    this.skillManager = undefined;
+    setSkillManager(null);
+    await this.initialize();
+  }
+
   /**
    * Ensure skill manager is initialized before use.
    * Awaits the init promise if still pending.

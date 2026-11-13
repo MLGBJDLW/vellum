@@ -23,14 +23,10 @@ import type { ToolCallInfo } from "../../context/MessagesContext.js";
 import { useCollapsible } from "../../hooks/useCollapsible.js";
 import type { ThinkingDisplayMode } from "../../i18n/index.js";
 import { useTheme } from "../../theme/index.js";
-import { BannerShimmerText } from "../Banner/ShimmerText.js";
 import { Clickable } from "../common/Clickable.js";
-import { SPINNER_STYLES, Spinner } from "../common/Spinner.js";
+import { Spinner } from "../common/Spinner.js";
 import { StreamingText } from "./StreamingText.js";
 import { createThinkingActivityTracker } from "./thinkingActivity.js";
-
-// Spinner frames for tool call status
-const TOOL_SPINNER_FRAMES = ["-", "\\", "|", "/"];
 
 // =============================================================================
 // Inline Formatting for Thinking Content
@@ -306,10 +302,10 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   }, [isCollapsed, content, onHeightChange]);
 
   // Theme colors
-  const thinkingColor = theme.colors.warning ?? "yellow";
+  const thinkingColor = theme.semantic.text.primary;
   const mutedColor = theme.semantic.text.muted;
-  const borderColor = theme.colors.warning ?? "yellow";
-  const accentColor = theme.colors.accent ?? "cyan";
+  const borderColor = theme.colors.primary;
+  const accentColor = theme.semantic.text.secondary;
   const successColor = theme.colors.success ?? "green";
   const errorColor = theme.colors.error ?? "red";
 
@@ -397,9 +393,9 @@ export const ThinkingBlock = memo(function ThinkingBlock({
           <Text wrap="truncate-end">
             <Text color={thinkingColor}>{isCollapsed ? "▸ " : "▾ "}</Text>
             {isStreaming ? (
-              <BannerShimmerText baseColor={thinkingColor} highlightColor="#FFD700" enabled>
-                Thinking
-              </BannerShimmerText>
+              <Text color={thinkingColor}>
+                <Spinner /> Thinking
+              </Text>
             ) : (
               <Text color={thinkingColor}>Thinking</Text>
             )}
@@ -437,7 +433,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
             switch (toolCall.status) {
               case "running":
               case "pending":
-                statusIcon = <Spinner frames={TOOL_SPINNER_FRAMES} color={accentColor} />;
+                statusIcon = <Spinner />;
                 statusColor = accentColor;
                 break;
               case "completed":
@@ -455,7 +451,9 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 
             return (
               <Box key={toolCall.id} flexDirection="row">
-                <Text color={statusColor}>{statusIcon}</Text>
+                <Box width={3} flexShrink={0}>
+                  <Text color={statusColor}>{statusIcon}</Text>
+                </Box>
                 <Text> </Text>
                 <Text color={accentColor} bold>
                   {toolCall.name}
@@ -509,7 +507,7 @@ export function CompactThinkingIndicator({
   charCount,
 }: CompactThinkingIndicatorProps): React.JSX.Element {
   const { theme } = useTheme();
-  const thinkingColor = theme.colors.warning ?? "yellow";
+  const thinkingColor = theme.semantic.text.primary;
 
   const parts: string[] = ["[...]"];
 
@@ -529,7 +527,7 @@ export function CompactThinkingIndicator({
     <Box flexDirection="row" alignItems="center">
       {isStreaming && (
         <>
-          <Spinner color={thinkingColor} frames={SPINNER_STYLES.dots} />
+          <Spinner />
           <Text> </Text>
         </>
       )}

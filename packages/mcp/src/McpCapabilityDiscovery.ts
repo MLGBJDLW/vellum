@@ -122,7 +122,7 @@ export interface CapabilityDiscoveryOptions {
 export class McpCapabilityDiscovery {
   private readonly connectionProvider: ConnectionProvider;
   private readonly toolRegistry?: ToolRegistry;
-  private readonly toolExecutor?: ToolExecutor;
+  private toolExecutor?: ToolExecutor;
   private readonly emitEvent?: CapabilityDiscoveryOptions["emitEvent"];
 
   constructor(options: CapabilityDiscoveryOptions) {
@@ -130,6 +130,14 @@ export class McpCapabilityDiscovery {
     this.toolRegistry = options.toolRegistry;
     this.toolExecutor = options.toolExecutor;
     this.emitEvent = options.emitEvent;
+  }
+
+  /** Keep live connections while moving tool execution to a replacement runtime. */
+  rebindToolExecutor(executor?: ToolExecutor): void {
+    this.toolExecutor = executor;
+    for (const tool of this.toolRegistry?.listMcpTools() ?? []) {
+      executor?.registerTool(tool);
+    }
   }
 
   // ============================================
