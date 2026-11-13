@@ -741,6 +741,73 @@ describe("current provider contracts", () => {
 });
 
 describe("audited model catalog", () => {
+  it("keeps account-owned fine-tunes selectable without borrowing base-model prices or lifecycle", () => {
+    const id = "ft:gpt-4.1-2025-04-14:organization:custom:id";
+    const models = normalizeDiscoveredModels("openai", [
+      { id },
+      { id: "ft:gpt-4o-audio-preview:organization:custom:id" },
+      { id: "ft:whisper-1:organization:custom:id" },
+      { id: "ft:gpt-4.1-2025-04-14:organization:retired:id", lifecycle: "retired" },
+    ]);
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({ id, name: id, supportsTools: true, deprecated: false });
+    expect(models[0]?.inputPrice).toBeUndefined();
+    expect(models[0]?.outputPrice).toBeUndefined();
+    expect(models[0]?.aliases).toBeUndefined();
+    expect(models[0]?.contextWindow).toBe(getModelInfo("openai", "gpt-4.1").contextWindow);
+  });
+
+  it("keeps missing gateway prices unknown while accepting explicitly free models", () => {
+    const [unknown, free] = normalizeDiscoveredModels("openrouter", [
+      { id: "vendor/unknown", pricing: { prompt: "", completion: "  ", input_cache_read: " " } },
+      { id: "vendor/free", pricing: { prompt: "0", completion: 0 } },
+    ]);
+    expect(unknown?.inputPrice).toBeUndefined();
+    expect(unknown?.outputPrice).toBeUndefined();
+    expect(unknown?.supportsPromptCache).toBe(false);
+    expect(free).toMatchObject({ inputPrice: 0, outputPrice: 0 });
+  });
+
+  it("uses xAI discovery metadata and excludes sparse media generation routes", () => {
+    const models = normalizeDiscoveredModels("xai", [
+      {
+        id: "grok-discovery-fixture",
+        input_modalities: ["text", "image"],
+        output_modalities: ["text"],
+        prompt_text_token_price: 12500,
+        completion_text_token_price: 25000,
+        cached_prompt_text_token_price: 2000,
+        image_price: null,
+        capabilities: {
+          reasoning_effort: ["low", "high"],
+          default_reasoning_effort: "high",
+        },
+      },
+      { id: "grok-imagine-image" },
+      { id: "grok-imagine-video" },
+      { id: "grok-2-image-1212" },
+      { id: "future-image", image_price: 200000000 },
+      { id: "future-video", output_modalities: ["video"] },
+    ]);
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({
+      supportsVision: true,
+      supportsReasoning: true,
+      reasoningEfforts: ["low", "high"],
+      defaultReasoningEffort: "high",
+      inputPrice: 1.25,
+      outputPrice: 2.5,
+      cacheReadsPrice: 0.2,
+    });
+  });
+
+  it("uses the Qwen Long HTTP limit and does not advertise unsupported tools", () => {
+    expect(getModelInfo("qwen", "qwen-long")).toMatchObject({
+      contextWindow: 1_000_000,
+      supportsTools: false,
+    });
+  });
+
   it("excludes shut-down routes without migrating still-callable deprecated models", () => {
     expect(
       normalizeDiscoveredModels("openai", [

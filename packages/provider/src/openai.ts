@@ -215,9 +215,14 @@ export class OpenAIProvider {
     return DEFAULT_MODEL_IDS.openai;
   }
 
-  async refreshModels(): Promise<import("./models/types.js").ModelInfo[]> {
+  async refreshModels(signal?: AbortSignal): Promise<import("./models/types.js").ModelInfo[]> {
+    signal?.throwIfAborted();
     const models: unknown[] = [];
-    for await (const model of this.ensureInitialized().models.list()) models.push(model);
+    for await (const model of this.ensureInitialized().models.list({ signal })) {
+      signal?.throwIfAborted();
+      models.push(model);
+    }
+    signal?.throwIfAborted();
     return normalizeDiscoveredModels(
       this.getProviderTypeForModelInfo() as import("./types.js").ProviderType,
       models
