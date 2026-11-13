@@ -16,6 +16,8 @@ import type { ToolExecution } from "../context/ToolsContext.js";
 export type SidebarContent = "todo" | "memory" | "tools" | "mcp" | "help" | "snapshots" | "lsp";
 
 export type SidebarPanelDataOptions = {
+  /** Session and workspace identity; data never crosses this boundary. */
+  readonly scopeKey?: string;
   readonly sidebarVisible: boolean;
   readonly sidebarContent: SidebarContent;
   readonly executions: readonly ToolExecution[];
@@ -49,38 +51,57 @@ export function shouldRefreshFromToolExecution(execution: ToolExecution | undefi
   if (!toolName) return { refreshTodos: false, refreshMemories: false };
 
   return {
-    refreshTodos: toolName === "todo_manage",
+    refreshTodos: toolName === "todo_manage" || toolName === "todo_write",
     refreshMemories: toolName === "save_memory" || toolName === "recall_memory",
   };
 }
 
-export function useSidebarPanelData(options: SidebarPanelDataOptions): SidebarPanelData {
-  const { sidebarVisible, sidebarContent, executions, loadTodos, loadMemories } = options;
+const EMPTY_ITEMS: readonly never[] = [];
 
-  const [todoItems, setTodoItems] = useState<readonly TodoItemData[]>([]);
-  const [memoryEntries, setMemoryEntries] = useState<readonly MemoryEntry[]>([]);
-
-  const refreshTodos = useCallback(() => {
-    void loadTodos()
-      .then(setTodoItems)
-      .catch(() => {
-        setTodoItems([]);
+function useScopedLoader<T>(scopeKey: string, load: () => Promise<readonly T[]>) {
+  const [state, setState] = useState<{ scopeKey: string; items: readonly T[] }>({
+    scopeKey,
+    items: EMPTY_ITEMS,
+  });
+  const requestRef = useRef(0);
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
+  const refresh = useCallback(() => {
+    const request = ++requestRef.current;
+    void load()
+      .catch(() => EMPTY_ITEMS)
+      .then((items) => {
+        if (request === requestRef.current && scopeRef.current === scopeKey) {
+          setState({ scopeKey, items });
+        }
       });
-  }, [loadTodos]);
+  }, [load, scopeKey]);
 
-  const refreshMemories = useCallback(() => {
-    void loadMemories()
-      .then(setMemoryEntries)
-      .catch(() => {
-        setMemoryEntries([]);
-      });
-  }, [loadMemories]);
-
-  // Initial load (best-effort).
   useEffect(() => {
-    refreshTodos();
-    refreshMemories();
-  }, [refreshMemories, refreshTodos]);
+    refresh();
+    return () => {
+      requestRef.current += 1;
+    };
+  }, [refresh]);
+
+  // Hide the previous scope during render, before the new async load completes.
+  return { items: state.scopeKey === scopeKey ? state.items : EMPTY_ITEMS, refresh };
+}
+
+export function useSidebarPanelData(options: SidebarPanelDataOptions): SidebarPanelData {
+  const {
+    scopeKey = "",
+    sidebarVisible,
+    sidebarContent,
+    executions,
+    loadTodos,
+    loadMemories,
+  } = options;
+  const { items: todoItems, refresh: refreshTodos } = useScopedLoader(scopeKey, loadTodos);
+  const { items: memoryEntries, refresh: refreshMemories } = useScopedLoader(
+    scopeKey,
+    loadMemories
+  );
 
   // Refresh when the relevant panel is opened.
   useEffect(() => {

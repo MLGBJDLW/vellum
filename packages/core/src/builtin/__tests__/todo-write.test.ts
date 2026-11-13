@@ -3,9 +3,10 @@
  */
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ToolContext } from "../../types/tool.js";
+import { getSessionTodoPath } from "../todo-storage.js";
 import { todoWriteTool } from "../todo-write.js";
 
 describe("todoWriteTool", () => {
@@ -15,9 +16,9 @@ describe("todoWriteTool", () => {
 
   beforeEach(async () => {
     testDir = join(process.cwd(), `.test-todo-write-${Date.now()}`);
-    todoFilePath = join(testDir, ".vellum", "todos.json");
+    todoFilePath = getSessionTodoPath(testDir, "test-session");
 
-    await mkdir(join(testDir, ".vellum"), { recursive: true });
+    await mkdir(dirname(todoFilePath), { recursive: true });
 
     ctx = {
       workingDir: testDir,

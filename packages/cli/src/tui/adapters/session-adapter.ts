@@ -8,7 +8,7 @@
  */
 
 import type { SessionMessage } from "@vellum/core";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Message } from "../context/MessagesContext.js";
 import { useMessages } from "../context/MessagesContext.js";
 import { toSessionMessage, toUIMessages } from "./message-adapter.js";
@@ -169,10 +169,7 @@ export interface SessionAdapter {
 export function createSessionAdapter(sessionId: string, storage: SessionStorage): SessionAdapter {
   return {
     async save(messages: readonly Message[]): Promise<void> {
-      const sessionMessages = messages
-        .filter((msg): msg is Message => msg.role !== "tool")
-        .map((msg) => toSessionMessage(msg));
-      await storage.save(sessionId, sessionMessages);
+      await storage.save(sessionId, toStoredMessages(messages));
     },
 
     async load(): Promise<readonly Message[] | null> {
@@ -187,6 +184,10 @@ export function createSessionAdapter(sessionId: string, storage: SessionStorage)
       await storage.clear(sessionId);
     },
   };
+}
+
+function toStoredMessages(messages: readonly Message[]): SessionMessage[] {
+  return messages.map(toSessionMessage);
 }
 
 // =============================================================================
@@ -230,76 +231,139 @@ export function useSessionAdapter(options: UseSessionAdapterOptions): UseSession
   const { sessionId, storage, autoSave = true, saveDebounceMs = 500, autoLoad = true } = options;
 
   // Get messages context
-  const { messages, addMessage, clearMessages } = useMessages();
+  const { messages, setMessages } = useMessages();
 
   // State refs for async operations
   const isSavingRef = useRef(false);
   const isLoadingRef = useRef(false);
-  const errorRef = useRef<Error | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const loadRequestRef = useRef(0);
+  const activeLoadRef = useRef<Promise<void> | null>(null);
+  const loadErrorRef = useRef<{ sessionId: string; storage: SessionStorage; error: Error } | null>(
+    null
+  );
+  const activeSessionRef = useRef(sessionId);
+  activeSessionRef.current = sessionId;
+  const autoSaveRef = useRef(autoSave);
+  autoSaveRef.current = autoSave;
+  const displayedSessionRef = useRef(sessionId);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const queuedSavesRef = useRef(0);
 
   // Track previous messages for change detection
   const previousMessagesRef = useRef<readonly Message[]>([]);
+
+  const queueSave = useCallback(
+    (targetId: string, targetStorage: SessionStorage, targetMessages: readonly Message[]) => {
+      // Convert now: queued writes retain their own session and immutable
+      // message snapshot even if the UI switches while storage is busy.
+      const snapshot = toStoredMessages(targetMessages);
+      queuedSavesRef.current += 1;
+      isSavingRef.current = true;
+      setError(null);
+      const operation = saveQueueRef.current.then(async () => {
+        try {
+          await targetStorage.save(targetId, snapshot);
+        } catch (err) {
+          const failure = err instanceof Error ? err : new Error(String(err));
+          setError(failure);
+          throw failure;
+        } finally {
+          queuedSavesRef.current -= 1;
+          isSavingRef.current = queuedSavesRef.current > 0;
+        }
+      });
+      // Keep the queue usable after failures while returning the rejecting
+      // operation to explicit callers (session switching must await success).
+      saveQueueRef.current = operation.catch(() => {});
+      return operation;
+    },
+    []
+  );
 
   /**
    * Save current messages to session storage
    */
   const saveSession = useCallback(async (): Promise<void> => {
-    if (isSavingRef.current) {
-      return;
+    const cancelPendingSave = () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+      pendingSaveRef.current = null;
+    };
+    cancelPendingSave();
+    if (activeSessionRef.current === sessionId) {
+      await activeLoadRef.current;
+      const failedLoad = loadErrorRef.current;
+      if (failedLoad?.sessionId === sessionId && failedLoad.storage === storage) {
+        throw failedLoad.error;
+      }
     }
-
-    isSavingRef.current = true;
-    errorRef.current = null;
-
-    try {
-      const adapter = createSessionAdapter(sessionId, storage);
-      await adapter.save(messages);
-    } catch (err) {
-      errorRef.current = err instanceof Error ? err : new Error(String(err));
-    } finally {
-      isSavingRef.current = false;
-    }
-  }, [sessionId, storage, messages]);
+    cancelPendingSave();
+    await queueSave(
+      sessionId,
+      storage,
+      activeSessionRef.current === sessionId ? messagesRef.current : messages
+    );
+  }, [sessionId, storage, messages, queueSave]);
 
   /**
    * Load messages from session storage
    */
   const loadSession = useCallback(async (): Promise<void> => {
-    if (isLoadingRef.current) {
-      return;
-    }
-
+    const request = ++loadRequestRef.current;
+    let finishLoad!: () => void;
+    const pendingLoad = new Promise<void>((resolve) => {
+      finishLoad = resolve;
+    });
+    activeLoadRef.current = pendingLoad;
+    loadErrorRef.current = null;
     isLoadingRef.current = true;
-    errorRef.current = null;
+    setError(null);
+    let initialMessages = messagesRef.current;
+    if (displayedSessionRef.current !== sessionId) {
+      displayedSessionRef.current = sessionId;
+      initialMessages = [];
+      messagesRef.current = initialMessages;
+      previousMessagesRef.current = initialMessages;
+      setMessages(initialMessages);
+    }
 
     try {
       const adapter = createSessionAdapter(sessionId, storage);
       const loadedMessages = await adapter.load();
 
-      if (loadedMessages && loadedMessages.length > 0) {
-        // Clear existing messages first
-        clearMessages();
-
-        // Add loaded messages
-        for (const msg of loadedMessages) {
-          addMessage({
-            role: msg.role,
-            content: msg.content,
-            isStreaming: msg.isStreaming,
-            toolCalls: msg.toolCalls,
-          });
+      if (request !== loadRequestRef.current || activeSessionRef.current !== sessionId) return;
+      // A user may already have started the selected session while its disk
+      // read was pending. Keep that newer transcript and persist its edits.
+      if (messagesRef.current !== initialMessages) {
+        previousMessagesRef.current = messagesRef.current;
+        if (autoSaveRef.current) {
+          void queueSave(sessionId, storage, messagesRef.current).catch(() => {});
         }
-
-        // Update previous messages ref to avoid triggering auto-save
-        previousMessagesRef.current = loadedMessages;
+        return;
       }
+      // Replace atomically, preserving message IDs, reasoning and token usage.
+      // Missing/empty sessions must not retain the previous transcript.
+      const nextMessages = loadedMessages ?? [];
+      messagesRef.current = nextMessages;
+      previousMessagesRef.current = nextMessages;
+      setMessages(nextMessages);
     } catch (err) {
-      errorRef.current = err instanceof Error ? err : new Error(String(err));
+      if (request === loadRequestRef.current && activeSessionRef.current === sessionId) {
+        const failure = err instanceof Error ? err : new Error(String(err));
+        loadErrorRef.current = { sessionId, storage, error: failure };
+        setError(failure);
+      }
     } finally {
-      isLoadingRef.current = false;
+      if (request === loadRequestRef.current) isLoadingRef.current = false;
+      if (activeLoadRef.current === pendingLoad) activeLoadRef.current = null;
+      finishLoad();
     }
-  }, [sessionId, storage, clearMessages, addMessage]);
+  }, [sessionId, storage, setMessages, queueSave]);
 
   /**
    * Clear session storage
@@ -309,7 +373,7 @@ export function useSessionAdapter(options: UseSessionAdapterOptions): UseSession
       const adapter = createSessionAdapter(sessionId, storage);
       await adapter.clear();
     } catch (err) {
-      errorRef.current = err instanceof Error ? err : new Error(String(err));
+      setError(err instanceof Error ? err : new Error(String(err)));
     }
   }, [sessionId, storage]);
 
@@ -322,10 +386,12 @@ export function useSessionAdapter(options: UseSessionAdapterOptions): UseSession
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // Set new timeout
+    pendingSaveRef.current = saveSession;
+    // The callback retains its original session ID when selection changes.
     saveTimeoutRef.current = setTimeout(() => {
-      void saveSession();
+      void saveSession().catch(() => {});
       saveTimeoutRef.current = null;
+      pendingSaveRef.current = null;
     }, saveDebounceMs);
   }, [saveSession, saveDebounceMs]);
 
@@ -334,6 +400,9 @@ export function useSessionAdapter(options: UseSessionAdapterOptions): UseSession
     if (autoLoad) {
       void loadSession();
     }
+    return () => {
+      loadRequestRef.current += 1;
+    };
   }, [autoLoad, loadSession]);
 
   // Auto-save on message changes
@@ -347,11 +416,8 @@ export function useSessionAdapter(options: UseSessionAdapterOptions): UseSession
       return;
     }
 
-    // Skip if this is the initial load (empty to loaded)
-    if (previousMessagesRef.current.length === 0 && messages.length > 0 && isLoadingRef.current) {
-      previousMessagesRef.current = messages;
-      return;
-    }
+    // Never save a previous session's render while the selected one loads.
+    if (isLoadingRef.current) return;
 
     // Trigger debounced save
     if (messages.length > 0) {
@@ -361,14 +427,19 @@ export function useSessionAdapter(options: UseSessionAdapterOptions): UseSession
     previousMessagesRef.current = messages;
   }, [autoSave, messages, debouncedSave]);
 
-  // Cleanup timeout on unmount
+  // Flush edits to their original session before another session replaces them.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selection/storage changes must flush the previous scope's pending save.
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+        const pendingSave = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        void pendingSave?.().catch(() => {});
       }
     };
-  }, []);
+  }, [sessionId, storage]);
 
   return {
     saveSession,
@@ -376,7 +447,7 @@ export function useSessionAdapter(options: UseSessionAdapterOptions): UseSession
     clearSession,
     isSaving: isSavingRef.current,
     isLoading: isLoadingRef.current,
-    error: errorRef.current,
+    error,
   };
 }
 

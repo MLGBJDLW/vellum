@@ -23,7 +23,7 @@ export interface ExecutionResult {
 
 interface TaskState {
   task: ParsedTask;
-  todoId: number;
+  todoId: string | number;
   status: TaskStatus;
 }
 
@@ -86,7 +86,7 @@ export class TaskExecutor {
     };
   }
 
-  private async addTaskToTodo(task: ParsedTask): Promise<number> {
+  private async addTaskToTodo(task: ParsedTask): Promise<string | number> {
     const addResult = await todoManageTool.execute(
       {
         action: "add",

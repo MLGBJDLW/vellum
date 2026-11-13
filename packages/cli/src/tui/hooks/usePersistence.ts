@@ -41,6 +41,8 @@ export interface UsePersistenceOptions {
   readonly sessionId: string;
   /** Storage implementation for basic persistence */
   readonly storage: SessionStorage;
+  /** Disable the basic adapter when the app already owns message persistence. */
+  readonly basicPersistenceEnabled?: boolean;
   /** Whether to enable advanced persistence features */
   readonly enableAdvancedPersistence?: boolean;
   /** Storage manager for advanced persistence (required if enableAdvancedPersistence=true) */
@@ -136,6 +138,7 @@ export function usePersistence(options: UsePersistenceOptions): UsePersistenceRe
   const {
     sessionId,
     storage,
+    basicPersistenceEnabled = true,
     enableAdvancedPersistence = false,
     storageManager,
     persistenceManager: externalPersistenceManager,
@@ -184,11 +187,19 @@ export function usePersistence(options: UsePersistenceOptions): UsePersistenceRe
     () => ({
       sessionId,
       storage,
-      autoSave: autoSave && !enableAdvancedPersistence,
+      autoSave: basicPersistenceEnabled && autoSave && !enableAdvancedPersistence,
+      saveDebounceMs,
+      autoLoad: basicPersistenceEnabled && autoLoad,
+    }),
+    [
+      sessionId,
+      storage,
+      basicPersistenceEnabled,
+      autoSave,
+      enableAdvancedPersistence,
       saveDebounceMs,
       autoLoad,
-    }),
-    [sessionId, storage, autoSave, enableAdvancedPersistence, saveDebounceMs, autoLoad]
+    ]
   );
 
   const sessionAdapter = useSessionAdapter(sessionAdapterOptions);

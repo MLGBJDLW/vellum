@@ -726,11 +726,11 @@ describe("Edge Cases", () => {
     expect(loaded).not.toBeNull();
   });
 
-  it("filters out tool role messages during save", async () => {
+  it("preserves tool role messages during save", async () => {
     const sessionId = "filter-tool-session";
     const adapter = createSessionAdapter(sessionId, storage);
 
-    // Save with tool message (should be filtered)
+    // Tool receipts must survive a session save and reload.
     await adapter.save([
       {
         id: "msg-1",
@@ -755,10 +755,9 @@ describe("Edge Cases", () => {
       },
     ]);
 
-    // Tool messages are filtered out in createSessionAdapter.save()
     const loaded = await adapter.load();
     expect(loaded).not.toBeNull();
-    // Should have 2 messages (user + assistant), tool filtered out
-    expect(loaded?.length).toBeLessThanOrEqual(3);
+    expect(loaded).toHaveLength(3);
+    expect(loaded?.[1]).toMatchObject({ id: "msg-2", role: "tool", content: "Tool result" });
   });
 });
