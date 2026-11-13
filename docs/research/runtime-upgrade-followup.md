@@ -43,6 +43,15 @@ plugin framework or another scheduler.
 
 ## Validation boundary
 
+The first hosted Windows/Node 24 run passed every assertion but reported an
+unhandled filesystem error from an instruction watcher after its test directory
+was removed. The integration fixture had never disposed its agent. The underlying
+runtime also allowed initialization to publish after disposal. Initialization and
+cleanup now share their in-flight promises, disposed integrations cannot restart,
+and watcher errors reach the loop's diagnostic handler. The fixture awaits actual
+initialization and cleanup instead of sleeping for a fixed duration. Deterministic
+overlap tests cover loading, watcher startup, disposal and restart.
+
 Focused tests reproduce absent/empty stdin, byte-prefix retention, cancellation
 classification, descendants retaining output handles, byte-by-byte Chinese/emoji
 output, background startup failures, and display observer failures. The existing

@@ -110,6 +110,9 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
   private pendingChanges: Map<string, PendingChange> = new Map();
   private watchTargets = new Set<string>();
   private isRunning = false;
+  private starting?: Promise<void>;
+  private stopping?: Promise<void>;
+  private stopRequested = false;
 
   /**
    * Creates a new AgentsWatcher.
@@ -137,10 +140,23 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
    * @throws Error if already watching
    */
   async start(): Promise<void> {
-    if (this.isRunning) {
+    if (this.isRunning || this.starting || this.stopping) {
       throw new Error("AgentsWatcher is already running");
     }
+    this.stopRequested = false;
+    this.starting = this.startWatching();
+    try {
+      await this.starting;
+    } catch (error) {
+      await this.watcher?.close();
+      this.watcher = null;
+      throw error;
+    } finally {
+      this.starting = undefined;
+    }
+  }
 
+  private async startWatching(): Promise<void> {
     const watchPaths = await this.buildWatchPaths();
     this.watchTargets = new Set(watchPaths.map((filePath) => this.normalizePath(filePath)));
     // Watch existing directory roots so files and nested directories created later
@@ -160,6 +176,7 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
       }
       directories.add(directory);
     }
+    if (this.stopRequested) return;
 
     this.watcher = watch([...directories], {
       persistent: true,
@@ -187,16 +204,17 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
     this.watcher.on("add", (filePath) => this.handleFileEvent(filePath, "add"));
     this.watcher.on("change", (filePath) => this.handleFileEvent(filePath, "change"));
     this.watcher.on("unlink", (filePath) => this.handleFileEvent(filePath, "unlink"));
-    this.watcher.on("error", (error) =>
-      this.emit("error", error instanceof Error ? error : new Error(String(error)))
-    );
+    this.watcher.on("error", (error) => {
+      if (this.listenerCount("error") > 0)
+        this.emit("error", error instanceof Error ? error : new Error(String(error)));
+    });
 
     // Wait for ready
     await new Promise<void>((resolve, reject) => {
       const onReady = () => {
         this.watcher?.removeListener("error", onError);
-        this.isRunning = true;
-        this.emit("ready");
+        this.isRunning = !this.stopRequested;
+        if (!this.stopRequested) this.emit("ready");
         resolve();
       };
       const onError = (err: unknown) => {
@@ -213,7 +231,17 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
    *
    * Cleans up all watchers and pending timers.
    */
-  async stop(): Promise<void> {
+  stop(): Promise<void> {
+    if (this.stopping) return this.stopping;
+    this.stopRequested = true;
+    this.stopping = this.stopWatching().finally(() => {
+      this.stopping = undefined;
+    });
+    return this.stopping;
+  }
+
+  private async stopWatching(): Promise<void> {
+    await this.starting?.catch(() => {});
     // Clear debounce timer
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
@@ -379,6 +407,7 @@ export class AgentsWatcher extends EventEmitter<AgentsWatcherEvents> {
    * Handles a file system event.
    */
   private handleFileEvent(filePath: string, eventType: "add" | "change" | "unlink"): void {
+    if (this.stopRequested) return;
     // Check if this is an agents file
     if (!this.isAgentsFile(filePath)) {
       return;

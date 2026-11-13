@@ -6,17 +6,27 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AgentsLoader } from "../loader.js";
 import {
   createSessionAgentsIntegration,
   SessionAgentsIntegration,
 } from "../session-integration.js";
 import { ToolAllowlistFilter } from "../tool-allowlist-filter.js";
+import { AgentsWatcher } from "../watcher.js";
 
 // ============================================
 // Test Helpers
 // ============================================
 
 let testDir: string;
+
+function createGate() {
+  let resolve = () => {};
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 
 async function createTestDir(): Promise<string> {
   const dir = path.join(os.tmpdir(), `session-integration-test-${Date.now()}`);
@@ -46,6 +56,7 @@ describe("SessionAgentsIntegration", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await cleanupTestDir(testDir);
   });
 
@@ -67,6 +78,34 @@ describe("SessionAgentsIntegration", () => {
   });
 
   describe("initialize", () => {
+    it("handles watcher filesystem errors without requiring an error-event subscriber", async () => {
+      let watcher: AgentsWatcher | undefined;
+      vi.spyOn(AgentsWatcher.prototype, "start").mockImplementation(async function (
+        this: AgentsWatcher
+      ) {
+        watcher = this;
+      });
+      const integration = new SessionAgentsIntegration();
+      await integration.initialize(testDir);
+      const filesystemError = Object.assign(new Error("Directory removed during watch"), {
+        code: "EPERM",
+      });
+      expect(() => watcher?.emit("error", filesystemError)).not.toThrow();
+      await integration.dispose();
+    });
+
+    it("closes a failed watcher before rejecting initialization", async () => {
+      vi.spyOn(AgentsWatcher.prototype, "start").mockRejectedValue(
+        new Error("watch startup failed")
+      );
+      const stop = vi.spyOn(AgentsWatcher.prototype, "stop");
+      const integration = new SessionAgentsIntegration();
+      await expect(integration.initialize(testDir)).rejects.toThrow("watch startup failed");
+      expect(stop).toHaveBeenCalledOnce();
+      expect(integration.getState()).toBe("uninitialized");
+      await integration.dispose();
+    });
+
     it("should initialize successfully with AGENTS.md file", async () => {
       await writeAgentsFile(
         testDir,
@@ -335,6 +374,54 @@ Updated instructions.
   });
 
   describe("dispose", () => {
+    it("drains an in-flight load without recreating disposed configuration or watchers", async () => {
+      await writeAgentsFile(testDir, "# Instructions\nDo not resurrect this config");
+      const gate = createGate();
+      const original = AgentsLoader.prototype.load;
+      vi.spyOn(AgentsLoader.prototype, "load").mockImplementation(async function (
+        this: AgentsLoader,
+        sessionPath
+      ) {
+        await gate.promise;
+        return original.call(this, sessionPath);
+      });
+      const start = vi.spyOn(AgentsWatcher.prototype, "start");
+      const integration = new SessionAgentsIntegration();
+      const initialized = vi.fn();
+      integration.on("initialized", initialized);
+      const initializing = integration.initialize(testDir);
+      const disposing = integration.dispose();
+      expect(integration.getState()).toBe("disposed");
+      gate.resolve();
+      await Promise.all([initializing, disposing]);
+      expect(integration.getState()).toBe("disposed");
+      expect(integration.getConfig()).toBeNull();
+      expect(start).not.toHaveBeenCalled();
+      expect(initialized).not.toHaveBeenCalled();
+    });
+
+    it("waits for pending watcher startup before closing and never emits initialized", async () => {
+      const gate = createGate();
+      const entered = createGate();
+      vi.spyOn(AgentsWatcher.prototype, "start").mockImplementation(async () => {
+        entered.resolve();
+        await gate.promise;
+      });
+      const stop = vi.spyOn(AgentsWatcher.prototype, "stop");
+      const integration = new SessionAgentsIntegration();
+      const initialized = vi.fn();
+      integration.on("initialized", initialized);
+      const initializing = integration.initialize(testDir);
+      await entered.promise;
+      const disposing = integration.dispose();
+      expect(integration.dispose()).toBe(disposing);
+      gate.resolve();
+      await Promise.all([initializing, disposing]);
+      expect(stop).toHaveBeenCalledOnce();
+      expect(integration.getState()).toBe("disposed");
+      expect(initialized).not.toHaveBeenCalled();
+    });
+
     it("should clean up state", async () => {
       const integration = new SessionAgentsIntegration({ enableWatcher: false });
       await integration.initialize(testDir);

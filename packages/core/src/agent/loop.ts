@@ -659,6 +659,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       this.agentsIntegration = new SessionAgentsIntegration({
         allowAllIfNoConfig: true, // Don't break existing behavior if no AGENTS.md found
       });
+      this.agentsIntegration.on("error", (error) => {
+        this.logger?.warn("AGENTS.md watcher error", { error });
+      });
       // Initialize asynchronously - errors are logged but don't fail construction
       this.agentsInitialization = this.agentsIntegration
         .initialize(config.cwd)
@@ -900,6 +903,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       await this.agentsInitialization;
       if (this.config.enableAgentsIntegration) {
         agents = new SessionAgentsIntegration({ allowAllIfNoConfig: true });
+        agents.on("error", (error) => this.logger?.warn("AGENTS.md watcher error", { error }));
         await agents.initialize(cwd);
       }
       replacement = await this.config.prepareWorkspace(cwd);
@@ -3425,7 +3429,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    *
    * @param reason - Optional reason for cancellation
    */
-  cancel(reason?: string): void {
+  cancel(reason?: string): Promise<void> {
     this.cancellation.cancel(reason);
     this.costManager.denyApproval();
     this.pendingPermission?.resolve(false);
@@ -3446,9 +3450,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
 
     // Dispose AGENTS.md integration
     if (this.agentsIntegration) {
-      this.agentsIntegration.dispose().catch((error) => {
+      return this.agentsIntegration.dispose().catch((error) => {
         this.logger?.warn("Error disposing AGENTS.md integration", { error });
       });
     }
+    return Promise.resolve();
   }
 }

@@ -10,6 +10,8 @@
 
 ### Patch Changes
 
+- Drain project-instruction watcher startup before cleanup, prevent disposed integrations from restarting, and handle background watcher errors without unhandled rejections.
+
 - Prevent non-interactive commands from hanging on open stdin, preserve UTF-8 output
   across stream boundaries, and retain the available prefix when sandbox output exceeds
   its byte limit. Cancel complete subprocess trees through one shared implementation,

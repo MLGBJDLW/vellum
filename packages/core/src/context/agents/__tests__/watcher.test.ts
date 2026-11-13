@@ -71,9 +71,7 @@ describe("AgentsWatcher", () => {
 
   afterEach(async () => {
     // Always stop watcher to prevent resource leaks
-    if (watcher?.running) {
-      await watcher.stop();
-    }
+    await watcher?.stop();
     watcher = null;
     await cleanupDir(tempDir);
   });
@@ -121,6 +119,20 @@ describe("AgentsWatcher", () => {
   });
 
   describe("stop()", () => {
+    it("drains an overlapping startup without leaving a watcher behind", async () => {
+      watcher = new AgentsWatcher(tempDir, { watchParents: false });
+      const ready = vi.fn();
+      watcher.on("ready", ready);
+      const starting = watcher.start();
+      const stopping = watcher.stop();
+      await Promise.all([starting, stopping]);
+      expect(watcher.running).toBe(false);
+      expect(watcher.getWatchedPaths()).toEqual([]);
+      expect(ready).not.toHaveBeenCalled();
+      await watcher.start();
+      expect(watcher.running).toBe(true);
+    });
+
     it("should stop watching and clean up resources", async () => {
       watcher = new AgentsWatcher(tempDir);
       await watcher.start();
