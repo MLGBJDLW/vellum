@@ -8,6 +8,8 @@
  * CI runners can be 3-5x slower than local machines.
  */
 
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { platform } from "node:os";
 import { describe, expect, it } from "vitest";
 import { executeShell, killProcessTree } from "../utils/shell-helpers.js";
@@ -21,6 +23,28 @@ const BASE_CLEANUP_WAIT = 1000; // Wait for process cleanup
 
 describe("shell-helpers - process tree management", () => {
   describe("killProcessTree", () => {
+    it.skipIf(isWindows)("escalates when a process ignores SIGTERM", async () => {
+      const child = spawn(
+        process.execPath,
+        [
+          "-e",
+          'process.on("SIGTERM", () => {}); console.log("ready"); setInterval(() => {}, 1000)',
+        ],
+        { detached: true, stdio: ["ignore", "pipe", "ignore"] }
+      );
+      const closed = once(child, "close");
+      try {
+        if (!child.stdout || !child.pid) throw new Error("Could not start test process");
+        await once(child.stdout, "data");
+        await killProcessTree(child.pid, { timeout: 25 });
+        const [, signal] = await closed;
+        expect(signal).toBe("SIGKILL");
+      } finally {
+        child.kill("SIGKILL");
+        await closed;
+      }
+    });
+
     it("should handle non-existent process gracefully", async () => {
       // Use a PID that is very unlikely to exist
       const fakePid = 999999999;

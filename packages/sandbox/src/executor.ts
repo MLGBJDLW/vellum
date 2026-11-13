@@ -6,8 +6,10 @@
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { sanitizeEnvironment } from "./hardening.js";
 import { detectPlatformBackend } from "./platforms/index.js";
+import { killProcessTree } from "./process-tree.js";
 import type {
   SandboxBackend,
   SandboxConfig,
@@ -39,10 +41,18 @@ export class SandboxExecutor {
     return new Promise((resolve) => {
       let stdout = "";
       let stderr = "";
+      const stdoutDecoder = new StringDecoder("utf8");
+      const stderrDecoder = new StringDecoder("utf8");
+      let stdoutBytes = 0;
+      let stderrBytes = 0;
+      let stdoutTruncated = false;
+      let stderrTruncated = false;
       let killed = false;
+      let terminationReason: SandboxResult["terminationReason"];
       let killSignal: NodeJS.Signals | null = null;
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       let childProcess: ChildProcess | undefined;
+      let termination: Promise<void> | undefined;
 
       if (abortSignal?.aborted) {
         resolve({
@@ -64,51 +74,45 @@ export class SandboxExecutor {
         cwd,
         env,
         stdio: ["pipe", "pipe", "pipe"],
+        detached: process.platform !== "win32",
+        windowsHide: true,
       });
 
-      const abortHandler = () => {
-        if (childProcess && !childProcess.killed) {
-          killed = true;
-          killSignal = "SIGTERM";
-          childProcess.kill("SIGTERM");
-        }
+      const terminate = (reason: "aborted" | "timeout") => {
+        if (killed || !childProcess?.pid) return;
+        killed = true;
+        terminationReason = reason;
+        killSignal = "SIGTERM";
+        termination = killProcessTree(childProcess.pid).catch(() => {});
       };
+      const abortHandler = () => terminate("aborted");
 
       if (abortSignal) {
         abortSignal.addEventListener("abort", abortHandler, { once: true });
+        if (abortSignal.aborted) abortHandler();
       }
 
-      if (options.input && childProcess.stdin) {
-        childProcess.stdin.write(options.input);
-        childProcess.stdin.end();
-      }
+      // Always close stdin, including absent/empty input. Otherwise readers hang.
+      // A child may exit without consuming its input; EPIPE is not a host crash.
+      childProcess.stdin?.on("error", () => {});
+      childProcess.stdin?.end(options.input);
 
       childProcess.stdout?.on("data", (data: Buffer) => {
-        if (stdout.length + data.length <= maxOutputBytes) {
-          stdout += data.toString();
-        }
+        const kept = Math.min(data.length, Math.max(0, maxOutputBytes - stdoutBytes));
+        if (kept > 0) stdout += stdoutDecoder.write(data.subarray(0, kept));
+        stdoutBytes += kept;
+        stdoutTruncated ||= kept < data.length;
       });
 
       childProcess.stderr?.on("data", (data: Buffer) => {
-        if (stderr.length + data.length <= maxOutputBytes) {
-          stderr += data.toString();
-        }
+        const kept = Math.min(data.length, Math.max(0, maxOutputBytes - stderrBytes));
+        if (kept > 0) stderr += stderrDecoder.write(data.subarray(0, kept));
+        stderrBytes += kept;
+        stderrTruncated ||= kept < data.length;
       });
 
       if (options.timeoutMs && options.timeoutMs > 0) {
-        timeoutId = setTimeout(() => {
-          if (childProcess && !childProcess.killed) {
-            killed = true;
-            killSignal = "SIGTERM";
-            childProcess.kill("SIGTERM");
-            setTimeout(() => {
-              if (childProcess && !childProcess.killed) {
-                killSignal = "SIGKILL";
-                childProcess.kill("SIGKILL");
-              }
-            }, 5000);
-          }
-        }, options.timeoutMs);
+        timeoutId = setTimeout(() => terminate("timeout"), options.timeoutMs);
       }
 
       childProcess.on("close", (exitCode, signal) => {
@@ -118,19 +122,23 @@ export class SandboxExecutor {
         if (abortSignal) {
           abortSignal.removeEventListener("abort", abortHandler);
         }
+        if (!stdoutTruncated) stdout += stdoutDecoder.end();
+        if (!stderrTruncated) stderr += stderrDecoder.end();
 
-        resolve({
-          exitCode,
-          signal: signal ?? killSignal,
-          stdout,
-          stderr,
-          durationMs: Date.now() - startTime,
-          peakMemoryBytes: 0,
-          cpuTimeMs: 0,
-          terminated: killed,
-          terminationReason: killed ? "timeout" : undefined,
-          modifiedFiles: [],
-        });
+        void Promise.resolve(termination).then(() =>
+          resolve({
+            exitCode: killed ? null : exitCode,
+            signal: signal ?? killSignal,
+            stdout,
+            stderr,
+            durationMs: Date.now() - startTime,
+            peakMemoryBytes: 0,
+            cpuTimeMs: 0,
+            terminated: killed,
+            terminationReason,
+            modifiedFiles: [],
+          })
+        );
       });
 
       childProcess.on("error", (error) => {

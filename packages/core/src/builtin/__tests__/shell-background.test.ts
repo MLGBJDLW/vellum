@@ -5,12 +5,34 @@
  */
 
 import { platform } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { executeShell, killProcessTree } from "../utils/shell-helpers.js";
 
 describe("shell-helpers - background process", () => {
   const isWindows = platform() === "win32";
   const pidsToCleanup: number[] = [];
+
+  it("returns a background startup error without an unhandled process event", async () => {
+    const result = await executeShell("unused", {
+      shell: join(process.cwd(), "nonexistent-vellum-shell"),
+      isBackground: true,
+    });
+    expect(result.pid).toBeUndefined();
+    expect(result.isBackground).toBeUndefined();
+    expect(result.stderr).toContain("Failed to start background process");
+  });
+
+  it("does not start a background process after cancellation", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const result = await executeShell("unused", {
+      abortSignal: controller.signal,
+      isBackground: true,
+    });
+    expect(result.killed).toBe(true);
+    expect(result.pid).toBeUndefined();
+  });
 
   // Cleanup spawned processes after each test
   afterEach(async () => {

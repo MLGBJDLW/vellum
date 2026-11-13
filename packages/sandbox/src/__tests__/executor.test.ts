@@ -4,7 +4,10 @@
  * Tests for command execution with sandboxing.
  */
 
-import { describe, expect, it } from "vitest";
+import { mkdtemp, readFile, rmdir, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { detectSandboxBackend, SandboxExecutor } from "../executor.js";
 import { configFromTrustPreset } from "../profiles/index.js";
 
@@ -92,6 +95,55 @@ describe("SandboxExecutor", () => {
   });
 
   describe("abort signal", () => {
+    it("cancels descendants that keep the command's output pipes open", async () => {
+      const directory = await mkdtemp(join(tmpdir(), "vellum-process-tree-"));
+      const marker = join(directory, "child.pid");
+      const controller = new AbortController();
+      const executor = new SandboxExecutor(config);
+      const script = `
+        const child = require('node:child_process').spawn(process.execPath,
+          ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'inherit' });
+        require('node:fs').writeFileSync(process.argv[1], String(child.pid));
+        setInterval(() => {}, 1000);
+      `;
+      const pending = executor.execute(process.execPath, ["-e", script, marker], {
+        abortSignal: controller.signal,
+      });
+      let childPid: number | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await vi.waitFor(
+          async () => {
+            childPid = Number(await readFile(marker, "utf8"));
+            expect(childPid).toBeGreaterThan(0);
+          },
+          { timeout: 10000 }
+        );
+        controller.abort();
+        const result = await Promise.race([
+          pending,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Descendant kept output open")), 10000);
+          }),
+        ]);
+        expect(result.terminationReason).toBe("aborted");
+        expect(result.exitCode).toBeNull();
+      } finally {
+        if (timer) clearTimeout(timer);
+        controller.abort();
+        if (childPid) {
+          try {
+            process.kill(childPid, "SIGKILL");
+          } catch {
+            /* Already terminated. */
+          }
+        }
+        await pending;
+        await unlink(marker).catch(() => {});
+        await rmdir(directory);
+      }
+    });
+
     it("aborts immediately if signal already aborted", async () => {
       const executor = new SandboxExecutor(config);
       const controller = new AbortController();
@@ -120,10 +172,24 @@ describe("SandboxExecutor", () => {
       const result = await resultPromise;
 
       expect(result.terminated).toBe(true);
+      expect(result.terminationReason).toBe("aborted");
     }, 5000);
   });
 
   describe("input handling", () => {
+    it.each([undefined, ""])("closes stdin when input is %s", async (input) => {
+      const executor = new SandboxExecutor(config);
+      const result = await executor.execute(
+        process.execPath,
+        ["-e", "process.stdin.resume(); process.stdin.on('end', () => console.log('eof'))"],
+        { input, timeoutMs: 2000 }
+      );
+
+      expect(result.terminated).toBe(false);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.trim()).toBe("eof");
+    });
+
     it("writes input to stdin", async () => {
       const executor = new SandboxExecutor(config);
       const result = await executor.execute(
@@ -150,7 +216,7 @@ describe("SandboxExecutor", () => {
 
       const result = await executor.execute("node", ["-e", "console.log('x'.repeat(1000))"]);
 
-      expect(result.stdout.length).toBeLessThanOrEqual(100);
+      expect(result.stdout).toBe("x".repeat(100));
     });
 
     it("uses option maxOutputBytes over config", async () => {
@@ -160,7 +226,7 @@ describe("SandboxExecutor", () => {
         maxOutputBytes: 50,
       });
 
-      expect(result.stdout.length).toBeLessThanOrEqual(50);
+      expect(result.stdout).toBe("x".repeat(50));
     });
   });
 
