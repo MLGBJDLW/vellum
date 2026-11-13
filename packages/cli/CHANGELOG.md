@@ -1,5 +1,15 @@
 # @butlerw/vellum
 
+## 0.8.0
+
+### Minor Changes
+
+- Persist subagent plans and receipt-complete conversation checkpoints, resume interrupted work with current permissions, and prevent overlapping recovery. Queue workers within concurrency limits, preserve explicit budgets, and report failures and cancellations accurately.
+
+  Add a live Subagents window inside Tasks with bounded activity updates, keyboard and mouse navigation, worker details, and layouts for narrow terminals. Unify CLI delegation and recovery with the existing worker runtime and remove the obsolete status-only resumption path.
+
+  Refresh all 17 provider integrations against official model catalogs, add newly documented model families, correct Qwen thinking and tool capabilities, and filter retired or incompatible discovery routes.
+
 ## 0.7.0
 
 ### Minor Changes
@@ -15,7 +25,7 @@
 ### Patch Changes
 
 - Add Tab-accepted next-step drafts, show main-conversation context usage and cache hit percentages, and use provider-aware cached/reasoning token accounting for cost estimates. Refresh current gateway models and distinguish unknown model capacities from internal fallbacks.
-  
+
   Fix language-server installation corrupting the terminal, render readable shell output, preserve thinking elapsed time, and continue output-limited responses through existing task limits. Keep Enter-based steering and consolidate reasoning controls around model-supported effort; remove redundant on/off, budget and toggle controls while preserving display preferences.
 
 ## 0.6.0
