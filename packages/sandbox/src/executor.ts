@@ -83,7 +83,14 @@ export class SandboxExecutor {
         killed = true;
         terminationReason = reason;
         killSignal = "SIGTERM";
-        termination = killProcessTree(childProcess.pid).catch(() => {});
+        termination = killProcessTree(childProcess.pid).catch((error: unknown) => {
+          stderr += `\nProcess-tree termination failed: ${error instanceof Error ? error.message : String(error)}`;
+          // Fall back to the owned child and close inherited pipes, so a failed
+          // platform utility cannot leave cancellation waiting on descendants.
+          childProcess?.kill("SIGKILL");
+          childProcess?.stdout?.destroy();
+          childProcess?.stderr?.destroy();
+        });
       };
       const abortHandler = () => terminate("aborted");
 

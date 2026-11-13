@@ -307,6 +307,31 @@ export async function executeShell(
         });
       });
       childProcess.once("spawn", () => {
+        if (abortSignal?.aborted && childProcess.pid) {
+          void killProcessTree(childProcess.pid).then(
+            () =>
+              resolve({
+                stdout: "",
+                stderr: "Operation aborted during background startup",
+                exitCode: null,
+                killed: true,
+                signal: "SIGTERM",
+                duration: Date.now() - startTime,
+              }),
+            (error: unknown) => {
+              childProcess.kill("SIGKILL");
+              resolve({
+                stdout: "",
+                stderr: `Process-tree termination failed: ${error instanceof Error ? error.message : String(error)}`,
+                exitCode: null,
+                killed: true,
+                signal: "SIGKILL",
+                duration: Date.now() - startTime,
+              });
+            }
+          );
+          return;
+        }
         childProcess.unref();
         resolve({
           stdout: `Background process started with PID: ${childProcess.pid}`,
@@ -425,15 +450,20 @@ export async function executeShell(
       }
     };
 
+    const terminationFailed = (error: unknown) => {
+      stderr += `\nProcess-tree termination failed: ${error instanceof Error ? error.message : String(error)}`;
+      childProcess?.kill("SIGKILL");
+      childProcess?.stdout?.destroy();
+      childProcess?.stderr?.destroy();
+    };
+
     // Handle abort signal
     const abortHandler = () => {
       if (childProcess?.pid && !killed) {
         killed = true;
         killSignal = "SIGTERM";
         // Kill the entire process tree, not just the parent
-        killProcessTree(childProcess.pid).catch(() => {
-          // Ignore errors - process may already be dead
-        });
+        void killProcessTree(childProcess.pid).catch(terminationFailed);
       }
     };
 
@@ -477,9 +507,7 @@ export async function executeShell(
           killed = true;
           killSignal = "SIGTERM";
           // Kill the entire process tree, not just the parent
-          killProcessTree(childProcess.pid).catch(() => {
-            // Ignore errors - process may already be dead
-          });
+          void killProcessTree(childProcess.pid).catch(terminationFailed);
         }
       }, timeout);
     };

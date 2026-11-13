@@ -34,6 +34,20 @@ describe("shell-helpers - background process", () => {
     expect(result.pid).toBeUndefined();
   });
 
+  it("cancels a background process before startup is acknowledged", async () => {
+    const controller = new AbortController();
+    const pending = executeShell(isWindows ? "Start-Sleep -Seconds 15" : "sleep 15", {
+      abortSignal: controller.signal,
+      isBackground: true,
+    });
+    controller.abort();
+    const result = await pending;
+    if (result.pid) pidsToCleanup.push(result.pid);
+    expect(result.killed).toBe(true);
+    expect(result.isBackground).toBeUndefined();
+    expect(result.stderr).toContain("aborted");
+  });
+
   // Cleanup spawned processes after each test
   afterEach(async () => {
     for (const pid of pidsToCleanup) {

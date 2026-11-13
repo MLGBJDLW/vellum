@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { win32 } from "node:path";
 
 /** Terminate a detached Unix process group or a Windows process and its descendants. */
 export async function killProcessTree(
@@ -9,13 +10,33 @@ export async function killProcessTree(
   const timeout = options.timeout ?? 5000;
   if (process.platform === "win32") {
     // Do not block the agent event loop while Windows walks the process tree.
-    await new Promise<void>((resolve) => {
-      const killer = spawn("taskkill", ["/pid", String(pid), "/f", "/t"], {
+    await new Promise<void>((resolve, reject) => {
+      const taskkill = win32.join(
+        process.env.SystemRoot || "C:\\Windows",
+        "System32",
+        "taskkill.exe"
+      );
+      const failed = (error: Error) => {
+        try {
+          process.kill(pid, 0);
+        } catch (probeError) {
+          if ((probeError as NodeJS.ErrnoException).code === "ESRCH") {
+            resolve();
+            return;
+          }
+        }
+        reject(error);
+      };
+      const killer = spawn(taskkill, ["/pid", String(pid), "/f", "/t"], {
         stdio: "ignore",
         windowsHide: true,
+        timeout: 5000,
       });
-      killer.once("error", () => resolve());
-      killer.once("close", () => resolve());
+      killer.once("error", failed);
+      killer.once("close", (code) => {
+        if (code === 0) resolve();
+        else failed(new Error(`taskkill exited with code ${code}`));
+      });
     });
     return;
   }

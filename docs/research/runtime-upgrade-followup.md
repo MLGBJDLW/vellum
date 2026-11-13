@@ -33,8 +33,12 @@ plugin framework or another scheduler.
   Both execution paths now share process-tree termination. Unix execution creates
   a process group; Windows uses asynchronous, hidden `taskkill /T`. Graceful Unix
   exits no longer require waiting the whole escalation interval.
+- Windows termination resolves `taskkill.exe` from the system directory, including
+  hosts with no System32 entry in PATH. A utility failure is reported and falls
+  back to terminating the owned child and closing its inherited output pipes.
 - Background startup errors had no error listener. Startup is now reported only
-  after the spawn event, and pre-cancelled operations launch nothing. Optional
+  after the spawn event. Pre-cancelled operations launch nothing, and cancellation
+  received while awaiting startup terminates the new process. Optional
   display callback errors cannot escape the output event handler and crash Vellum.
 
 ## Validation boundary

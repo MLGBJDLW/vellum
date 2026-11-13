@@ -10,3 +10,6 @@ its byte limit. Cancel complete subprocess trees through one shared implementati
 correctly distinguish cancellation from timeout, and avoid blocking the Windows
 event loop during process cleanup. Handle background startup failures without
 unhandled process errors and preserve captured output when display callbacks fail.
+Resolve Windows termination tools from the system directory without relying on
+PATH, report cleanup failures with a direct-child fallback, and honor cancellation
+that arrives before background startup is acknowledged.
