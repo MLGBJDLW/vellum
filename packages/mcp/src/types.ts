@@ -4,6 +4,7 @@
 
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { ContentBlock } from "@modelcontextprotocol/sdk/types.js";
 
 // ============================================
 // Legacy Types (Deprecated - Kept for Migration)
@@ -202,6 +203,8 @@ export interface McpTool {
 export interface McpToolCallResponse {
   /** Response content items */
   content: McpToolContent[];
+  /** Structured output returned by the server, including structured-only results. */
+  structuredContent?: Record<string, unknown>;
   /** Whether the tool call resulted in an error */
   isError?: boolean;
 }
@@ -209,10 +212,7 @@ export interface McpToolCallResponse {
 /**
  * Content types that can be returned from tool calls.
  */
-export type McpToolContent =
-  | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string }
-  | { type: "resource"; resource: McpResource };
+export type McpToolContent = ContentBlock;
 
 // ============================================
 // Resource Types

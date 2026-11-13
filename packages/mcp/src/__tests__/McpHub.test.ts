@@ -18,17 +18,19 @@ const mockConnect = vi.fn();
 const mockClose = vi.fn();
 
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
-  Client: vi.fn().mockImplementation(() => ({
-    listTools: mockListTools,
-    callTool: mockCallTool,
-    listResources: mockListResources,
-    readResource: mockReadResource,
-    listPrompts: mockListPrompts,
-    getPrompt: mockGetPrompt,
-    listResourceTemplates: mockListResourceTemplates,
-    connect: mockConnect,
-    close: mockClose,
-  })),
+  Client: vi.fn().mockImplementation(function MockClient() {
+    return {
+      listTools: mockListTools,
+      callTool: mockCallTool,
+      listResources: mockListResources,
+      readResource: mockReadResource,
+      listPrompts: mockListPrompts,
+      getPrompt: mockGetPrompt,
+      listResourceTemplates: mockListResourceTemplates,
+      connect: mockConnect,
+      close: mockClose,
+    };
+  }),
 }));
 
 vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
@@ -54,9 +56,11 @@ vi.mock("node:fs/promises", () => ({
   },
 }));
 
-import { filterTools } from "../McpCapabilityDiscovery.js";
+import { filterTools, McpCapabilityDiscovery } from "../McpCapabilityDiscovery.js";
 // Import after mocks are set up
 import { McpHub } from "../McpHub.js";
+import { McpServerLifecycle } from "../McpServerLifecycle.js";
+import { McpServerRegistry } from "../McpServerRegistry.js";
 
 describe("McpHub Tool System", () => {
   let hub: McpHub;
@@ -125,6 +129,40 @@ describe("McpHub Tool System", () => {
 
   afterEach(async () => {
     await hub.dispose();
+  });
+
+  it("closes the client and transport when startup discovery fails", async () => {
+    const discovery = new McpCapabilityDiscovery({
+      connectionProvider: {
+        getConnections: () => [],
+        getConnection: () => undefined,
+        isServerConnected: () => false,
+      },
+    });
+    vi.spyOn(discovery, "discoverServerCapabilities").mockRejectedValueOnce(
+      new Error("invalid inventory")
+    );
+    const lifecycle = new McpServerLifecycle({
+      registry: new McpServerRegistry(),
+      capabilityDiscovery: discovery,
+      protocolVersion: "test",
+    });
+    lifecycle.setConnectionStore({
+      addConnection: vi.fn(),
+      findConnection: () => undefined,
+      removeConnection: () => undefined,
+      getConnections: () => [],
+    });
+    const transport = { start: vi.fn(), close: vi.fn().mockResolvedValue(undefined) };
+    const { StdioClientTransport } = await import("@modelcontextprotocol/sdk/client/stdio.js");
+    vi.mocked(StdioClientTransport).mockImplementationOnce(function MockTransport() {
+      return transport;
+    } as unknown as typeof StdioClientTransport);
+    const result = await lifecycle.connectToServer("broken", { command: "unused" });
+    expect(result.server.statusInfo).toEqual({ status: "failed", error: "invalid inventory" });
+    expect(mockClose).toHaveBeenCalledOnce();
+    expect(transport.close).toHaveBeenCalledOnce();
+    await lifecycle.dispose();
   });
 
   // ============================================
