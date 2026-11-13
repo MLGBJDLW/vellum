@@ -196,6 +196,9 @@ export const batchTool = defineTool({
       if (op.tool === "batch") {
         return fail("Cannot nest batch operations");
       }
+      if (op.tool.toLowerCase() === "switch_workspace") {
+        return fail("Call switch_workspace alone, outside batch operations");
+      }
     }
 
     // Execute operations with concurrency

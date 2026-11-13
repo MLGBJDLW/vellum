@@ -24,6 +24,7 @@ import {
   createToolRegistry,
   createUserMessage,
   getTextContent,
+  loadSessionTodos,
   ProjectMemoryService,
   registerAllBuiltinTools,
   registerGitTools,
@@ -232,12 +233,6 @@ import {
   setBannerSeen as saveBannerSeen,
   setThemeInSettings,
 } from "./tui/i18n/settings-integration.js";
-import {
-  disposeLsp,
-  initializeLsp,
-  type LspIntegrationOptions,
-  type LspIntegrationResult,
-} from "./tui/lsp-integration.js";
 // Metrics integration
 import {
   attachToolLifecycleMetrics,
@@ -623,16 +618,31 @@ function createCommandRegistry(): CommandRegistry {
  * @param registry - Command registry to register commands into
  * @param pluginResult - Result from plugin initialization
  */
-function registerPluginCommands(registry: CommandRegistry, pluginResult: PluginInitResult): void {
+function registerPluginCommands(
+  registry: CommandRegistry,
+  pluginResult: PluginInitResult
+): () => void {
   const commands = getPluginCommands(pluginResult.manager);
+  const removals: Array<() => void> = [];
   for (const cmd of commands) {
     try {
+      const previous = registry.get(cmd.name);
       registry.register(cmd);
+      if (registry.get(cmd.name) === cmd) {
+        removals.push(() => {
+          if (registry.get(cmd.name) !== cmd) return;
+          registry.unregister(cmd.name);
+          if (previous?.name === cmd.name) registry.register(previous);
+        });
+      }
     } catch (error) {
       // Log but don't fail on command conflicts
       console.warn(`[plugin] Failed to register command '${cmd.name}':`, error);
     }
   }
+  return () => {
+    for (const remove of removals.reverse()) remove();
+  };
 }
 
 export function App({
@@ -664,11 +674,17 @@ export function App({
   }, [toolRegistryProp]);
 
   // If an AgentLoop is provided, MCP tools must execute via the same ToolExecutor.
-  const toolExecutor: ToolExecutor | undefined = useMemo(() => {
-    if (toolExecutorProp) {
-      return toolExecutorProp;
-    }
-    return agentLoopProp?.getToolExecutor();
+  const [toolExecutor, setToolExecutor] = useState<ToolExecutor | undefined>(
+    () => toolExecutorProp ?? agentLoopProp?.getToolExecutor()
+  );
+  useEffect(() => {
+    setToolExecutor(toolExecutorProp ?? agentLoopProp?.getToolExecutor());
+    if (!agentLoopProp) return;
+    const updateExecutor = () => setToolExecutor(agentLoopProp.getToolExecutor());
+    agentLoopProp.on("workspaceChanged", updateExecutor);
+    return () => {
+      agentLoopProp.off("workspaceChanged", updateExecutor);
+    };
   }, [agentLoopProp, toolExecutorProp]);
 
   return (
@@ -718,6 +734,17 @@ function AppContent({
   const { messages, addMessage, clearMessages, setMessages, pendingMessage } = useMessages();
   const [isLoading, setIsLoading] = useState(false);
   const taskSubmissionRef = useRef(false);
+  const [workingDirectory, setWorkingDirectory] = useState(
+    () => agentLoopProp?.getWorkingDirectory() ?? process.cwd()
+  );
+  useEffect(() => {
+    if (!agentLoopProp) return;
+    setWorkingDirectory(agentLoopProp.getWorkingDirectory());
+    agentLoopProp.on("workspaceChanged", setWorkingDirectory);
+    return () => {
+      agentLoopProp.off("workspaceChanged", setWorkingDirectory);
+    };
+  }, [agentLoopProp]);
   const [steeringCount, setSteeringCount] = useState(0);
   useEffect(() => {
     if (!agentLoopProp) return;
@@ -779,13 +806,13 @@ function AppContent({
   } = useDesktopNotification({ enabled: true });
 
   // Workspace and git status for header separator
-  const { name: workspaceName } = useWorkspace();
+  const { name: workspaceName } = useWorkspace(workingDirectory);
   const {
     branch: gitBranch,
     changedFiles: gitChangedFiles,
     additions: gitAdditions,
     deletions: gitDeletions,
-  } = useGitStatus();
+  } = useGitStatus(workingDirectory);
 
   // Alternate buffer configuration
   // Enabled by default (config defaults to true)
@@ -907,7 +934,7 @@ function AppContent({
   useEffect(() => {
     // Initialize sandbox on mount
     sandboxRef.current = initializeSandbox({
-      workingDirectory: process.cwd(),
+      workingDirectory,
       allowNetwork: false,
       allowFileSystem: true,
       timeoutMs: 30000,
@@ -917,7 +944,7 @@ function AppContent({
       // Cleanup sandbox on unmount
       void cleanupSandbox();
     };
-  }, []);
+  }, [workingDirectory]);
 
   //: Resilience (circuit breaker, rate limiter, fallback)
   const [resilientProvider, setResilientProvider] = useState<ResilientProvider | null>(null);
@@ -992,7 +1019,7 @@ function AppContent({
     }
 
     // Get the tool executor from the agent loop
-    const toolExecutor = agentLoopProp?.getToolExecutor();
+    let toolExecutor = agentLoopProp?.getToolExecutor();
     if (!toolExecutor) {
       return;
     }
@@ -1022,13 +1049,20 @@ function AppContent({
         );
       },
     };
-    toolExecutor.setEnterpriseHooks(coreHooks);
+    const rebind = () => {
+      toolExecutor?.setEnterpriseHooks(null);
+      toolExecutor = agentLoopProp?.getToolExecutor();
+      toolExecutor?.setEnterpriseHooks(coreHooks);
+    };
+    rebind();
+    agentLoopProp?.on("workspaceChanged", rebind);
 
     console.debug("[enterprise] Wired enterprise hooks to ToolExecutor");
 
     return () => {
       // Clear hooks on cleanup
-      toolExecutor.setEnterpriseHooks(null);
+      agentLoopProp?.off("workspaceChanged", rebind);
+      toolExecutor?.setEnterpriseHooks(null);
     };
   }, [enterpriseHooks, agentLoopProp]);
 
@@ -1225,6 +1259,17 @@ function AppContent({
   // ==========================================================================
   const mcpContext = useMcp();
   useEffect(() => {
+    const hub = mcpContext.hub;
+    if (!hub || !agentLoopProp) return;
+    const rebind = () => hub.rebindToolExecutor(agentLoopProp.getToolExecutor());
+    rebind();
+    // Bind in the event itself, before AgentLoop starts its next model turn.
+    agentLoopProp.on("workspaceChanged", rebind);
+    return () => {
+      agentLoopProp.off("workspaceChanged", rebind);
+    };
+  }, [agentLoopProp, mcpContext.hub]);
+  useEffect(() => {
     if (mcpContext.hub && mcpContext.isInitialized) {
       setMcpCommandsHub(mcpContext.hub);
     }
@@ -1291,7 +1336,9 @@ function AppContent({
 
   // Session list state - loaded from storage
   const [sessions, setSessions] = useState<SessionMetadata[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string>(() => createId());
+  const [activeSessionId, setActiveSessionId] = useState<string>(
+    () => agentLoopProp?.getRuntimeSessionId?.() ?? createId()
+  );
 
   // Extended token usage state (Fix 2: TUI layer token counting)
   const tokenUsageRef = useRef({
@@ -1321,9 +1368,13 @@ function AppContent({
     cacheWriteTokens: 0,
   });
   const previousTokenUsageRef = useRef({ inputTokens: 0, outputTokens: 0 });
+  const saveCurrentSessionRef = useRef<(() => Promise<void>) | null>(null);
+  const sessionSelectionRequestRef = useRef(0);
+  const sessionTransitionRef = useRef<Promise<void> | null>(null);
 
   const switchToSession = useCallback(
-    (sessionId: string, session?: Session): boolean => {
+    async (sessionId: string, session?: Session): Promise<boolean> => {
+      if (sessionTransitionRef.current) return false;
       if (taskSubmissionRef.current) {
         addMessage({
           role: "assistant",
@@ -1331,47 +1382,66 @@ function AppContent({
         });
         return false;
       }
-      if (sessionId !== activeSessionId) {
-        try {
-          agentLoopProp?.clearDelegations?.();
-        } catch {
-          addMessage({
-            role: "assistant",
-            content: "Finish or stop delegated work before switching sessions.",
-          });
-          return false;
+      let finishTransition = () => {};
+      sessionTransitionRef.current = new Promise<void>((resolve) => {
+        finishTransition = resolve;
+      });
+      try {
+        // Drain pending saves while the previous runtime still owns its complete
+        // provider transcript, including tool receipts and compaction metadata.
+        await saveCurrentSessionRef.current?.();
+        if (taskSubmissionRef.current) return false;
+        if (sessionId !== activeSessionId || session) {
+          try {
+            agentLoopProp?.replaceSession(sessionId, session?.messages ?? []);
+          } catch {
+            addMessage({
+              role: "assistant",
+              content: "Finish or stop delegated work before switching sessions.",
+            });
+            return false;
+          }
         }
+        sessionCacheRef.current = session ?? null;
+        setMessages(toUIMessages(session?.messages ?? []));
+        setContextTokens(undefined);
+        previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
+        tokenUsageRef.current = {
+          inputTokens: 0,
+          outputTokens: 0,
+          thinkingTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          totalCost: 0,
+        };
+        setTokenUsage({
+          inputTokens: 0,
+          outputTokens: 0,
+          thinkingTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          totalCost: 0,
+        });
+        setTurnUsage({
+          inputTokens: 0,
+          outputTokens: 0,
+          thinkingTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        });
+        setActiveSessionId(sessionId);
+        return true;
+      } catch (error) {
+        notifyError(
+          `Unable to switch sessions: ${error instanceof Error ? error.message : String(error)}`
+        );
+        return false;
+      } finally {
+        sessionTransitionRef.current = null;
+        finishTransition();
       }
-      sessionCacheRef.current = session ?? null;
-      setContextTokens(undefined);
-      previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
-      tokenUsageRef.current = {
-        inputTokens: 0,
-        outputTokens: 0,
-        thinkingTokens: 0,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        totalCost: 0,
-      };
-      setTokenUsage({
-        inputTokens: 0,
-        outputTokens: 0,
-        thinkingTokens: 0,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        totalCost: 0,
-      });
-      setTurnUsage({
-        inputTokens: 0,
-        outputTokens: 0,
-        thinkingTokens: 0,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-      });
-      setActiveSessionId(sessionId);
-      return true;
     },
-    [activeSessionId, addMessage, agentLoopProp]
+    [activeSessionId, addMessage, agentLoopProp, setMessages, notifyError]
   );
 
   const refreshSessions = useCallback(async () => {
@@ -1402,9 +1472,15 @@ function AppContent({
   // Session storage (file-backed with memory fallback while initializing)
   const sessionStorage = useMemo<SessionStorage>(() => {
     const fallbackStorage = createMemorySessionStorage();
+    let loadRequest = 0;
 
     return {
       async save(sessionId, sessionMessages) {
+        const sessionWorkingDirectory = agentLoopProp?.getWorkingDirectory() ?? process.cwd();
+        if (agentLoopProp?.getRuntimeSessionId() === sessionId && !taskSubmissionRef.current) {
+          const runtimeHistory = agentLoopProp.getMessages();
+          if (runtimeHistory.length > 0) sessionMessages = runtimeHistory;
+        }
         const storage = storageManagerRef.current;
         if (!storage) {
           await fallbackStorage.save(sessionId, sessionMessages);
@@ -1420,7 +1496,7 @@ function AppContent({
               id: sessionId,
               title: "New Session",
               mode: mapCodingModeToSessionMode(currentModeRef.current),
-              workingDirectory: process.cwd(),
+              workingDirectory: sessionWorkingDirectory,
               messages: [],
             });
           }
@@ -1443,7 +1519,7 @@ function AppContent({
             title,
             summary,
             lastActive: new Date(),
-            workingDirectory: process.cwd(),
+            workingDirectory: sessionWorkingDirectory,
             messageCount: sessionMessages.length,
             tokenCount,
             mode: mapCodingModeToSessionMode(currentModeRef.current),
@@ -1456,15 +1532,29 @@ function AppContent({
       },
 
       async load(sessionId) {
+        const request = ++loadRequest;
         const storage = storageManagerRef.current;
-        if (!storage) {
-          return fallbackStorage.load(sessionId);
-        }
-
+        const historyAtLoad = agentLoopProp?.getMessages() ?? [];
         try {
-          const session = await storage.load(sessionId);
-          sessionCacheRef.current = session;
-          return session.messages;
+          const session = storage ? await storage.load(sessionId).catch(() => null) : null;
+          const loaded = storage
+            ? (session?.messages ?? null)
+            : await fallbackStorage.load(sessionId);
+          if (request === loadRequest && agentLoopProp?.getRuntimeSessionId() === sessionId) {
+            const currentHistory = agentLoopProp.getMessages();
+            if (
+              taskSubmissionRef.current ||
+              currentHistory.length !== historyAtLoad.length ||
+              currentHistory.some((message, index) => message !== historyAtLoad[index])
+            ) {
+              // A prompt was submitted while disk I/O was pending. Keep that live
+              // conversation instead of replacing it with the earlier snapshot.
+              return currentHistory;
+            }
+            agentLoopProp.replaceSession(sessionId, loaded ?? []);
+            sessionCacheRef.current = session;
+          }
+          return loaded;
         } catch {
           return null;
         }
@@ -1491,7 +1581,7 @@ function AppContent({
         }
       },
     };
-  }, [refreshSessions]);
+  }, [agentLoopProp, refreshSessions]);
 
   // ==========================================================================
   // Adapter Integration - Session Adapter
@@ -1511,6 +1601,7 @@ function AppContent({
     saveDebounceMs: 2000, // Auto-save after 2 seconds of inactivity
     autoLoad: true, // Load session on mount
   });
+  saveCurrentSessionRef.current = saveSession;
 
   const costService = useMemo(
     () => createCostService({ sessionId: activeSessionId }),
@@ -1545,6 +1636,7 @@ function AppContent({
   const persistence = usePersistence({
     sessionId: activeSessionId,
     storage: sessionStorage,
+    basicPersistenceEnabled: false,
     storageManager: storageManagerRef.current ?? undefined,
     enableAdvancedPersistence: !!storageManagerRef.current,
     autoSave: true,
@@ -1604,57 +1696,8 @@ function AppContent({
   }, [pendingApproval.length, showApprovalQueue]);
 
   const loadTodos = useCallback(async (): Promise<readonly TodoItemData[]> => {
-    const todoFilePath = join(process.cwd(), ".vellum", "todos.json");
-
-    try {
-      const content = await readFile(todoFilePath, { encoding: "utf-8" });
-      const parsed = JSON.parse(content) as unknown;
-
-      if (!parsed || typeof parsed !== "object") {
-        return [];
-      }
-
-      const items = (parsed as { items?: unknown }).items;
-      if (!Array.isArray(items)) {
-        return [];
-      }
-
-      return items
-        .map((item): TodoItemData | null => {
-          if (!item || typeof item !== "object") return null;
-
-          const id = (item as { id?: unknown }).id;
-          const text = (item as { text?: unknown }).text;
-          const completed = (item as { completed?: unknown }).completed;
-          const createdAt = (item as { createdAt?: unknown }).createdAt;
-          const completedAt = (item as { completedAt?: unknown }).completedAt;
-
-          if (
-            typeof id !== "number" ||
-            typeof text !== "string" ||
-            typeof completed !== "boolean"
-          ) {
-            return null;
-          }
-
-          const createdAtStr = typeof createdAt === "string" ? createdAt : new Date().toISOString();
-          const completedAtStr = typeof completedAt === "string" ? completedAt : undefined;
-
-          const mapped: TodoItemData = {
-            id,
-            title: text,
-            status: completed ? "completed" : "pending",
-            createdAt: createdAtStr,
-            completedAt: completedAtStr,
-          };
-
-          return mapped;
-        })
-        .filter((item): item is TodoItemData => item !== null);
-    } catch {
-      return [];
-    }
-  }, []);
+    return (await loadSessionTodos(workingDirectory, activeSessionId)).items;
+  }, [workingDirectory, activeSessionId]);
 
   const loadMemories = useCallback(async (): Promise<MemoryPanelProps["entries"]> => {
     const projectEntries: Array<MemoryPanelProps["entries"][number]> = [];
@@ -1662,7 +1705,7 @@ function AppContent({
     // 1) Project memory service entries (.vellum/memory.json)
     try {
       const service = new ProjectMemoryService();
-      await service.initialize(process.cwd());
+      await service.initialize(workingDirectory);
       try {
         projectEntries.push(...(await service.listEntries()));
       } finally {
@@ -1674,7 +1717,7 @@ function AppContent({
 
     // 2) save_memory tool entries (.vellum/memory/{namespace}/{key}.json)
     const toolEntries: Array<MemoryPanelProps["entries"][number]> = [];
-    const toolMemoryBaseDir = join(process.cwd(), ".vellum", "memory");
+    const toolMemoryBaseDir = join(workingDirectory, ".vellum", "memory");
 
     try {
       const namespaceEntries = await readdir(toolMemoryBaseDir, { withFileTypes: true });
@@ -1734,9 +1777,10 @@ function AppContent({
     ];
     combined.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     return combined;
-  }, []);
+  }, [workingDirectory]);
 
   const { todoItems, memoryEntries, refreshTodos } = useSidebarPanelData({
+    scopeKey: JSON.stringify([workingDirectory, activeSessionId]),
     sidebarVisible: showSidebar,
     sidebarContent,
     executions,
@@ -1781,14 +1825,22 @@ function AppContent({
   // Snapshots (SnapshotCheckpointPanel integration)
   // ==========================================================================
 
-  const snapshots = useSnapshots();
+  const snapshots = useSnapshots(workingDirectory);
+  const checkpointDiffRequestRef = useRef(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: changing workspace invalidates its pending diff and closes the old project view.
+  useEffect(() => {
+    checkpointDiffRequestRef.current += 1;
+    setCheckpointDiff({ content: "", isLoading: false, isVisible: false });
+  }, [workingDirectory]);
 
   const openCheckpointDiff = useCallback(
     async (hash: string) => {
+      const request = ++checkpointDiffRequestRef.current;
       setCheckpointDiff({ content: "", snapshotHash: hash, isLoading: true, isVisible: true });
 
       try {
         const diff = await snapshots.diff(hash);
+        if (request !== checkpointDiffRequestRef.current) return;
         setCheckpointDiff({
           content: diff,
           snapshotHash: hash,
@@ -1796,6 +1848,7 @@ function AppContent({
           isVisible: true,
         });
       } catch (error) {
+        if (request !== checkpointDiffRequestRef.current) return;
         setCheckpointDiff({
           content: `Failed to load diff: ${error instanceof Error ? error.message : String(error)}`,
           snapshotHash: hash,
@@ -1808,6 +1861,7 @@ function AppContent({
   );
 
   const closeCheckpointDiff = useCallback(() => {
+    checkpointDiffRequestRef.current += 1;
     setCheckpointDiff((prev) => ({ ...prev, isVisible: false }));
   }, []);
 
@@ -2461,14 +2515,17 @@ function AppContent({
   const [_pluginResult, setPluginResult] = useState<PluginInitResult | null>(null);
   const [_pluginsLoading, setPluginsLoading] = useState(true);
 
-  // Initialize plugins on mount
+  // Project commands belong to the current workspace.
   useEffect(() => {
     let cancelled = false;
+    let removeCommands: (() => void) | undefined;
+    setPluginResult(null);
+    setPluginsLoading(true);
 
     const loadPlugins = async () => {
       try {
         const result = await initializePlugins({
-          projectRoot: process.cwd(),
+          projectRoot: workingDirectory,
           autoTrust: false,
           eagerLoad: false,
           includeBuiltin: true,
@@ -2480,7 +2537,7 @@ function AppContent({
           setPluginResult(result);
 
           // Register plugin commands into the registry
-          registerPluginCommands(commandRegistry, result);
+          removeCommands = registerPluginCommands(commandRegistry, result);
           bumpCommandRegistryVersion();
 
           // Log plugin loading results
@@ -2504,9 +2561,11 @@ function AppContent({
 
     return () => {
       cancelled = true;
+      removeCommands?.();
+      bumpCommandRegistryVersion();
       disposePlugins();
     };
-  }, [commandRegistry, bumpCommandRegistryVersion]);
+  }, [commandRegistry, bumpCommandRegistryVersion, workingDirectory]);
 
   // Load user-defined commands from ~/.vellum/commands
   useEffect(() => {
@@ -2537,63 +2596,8 @@ function AppContent({
     };
   }, [commandRegistry, bumpCommandRegistryVersion]);
 
-  // ==========================================================================
-  //: LSP Integration
-  // ==========================================================================
-
-  // LSP initialization state
-  const [_lspResult, setLspResult] = useState<LspIntegrationResult | null>(null);
-  const [_lspLoading, setLspLoading] = useState(true);
-
-  // Initialize LSP on mount (non-blocking, graceful fallback)
-  useEffect(() => {
-    let cancelled = false;
-    const isDebug = !!process.env.VELLUM_DEBUG;
-
-    const loadLsp = async () => {
-      try {
-        const result = await initializeLsp({
-          workspaceRoot: process.cwd(),
-          toolRegistry: toolRegistry as LspIntegrationOptions["toolRegistry"],
-          autoInstall: false,
-          logger: isDebug
-            ? {
-                debug: (msg) => console.debug(`[lsp] ${msg}`),
-                info: (msg) => console.info(`[lsp] ${msg}`),
-                warn: (msg) => console.warn(`[lsp] ${msg}`),
-                error: (msg) => console.error(`[lsp] ${msg}`),
-              }
-            : undefined,
-        });
-
-        if (cancelled) return;
-
-        setLspResult(result);
-        if (isDebug) {
-          const msg = result.success
-            ? `[lsp] Initialized with ${result.toolCount} tools, ${result.availableServers.length} servers available`
-            : `[lsp] Initialization skipped: ${result.error}`;
-          console.debug(msg);
-        }
-        setLspLoading(false);
-      } catch (error) {
-        if (cancelled) return;
-        // LSP is optional - log but don't fail
-        if (isDebug) console.debug("[lsp] Failed to initialize (non-critical):", error);
-        setLspLoading(false);
-      }
-    };
-
-    void loadLsp();
-
-    return () => {
-      cancelled = true;
-      void disposeLsp();
-    };
-  }, [toolRegistry]);
-
   const handleCommandEvent = useCallback(
-    (event: string, data?: unknown) => {
+    async (event: string, data?: unknown) => {
       if (event === "app:exit") {
         // Show goodbye message
         addMessage({ role: "assistant", content: "Goodbye! See you next time." });
@@ -2624,7 +2628,7 @@ function AppContent({
       if (event === "session:resume") {
         const payload = data as ResumeSessionEventData | undefined;
         if (payload?.session) {
-          if (switchToSession(payload.session.metadata.id, payload.session)) {
+          if (await switchToSession(payload.session.metadata.id, payload.session)) {
             setMessages([...toUIMessages(payload.session.messages)]);
           }
         }
@@ -2645,7 +2649,7 @@ function AppContent({
       session: {
         id: activeSessionId,
         provider: currentProvider,
-        cwd: process.cwd(),
+        cwd: workingDirectory,
       },
       credentials: credentialManager,
       toolRegistry,
@@ -2661,6 +2665,7 @@ function AppContent({
     activeSessionId,
     currentProvider,
     handleCommandEvent,
+    workingDirectory,
   ]);
 
   useEffect(() => {
@@ -2671,9 +2676,9 @@ function AppContent({
     contextProviderRef.current.updateSession({
       id: activeSessionId,
       provider: currentProvider,
-      cwd: process.cwd(),
+      cwd: workingDirectory,
     });
-  }, [activeSessionId, currentProvider]);
+  }, [activeSessionId, currentProvider, workingDirectory]);
 
   useEffect(() => {
     if (!commandExecutor) {
@@ -2777,10 +2782,12 @@ function AppContent({
         cancellationRef.current.cancel("shutdown");
       }
       agentLoopProp?.cancel("shutdown");
-      await getOrchestrator()?.shutdown();
-      // Save session on shutdown
-      await saveSession();
-      await previousCleanup?.();
+      try {
+        await getOrchestrator()?.shutdown();
+        await saveSession();
+      } finally {
+        await previousCleanup?.();
+      }
     };
     setShutdownCleanup(cleanup);
 
@@ -3116,6 +3123,8 @@ function AppContent({
   const handleMessage = useCallback(
     async function sendMessage(text: string) {
       if (!text.trim()) return;
+      // Keep the submitted prompt intact until the selected transcript is ready.
+      await sessionTransitionRef.current;
 
       if (followupPrompt && agentLoopProp) {
         const response = resolveFollowupResponse(text, followupPrompt.suggestions);
@@ -3889,11 +3898,22 @@ function AppContent({
   }, []);
 
   const handleSessionSelected = useCallback(
-    (id: string) => {
-      if (switchToSession(id)) announce(`Selected session: ${id}`);
-      setShowSessionManager(false);
+    async (id: string) => {
+      const request = ++sessionSelectionRequestRef.current;
+      try {
+        const session = await storageManagerRef.current?.load(id);
+        if (request !== sessionSelectionRequestRef.current) return;
+        if (await switchToSession(id, session)) {
+          announce(`Selected session: ${id}`);
+          setShowSessionManager(false);
+        }
+      } catch (error) {
+        notifyError(
+          `Unable to load session: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     },
-    [announce, switchToSession]
+    [announce, switchToSession, notifyError]
   );
 
   const loadSessionPreviewMessages = useCallback(
@@ -4080,6 +4100,7 @@ function AppContent({
       updateAvailable={updateAvailable}
       redoBacktrack={redoBacktrack}
       workspace={workspaceName}
+      workingDirectory={workingDirectory}
       branch={gitBranch}
       changedFiles={gitChangedFiles}
       additions={gitAdditions}
@@ -4104,6 +4125,7 @@ type TipValue = ReturnType<typeof useTipEngine>["currentTip"];
 type ToolApprovalState = ReturnType<typeof useToolApprovalController>;
 
 interface AppContentViewProps {
+  readonly workingDirectory: string;
   readonly agentLevel?: 0 | 1 | 2;
   readonly announce: (message: string) => void;
   readonly alternateBufferEnabled: boolean;
@@ -4944,6 +4966,7 @@ function AppHeader({
 }
 
 function AppContentView({
+  workingDirectory,
   agentLevel,
   announce,
   alternateBufferEnabled,
@@ -5416,7 +5439,7 @@ function AppContentView({
             disabled={commandInputDisabled}
             focused={commandInputFocused}
             historyKey="vellum-command-history"
-            cwd={process.cwd()}
+            cwd={workingDirectory}
           />
         </Clickable>
         {steeringCount > 0 && (

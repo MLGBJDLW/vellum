@@ -47,7 +47,7 @@ let skillConfig: SkillConfig | null = null;
  *
  * @param manager - SkillManager instance to use
  */
-export function setSkillManager(manager: SkillManager): void {
+export function setSkillManager(manager: SkillManager | null): void {
   sharedManager = manager;
 }
 

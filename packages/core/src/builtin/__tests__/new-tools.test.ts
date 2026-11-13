@@ -362,6 +362,34 @@ describe("batchTool", () => {
         expect(result.error).toContain("nest");
       }
     });
+
+    it.each(["switch_workspace", "Switch_Workspace"])(
+      "rejects %s before executing any batch operation",
+      async (name) => {
+        const execute = vi.fn().mockResolvedValue({ success: true, output: {} });
+        const tool = { execute };
+        setBatchToolRegistry({
+          get: (requested: string) =>
+            ["read_file", "switch_workspace"].includes(requested.toLowerCase()) ? tool : undefined,
+        } as unknown as ToolRegistry);
+
+        const result = await batchTool.execute(
+          {
+            operations: [
+              { tool: "read_file", params: { path: "before.txt" } },
+              { tool: name, params: { path: "../other-project" } },
+            ],
+            concurrency: 2,
+            stopOnError: true,
+          },
+          mockContext
+        );
+
+        expect(result.success).toBe(false);
+        if (!result.success) expect(result.error).toContain("switch_workspace alone");
+        expect(execute).not.toHaveBeenCalled();
+      }
+    );
   });
 });
 

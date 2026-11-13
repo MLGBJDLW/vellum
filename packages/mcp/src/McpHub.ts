@@ -178,6 +178,12 @@ export class McpHub implements ConnectionProvider {
   // Incremental update manager
   private readonly updater: McpIncrementalUpdater;
 
+  /** Synchronously attach existing and future MCP tools to the current runtime. */
+  rebindToolExecutor(executor?: ToolExecutor): void {
+    this.toolExecutor = executor;
+    this.capabilityDiscovery.rebindToolExecutor(executor);
+  }
+
   // ============================================
   // T008: Constructor
   // ============================================

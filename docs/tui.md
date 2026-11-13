@@ -85,6 +85,8 @@ Responses, tool results, and streaming text share one scrollable viewport. PageU
 
 Set `VELLUM_REDUCED_MOTION=1` to disable decorative clock animations and skip the startup transition. Loading states remain visible. Scrollbar feedback only animates while active, and completed tool rows and text inputs do not subscribe to animation frames.
 
+Active tools, thinking, and loading share Vellum's ink mark: `╲·╱ → ╲•╱ → ╲◆╱ → ╲•╱`. Its folded-page V and pulsing ink drop echo the existing parchment and manuscript identity. Only the three-cell mark moves; operation names remain readable in the theme's ink color. All marks use the existing shared clock, with no separate spinner timers or animated label gradients. `VELLUM_ICONS=ascii` selects an equally sized ASCII mark; reduced motion keeps a still mark, and `NO_COLOR` removes its color. The footer keeps each mode and agent level in one theme-owned color.
+
 ## Mouse and Thinking controls
 
 Use `/mouse` or `/mouse status` to inspect the current mouse mode. Mode changes take effect immediately in the running session; restarting restores the configured defaults.
@@ -893,3 +895,10 @@ For complete TypeScript types and API documentation, see the source files in `pa
 - Sidebar Status shows the latest main-agent prompt occupancy and the selected model's context window. It never compares cumulative session token spend to one context window. After compaction, tokenizer measurements are explicitly marked as estimates; delegated requests do not replace the main-agent measurement. Unknown limits remain unknown.
 - Footer input/output totals include cache and reasoning exactly once. Cache hit percentage is cache reads divided by total input tokens; cache writes are not hits. Costs use the existing detailed pricing calculator and are prefixed with `~` because catalog estimates are not provider invoices.
 - A response stopped by the provider's output-token limit continues through the same task loop. Empty or identical repeated output does not trigger unlimited continuation. Cancellation, explicit budgets and loop detection still apply.
+
+## Session and workspace continuity (0.8.1)
+
+- Tasks belong to a session within a workspace. Starting another session clears the previous plan; returning to the original session restores it. Both task tools use the same records. Unowned legacy `.vellum/todos.json` files are preserved, but are not automatically assigned to new sessions.
+- Enter submits an already complete slash command, including `/session list`. Tab or Enter on a partial command completes it. Submitted text clears immediately, and a new draft typed while a command is running is preserved.
+- In the interactive CLI, the primary agent can call `switch_workspace` with an existing directory. For example, ask it to switch to a neighboring project before continuing. Relative paths resolve from the current workspace. The header, Git status, project instructions, skills, task storage, delegation runtime and language services follow the new directory. Conversation history remains in the current session.
+- Workspace changes run as a single tool call after delegated work finishes. Invalid directories, cancelled preparation and failed setup leave the previous workspace active. Subagents cannot change the primary workspace.

@@ -118,6 +118,28 @@ describe("session adapter identity", () => {
     );
   });
 
+  it("does not overwrite unread history when the session load fails", async () => {
+    const storage: SessionStorage = {
+      save: vi.fn().mockResolvedValue(undefined),
+      clear: vi.fn().mockResolvedValue(undefined),
+      load: vi.fn().mockRejectedValue(new Error("Cannot read saved history")),
+    };
+    let save!: () => Promise<void>;
+    function Editor() {
+      save = useSessionAdapter({ sessionId: "current", storage }).saveSession;
+      return <Text>editor</Text>;
+    }
+    await act(async () => {
+      render(
+        <MessagesProvider>
+          <Editor />
+        </MessagesProvider>
+      );
+    });
+    await expect(save()).rejects.toThrow("Cannot read saved history");
+    expect(storage.save).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])(
     "saves queued edits after an earlier write finishes (failed: %s)",
     async (fails) => {

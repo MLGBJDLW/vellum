@@ -104,6 +104,7 @@ export interface PluginLoadError {
 // =============================================================================
 
 let _pluginManager: PluginManager | null = null;
+let pluginGeneration = 0;
 
 /**
  * Gets the global plugin manager instance.
@@ -144,6 +145,7 @@ export function getPluginManager(): PluginManager | null {
 export async function initializePlugins(
   options: PluginInitOptions = {}
 ): Promise<PluginInitResult> {
+  const generation = ++pluginGeneration;
   const {
     projectRoot = process.cwd(),
     autoTrust = false,
@@ -188,7 +190,7 @@ export async function initializePlugins(
   }
 
   // Store manager globally for access by other modules
-  _pluginManager = manager;
+  if (generation === pluginGeneration) _pluginManager = manager;
 
   // Return initialization result
   const plugins = manager.getPlugins();
@@ -379,5 +381,6 @@ export async function executePluginHooks(
  * Should be called during application shutdown.
  */
 export function disposePlugins(): void {
+  pluginGeneration += 1;
   _pluginManager = null;
 }

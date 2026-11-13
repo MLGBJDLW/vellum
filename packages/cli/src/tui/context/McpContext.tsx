@@ -237,6 +237,11 @@ export function McpProvider({
 
   // Auto-initialize on mount
   useEffect(() => {
+    hub?.rebindToolExecutor(toolExecutor);
+  }, [hub, toolExecutor]);
+
+  // Auto-initialize on mount
+  useEffect(() => {
     if (disableMcp) {
       return;
     }

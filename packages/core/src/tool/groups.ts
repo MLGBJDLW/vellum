@@ -117,7 +117,13 @@ export const BUILTIN_TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
   },
 
   agent: {
-    tools: ["delegate_agent", "ask_followup_question", "attempt_completion", "todo_manage"],
+    tools: [
+      "delegate_agent",
+      "ask_followup_question",
+      "attempt_completion",
+      "todo_manage",
+      "switch_workspace",
+    ],
     description: "Agent control, delegation, and task management tools",
   },
 

@@ -25,9 +25,11 @@ export function useSubagents(loop: AgentLoop | undefined): readonly DelegationUp
       else if (timer === undefined) timer = setTimeout(flush, 100);
     };
     loop?.on("delegationUpdate", update);
+    loop?.on("workspaceChanged", flush);
     flush();
     return () => {
       loop?.off("delegationUpdate", update);
+      loop?.off("workspaceChanged", flush);
       if (timer !== undefined) clearTimeout(timer);
     };
   }, [loop]);

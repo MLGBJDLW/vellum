@@ -103,39 +103,50 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [stateDir, setStateDir] = useState(resolvedDir);
 
   // Ref to track if we're mounted
   const mountedRef = useRef(true);
+  const activeDirRef = useRef(resolvedDir);
+  activeDirRef.current = resolvedDir;
+  const refreshRequestRef = useRef(0);
+  const isCurrent = useCallback(
+    () => mountedRef.current && activeDirRef.current === resolvedDir,
+    [resolvedDir]
+  );
 
   /**
    * Initialize the snapshot system.
    */
   const initialize = useCallback(async (): Promise<boolean> => {
+    if (!isCurrent()) return false;
     try {
       const result = await Snapshot.init(resolvedDir);
       if (result.ok) {
-        if (mountedRef.current) {
+        if (isCurrent()) {
           setIsInitialized(true);
         }
         return true;
       }
-      if (mountedRef.current) {
+      if (isCurrent()) {
         setError(result.error.message);
       }
       return false;
     } catch (err) {
-      if (mountedRef.current) {
+      if (isCurrent()) {
         setError(err instanceof Error ? err.message : "Failed to initialize snapshots");
       }
       return false;
     }
-  }, [resolvedDir]);
+  }, [resolvedDir, isCurrent]);
 
   /**
    * Refresh the list of snapshots.
    */
   const refresh = useCallback(async (): Promise<void> => {
-    if (!mountedRef.current) return;
+    if (!isCurrent()) return;
+    const request = ++refreshRequestRef.current;
+    const canPublish = () => isCurrent() && request === refreshRequestRef.current;
 
     setIsLoading(true);
     setError(null);
@@ -143,8 +154,9 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
     try {
       // Check if initialized
       const initialized = await Snapshot.isInitialized(resolvedDir);
+      if (!canPublish()) return;
       if (!initialized) {
-        if (mountedRef.current) {
+        if (canPublish()) {
           setSnapshots([]);
           setIsInitialized(false);
           setIsLoading(false);
@@ -152,14 +164,14 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
         return;
       }
 
-      if (mountedRef.current) {
+      if (canPublish()) {
         setIsInitialized(true);
       }
 
       // List snapshots
       const result = await Snapshot.listSnapshots(resolvedDir);
 
-      if (!mountedRef.current) return;
+      if (!canPublish()) return;
 
       if (result.ok) {
         // Limit to MAX_SNAPSHOTS
@@ -174,21 +186,22 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
         }
       }
     } catch (err) {
-      if (mountedRef.current) {
+      if (canPublish()) {
         setError(err instanceof Error ? err.message : "Failed to load snapshots");
       }
     } finally {
-      if (mountedRef.current) {
+      if (canPublish()) {
         setIsLoading(false);
       }
     }
-  }, [resolvedDir]);
+  }, [resolvedDir, isCurrent]);
 
   /**
    * Restore files to a specific snapshot.
    */
   const restore = useCallback(
     async (hash: string): Promise<RestoreResult> => {
+      if (!isCurrent()) return { success: false, files: [], error: "Workspace changed" };
       try {
         const result = await Snapshot.restore(resolvedDir, hash);
 
@@ -214,7 +227,7 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
         };
       }
     },
-    [resolvedDir, refresh]
+    [resolvedDir, refresh, isCurrent]
   );
 
   /**
@@ -222,6 +235,7 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
    */
   const diff = useCallback(
     async (hash: string): Promise<string> => {
+      if (!isCurrent()) return "Workspace changed";
       try {
         const result = await Snapshot.diff(resolvedDir, hash);
 
@@ -234,7 +248,7 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
         return `Error: ${err instanceof Error ? err.message : "Failed to get diff"}`;
       }
     },
-    [resolvedDir]
+    [resolvedDir, isCurrent]
   );
 
   /**
@@ -242,20 +256,23 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
    */
   const take = useCallback(
     async (message?: string): Promise<string> => {
+      if (!isCurrent()) throw new Error("Workspace changed");
       try {
         // Ensure initialized
         const initialized = await Snapshot.isInitialized(resolvedDir);
+        if (!isCurrent()) throw new Error("Workspace changed");
         if (!initialized) {
           const initResult = await Snapshot.init(resolvedDir);
           if (!initResult.ok) {
             throw new SnapshotError(initResult.error.message, SnapshotErrorCode.OPERATION_FAILED);
           }
-          if (mountedRef.current) {
+          if (isCurrent()) {
             setIsInitialized(true);
           }
         }
 
         // Track all files
+        if (!isCurrent()) throw new Error("Workspace changed");
         const result = await Snapshot.track(resolvedDir, [], message ?? "Manual checkpoint");
 
         if (result.ok) {
@@ -272,24 +289,29 @@ export function useSnapshots(workingDir?: string): UseSnapshotsResult {
         throw new Error(err instanceof Error ? err.message : "Failed to take snapshot");
       }
     },
-    [resolvedDir, refresh]
+    [resolvedDir, refresh, isCurrent]
   );
 
   // Initial load
   useEffect(() => {
     mountedRef.current = true;
+    setStateDir(resolvedDir);
+    setSnapshots([]);
+    setIsInitialized(false);
+    setError(null);
     void refresh();
 
     return () => {
       mountedRef.current = false;
+      refreshRequestRef.current += 1;
     };
-  }, [refresh]);
+  }, [refresh, resolvedDir]);
 
   return {
-    snapshots,
-    isLoading,
-    error,
-    isInitialized,
+    snapshots: stateDir === resolvedDir ? snapshots : [],
+    isLoading: stateDir === resolvedDir ? isLoading : true,
+    error: stateDir === resolvedDir ? error : null,
+    isInitialized: stateDir === resolvedDir && isInitialized,
     refresh,
     restore,
     diff,

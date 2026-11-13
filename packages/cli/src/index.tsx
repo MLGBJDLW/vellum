@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
-
 import {
   AgentLoop,
   APPROVAL_POLICIES,
@@ -10,16 +7,12 @@ import {
   CODING_MODES,
   type CodingMode,
   OnboardingWizard as CoreOnboardingWizard,
-  createAgentFactory,
   createModeManager,
-  getToolEventBus,
   LLM,
   normalizeMode,
   SANDBOX_POLICIES,
   type SandboxPolicy,
-  UnifiedToolContainer,
 } from "@vellum/core";
-import { createLspTools, LspHub } from "@vellum/lsp";
 import {
   getDefaultModelId,
   getModelReplacement,
@@ -41,6 +34,7 @@ import {
 } from "./commands/credentials.js";
 import { executeInit } from "./commands/init.js";
 import { createLspCommand } from "./commands/lsp.js";
+import { getRoleManager } from "./commands/role.js";
 import { handleRun } from "./commands/run.js";
 import {
   handleSkillCreate,
@@ -50,7 +44,7 @@ import {
 } from "./commands/skill.js";
 import { getEffectiveThinkingConfig } from "./commands/think.js";
 import type { CommandResult } from "./commands/types.js";
-import { getOrCreateOrchestrator, resetOrchestrator } from "./orchestrator-singleton.js";
+import { resetOrchestrator } from "./orchestrator-singleton.js";
 import { executeShutdownCleanup, getShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
 import { BufferedStdout, createCompatStdout, setActiveStdout } from "./tui/buffered-stdout.js";
 import { initializeKittyDetection } from "./tui/hooks/useKittyKeyboard.js";
@@ -62,6 +56,7 @@ import {
 } from "./tui/i18n/settings-integration.js";
 import { isConptyTerminal } from "./tui/utils/detectTerminal.js";
 import { version } from "./version.js";
+import { WorkspaceRuntime } from "./workspace-runtime.js";
 
 // ============================================
 // Helper: Get message from CommandResult
@@ -345,62 +340,17 @@ program
       });
       const modeConfig = BUILTIN_CODING_MODES[effectiveMode];
 
-      // Initialize orchestrator singleton for task delegation
-
-      // Create PromptBuilder with MD prompts (REQ-001: Use MD prompts)
-      const factoryResult = await createAgentFactory({
-        cwd: process.cwd(),
-        projectRoot: process.cwd(),
-        role: options.role, // User override or undefined (uses mode default)
-        mode: effectiveMode, // Load vibe.md/plan.md/spec.md
+      // One owner builds startup and replacement services, including the shared
+      // parent/child tool container and each project's prompt and LSP watchers.
+      const workspaceRuntime = new WorkspaceRuntime({
+        getMode: () => modeManager.getCurrentMode(),
+        getRole: () => getRoleManager()?.currentRole ?? options.role,
+        getPermissionChecker: () => agentLoop?.getConfig().permissionChecker,
       });
-      const { promptBuilder, cleanup } = factoryResult;
-      effectiveRole = factoryResult.effectiveRole;
-
-      // Register cleanup for graceful shutdown
-      setShutdownCleanup(cleanup);
-
-      // Get global tool event bus for timeout warnings
-      const toolEventBus = getToolEventBus();
-
-      // Create unified tool container (T045: Single source of truth for tools)
-      const toolContainer = new UnifiedToolContainer({
-        cwd: process.cwd(),
-        eventBus: toolEventBus,
-      });
-      toolContainer.registerBuiltins();
-      const orchestrator = getOrCreateOrchestrator({ toolContainer });
-
-      // Initialize LSP and register LSP tools to UnifiedToolContainer
-      // This ensures Agent has access to LSP tools (lsp_diagnostics, lsp_hover, etc.)
-      try {
-        const workspaceRoot = process.cwd();
-        const lspHub = LspHub.getInstance({
-          getGlobalConfigPath: async () => join(homedir(), ".vellum", "lsp.json"),
-          getProjectConfigPath: async () => join(resolve(workspaceRoot), ".vellum", "lsp.json"),
-          autoInstall: "never",
-          idleTimeoutMs: 300000,
-          maxRestartAttempts: 3,
-        });
-        await lspHub.initialize();
-
-        // Create LSP tools and register to container
-        // Type assertion needed: LSP package uses `kind: string` but we know it's "lsp"
-        const lspTools = createLspTools(lspHub);
-        for (const tool of lspTools) {
-          toolContainer.registerTool(tool as Parameters<typeof toolContainer.registerTool>[0]);
-        }
-
-        // Compose LSP cleanup with existing shutdown cleanup
-        const previousCleanup = getShutdownCleanup();
-        setShutdownCleanup(async () => {
-          await previousCleanup?.();
-          await lspHub.dispose();
-        });
-      } catch {
-        // LSP initialization is non-critical - agent still works without LSP tools
-        // Tools from the "lsp" group simply won't be available
-      }
+      setShutdownCleanup(() => workspaceRuntime.dispose());
+      const workspace = await workspaceRuntime.prepare(process.cwd(), { allowLspFailure: true });
+      await workspace.commit();
+      effectiveRole = workspace.effectiveRole;
 
       // Create AgentLoop with PromptBuilder and unified tool container
       agentLoop = new AgentLoop({
@@ -412,13 +362,14 @@ program
         cwd: process.cwd(),
         projectRoot: process.cwd(),
         interactive: true,
-        orchestrator,
-        promptBuilder, // Use MD-loaded prompts
+        orchestrator: workspace.orchestrator,
+        promptBuilder: workspace.promptBuilder,
+        prepareWorkspace: (cwd) => workspaceRuntime.prepare(cwd),
         // Dynamic thinking config getter for runtime /think toggling
         getThinkingConfig: getEffectiveThinkingConfig,
         // T045: Wire unified tool container
-        tools: toolContainer.getProviderToolDefinitions(),
-        toolExecutor: toolContainer.getExecutor(),
+        tools: workspace.tools,
+        toolExecutor: workspace.toolExecutor,
         // Enable AGENTS.md and Skills integration for project context
         enableAgentsIntegration: true,
         enableSkillsIntegration: true,

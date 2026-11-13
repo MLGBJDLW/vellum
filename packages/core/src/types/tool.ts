@@ -100,6 +100,8 @@ export interface ToolDefinition<TInput extends z.ZodType> {
 export interface ToolContext {
   /** Current working directory for the tool */
   workingDir: string;
+  /** Parent-only workspace transition, supplied by runtimes that can reload project services. */
+  switchWorkspace?: (path: string, signal: AbortSignal) => Promise<string>;
   /** Identifier for the current session */
   sessionId: string;
   /** Identifier for the message that triggered this tool call */

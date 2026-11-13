@@ -18,7 +18,7 @@ import {
   useMemo,
   useState,
 } from "react";
-
+import { subscribeWorkspaceLsp } from "../../lsp-runtime.js";
 import { useLspConfirmation } from "../hooks/useLspConfirmation.js";
 import { getLspManager, type LspIntegrationState } from "../lsp-integration.js";
 
@@ -235,6 +235,7 @@ export function LspProvider({
   // Register the confirmation handler with LspHub
   useEffect(() => {
     setConfirmationHandler(requestConfirmation);
+    return subscribeWorkspaceLsp(() => setConfirmationHandler(requestConfirmation));
   }, [setConfirmationHandler, requestConfirmation]);
 
   // Create context value

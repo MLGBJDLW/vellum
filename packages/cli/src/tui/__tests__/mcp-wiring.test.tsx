@@ -40,6 +40,8 @@ vi.mock("@vellum/mcp", () => {
 
     async initialize(): Promise<void> {}
 
+    rebindToolExecutor(_executor?: ToolExecutor): void {}
+
     async dispose(): Promise<void> {}
   }
 
