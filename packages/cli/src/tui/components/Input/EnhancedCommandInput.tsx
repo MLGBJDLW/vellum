@@ -312,14 +312,18 @@ export function EnhancedCommandInput({
       originalInputRef.current = null;
       addToHistory(trimmed);
 
+      // Commit the empty editor before dispatch. A command may change sessions
+      // or start asynchronous work; neither should retain the submitted text or
+      // clear a newer draft when it finishes.
+      inputRef.current?.replaceValue("");
+      setDismissedAutocompleteValue(null);
+
       if (isSlashCommand(trimmed)) {
         const command = parseSlashCommand(trimmed);
         onCommand(command);
       } else {
         onMessage(trimmed);
       }
-
-      setValue("");
     },
     [addToHistory, onCommand, onMessage]
   );
@@ -364,6 +368,22 @@ export function EnhancedCommandInput({
       if (key.return || key.tab) {
         if (activeAutocomplete === "slash") {
           const { hasOptions, selectedOption } = slashSelectionRef.current;
+          const query = slashAutocomplete.query.toLowerCase();
+          const isComplete =
+            selectedOption?.name.toLowerCase() === query ||
+            selectedOption?.aliases?.some((alias) => alias.toLowerCase() === query);
+          const currentValue = inputRef.current?.getValue() ?? value;
+          // Enter submits an already complete token (or an unknown command so
+          // the executor can explain the error). A menu from an earlier render
+          // must not replace or resubmit text typed in the same stdin chunk.
+          // Tab always remains completion.
+          if (
+            key.return &&
+            (currentValue !== value || !hasOptions || slashOptions.length === 0 || isComplete)
+          ) {
+            handleSubmit(currentValue);
+            return;
+          }
           if (hasOptions && selectedOption) {
             handleSlashSelect(selectedOption.name);
           }
