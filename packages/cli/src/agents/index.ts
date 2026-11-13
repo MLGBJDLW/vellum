@@ -17,13 +17,6 @@ export {
 // Task persistence utilities
 export {
   createTaskPersistence,
-  type PersistedTaskState,
   type TaskPersistence,
+  type TaskSummary,
 } from "./task-persistence.js";
-// Task resumption utilities
-export {
-  createTaskResumption,
-  type ResumeOptions,
-  type ResumeResult,
-  type TaskResumption,
-} from "./task-resumption.js";
