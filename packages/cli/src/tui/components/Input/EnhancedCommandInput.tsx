@@ -270,36 +270,30 @@ export function EnhancedCommandInput({
   ]);
 
   // History navigation
-  const originalInputRef = useRef<string | null>(null);
-  const { navigateHistory, addToHistory, currentIndex } = useInputHistory({
+  const restoringHistoryRef = useRef(false);
+  const { navigateHistory, addToHistory, resetNavigation } = useInputHistory({
     maxItems: 100,
     persistKey: historyKey,
   });
 
-  const handleHistoryUp = useCallback(() => {
-    if (originalInputRef.current === null) {
-      originalInputRef.current = value;
-    }
-    const entry = navigateHistory("up");
-    if (entry !== null) {
-      setValue(entry);
-    }
-  }, [value, navigateHistory]);
+  const handleHistory = useCallback(
+    (direction: "up" | "down") => {
+      const entry = navigateHistory(direction, inputRef.current?.getValue() ?? value);
+      if (entry === null) return;
+      restoringHistoryRef.current = true;
+      inputRef.current?.replaceValue(entry);
+      restoringHistoryRef.current = false;
+    },
+    [navigateHistory, value]
+  );
 
-  const handleHistoryDown = useCallback(() => {
-    const entry = navigateHistory("down");
-    if (entry !== null) {
-      setValue(entry);
-    } else if (originalInputRef.current !== null && currentIndex === -1) {
-      setValue(originalInputRef.current);
-      originalInputRef.current = null;
-    }
-  }, [navigateHistory, currentIndex]);
-
-  const handleChange = useCallback((newValue: string) => {
-    originalInputRef.current = null;
-    setValue(newValue);
-  }, []);
+  const handleChange = useCallback(
+    (newValue: string) => {
+      if (!restoringHistoryRef.current) resetNavigation();
+      setValue(newValue);
+    },
+    [resetNavigation]
+  );
 
   const handleSubmit = useCallback(
     (submittedValue: string) => {
@@ -309,7 +303,6 @@ export function EnhancedCommandInput({
         return;
       }
 
-      originalInputRef.current = null;
       addToHistory(trimmed);
 
       // Commit the empty editor before dispatch. A command may change sessions
@@ -333,11 +326,11 @@ export function EnhancedCommandInput({
     (input, key) => {
       // ↑ or Ctrl+P - previous history
       if (key.upArrow || (key.ctrl && input === "p")) {
-        handleHistoryUp();
+        handleHistory("up");
       }
       // ↓ or Ctrl+N - next history
       else if (key.downArrow || (key.ctrl && input === "n")) {
-        handleHistoryDown();
+        handleHistory("down");
       }
     },
     { isActive: focused && !disabled && !multiline && activeAutocomplete === null }

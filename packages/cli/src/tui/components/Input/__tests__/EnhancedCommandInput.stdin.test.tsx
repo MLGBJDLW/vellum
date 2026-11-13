@@ -43,6 +43,18 @@ async function write(stdin: { write: (data: string) => void }, data: string) {
 }
 
 describe("EnhancedCommandInput terminal submission", () => {
+  it("restores the draft on the first Down and handles coalesced history keys and edits", async () => {
+    const screen = renderInput(vi.fn());
+    await write(screen.stdin, "first\rsecond\r");
+    await write(screen.stdin, "unfinished");
+    await write(screen.stdin, "\x1b[A\x1b[A\x1b[B\x1b[B!");
+    expect(screen.lastFrame()).toContain("unfinished!");
+    await write(screen.stdin, "\r");
+    expect(screen.onMessage).toHaveBeenLastCalledWith("unfinished!");
+    await write(screen.stdin, "\x1b[A\x1b[B");
+    expect(screen.lastFrame()).toContain("Write a message");
+  });
+
   it.each(["/session list", "/help", "/h", "/seesion", "/seesion list"])(
     "submits and clears a fully typed command %s with one Enter",
     async (command) => {

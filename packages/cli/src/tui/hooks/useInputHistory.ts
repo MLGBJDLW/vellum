@@ -159,7 +159,9 @@ export interface UseInputHistoryReturn {
   /** Add a new entry to history */
   addToHistory: (entry: string) => void;
   /** Navigate up (older) or down (newer) through history */
-  navigateHistory: (direction: "up" | "down") => string | null;
+  navigateHistory: (direction: "up" | "down", draft?: string) => string | null;
+  /** Leave history browsing when the current draft is edited. */
+  resetNavigation: () => void;
   /** Clear all history entries */
   clearHistory: () => void;
   /** Get the current entry at navigation index */
@@ -269,9 +271,16 @@ export function useInputHistory(options: UseInputHistoryOptions = {}): UseInputH
 
   // Current navigation index: -1 means not navigating (at the "new entry" position)
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const currentIndexRef = useRef(-1);
+  const historyRef = useRef(history);
 
   // Ref to track the temp entry when user starts navigating
   const tempEntryRef = useRef<string>("");
+  const resetNavigation = useCallback(() => {
+    currentIndexRef.current = -1;
+    setCurrentIndex(-1);
+    tempEntryRef.current = "";
+  }, []);
 
   /**
    * Add a new entry to history.
@@ -285,12 +294,9 @@ export function useInputHistory(options: UseInputHistoryOptions = {}): UseInputH
         return;
       }
 
-      setHistory((prev) => {
+      const prev = historyRef.current;
+      if (prev.at(-1) !== trimmed) {
         // Skip if same as last entry (no consecutive duplicates)
-        if (prev.length > 0 && prev[prev.length - 1] === trimmed) {
-          return prev;
-        }
-
         const newHistory = [...prev, trimmed];
 
         // Trim to maxItems if exceeded
@@ -302,14 +308,14 @@ export function useInputHistory(options: UseInputHistoryOptions = {}): UseInputH
           saveToStorage(persistKey, trimmedHistory);
         }
 
-        return trimmedHistory;
-      });
+        historyRef.current = trimmedHistory;
+        setHistory(trimmedHistory);
+      }
 
       // Reset navigation index
-      setCurrentIndex(-1);
-      tempEntryRef.current = "";
+      resetNavigation();
     },
-    [maxItems, persistKey]
+    [maxItems, persistKey, resetNavigation]
   );
 
   /**
@@ -318,7 +324,9 @@ export function useInputHistory(options: UseInputHistoryOptions = {}): UseInputH
    * Returns the entry at the new position, or null if at boundary.
    */
   const navigateHistory = useCallback(
-    (direction: "up" | "down"): string | null => {
+    (direction: "up" | "down", draft = ""): string | null => {
+      const history = historyRef.current;
+      const currentIndex = currentIndexRef.current;
       if (history.length === 0) {
         return null;
       }
@@ -329,6 +337,7 @@ export function useInputHistory(options: UseInputHistoryOptions = {}): UseInputH
         // Moving to older entries
         if (currentIndex === -1) {
           // Start navigating from the most recent entry
+          tempEntryRef.current = draft;
           newIndex = history.length - 1;
         } else if (currentIndex > 0) {
           // Move to older entry
@@ -349,46 +358,51 @@ export function useInputHistory(options: UseInputHistoryOptions = {}): UseInputH
           newIndex = currentIndex + 1;
         } else {
           // At the newest entry, return to "new entry" position
-          setCurrentIndex(-1);
-          return tempEntryRef.current || null;
+          const restored = tempEntryRef.current;
+          resetNavigation();
+          return restored;
         }
       }
 
+      currentIndexRef.current = newIndex;
       setCurrentIndex(newIndex);
       return history[newIndex] ?? null;
     },
-    [history, currentIndex]
+    [resetNavigation]
   );
 
   /**
    * Clear all history entries.
    */
   const clearHistory = useCallback(() => {
+    historyRef.current = [];
     setHistory([]);
-    setCurrentIndex(-1);
-    tempEntryRef.current = "";
+    resetNavigation();
 
     if (persistKey) {
       saveToStorage(persistKey, []);
     }
-  }, [persistKey]);
+  }, [persistKey, resetNavigation]);
 
   /**
    * Get the current entry at navigation index.
    * Returns null if not navigating or history is empty.
    */
   const getCurrentEntry = useCallback((): string | null => {
+    const currentIndex = currentIndexRef.current;
+    const history = historyRef.current;
     if (currentIndex === -1 || history.length === 0) {
       return null;
     }
     return history[currentIndex] ?? null;
-  }, [history, currentIndex]);
+  }, []);
 
   return {
     history,
     currentIndex,
     addToHistory,
     navigateHistory,
+    resetNavigation,
     clearHistory,
     getCurrentEntry,
   };

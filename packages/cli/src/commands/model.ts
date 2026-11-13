@@ -363,6 +363,7 @@ async function refreshModels(
   if (!type || !getSupportedProviders().includes(type))
     return error("INVALID_ARGUMENT", "Choose a provider: /model refresh <provider>");
   try {
+    ctx.signal?.throwIfAborted();
     const registry = new ProviderRegistry({
       credentialManager: ctx.credentials,
       enableCache: false,
@@ -370,12 +371,15 @@ async function refreshModels(
     const instance = await registry.get({ type: type as ProviderType });
     if (!instance.refreshModels)
       return error("INTERNAL_ERROR", `${type} does not expose model discovery.`);
-    const models = await instance.refreshModels();
+    const models = await instance.refreshModels(ctx.signal);
+    ctx.signal?.throwIfAborted();
     updateDiscoveredModels(type as ProviderType, models);
     return success(
       `Refreshed ${models.length} models from ${type}. Use /model ${type} to select one. Availability does not verify inference access or billing.`
     );
   } catch {
+    if (ctx.signal?.aborted)
+      return error("COMMAND_ABORTED", `Model refresh cancelled; the previous catalog is retained.`);
     // Provider errors may include request details. Keep credentials out of UI logs.
     return error(
       "INTERNAL_ERROR",

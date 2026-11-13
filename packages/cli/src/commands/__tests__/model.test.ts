@@ -13,9 +13,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { modelCommand, setModelCommandConfig } from "../model.js";
 import type { CommandContext, CommandError, CommandResult, CommandSuccess } from "../types.js";
 
+const discovery = vi.hoisted(() => ({ refresh: vi.fn(), update: vi.fn() }));
+
 // Mock @vellum/provider
 vi.mock("@vellum/provider", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@vellum/provider")>()),
+  ProviderRegistry: class {
+    async get() {
+      return { refreshModels: discovery.refresh };
+    }
+  },
+  updateDiscoveredModels: discovery.update,
   getSupportedProviders: () => ["anthropic", "openai", "google", "groq", "ollama", "lmstudio"],
   getProviderModels: (provider: string) => {
     const models: Record<
@@ -154,8 +162,39 @@ describe("/model command", () => {
   let onModelChangeMock: (provider: string, model: string) => void;
 
   beforeEach(() => {
+    discovery.refresh.mockReset();
+    discovery.update.mockReset();
     onModelChangeMock = vi.fn();
     setModelCommandConfig("anthropic", "claude-sonnet-5-5", onModelChangeMock);
+  });
+
+  it("forwards refresh cancellation and retains the previous inventory after a late result", async () => {
+    const controller = new AbortController();
+    discovery.refresh.mockImplementation(async (signal: AbortSignal) => {
+      expect(signal).toBe(controller.signal);
+      controller.abort();
+      return [];
+    });
+    const ctx = { ...createMockContext(["refresh", "openai"]), signal: controller.signal };
+    const result = await modelCommand.execute(ctx);
+    expect(isError(result)).toBe(true);
+    expect(discovery.update).not.toHaveBeenCalled();
+    if (isError(result)) {
+      expect(result.code).toBe("COMMAND_ABORTED");
+      expect(result.message).toContain("previous catalog is retained");
+    }
+  });
+
+  it("publishes a completed explicit refresh with the command signal", async () => {
+    const controller = new AbortController();
+    discovery.refresh.mockResolvedValue([]);
+    const result = await modelCommand.execute({
+      ...createMockContext(["refresh", "openai"]),
+      signal: controller.signal,
+    });
+    expect(isSuccess(result)).toBe(true);
+    expect(discovery.refresh).toHaveBeenCalledExactlyOnceWith(controller.signal);
+    expect(discovery.update).toHaveBeenCalledExactlyOnceWith("openai", []);
   });
 
   describe("Scenario 1: /model (no args)", () => {

@@ -1,3 +1,4 @@
+import { Box, Text } from "ink";
 import { cleanup, render } from "ink-testing-library";
 import { act, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,9 +14,11 @@ function Harness({
   onChange,
   onSubmit,
   multiline = false,
+  showBorder = true,
 }: {
   initialValue?: string;
   multiline?: boolean;
+  showBorder?: boolean;
   onChange: (value: string) => void;
   onSubmit?: (value: string) => void;
 }) {
@@ -25,6 +28,7 @@ function Harness({
       <BracketedPasteProvider>
         <MouseProvider enabled={false}>
           <TextInput
+            showBorder={showBorder}
             multiline={multiline}
             value={value}
             onSubmit={onSubmit}
@@ -55,6 +59,72 @@ async function write(stdin: { write: (data: string) => void }, data: string) {
 }
 
 describe("TextInput terminal input", () => {
+  it("expands an initially empty borderless prompt inside a horizontal form", async () => {
+    const screen = renderInput(
+      <Box width={40} flexDirection="row">
+        <Text>Label: </Text>
+        <Box flexGrow={1}>
+          <Harness showBorder={false} onChange={vi.fn()} />
+        </Box>
+      </Box>
+    );
+    await write(screen.stdin, "abcdefghijk");
+    expect(screen.lastFrame()).toContain("Label: ❯ abcdefghijk");
+    expect(screen.lastFrame()?.split("\n")).toHaveLength(1);
+  });
+
+  it("reflows to a narrow parent and keeps the cursor and draft visible when resized", async () => {
+    const draft = `START${"中文🙂ab".repeat(100)}END`;
+    const change = vi.fn();
+    const submit = vi.fn();
+    const element = (width: number) => (
+      <Box width={width} flexDirection="column">
+        <Harness initialValue={draft} onChange={change} onSubmit={submit} />
+      </Box>
+    );
+    const screen = renderInput(element(40));
+    expect(screen.lastFrame()).toContain("END");
+    await act(async () => screen.rerender(element(24)));
+    expect(screen.lastFrame()).toContain("END");
+    expect(screen.lastFrame()?.split("\n").length).toBeLessThanOrEqual(10);
+    await write(screen.stdin, "\x01");
+    expect(screen.lastFrame()).toContain("START");
+    await write(screen.stdin, "\r");
+    expect(submit).toHaveBeenCalledExactlyOnceWith(draft);
+    expect(change).not.toHaveBeenCalled();
+  });
+
+  it("keeps long drafts in a cursor-following viewport and submits their complete content", async () => {
+    const draft = `first-${"abcdef中文🙂".repeat(150)}-last`;
+    const submit = vi.fn();
+    const screen = renderInput(
+      <Harness initialValue={draft} onChange={vi.fn()} onSubmit={submit} />
+    );
+    expect(screen.lastFrame()).toContain("-last");
+    expect(screen.lastFrame()).not.toContain("first-");
+    expect(screen.lastFrame()?.split("\n").length).toBeLessThanOrEqual(10);
+    await write(screen.stdin, "\x01");
+    expect(screen.lastFrame()).toContain("first-");
+    expect(screen.lastFrame()).not.toContain("-last");
+    await write(screen.stdin, "\r");
+    expect(submit).toHaveBeenCalledExactlyOnceWith(draft);
+  });
+
+  it("browses multiline drafts without rendering every line or dropping pasted text", async () => {
+    const draft = Array.from({ length: 200 }, (_, i) => `line-${i}`).join("\n");
+    const submit = vi.fn();
+    const screen = renderInput(<Harness multiline onChange={vi.fn()} onSubmit={submit} />);
+    await write(screen.stdin, `\x1b[200~${draft}\x1b[201~`);
+    expect(screen.lastFrame()).toContain("line-199");
+    expect(screen.lastFrame()).not.toContain("line-0");
+    expect(screen.lastFrame()?.split("\n").length).toBeLessThanOrEqual(10);
+    await write(screen.stdin, "\x1b[A".repeat(15));
+    expect(screen.lastFrame()).toContain("line-184");
+    expect(screen.lastFrame()).not.toContain("line-199");
+    await write(screen.stdin, "\x1b[13;5u");
+    expect(submit).toHaveBeenCalledExactlyOnceWith(draft);
+  });
+
   it("accepts a ghost draft with Tab and submits only on Enter", async () => {
     const submit = vi.fn();
     function Draft() {
