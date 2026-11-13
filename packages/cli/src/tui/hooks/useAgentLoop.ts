@@ -9,6 +9,7 @@ import {
   type AgentLoop,
   type AgentState,
   createUserMessage,
+  type DelegationUpdate,
   type ExecutionResult,
   SessionParts,
   type StateContext,
@@ -16,6 +17,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ICONS } from "../../utils/icons.js";
+import { isSubagentActive, useSubagents } from "./useSubagents.js";
 
 /**
  * Message type for the hook's message list.
@@ -123,6 +125,8 @@ export interface UseAgentLoopReturn {
   error: Error | null;
   /** Current delegation state (T059) */
   delegation: DelegationState;
+  /** Every live or recently finished worker, keyed by delegation ID. */
+  subagents: readonly DelegationUpdate[];
   /** Current user prompt state for ask_followup_question tool */
   userPromptState: UserPromptState | null;
   /** Submit user response to pending prompt */
@@ -235,14 +239,16 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
   const [thinking, setThinking] = useState("");
   const [error, setError] = useState<Error | null>(null);
 
-  // Delegation state (T059)
-  const [delegation, setDelegation] = useState<DelegationState>({
-    isActive: false,
-    delegationId: null,
-    delegatingTo: null,
-    task: null,
-    subagentText: null,
-  });
+  // Keep the legacy single-worker view as a projection of the runtime snapshot.
+  const subagents = useSubagents(loop);
+  const activeDelegation = subagents.find(isSubagentActive);
+  const delegation: DelegationState = {
+    isActive: activeDelegation !== undefined,
+    delegationId: activeDelegation?.id ?? null,
+    delegatingTo: activeDelegation?.agent ?? null,
+    task: activeDelegation?.task ?? null,
+    subagentText: activeDelegation?.message ?? activeDelegation?.toolName ?? null,
+  };
 
   // User prompt state for ask_followup_question tool
   const [userPromptState, setUserPromptState] = useState<UserPromptState | null>(null);
@@ -489,45 +495,6 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       setError(err);
     };
 
-    // Delegation start handler (T059)
-    const handleDelegationStart = (delegationId: string, agent: string, task: string) => {
-      setDelegation({
-        isActive: true,
-        delegationId,
-        delegatingTo: agent,
-        task,
-        subagentText: null,
-      });
-    };
-
-    // Delegation complete handler (T059)
-    const handleDelegationComplete = (_delegationId: string, _agent: string, _result: string) => {
-      setDelegation({
-        isActive: false,
-        delegationId: null,
-        delegatingTo: null,
-        task: null,
-        subagentText: null,
-      });
-    };
-
-    // Subagent text handler (T059)
-    const handleSubagentText = (_delegationId: string, agent: string, chunk: string) => {
-      setDelegation((prev) => ({
-        ...prev,
-        subagentText: chunk,
-        delegatingTo: agent,
-      }));
-    };
-
-    // Subagent tool handler (T059)
-    const handleSubagentTool = (_delegationId: string, agent: string, toolName: string) => {
-      setDelegation((prev) => ({
-        ...prev,
-        subagentText: `${agent}: ${toolName}`,
-      }));
-    };
-
     // User prompt handler for ask_followup_question tool
     const handleUserPromptRequired = (prompt: { question: string; suggestions?: string[] }) => {
       setUserPromptState({
@@ -580,11 +547,6 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     loop.on("loopDetected", handleLoopDetected);
     loop.on("retry", handleRetry);
     loop.on("retryExhausted", handleRetryExhausted);
-    // Delegation events (T059)
-    loop.on("delegationStart", handleDelegationStart);
-    loop.on("delegationComplete", handleDelegationComplete);
-    loop.on("subagentText", handleSubagentText);
-    loop.on("subagentTool", handleSubagentTool);
     // User prompt and completion events
     loop.on("userPrompt:required", handleUserPromptRequired);
     loop.on("completion:attempted", handleCompletionAttempted);
@@ -617,11 +579,6 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
       loop.off("loopDetected", handleLoopDetected);
       loop.off("retry", handleRetry);
       loop.off("retryExhausted", handleRetryExhausted);
-      // Delegation events cleanup (T059)
-      loop.off("delegationStart", handleDelegationStart);
-      loop.off("delegationComplete", handleDelegationComplete);
-      loop.off("subagentText", handleSubagentText);
-      loop.off("subagentTool", handleSubagentTool);
       // User prompt and completion events cleanup
       loop.off("userPrompt:required", handleUserPromptRequired);
       loop.off("completion:attempted", handleCompletionAttempted);
@@ -729,6 +686,7 @@ export function useAgentLoop(loop: AgentLoop): UseAgentLoopReturn {
     isLoading,
     error,
     delegation,
+    subagents,
     userPromptState,
     submitUserResponse,
     completionState,

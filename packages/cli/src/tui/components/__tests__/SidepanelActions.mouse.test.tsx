@@ -12,6 +12,7 @@ import { HotkeyHelpModal } from "../common/HotkeyHelpModal.js";
 import { LspConfirmDialog } from "../Dialogs/LspConfirmDialog.js";
 import { LspSetupPanel, type ServerInfo } from "../LspSetupPanel.js";
 import { MemoryPanel } from "../MemoryPanel.js";
+import { SubagentPanel } from "../Sidebar/SubagentPanel.js";
 import { TipBanner } from "../TipBanner.js";
 import { TodoPanel } from "../TodoPanel.js";
 import { ApprovalQueue } from "../Tools/ApprovalQueue.js";
@@ -88,6 +89,51 @@ const entries = Array.from({ length: 12 }, (_, i) => ({
 }));
 
 describe("sidepanel mouse actions", () => {
+  it("inspects and scrolls worker cards without activating covered panels", async () => {
+    const context = harness();
+    const focus = vi.fn();
+    const entries = Array.from({ length: 6 }, (_, index) => ({
+      id: `worker-${index}`,
+      agent: `worker-${index}`,
+      task: `Inspect component ${index}`,
+      status: "running" as const,
+      startedAt: index,
+      updatedAt: index,
+    }));
+    const panel = (
+      <SubagentPanel
+        entries={entries}
+        width={32}
+        maxHeight={9}
+        isFocused={false}
+        mouseEnabled
+        onFocus={focus}
+      />
+    );
+    let screen!: ReturnType<typeof render>;
+    await act(async () => {
+      screen = render(context.wrap(panel));
+    });
+    await act(async () => {
+      click(screen, "worker-0");
+    });
+    expect(focus).toHaveBeenCalledOnce();
+    expect(screen.lastFrame()).toContain("? turns");
+    const workerPosition = position(screen, "worker-0");
+    await act(async () => {
+      context.wheel(workerPosition.col, workerPosition.row);
+    });
+    expect(screen.lastFrame()).toContain("worker-1");
+    focus.mockClear();
+    await act(async () => {
+      screen.rerender(context.wrap(panel, false));
+    });
+    await act(async () => {
+      click(screen, "worker-1");
+      context.wheel(workerPosition.col, workerPosition.row);
+    });
+    expect(focus).not.toHaveBeenCalled();
+  });
   it("keeps trust decisions explicit and resolves only the clicked choice once", async () => {
     const decide = vi.fn();
     const context = harness();
