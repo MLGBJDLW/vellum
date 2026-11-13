@@ -8,6 +8,8 @@
  * CI runners can be 3-5x slower than local machines.
  */
 
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { platform } from "node:os";
 import { describe, expect, it } from "vitest";
 import { executeShell, killProcessTree } from "../utils/shell-helpers.js";
@@ -21,6 +23,79 @@ const BASE_CLEANUP_WAIT = 1000; // Wait for process cleanup
 
 describe("shell-helpers - process tree management", () => {
   describe("killProcessTree", () => {
+    it.skipIf(!isWindows)(
+      "rejects a failed Windows termination utility for a live process",
+      async () => {
+        const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        const closed = once(child, "close");
+        await once(child, "spawn");
+        const originalRoot = process.env.SystemRoot;
+        try {
+          process.env.SystemRoot = "C:\\nonexistent-vellum-windows-root";
+          if (!child.pid) throw new Error("Could not start test process");
+          await expect(killProcessTree(child.pid)).rejects.toThrow("ENOENT");
+        } finally {
+          if (originalRoot === undefined) delete process.env.SystemRoot;
+          else process.env.SystemRoot = originalRoot;
+          child.kill("SIGKILL");
+          await closed;
+        }
+      }
+    );
+
+    it.skipIf(!isWindows)("terminates Windows processes without relying on PATH", async () => {
+      const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      const closed = once(child, "close");
+      await once(child, "spawn");
+      const originalPath = process.env.PATH;
+      let forcedCleanup = false;
+      const cleanupTimer = setTimeout(() => {
+        forcedCleanup = true;
+        child.kill("SIGKILL");
+      }, 5000);
+      try {
+        process.env.PATH = "";
+        if (!child.pid) throw new Error("Could not start test process");
+        await killProcessTree(child.pid);
+        await closed;
+        expect(forcedCleanup).toBe(false);
+      } finally {
+        if (originalPath === undefined) delete process.env.PATH;
+        else process.env.PATH = originalPath;
+        clearTimeout(cleanupTimer);
+        child.kill("SIGKILL");
+        await closed;
+      }
+    });
+
+    it.skipIf(isWindows)("escalates when a process ignores SIGTERM", async () => {
+      const child = spawn(
+        process.execPath,
+        [
+          "-e",
+          'process.on("SIGTERM", () => {}); console.log("ready"); setInterval(() => {}, 1000)',
+        ],
+        { detached: true, stdio: ["ignore", "pipe", "ignore"] }
+      );
+      const closed = once(child, "close");
+      try {
+        if (!child.stdout || !child.pid) throw new Error("Could not start test process");
+        await once(child.stdout, "data");
+        await killProcessTree(child.pid, { timeout: 25 });
+        const [, signal] = await closed;
+        expect(signal).toBe("SIGKILL");
+      } finally {
+        child.kill("SIGKILL");
+        await closed;
+      }
+    });
+
     it("should handle non-existent process gracefully", async () => {
       // Use a PID that is very unlikely to exist
       const fakePid = 999999999;

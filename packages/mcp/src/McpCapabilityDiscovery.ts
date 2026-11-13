@@ -5,6 +5,7 @@
 import type { ToolExecutor, ToolRegistry } from "@vellum/core";
 import { DEFAULT_MCP_TIMEOUT_SECONDS } from "./constants.js";
 import { McpConnectionError, McpTimeoutError, McpToolError } from "./errors.js";
+import { collectPages } from "./pagination.js";
 import type {
   McpConnection,
   McpHubEvents,
@@ -188,8 +189,15 @@ export class McpCapabilityDiscovery {
 
     try {
       // Discover tools
-      const toolsResponse = await client.listTools();
-      const allTools: McpTool[] = toolsResponse.tools.map((tool) => ({
+      const capabilities = client.getServerCapabilities?.();
+      const tools =
+        capabilities !== undefined && !capabilities.tools
+          ? []
+          : await collectPages(
+              (params) => client.listTools(params),
+              (page) => page.tools
+            );
+      const allTools: McpTool[] = tools.map((tool) => ({
         name: tool.name,
         description: tool.description,
         inputSchema: tool.inputSchema as McpTool["inputSchema"],
@@ -200,8 +208,11 @@ export class McpCapabilityDiscovery {
 
       // Discover resources
       try {
-        const resourcesResponse = await client.listResources();
-        server.resources = resourcesResponse.resources.map((resource) => ({
+        const resources = await collectPages(
+          (params) => client.listResources(params),
+          (page) => page.resources
+        );
+        server.resources = resources.map((resource) => ({
           uri: resource.uri,
           name: resource.name,
           mimeType: resource.mimeType,
@@ -214,8 +225,11 @@ export class McpCapabilityDiscovery {
 
       // Discover resource templates
       try {
-        const templatesResponse = await client.listResourceTemplates();
-        server.resourceTemplates = templatesResponse.resourceTemplates.map((template) => ({
+        const templates = await collectPages(
+          (params) => client.listResourceTemplates(params),
+          (page) => page.resourceTemplates
+        );
+        server.resourceTemplates = templates.map((template) => ({
           uriTemplate: template.uriTemplate,
           name: template.name,
           description: template.description,
@@ -259,7 +273,20 @@ export class McpCapabilityDiscovery {
         },
         async (params, context) => {
           const response = await this.callTool(server.name, tool.name, params, context.abortSignal);
-          return response.content;
+          if (response.isError) {
+            const details = response.content
+              .filter((item) => item.type === "text")
+              .map((item) => item.text)
+              .join("\n");
+            throw new McpToolError(
+              details || JSON.stringify(response.structuredContent ?? response.content),
+              server.name,
+              tool.name
+            );
+          }
+          return response.structuredContent === undefined
+            ? response.content
+            : { content: response.content, structuredContent: response.structuredContent };
         }
       );
 
@@ -359,6 +386,9 @@ export class McpCapabilityDiscovery {
       return {
         content: (response.content ?? []) as McpToolCallResponse["content"],
         isError: Boolean(response.isError),
+        ...(response.structuredContent !== undefined
+          ? { structuredContent: response.structuredContent as Record<string, unknown> }
+          : {}),
       };
     } catch (error) {
       // Re-throw timeout errors as-is
@@ -432,19 +462,27 @@ export class McpCapabilityDiscovery {
 
     try {
       // Send tools/list request via SDK
-      const response = await connection.client.listTools();
+      const inventory = await collectPages(
+        (params) => connection.client.listTools(params),
+        (page) => page.tools
+      );
 
       // Parse server config to get autoApprove list
       const config = JSON.parse(connection.server.config) as McpServerConfig;
       const autoApproveList = config.autoApprove ?? [];
 
       // Map tools with autoApprove flag based on config
-      const tools: McpTool[] = response.tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema as McpTool["inputSchema"],
-        autoApprove: autoApproveList.includes(tool.name),
-      }));
+      const tools = this.filterTools(
+        inventory.map(
+          (tool): McpTool => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema as McpTool["inputSchema"],
+            autoApprove: autoApproveList.includes(tool.name),
+          })
+        ),
+        connection.server.toolFilter
+      );
 
       // Store on server object
       connection.server.tools = tools;
@@ -559,10 +597,13 @@ export class McpCapabilityDiscovery {
 
     try {
       // Send resources/list request via SDK
-      const response = await connection.client.listResources();
+      const inventory = await collectPages(
+        (params) => connection.client.listResources(params),
+        (page) => page.resources
+      );
 
       // Map resources to our type
-      const resources: McpResource[] = response.resources.map((resource) => ({
+      const resources: McpResource[] = inventory.map((resource) => ({
         uri: resource.uri,
         name: resource.name,
         mimeType: resource.mimeType,
@@ -614,9 +655,12 @@ export class McpCapabilityDiscovery {
     }
 
     try {
-      const response = await connection.client.listPrompts();
+      const inventory = await collectPages(
+        (params) => connection.client.listPrompts(params),
+        (page) => page.prompts
+      );
 
-      return response.prompts.map((prompt) => ({
+      return inventory.map((prompt) => ({
         name: prompt.name,
         description: prompt.description,
         arguments: prompt.arguments?.map((arg) => ({

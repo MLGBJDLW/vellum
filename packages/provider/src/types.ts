@@ -796,7 +796,7 @@ export interface Provider {
   listModels(): string[];
   getDefaultModel(): string;
   /** Explicit, read-only discovery; never invoked on every completion. */
-  refreshModels?(): Promise<import("./models/types.js").ModelInfo[]>;
+  refreshModels?(signal?: AbortSignal): Promise<import("./models/types.js").ModelInfo[]>;
 
   /**
    * Initialize the provider with configuration options

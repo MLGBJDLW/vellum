@@ -311,7 +311,7 @@ describe("todoWriteTool", () => {
         ctx
       );
 
-      expect(result.success).toBe(true);
+      expect(result.success, result.success ? undefined : result.error).toBe(true);
       if (result.success) {
         // Should be sorted: 1, 2, 3, 5, 10
         const ids = result.output.todos.map((t) => String(t.id));

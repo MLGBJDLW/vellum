@@ -2,7 +2,6 @@
 // McpServerLifecycle - Connection Lifecycle Management
 // ============================================
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   getDefaultEnvironment,
   StdioClientTransport,
@@ -12,6 +11,7 @@ import { type FSWatcher, watch } from "chokidar";
 import { DEFAULT_MCP_TIMEOUT_SECONDS, MCP_CLIENT_NAME } from "./constants.js";
 import { McpConnectionError } from "./errors.js";
 import type { McpCapabilityDiscovery } from "./McpCapabilityDiscovery.js";
+import { McpClient as Client } from "./McpClient.js";
 import type { McpOAuthManager } from "./McpOAuthManager.js";
 import type { McpServerRegistry } from "./McpServerRegistry.js";
 import type {
@@ -169,12 +169,14 @@ export class McpServerLifecycle {
 
     this.emit("server:status", { serverName: name, status: server.statusInfo });
 
+    let transport: Transport | undefined;
+    let client: Client | undefined;
     try {
       // Create transport based on config type
-      const transport = await this.createTransport(name, config);
+      transport = await this.createTransport(name, config);
 
       // Create MCP client
-      const client = new Client(
+      client = new Client(
         { name: MCP_CLIENT_NAME, version: this.protocolVersion },
         { capabilities: {} }
       );
@@ -216,6 +218,17 @@ export class McpServerLifecycle {
 
       return connection;
     } catch (error) {
+      // Failed startup still owns a live transport/process, even before it is stored.
+      await Promise.resolve()
+        .then(() => client?.close())
+        .catch(() => {});
+      await Promise.resolve()
+        .then(() => transport?.close())
+        .catch(() => {});
+      const watcher = this.sourceFileWatchers.get(name);
+      this.sourceFileWatchers.delete(name);
+      await watcher?.close().catch(() => {});
+
       // Set status to failed
       const errorMessage = error instanceof Error ? error.message : String(error);
       server.statusInfo = { status: "failed", error: errorMessage };

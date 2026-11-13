@@ -7,8 +7,8 @@
  * @module tui/components/Input/TextInput
  */
 
-import type { Key } from "ink";
-import { Box, Text, useStdin } from "ink";
+import type { DOMElement, Key } from "ink";
+import { Box, ResizeObserver, Text, useStdin } from "ink";
 import {
   memo,
   type Ref,
@@ -23,10 +23,13 @@ import {
 import stripAnsi from "strip-ansi";
 import { useAnimationControls } from "../../context/AnimationContext.js";
 import { usePasteHandler } from "../../context/BracketedPasteContext.js";
+import { useLayoutPositionContext } from "../../context/LayoutPositionContext.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
+import { useTerminalDimensions } from "../../hooks/useTerminalSize.js";
 import { useTheme } from "../../theme/index.js";
 import { getCurrentTerminalKey, subscribeTerminalInput } from "../../utils/terminal-input.js";
 import { HighlightedText } from "./HighlightedText.js";
+import { inputCursorRow, moveInputCursor, wrapInputRows } from "./input-viewport.js";
 
 // =============================================================================
 // Types
@@ -123,14 +126,6 @@ function normalizeInputValue(input: string, multiline: boolean): string {
   return multiline ? withoutControls : withoutControls.replace(/\n/g, "");
 }
 
-/**
- * Generate a stable key for multiline rendering.
- * Uses line start position as key since lines can be added/removed.
- */
-function getLineKey(lineStartPos: number): string {
-  return `line-${lineStartPos}`;
-}
-
 // =============================================================================
 // Component
 // =============================================================================
@@ -187,6 +182,28 @@ function TextInputComponent({
 }: TextInputProps) {
   const { theme } = useTheme();
   const { pauseAnimations, resumeAnimations, isVSCode } = useAnimationControls();
+  const terminal = useTerminalDimensions();
+  const layout = useLayoutPositionContext();
+  const boxRef = useRef<DOMElement>(null);
+  const [measuredWidth, setMeasuredWidth] = useState<number>();
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry?.contentRect.width;
+      if (width && width > 0) setMeasuredWidth(width);
+    });
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+  const inputWidth = measuredWidth ?? layout?.contentBounds.width ?? terminal.width;
+  const contentWidth = Math.max(1, inputWidth - (showBorder || multiline ? 6 : 2));
+  const maxVisibleRows = Math.max(1, Math.min(8, Math.floor(terminal.height / 3) - 2));
+  const displayValue = mask ? value.replace(/[\s\S]/g, mask) : value;
+  const lineData = useMemo(
+    () => wrapInputRows(displayValue, contentWidth),
+    [displayValue, contentWidth]
+  );
 
   // Pause animations when input is focused in VS Code to reduce flickering
   useEffect(() => {
@@ -197,7 +214,7 @@ function TextInputComponent({
   }, [focused, isVSCode, pauseAnimations, resumeAnimations]);
 
   // Calculate effective min height (default 5 for multiline, 1 for single-line)
-  const effectiveMinHeight = minHeight ?? (multiline ? 5 : 1);
+  const effectiveMinHeight = Math.min(maxVisibleRows, minHeight ?? (multiline ? 5 : 1));
 
   // Refs advance synchronously: Ink can deliver several keys in one read loop
   // before React commits the controlled value or cursor state.
@@ -440,26 +457,9 @@ function TextInputComponent({
     const value = valueRef.current;
     const cursorPosition = cursorPositionRef.current;
     if (!multiline) return;
-
-    // Find the previous newline
-    const beforeCursor = value.slice(0, cursorPosition);
-    const lastNewline = beforeCursor.lastIndexOf("\n");
-
-    if (lastNewline === -1) {
-      // No previous line, move to start
-      setCursor(0);
-      return;
-    }
-
-    // Find the newline before that to get line start
-    const lineStart = beforeCursor.lastIndexOf("\n", lastNewline - 1) + 1;
-    const columnInCurrentLine = cursorPosition - lastNewline - 1;
-    const previousLineLength = lastNewline - lineStart;
-
-    // Move to same column in previous line (or end of line if shorter)
-    const newPosition = lineStart + Math.min(columnInCurrentLine, previousLineLength);
-    setCursor(newPosition);
-  }, [multiline, setCursor]);
+    const rows = value === displayValue ? lineData : wrapInputRows(value, contentWidth);
+    setCursor(moveInputCursor(rows, cursorPosition, -1));
+  }, [multiline, contentWidth, displayValue, lineData, setCursor]);
 
   /**
    * Handle down arrow in multiline mode
@@ -468,31 +468,9 @@ function TextInputComponent({
     const value = valueRef.current;
     const cursorPosition = cursorPositionRef.current;
     if (!multiline) return;
-
-    // Find the current line boundaries
-    const beforeCursor = value.slice(0, cursorPosition);
-    const afterCursor = value.slice(cursorPosition);
-
-    const currentLineStart = beforeCursor.lastIndexOf("\n") + 1;
-    const columnInCurrentLine = cursorPosition - currentLineStart;
-
-    const nextNewline = afterCursor.indexOf("\n");
-    if (nextNewline === -1) {
-      // No next line, move to end
-      setCursor(value.length);
-      return;
-    }
-
-    // Find the line after the next newline
-    const nextLineStart = cursorPosition + nextNewline + 1;
-    const restAfterNextLine = value.slice(nextLineStart);
-    const nextLineEnd = restAfterNextLine.indexOf("\n");
-    const nextLineLength = nextLineEnd === -1 ? restAfterNextLine.length : nextLineEnd;
-
-    // Move to same column in next line (or end of line if shorter)
-    const newPosition = nextLineStart + Math.min(columnInCurrentLine, nextLineLength);
-    setCursor(newPosition);
-  }, [multiline, setCursor]);
+    const rows = value === displayValue ? lineData : wrapInputRows(value, contentWidth);
+    setCursor(moveInputCursor(rows, cursorPosition, 1));
+  }, [multiline, contentWidth, displayValue, lineData, setCursor]);
 
   /**
    * Handle Home key (Ctrl+A) - move to current line start
@@ -811,20 +789,17 @@ function TextInputComponent({
   const isEmpty = value.length === 0;
   const displayPlaceholder = suggestion ? `${suggestion}  [Tab]` : placeholder;
   const showPlaceholder = isEmpty && displayPlaceholder;
-  const displayValue = mask ? value.replace(/[\s\S]/g, mask) : value;
-
-  // Split value into lines for multiline display
-  const lines = multiline ? displayValue.split("\n") : [displayValue];
-
-  // Pre-calculate line start positions for stable keys and rendering
-  const lineData = useMemo(() => {
-    let pos = 0;
-    return lines.map((line, index) => {
-      const startPos = pos;
-      pos += line.length + 1; // +1 for newline
-      return { line, index, startPos, key: getLineKey(startPos) };
-    });
-  }, [lines]);
+  const cursorRow = inputCursorRow(lineData, cursorPosition);
+  const viewportStart = useRef(0);
+  const startRow = Math.max(
+    0,
+    Math.min(viewportStart.current, cursorRow, lineData.length - maxVisibleRows)
+  );
+  const visibleStart = Math.max(startRow, cursorRow - maxVisibleRows + 1);
+  useLayoutEffect(() => {
+    viewportStart.current = visibleStart;
+  }, [visibleStart]);
+  const visibleRows = lineData.slice(visibleStart, visibleStart + maxVisibleRows);
 
   // Input highlighting (disabled when masking)
   const shouldHighlight = enableHighlight && !mask;
@@ -832,18 +807,18 @@ function TextInputComponent({
   /**
    * Render a line with cursor indicator (and optional highlighting)
    */
-  const renderLineWithCursor = (line: string, lineStartPosition: number) => {
+  const renderLineWithCursor = (line: string, lineStartPosition: number, activeRow = true) => {
     const lineEndPosition = lineStartPosition + line.length;
-    const cursorInLine = cursorPosition >= lineStartPosition && cursorPosition <= lineEndPosition;
+    const cursorInLine =
+      activeRow && cursorPosition >= lineStartPosition && cursorPosition <= lineEndPosition;
 
     // Use HighlightedText when highlighting is enabled
     if (shouldHighlight) {
       return (
         <HighlightedText
           text={line || " "}
-          cursorPosition={cursorPosition}
+          cursorPosition={cursorPosition - lineStartPosition}
           showCursor={cursorInLine && focused}
-          lineStartPosition={lineStartPosition}
         />
       );
     }
@@ -871,21 +846,8 @@ function TextInputComponent({
   // Border color based on focus state
   const borderColor = focused ? theme.semantic.border.focus : theme.semantic.border.default;
 
-  // Calculate visual line count considering terminal width wrapping
-  const terminalWidth = process.stdout.columns || 80;
-  const contentWidth = Math.max(1, terminalWidth - 4); // Account for border (2) + paddingX (1 each side)
-
-  // Sum visual lines for each logical line (accounts for wrapping)
-  const visualLineCount = lineData.reduce((total, { line }) => {
-    if (!line) return total + 1;
-    // Unicode-aware length for proper CJK/emoji handling
-    const lineLength = [...line].length;
-    const wrappedLines = Math.ceil(lineLength / contentWidth) || 1;
-    return total + wrappedLines;
-  }, 0);
-
   // Calculate padding lines needed to meet minHeight
-  const paddingLinesNeeded = Math.max(0, effectiveMinHeight - visualLineCount);
+  const paddingLinesNeeded = Math.max(0, effectiveMinHeight - visibleRows.length);
 
   // Render placeholder
   if (showPlaceholder) {
@@ -893,6 +855,9 @@ function TextInputComponent({
     const emptyLinesForPlaceholder = Math.max(0, effectiveMinHeight - 1);
     return (
       <Box
+        ref={boxRef}
+        flexGrow={1}
+        minWidth={0}
         flexDirection="column"
         borderStyle="round"
         borderColor={borderColor}
@@ -921,43 +886,34 @@ function TextInputComponent({
     );
   }
 
-  // Render single-line
-  if (!multiline) {
-    const content = renderLineWithCursor(displayValue, 0);
-    if (!showBorder) {
-      return (
-        <Box flexDirection="row">
-          <Text color={theme.semantic.text.primary}>{"❯ "}</Text>
-          {content}
-        </Box>
-      );
-    }
-    return (
-      <Box borderStyle="round" borderColor={borderColor} paddingX={1} flexDirection="row">
-        <Text color={theme.semantic.text.primary}>{"❯ "}</Text>
-        <Box flexGrow={1}>{content}</Box>
-      </Box>
-    );
-  }
-
-  // Render multiline with stable keys based on line position
+  // Render only the visible rows; the complete draft remains editable/submittable.
   return (
     <Box
+      ref={boxRef}
+      flexGrow={1}
+      minWidth={0}
       flexDirection="column"
-      borderStyle="round"
+      borderStyle={showBorder || multiline ? "round" : undefined}
       borderColor={borderColor}
-      paddingX={1}
-      minHeight={effectiveMinHeight + 2} // +2 for top/bottom border
+      paddingX={showBorder || multiline ? 1 : 0}
+      minHeight={effectiveMinHeight + (showBorder || multiline ? 2 : 0)}
     >
-      {lineData.map(({ line, startPos, key }, index) => (
-        <Box key={key} flexDirection="row">
+      {visibleRows.map(({ text, start }, index) => (
+        <Box key={start} flexDirection="row" height={1}>
           {/* Show prompt prefix on first line only */}
           {index === 0 ? (
-            <Text color={theme.semantic.text.primary}>{"❯ "}</Text>
+            <Text color={theme.semantic.text.primary}>{visibleStart > 0 ? "↑ " : "❯ "}</Text>
           ) : (
-            <Text>{"  "}</Text>
+            <Text>
+              {index === visibleRows.length - 1 &&
+              visibleStart + visibleRows.length < lineData.length
+                ? "↓ "
+                : "  "}
+            </Text>
           )}
-          <Box flexGrow={1}>{renderLineWithCursor(line, startPos)}</Box>
+          <Box flexGrow={1}>
+            {renderLineWithCursor(text, start, visibleStart + index === cursorRow)}
+          </Box>
         </Box>
       ))}
       {/* Add empty lines to maintain minHeight - these are static decorative elements */}

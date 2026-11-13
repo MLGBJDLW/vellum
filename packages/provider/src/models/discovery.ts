@@ -10,6 +10,7 @@ const positive = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 const price = (value: unknown): number | undefined => {
   if (typeof value !== "string" && typeof value !== "number") return undefined;
+  if (typeof value === "string" && value.trim().length === 0) return undefined;
   const perMillion = Number(value) * 1_000_000;
   return Number.isFinite(perMillion) && perMillion >= 0
     ? Number(perMillion.toPrecision(12))
@@ -17,6 +18,9 @@ const price = (value: unknown): number | undefined => {
 };
 const boolean = (value: unknown): boolean | undefined =>
   typeof value === "boolean" ? value : undefined;
+// xAI reports cents per 100M tokens; catalog prices are USD per 1M tokens.
+const xaiPrice = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? value / 10_000 : undefined;
 
 /** Normalize provider discovery without inventing capabilities or prices. */
 export function normalizeDiscoveredModels(provider: ProviderType, records: unknown[]): ModelInfo[] {
@@ -37,17 +41,39 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
     if (typeof rawId !== "string" || rawId.length === 0) continue;
     const id = provider === "google" ? rawId.replace(/^models\//, "") : rawId;
     if (isRetiredModel(provider, id)) continue;
+    // Account-owned fine-tunes use ft:<base>:<organization>:<suffix>:<id>.
+    // Their availability and prices are independent of the original base route.
+    const fineTuneBase = provider === "openai" ? /^ft:([^:]+):.+/.exec(id)?.[1] : undefined;
+    const familyId = fineTuneBase ?? id;
     // An account may expose a dated OpenAI snapshot without its rolling alias.
-    const known =
+    const inherited =
       knownModels.get(id) ??
       (provider === "openai"
-        ? knownModels.get(id.replace(/-\d{4}-?\d{2}-?\d{2}$/, ""))
+        ? (knownModels.get(familyId) ??
+          knownModels.get(familyId.replace(/-\d{4}-?\d{2}-?\d{2}$/, "")))
         : undefined);
+    const known =
+      fineTuneBase && inherited?.id !== id && inherited
+        ? {
+            ...inherited,
+            name: id,
+            aliases: undefined,
+            deprecated: false,
+            inputPrice: undefined,
+            outputPrice: undefined,
+            cacheReadsPrice: undefined,
+            cacheWritesPrice: undefined,
+            tiers: undefined,
+            description: undefined,
+          }
+        : inherited;
     const capabilities = record(data.capabilities);
     const localCapabilities = Array.isArray(data.capabilities) ? data.capabilities : undefined;
     const thinkingTypes = record(record(capabilities.thinking).types);
     const effortCapability = record(capabilities.effort);
     const architecture = record(data.architecture);
+    const inputModalities = architecture.input_modalities ?? data.input_modalities;
+    const outputModalities = architecture.output_modalities ?? data.output_modalities;
     const topProvider = record(data.top_provider);
     const pricing = record(data.pricing);
     const reasoning = record(data.reasoning);
@@ -74,14 +100,20 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
     )
       continue;
     if (Array.isArray(methods) && !methods.includes("generateContent")) continue;
-    if (
-      Array.isArray(architecture.output_modalities) &&
-      !architecture.output_modalities.includes("text")
-    )
-      continue;
+    if (Array.isArray(outputModalities) && !outputModalities.includes("text")) continue;
     if (
       provider === "openai" &&
-      (!/^(gpt-\d|o\d|chatgpt-)/.test(id) || /audio|realtime|transcribe|tts|search-api/.test(id))
+      (!/^(gpt-\d|o\d|chatgpt-)/.test(familyId) ||
+        /audio|realtime|transcribe|tts|search-api/.test(familyId))
+    )
+      continue;
+    // xAI's sparse /models response includes image generation products without
+    // output modalities; these cannot be sent to the text completion transport.
+    if (
+      provider === "xai" &&
+      (/^grok-(?:imagine(?:-|$)|2-image(?:-|$))/.test(id) ||
+        xaiPrice(data.image_price) !== undefined ||
+        xaiPrice(data.generated_image_token_price) !== undefined)
     )
       continue;
     if (capabilities.completion_chat === false) continue;
@@ -95,7 +127,10 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       positive(data.inputTokenLimit) ??
       positive(data.max_context_length);
     const contextWindow = reportedContextWindow ?? known?.contextWindow ?? 8_192;
-    const reportedEfforts = reasoning.supported_efforts ?? localReasoningOptions;
+    const reportedEfforts =
+      reasoning.supported_efforts ??
+      (provider === "xai" ? capabilities.reasoning_effort : undefined) ??
+      localReasoningOptions;
     const reasoningEfforts = Array.isArray(reportedEfforts)
       ? reportedEfforts.flatMap((effort) => {
           const parsed = reasoningEffortSchema.safeParse(effort);
@@ -107,14 +142,16 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
           )
         : known?.reasoningEfforts;
     const defaultEffort = reasoningEffortSchema.safeParse(
-      reasoning.default_effort ?? localReasoning.default
+      reasoning.default_effort ??
+        (provider === "xai" ? capabilities.default_reasoning_effort : undefined) ??
+        localReasoning.default
     );
     const model: ModelInfo = {
       ...known,
       ...(known && known.id !== id ? { aliases: undefined } : {}),
       id,
       provider,
-      ...(provider === "openai" && /^(gpt-[5-9]|o[134])/.test(id)
+      ...(provider === "openai" && /^(gpt-[5-9]|o[134])/.test(familyId)
         ? { api: "responses" as const, supportsSampling: false }
         : {}),
       name:
@@ -142,8 +179,8 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
         (Array.isArray(data.supported_parameters)
           ? supported.includes("tools")
           : known?.supportsTools),
-      supportsVision: Array.isArray(architecture.input_modalities)
-        ? architecture.input_modalities.includes("image")
+      supportsVision: Array.isArray(inputModalities)
+        ? inputModalities.includes("image")
         : (boolean(capabilities.vision) ??
           (localCapabilities ? localCapabilities.includes("vision") : undefined) ??
           boolean(record(capabilities.image_input).supported) ??
@@ -153,7 +190,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
         (localReasoningOptions
           ? localReasoningOptions.some((option) => option !== "off")
           : undefined) ??
-        (Array.isArray(reasoning.supported_efforts)
+        (Array.isArray(reportedEfforts)
           ? reasoningEfforts?.some((effort) => effort !== "none")
           : undefined) ??
         (localCapabilities ? localCapabilities.includes("thinking") : undefined) ??
@@ -164,6 +201,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       supportsPromptCache:
         price(pricing.input_cache_read) !== undefined ||
         price(pricing.input_cache_write) !== undefined ||
+        (provider === "xai" && xaiPrice(data.cached_prompt_text_token_price) !== undefined) ||
         known?.supportsPromptCache === true,
       ...(Array.isArray(data.supported_parameters)
         ? { supportsSampling: supported.includes("temperature") || supported.includes("top_p") }
@@ -191,9 +229,18 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
         (data.lifecycle === "active" || data.lifecycle === "deprecated"
           ? data.lifecycle === "deprecated"
           : (known?.deprecated ?? false)),
-      inputPrice: price(pricing.prompt) ?? known?.inputPrice,
-      outputPrice: price(pricing.completion) ?? known?.outputPrice,
-      cacheReadsPrice: price(pricing.input_cache_read) ?? known?.cacheReadsPrice,
+      inputPrice:
+        price(pricing.prompt) ??
+        (provider === "xai" ? xaiPrice(data.prompt_text_token_price) : undefined) ??
+        known?.inputPrice,
+      outputPrice:
+        price(pricing.completion) ??
+        (provider === "xai" ? xaiPrice(data.completion_text_token_price) : undefined) ??
+        known?.outputPrice,
+      cacheReadsPrice:
+        price(pricing.input_cache_read) ??
+        (provider === "xai" ? xaiPrice(data.cached_prompt_text_token_price) : undefined) ??
+        known?.cacheReadsPrice,
       cacheWritesPrice: price(pricing.input_cache_write) ?? known?.cacheWritesPrice,
       description:
         known?.description ??

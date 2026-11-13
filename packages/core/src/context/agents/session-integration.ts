@@ -129,6 +129,8 @@ export class SessionAgentsIntegration extends EventEmitter<SessionAgentsIntegrat
   private sessionPath: string | null = null;
   private state: SessionAgentsState = "uninitialized";
   private lastWarnings: AgentsWarning[] = [];
+  private initialization?: Promise<void>;
+  private disposal?: Promise<void>;
 
   /**
    * Creates a new SessionAgentsIntegration.
@@ -182,6 +184,11 @@ export class SessionAgentsIntegration extends EventEmitter<SessionAgentsIntegrat
     this.state = "initializing";
     this.sessionPath = path.resolve(sessionPath);
 
+    this.initialization = this.initializeSession();
+    await this.initialization;
+  }
+
+  private async initializeSession(): Promise<void> {
     try {
       // Create loader
       this.loader = new AgentsLoader({
@@ -191,18 +198,23 @@ export class SessionAgentsIntegration extends EventEmitter<SessionAgentsIntegrat
 
       // Load initial configuration
       await this.loadConfig();
+      if (this.state === "disposed") return;
 
       // Set up watcher if enabled
       if (this.options.enableWatcher) {
         await this.setupWatcher();
       }
+      if (this.getState() === "disposed") return;
 
       this.state = "ready";
       this.emit("initialized");
     } catch (error) {
+      await this.watcher?.stop();
+      this.watcher = null;
+      if (this.state === "disposed") return;
       this.state = "uninitialized";
       const err = error instanceof Error ? error : new Error(String(error));
-      this.emit("error", err);
+      this.reportError(err);
       throw err;
     }
   }
@@ -303,10 +315,16 @@ export class SessionAgentsIntegration extends EventEmitter<SessionAgentsIntegrat
    *
    * Stops the watcher and clears internal state.
    */
-  async dispose(): Promise<void> {
-    if (this.state === "disposed") {
-      return;
-    }
+  dispose(): Promise<void> {
+    if (this.disposal) return this.disposal;
+    // Invalidate immediately so in-flight loads/startup cannot publish ready state.
+    this.state = "disposed";
+    this.disposal = this.disposeResources();
+    return this.disposal;
+  }
+
+  private async disposeResources(): Promise<void> {
+    await this.initialization?.catch(() => {});
 
     // Stop watcher
     if (this.watcher) {
@@ -347,6 +365,7 @@ export class SessionAgentsIntegration extends EventEmitter<SessionAgentsIntegrat
 
     const previousConfig = this.currentConfig;
     const result = await this.loader.load(this.sessionPath);
+    if (this.state === "disposed") return;
 
     this.currentConfig = result.config;
     this.lastWarnings = result.warnings;
@@ -413,7 +432,7 @@ export class SessionAgentsIntegration extends EventEmitter<SessionAgentsIntegrat
       await this.loadConfig();
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      this.emit("error", err);
+      this.reportError(err);
     }
   }
 
@@ -421,7 +440,13 @@ export class SessionAgentsIntegration extends EventEmitter<SessionAgentsIntegrat
    * Handles watcher errors.
    */
   private handleWatcherError(error: Error): void {
-    this.emit("error", error);
+    this.reportError(error);
+  }
+
+  private reportError(error: Error): void {
+    // Startup errors also reject initialize(); optional background listeners must
+    // not turn filesystem races into unhandled EventEmitter exceptions.
+    if (this.state !== "disposed" && this.listenerCount("error") > 0) this.emit("error", error);
   }
 
   /**

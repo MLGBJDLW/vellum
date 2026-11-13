@@ -65,3 +65,52 @@ gateway transport filtering, catalog schema consistency, and existing provider
 contracts. They use local fixtures and do not certify account permissions,
 regional deployment access, inference quality, or every vendor's live availability.
 Full repository checks and release status are recorded in the parent PR.
+
+## Discovery and transport follow-up
+
+A second pass revisited the official sources above for all 17 adapters. The
+existing current-model additions and confirmed retirement removals remain valid;
+no additional static model family was justified by this pass. Account-specific,
+regional, restricted-access and local inventories still require explicit
+discovery. The Yi and Baichuan portals still do not expose enough public data to
+claim complete current inventories. This is coverage of every supported adapter,
+not proof that every possible account-specific model has been exercised.
+
+The following fixes use the existing catalog and SDK clients:
+
+- Cloud model refresh accepts the caller's cancellation signal, including SDK
+  pagination and OpenAI-compatible providers. Cancellation rejects the refresh
+  instead of publishing a partially collected inventory. No new polling,
+  dependency, parallel registry or CI job is introduced.
+- OpenAI discovery now includes account-owned `ft:` chat models and checkpoints.
+  A recognized base supplies capabilities, but its public price, aliases and
+  deprecation state are not assigned to the fine-tune. Explicit discovery
+  lifecycle metadata still applies. Fine-tuned model IDs work with the existing
+  completion transports. See the official
+  [fine-tuning usage contract](https://developers.openai.com/api/docs/guides/supervised-fine-tuning).
+- xAI's `/models` response can include image products alongside language models.
+  The normalizer excludes those media routes, honors reported input/output
+  modalities and reasoning effort, and converts the native cents-per-100M-token
+  prices to the catalog's USD-per-1M-token unit. See the official
+  [model-list schema and examples](https://docs.x.ai/developers/rest-api-reference/inference/models).
+- Missing or whitespace-only gateway price strings remain unknown; an explicit
+  numeric zero remains valid. This prevents an empty field from silently
+  disabling cost accounting.
+- Qwen Long has no function calling and accepts at most 1M tokens in HTTP
+  requests. Its advertised 10M context requires file submission, which this
+  adapter does not implement. The catalog now describes the supported transport
+  instead of allowing oversized chat requests. See the
+  [Qwen Long model details](https://www.alibabacloud.com/help/en/model-studio/qwen-long).
+
+Some Alibaba overview and detail tables disagree on legacy model capacities or
+thinking capabilities. For example, the general table lists a larger Qwen Max
+window than its [model-specific page](https://www.alibabacloud.com/help/en/model-studio/qwen-max).
+This pass does not increase those uncertain limits or infer new capabilities
+from the summary alone. Regional pricing and deployment access remain subject
+to the configured endpoint.
+
+Regression checks cover in-flight and pre-dispatch cancellation through the real
+SDK request paths, cancellation on subsequent discovery pages, fine-tune
+selection, sparse xAI inventories, price parsing and Qwen Long transport limits.
+The checks use local HTTP fixtures; no paid inference or live account probing
+was performed.

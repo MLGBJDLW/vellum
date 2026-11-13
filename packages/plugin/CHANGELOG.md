@@ -1,5 +1,12 @@
 # @vellum/plugin
 
+## 0.1.11
+
+### Patch Changes
+
+- Updated dependencies [`ee3651c`]:
+  - @vellum/core@0.4.2
+
 ## 0.1.10
 
 ### Patch Changes

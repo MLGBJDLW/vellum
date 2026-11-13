@@ -7,73 +7,19 @@
  * @module builtin/utils/shell-helpers
  */
 
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream, type WriteStream } from "node:fs";
 import * as fs from "node:fs/promises";
 import { homedir, platform } from "node:os";
 import * as path from "node:path";
 import { finished } from "node:stream/promises";
+import { StringDecoder } from "node:string_decoder";
 
-import { sanitizeEnvironment } from "@vellum/sandbox";
+import { killProcessTree, sanitizeEnvironment } from "@vellum/sandbox";
 import { detectExecutionShell as detectShell } from "../../shell/execution.js";
 
-export { detectShell };
-
-/** Timeout before sending SIGKILL after SIGTERM (ms) */
-const SIGKILL_TIMEOUT_MS = 5000;
-
-/**
- * Kills a process tree (the process and all its descendants).
- *
- * - Windows: Uses `taskkill /pid <pid> /f /t` to kill tree
- * - Unix: Uses `process.kill(-pid, signal)` to kill process group
- *
- * Implements graceful shutdown: SIGTERM → wait timeout → SIGKILL
- *
- * @param pid - Process ID to kill
- * @param options - Kill options
- * @param options.timeout - Time to wait before SIGKILL (default: 5000ms)
- * @returns Promise that resolves when the process tree is killed
- */
-export async function killProcessTree(
-  pid: number,
-  options: { timeout?: number } = {}
-): Promise<void> {
-  const { timeout = SIGKILL_TIMEOUT_MS } = options;
-  const isWindows = platform() === "win32";
-
-  if (isWindows) {
-    // Windows: taskkill /T kills the entire process tree
-    // /f = force, /t = tree (kill child processes)
-    spawnSync("taskkill", ["/pid", String(pid), "/f", "/t"], {
-      stdio: "ignore",
-    });
-    return;
-  }
-
-  // Unix: Kill the process group using negative PID
-  // First try SIGTERM for graceful shutdown
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch {
-    // Process may already be dead, ignore ESRCH errors
-    return;
-  }
-
-  // Wait for graceful shutdown, then force kill if still alive
-  await new Promise<void>((resolve) => {
-    setTimeout(() => {
-      try {
-        // Check if process group still exists and force kill
-        process.kill(-pid, "SIGKILL");
-      } catch {
-        // Process already dead, ignore
-      }
-      resolve();
-    }, timeout);
-  });
-}
+export { detectShell, killProcessTree };
 
 import {
   configFromTrustPreset,
@@ -320,6 +266,16 @@ export async function executeShell(
   } = options;
 
   const startTime = Date.now();
+  if (abortSignal?.aborted) {
+    return {
+      stdout: "",
+      stderr: "Operation aborted",
+      exitCode: null,
+      killed: true,
+      signal: "SIGTERM",
+      duration: 0,
+    };
+  }
   const { shell, shellArgs } = customShell
     ? { shell: customShell, shellArgs: ["-c"] }
     : detectShell();
@@ -339,21 +295,56 @@ export async function executeShell(
       windowsHide: true,
     });
 
-    const pid = childProcess.pid;
-    childProcess.unref(); // Allow parent to exit independently
-
-    return {
-      stdout: pid
-        ? `Background process started with PID: ${pid}`
-        : "Failed to start background process",
-      stderr: "",
-      exitCode: null,
-      killed: false,
-      signal: null,
-      duration: Date.now() - startTime,
-      pid,
-      isBackground: true,
-    };
+    return new Promise<ShellResult>((resolve) => {
+      childProcess.once("error", (error) => {
+        resolve({
+          stdout: "",
+          stderr: `Failed to start background process: ${error.message}`,
+          exitCode: null,
+          killed: false,
+          signal: null,
+          duration: Date.now() - startTime,
+        });
+      });
+      childProcess.once("spawn", () => {
+        if (abortSignal?.aborted && childProcess.pid) {
+          void killProcessTree(childProcess.pid).then(
+            () =>
+              resolve({
+                stdout: "",
+                stderr: "Operation aborted during background startup",
+                exitCode: null,
+                killed: true,
+                signal: "SIGTERM",
+                duration: Date.now() - startTime,
+              }),
+            (error: unknown) => {
+              childProcess.kill("SIGKILL");
+              resolve({
+                stdout: "",
+                stderr: `Process-tree termination failed: ${error instanceof Error ? error.message : String(error)}`,
+                exitCode: null,
+                killed: true,
+                signal: "SIGKILL",
+                duration: Date.now() - startTime,
+              });
+            }
+          );
+          return;
+        }
+        childProcess.unref();
+        resolve({
+          stdout: `Background process started with PID: ${childProcess.pid}`,
+          stderr: "",
+          exitCode: null,
+          killed: false,
+          signal: null,
+          duration: Date.now() - startTime,
+          pid: childProcess.pid,
+          isBackground: true,
+        });
+      });
+    });
   }
 
   if (sandbox?.enabled && sandbox.config) {
@@ -417,6 +408,10 @@ export async function executeShell(
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
+    const stdoutDecoder = new StringDecoder("utf8");
+    const stderrDecoder = new StringDecoder("utf8");
+    const stdoutStreamDecoder = new StringDecoder("utf8");
+    const stderrStreamDecoder = new StringDecoder("utf8");
     let killed = false;
     let killSignal: NodeJS.Signals | null = null;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -446,16 +441,29 @@ export async function executeShell(
         childProcess?.stderr?.pause();
       }
     };
+    const streamOutput = (callback: ((chunk: string) => void) | undefined, chunk: string) => {
+      if (!callback || !chunk) return;
+      try {
+        callback(chunk);
+      } catch {
+        // A failed display observer must not crash the process or lose captured output.
+      }
+    };
+
+    const terminationFailed = (error: unknown) => {
+      stderr += `\nProcess-tree termination failed: ${error instanceof Error ? error.message : String(error)}`;
+      childProcess?.kill("SIGKILL");
+      childProcess?.stdout?.destroy();
+      childProcess?.stderr?.destroy();
+    };
 
     // Handle abort signal
     const abortHandler = () => {
-      if (childProcess?.pid && !childProcess.killed) {
+      if (childProcess?.pid && !killed) {
         killed = true;
         killSignal = "SIGTERM";
         // Kill the entire process tree, not just the parent
-        killProcessTree(childProcess.pid).catch(() => {
-          // Ignore errors - process may already be dead
-        });
+        void killProcessTree(childProcess.pid).catch(terminationFailed);
       }
     };
 
@@ -484,7 +492,8 @@ export async function executeShell(
     childProcess = spawn(shell, [...shellArgs, commandText], {
       cwd,
       env: sanitizeEnvironment({ ...process.env, ...env }),
-      stdio: ["pipe", "pipe", "pipe"],
+      // This tool has no interactive input channel. Readers must receive EOF.
+      stdio: ["ignore", "pipe", "pipe"],
       detached: !isWindows, // Unix: create new process group; Windows: handled by taskkill /t
       windowsHide: true,
     });
@@ -494,29 +503,25 @@ export async function executeShell(
       if (timeout === undefined || timeout <= 0) return;
       if (timeoutId) clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
-        if (childProcess?.pid && !childProcess.killed) {
+        if (childProcess?.pid && !killed) {
           killed = true;
           killSignal = "SIGTERM";
           // Kill the entire process tree, not just the parent
-          killProcessTree(childProcess.pid).catch(() => {
-            // Ignore errors - process may already be dead
-          });
+          void killProcessTree(childProcess.pid).catch(terminationFailed);
         }
       }, timeout);
     };
 
     // Collect stdout and stream to callback
     childProcess.stdout?.on("data", (data: Buffer) => {
-      const chunk = data.toString();
+      const chunk = stdoutStreamDecoder.write(data);
       captureChunk("STDOUT", data);
       const kept = Math.min(data.length, Math.max(0, maxBuffer - stdoutBytes));
-      if (kept > 0) stdout += data.subarray(0, kept).toString();
+      if (kept > 0) stdout += stdoutDecoder.write(data.subarray(0, kept));
       stdoutBytes += kept;
       stdoutDroppedBytes += data.length - kept;
       // Stream chunk to callback if provided
-      if (onStdout) {
-        onStdout(chunk);
-      }
+      streamOutput(onStdout, chunk);
       // Reset timeout on output if inactivity mode is enabled
       if (inactivityTimeout) {
         resetTimeout();
@@ -525,16 +530,14 @@ export async function executeShell(
 
     // Collect stderr and stream to callback
     childProcess.stderr?.on("data", (data: Buffer) => {
-      const chunk = data.toString();
+      const chunk = stderrStreamDecoder.write(data);
       captureChunk("STDERR", data);
       const kept = Math.min(data.length, Math.max(0, maxBuffer - stderrBytes));
-      if (kept > 0) stderr += data.subarray(0, kept).toString();
+      if (kept > 0) stderr += stderrDecoder.write(data.subarray(0, kept));
       stderrBytes += kept;
       stderrDroppedBytes += data.length - kept;
       // Stream chunk to callback if provided
-      if (onStderr) {
-        onStderr(chunk);
-      }
+      streamOutput(onStderr, chunk);
       // Reset timeout on output if inactivity mode is enabled
       if (inactivityTimeout) {
         resetTimeout();
@@ -555,6 +558,14 @@ export async function executeShell(
       if (abortSignal) {
         abortSignal.removeEventListener("abort", abortHandler);
       }
+
+      // Do not manufacture a replacement character when the byte cap splits UTF-8.
+      if (stdoutDroppedBytes === 0) stdout += stdoutDecoder.end();
+      if (stderrDroppedBytes === 0) stderr += stderrDecoder.end();
+      const stdoutTail = stdoutStreamDecoder.end();
+      const stderrTail = stderrStreamDecoder.end();
+      streamOutput(onStdout, stdoutTail);
+      streamOutput(onStderr, stderrTail);
 
       // Check if output was truncated and append warning
       const totalDroppedBytes = stdoutDroppedBytes + stderrDroppedBytes;

@@ -138,6 +138,16 @@ describe("shell-helpers", () => {
   });
 
   describe("executeShell - basic functionality", () => {
+    it("closes non-interactive stdin so input readers can finish", async () => {
+      const script = 'process.stdin.resume(); process.stdin.on("end", () => console.log("eof"))';
+      const nodePath = process.execPath.replace(/'/g, platform() === "win32" ? "''" : "'\\''");
+      const command = `${platform() === "win32" ? "& " : ""}'${nodePath}' -e '${script}'`;
+      const result = await executeShell(command, { timeout: 5000 });
+      expect(result.exitCode).toBe(0);
+      expect(result.killed).toBe(false);
+      expect(result.stdout.trim()).toBe("eof");
+    });
+
     it.skipIf(platform() !== "win32")(
       "preserves Unicode in Windows PowerShell native pipelines",
       async () => {

@@ -71,9 +71,7 @@ describe("AgentsWatcher", () => {
 
   afterEach(async () => {
     // Always stop watcher to prevent resource leaks
-    if (watcher?.running) {
-      await watcher.stop();
-    }
+    await watcher?.stop();
     watcher = null;
     await cleanupDir(tempDir);
   });
@@ -121,6 +119,20 @@ describe("AgentsWatcher", () => {
   });
 
   describe("stop()", () => {
+    it("drains an overlapping startup without leaving a watcher behind", async () => {
+      watcher = new AgentsWatcher(tempDir, { watchParents: false });
+      const ready = vi.fn();
+      watcher.on("ready", ready);
+      const starting = watcher.start();
+      const stopping = watcher.stop();
+      await Promise.all([starting, stopping]);
+      expect(watcher.running).toBe(false);
+      expect(watcher.getWatchedPaths()).toEqual([]);
+      expect(ready).not.toHaveBeenCalled();
+      await watcher.start();
+      expect(watcher.running).toBe(true);
+    });
+
     it("should stop watching and clean up resources", async () => {
       watcher = new AgentsWatcher(tempDir);
       await watcher.start();
@@ -288,30 +300,29 @@ describe("AgentsWatcher", () => {
     it("should batch rapid changes into single event", async () => {
       watcher = new AgentsWatcher(tempDir, { debounceMs: 150, watchParents: false });
       await watcher.start();
-
-      let changeCount = 0;
-      let lastPaths: string[] = [];
-
-      watcher.on("change", (paths) => {
-        changeCount++;
-        lastPaths = paths;
-      });
-
-      // Make multiple rapid changes
+      const changed = vi.fn();
+      watcher.on("change", changed);
+      // biome-ignore lint/complexity/useLiteralKeys: Exercise the subscribed watcher without adding a public test API.
+      const fileWatcher = watcher["watcher"];
+      expect(fileWatcher).not.toBeNull();
       const filePath = path.join(tempDir, "AGENTS.md");
-      await createFile(filePath, "Content 1");
-      await wait(30);
-      await fs.writeFile(filePath, "Content 2", "utf-8");
-      await wait(30);
-      await fs.writeFile(filePath, "Content 3", "utf-8");
-
-      // Wait for debounce to complete (longer to account for file system delays)
-      await wait(400);
-
-      // Should emit at least once with batched changes
-      expect(changeCount).toBeGreaterThanOrEqual(1);
-      // Changes should be batched - not necessarily exactly 1 path
-      expect(lastPaths.length).toBeGreaterThanOrEqual(1);
+      // Exercise the subscribed event handler and debounce clock directly. Actual
+      // filesystem delivery is covered above and need not fit a 400ms CI window.
+      vi.useFakeTimers();
+      try {
+        fileWatcher?.emit("add", filePath);
+        await vi.advanceTimersByTimeAsync(30);
+        fileWatcher?.emit("change", filePath);
+        await vi.advanceTimersByTimeAsync(30);
+        fileWatcher?.emit("change", filePath);
+        await vi.advanceTimersByTimeAsync(149);
+        expect(changed).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(changed).toHaveBeenCalledOnce();
+        expect(changed).toHaveBeenCalledWith([filePath]);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("should emit after debounce delay passes", async () => {

@@ -5,18 +5,23 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SessionAgentsIntegration } from "../../context/agents/session-integration.js";
 import { AgentLoop, type AgentLoopConfig } from "../loop.js";
 import { MODE_CONFIGS } from "../modes.js";
 
 describe("AGENTS.md Integration", () => {
   let tempDir: string;
+  let loop: AgentLoop | undefined;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "vellum-agents-test-"));
   });
 
   afterEach(async () => {
+    await loop?.cancel("test cleanup");
+    loop = undefined;
+    vi.restoreAllMocks();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -30,7 +35,7 @@ describe("AGENTS.md Integration", () => {
       enableAgentsIntegration: true,
     };
 
-    const loop = new AgentLoop(config);
+    loop = new AgentLoop(config);
     expect(loop.getState()).toBe("idle");
   });
 
@@ -43,7 +48,7 @@ describe("AGENTS.md Integration", () => {
       cwd: tempDir,
     };
 
-    const loop = new AgentLoop(config);
+    loop = new AgentLoop(config);
     expect(loop.getState()).toBe("idle");
   });
 
@@ -70,11 +75,13 @@ Test instruction for agents.
       enableAgentsIntegration: true,
     };
 
-    const loop = new AgentLoop(config);
+    const initialize = vi.spyOn(SessionAgentsIntegration.prototype, "initialize");
+    loop = new AgentLoop(config);
     expect(loop.getState()).toBe("idle");
 
-    // Wait for async initialization
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await initialize.mock.results[0]?.value;
+    const integration = initialize.mock.contexts[0] as SessionAgentsIntegration | undefined;
+    expect(integration?.getConfig()?.instructions).toContain("Test instruction");
   });
 
   it("should work when cwd is not provided", async () => {
@@ -87,7 +94,7 @@ Test instruction for agents.
       enableAgentsIntegration: true,
     };
 
-    const loop = new AgentLoop(config);
+    loop = new AgentLoop(config);
     expect(loop.getState()).toBe("idle");
   });
 });

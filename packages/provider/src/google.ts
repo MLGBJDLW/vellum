@@ -205,11 +205,16 @@ export class GoogleProvider implements Provider {
     return DEFAULT_MODEL_IDS.google;
   }
 
-  async refreshModels(): Promise<import("./models/types.js").ModelInfo[]> {
+  async refreshModels(signal?: AbortSignal): Promise<import("./models/types.js").ModelInfo[]> {
+    signal?.throwIfAborted();
     this.ensureInitialized();
     const models: unknown[] = [];
     if (!this.client) throw new Error("Google provider is not initialized");
-    for await (const model of await this.client.models.list()) models.push(model);
+    for await (const model of await this.client.models.list({ config: { abortSignal: signal } })) {
+      signal?.throwIfAborted();
+      models.push(model);
+    }
+    signal?.throwIfAborted();
     return normalizeDiscoveredModels("google", models);
   }
 
