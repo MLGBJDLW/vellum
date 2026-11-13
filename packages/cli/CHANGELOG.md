@@ -1,5 +1,11 @@
 # @butlerw/vellum
 
+## Unreleased
+
+### Fixed
+
+- Render resumed tool results once with their original tool names and arguments, preserve provider message parts and metadata across session saves, and keep tool receipts in persistence bridge synchronization.
+
 ## 0.8.1
 
 ### Patch Changes

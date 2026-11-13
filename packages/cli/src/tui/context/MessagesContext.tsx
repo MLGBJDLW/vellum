@@ -7,6 +7,7 @@
  * @module tui/context/MessagesContext
  */
 
+import type { SessionMessage } from "@vellum/core";
 import React, {
   createContext,
   type Dispatch,
@@ -95,6 +96,8 @@ export interface Message {
   readonly thinkingDuration?: number;
   /** Whether thinking phase is complete (false during streaming) */
   readonly isThinkingComplete?: boolean;
+  /** Original persisted message, retained by reference for lossless session replay. */
+  readonly sourceMessage?: SessionMessage;
 }
 
 /**

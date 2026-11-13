@@ -760,23 +760,6 @@ const MessageList = memo(function MessageList({
     }
     return ids;
   }, [messages]);
-  const shouldRenderInlineToolCalls = useCallback(
-    (message: Message) => {
-      if (message.role !== "assistant") {
-        return true;
-      }
-      if (!message.toolCalls || message.toolCalls.length === 0) {
-        return true;
-      }
-      for (const call of message.toolCalls) {
-        if (toolGroupCallIds.has(call.id)) {
-          return false;
-        }
-      }
-      return true;
-    },
-    [toolGroupCallIds]
-  );
 
   const isStaticOutputMode = process.env.VELLUM_STATIC_OUTPUT === "1";
   const shouldConstrainHeight =
@@ -930,7 +913,6 @@ const MessageList = memo(function MessageList({
           />
         );
       }
-      const showToolCallsForItem = shouldRenderInlineToolCalls(item);
       const thinkingToggle = getThinkingToggleInfo(item);
       // Standard message rendering
       return (
@@ -942,7 +924,7 @@ const MessageList = memo(function MessageList({
           thinkingColor={thinkingColor}
           successColor={successColor}
           errorColor={errorColor}
-          showToolCalls={showToolCallsForItem}
+          showToolCalls
           thinkingDisplayMode={thinkingDisplayMode}
           thinkingToggleSignal={thinkingToggle.signal}
           thinkingToggleHint={thinkingToggle.hint}
@@ -960,7 +942,6 @@ const MessageList = memo(function MessageList({
       thinkingColor,
       successColor,
       errorColor,
-      shouldRenderInlineToolCalls,
       thinkingDisplayMode,
       getThinkingToggleInfo,
       handleThinkingHeightChange,
@@ -1001,8 +982,21 @@ const MessageList = memo(function MessageList({
     return [...msgs, pendingMessage];
   }, [messages, pendingMessage]);
 
-  // Streaming and completed messages share one viewport and one follow-mode owner.
-  const virtualizedMessages = allMessages;
+  // Keep complete tool-use messages in history for provider replay. Only the viewport
+  // drops calls already represented by receipt groups, including empty call carriers.
+  const virtualizedMessages = useMemo(
+    () =>
+      allMessages.flatMap((message) => {
+        if (message.role !== "assistant" || !message.toolCalls?.length) return [message];
+        const toolCalls = message.toolCalls.filter((call) => !toolGroupCallIds.has(call.id));
+        if (toolCalls.length === message.toolCalls.length) return [message];
+        if (!toolCalls.length && !message.isStreaming && !message.content && !message.thinking) {
+          return [];
+        }
+        return [{ ...message, toolCalls }];
+      }),
+    [allMessages, toolGroupCallIds]
+  );
 
   const estimatedItemHeightForVirtualization = useMemo(() => {
     if (typeof estimatedItemHeight === "function") {
@@ -1014,18 +1008,12 @@ const MessageList = memo(function MessageList({
       if (!message) {
         return baseEstimate;
       }
-      const includeToolCalls = shouldRenderInlineToolCalls(message);
       return Math.max(
         baseEstimate,
-        estimateMessageHeightLegacy(message, estimatedContentWidth, includeToolCalls)
+        estimateMessageHeightLegacy(message, estimatedContentWidth, true)
       );
     };
-  }, [
-    estimatedItemHeight,
-    virtualizedMessages,
-    estimatedContentWidth,
-    shouldRenderInlineToolCalls,
-  ]);
+  }, [estimatedItemHeight, virtualizedMessages, estimatedContentWidth]);
 
   // Empty state
   if (allMessages.length === 0) {

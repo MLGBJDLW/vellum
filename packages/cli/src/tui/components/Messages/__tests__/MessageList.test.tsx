@@ -9,6 +9,7 @@ import { cleanup, render } from "ink-testing-library";
 import type React from "react";
 import { act } from "react";
 import { afterEach, describe, expect, it } from "vitest";
+import { toUIMessages } from "../../../adapters/message-adapter.js";
 import type { Message } from "../../../context/MessagesContext.js";
 import { ThemeProvider } from "../../../theme/index.js";
 import { MessageList } from "../MessageList.js";
@@ -191,6 +192,68 @@ describe("MessageList", () => {
   });
 
   describe("Tool Group Messages", () => {
+    it("replays one named tool row and one result without raw JSON or an empty assistant row", () => {
+      const messages = toUIMessages([
+        {
+          id: "call",
+          role: "assistant",
+          parts: [{ type: "tool", id: "shell-1", name: "shell", input: { command: "pwd" } }],
+          metadata: { createdAt: 0 },
+        },
+        {
+          id: "receipt",
+          role: "tool_result",
+          parts: [
+            {
+              type: "tool_result",
+              toolId: "shell-1",
+              content: JSON.stringify({ stdout: "REPLAY_OUTPUT", stderr: "", exitCode: 0 }),
+            },
+          ],
+          metadata: { createdAt: 1 },
+        },
+        {
+          id: "reply",
+          role: "assistant",
+          parts: [{ type: "text", text: "Finished." }],
+          metadata: { createdAt: 2 },
+        },
+      ]);
+      const frame = renderWithTheme(<MessageList messages={messages} />).lastFrame() ?? "";
+      expect(frame.match(/REPLAY_OUTPUT/g)).toHaveLength(1);
+      expect(frame.match(/\bshell\b/g)).toHaveLength(1);
+      expect(frame.match(/Vellum/g)).toHaveLength(1);
+      expect(frame).not.toContain('"stdout"');
+      expect(frame).not.toContain("tool_result");
+    });
+
+    it("keeps unmatched calls visible while rendering a matched failure only once", () => {
+      const messages = toUIMessages([
+        {
+          id: "call",
+          role: "assistant",
+          parts: [
+            { type: "tool", id: "read-1", name: "read_file", input: { path: "missing.txt" } },
+            { type: "tool", id: "pending-1", name: "list_dir", input: { path: "." } },
+          ],
+          metadata: { createdAt: 0 },
+        },
+        {
+          id: "receipt",
+          role: "tool_result",
+          parts: [
+            { type: "tool_result", toolId: "read-1", content: "Missing file", isError: true },
+          ],
+          metadata: { createdAt: 1 },
+        },
+      ]);
+      const frame = renderWithTheme(<MessageList messages={messages} />).lastFrame() ?? "";
+      expect(frame.match(/read_file/g)).toHaveLength(1);
+      expect(frame.match(/list_dir/g)).toHaveLength(1);
+      expect(frame.match(/Missing file/g)).toHaveLength(1);
+      expect(messages[0]?.toolCalls).toHaveLength(2);
+    });
+
     it("should render tool_group message as inline tool rows", () => {
       const messages = [
         createMessage({

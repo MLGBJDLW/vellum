@@ -10,7 +10,7 @@
 
 import type { PersistenceManager, Session, SessionMessage } from "@vellum/core";
 import type { Message } from "../context/MessagesContext.js";
-import { toSessionMessage, toUIMessage } from "./message-adapter.js";
+import { toSessionMessage, toUIMessages } from "./message-adapter.js";
 
 // =============================================================================
 // Types
@@ -153,9 +153,7 @@ export class PersistenceBridge {
    * @returns Array of session messages
    */
   toSessionMessages(messages: readonly Message[]): SessionMessage[] {
-    return messages
-      .filter((msg): msg is Message => msg.role !== "tool" && msg.role !== "tool_group")
-      .map((msg) => toSessionMessage(msg));
+    return messages.map(toSessionMessage);
   }
 
   /**
@@ -165,7 +163,7 @@ export class PersistenceBridge {
    * @returns Array of UI messages
    */
   toUIMessages(sessionMessages: readonly SessionMessage[]): Message[] {
-    return sessionMessages.map((msg) => toUIMessage(msg));
+    return [...toUIMessages(sessionMessages)];
   }
 
   /**
@@ -223,9 +221,6 @@ export class PersistenceBridge {
     try {
       // Convert and add each new message
       for (const msg of newMessages) {
-        if (msg.role === "tool" || msg.role === "tool_group") {
-          continue;
-        }
         const sessionMsg = toSessionMessage(msg);
         await this.persistence.onMessage(sessionMsg);
       }
