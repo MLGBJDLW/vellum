@@ -54,7 +54,7 @@ Vellum includes adapters for Anthropic, OpenAI, Google, DeepSeek, Groq, xAI, Qwe
 OpenRouter, Mistral, Moonshot, Zhipu, MiniMax, Doubao, Yi, Baichuan, Ollama, and
 LM Studio. Model defaults and capabilities come from one shared catalog.
 
-See the [provider audit](docs/research/provider-model-audit.md) for exact models,
+See the [provider audit](docs/research/provider-catalog-2026-11-13.md) for exact models,
 official sources, retired-model removals, protocol adaptations, and vendors whose
 public catalogs could not be verified. Unknown pricing is not treated as free.
 Local and aggregator availability depends on the configured endpoint.
@@ -62,7 +62,7 @@ Local and aggregator availability depends on the configured endpoint.
 ## Capabilities
 
 - Streaming terminal interface with scrollable history and a task sidebar
-- Specialist agents and cancellation-aware delegation
+- Specialist agents with durable checkpoints, recovery and live task-side activity
 - Skills, custom prompts, and local memory
 - MCP tools and optional language-server tools for software work
 - Environment, system keychain, and encrypted-file credential storage
@@ -78,6 +78,7 @@ Local and aggregator availability depends on the configured endpoint.
 - [Skills](docs/skills.md) and [custom agents](docs/custom-agents.md)
 - [MCP](docs/mcp.md), [LSP](docs/lsp.md), and [terminal UI](docs/tui.md)
 - [Harness source comparison](docs/research/agent-harness.md)
+- [Durable subagents and recovery](docs/research/durable-subagents.md)
 
 ## Development
 
