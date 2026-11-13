@@ -1,5 +1,18 @@
 # @vellum/mcp
 
+## 0.2.0
+
+### Minor Changes
+
+- Discover all pages of MCP tools, resources, resource templates, and prompts. Keep tool filters during refresh and reject repeated cursors without replacing the last complete inventory.
+
+  Preserve structured tool output and mark server-reported application errors as failed receipts so the agent can repair them. Release transports, clients, and watchers when connection setup fails.
+
+### Patch Changes
+
+- Updated dependencies [`ee3651c`]:
+  - @vellum/core@0.4.2
+
 ## 0.1.10
 
 ### Patch Changes

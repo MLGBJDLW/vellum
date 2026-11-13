@@ -1,5 +1,29 @@
 # @butlerw/vellum
 
+## 0.9.0
+
+### Minor Changes
+
+- Discover all pages of MCP tools, resources, resource templates, and prompts. Keep tool filters during refresh and reject repeated cursors without replacing the last complete inventory.
+
+  Preserve structured tool output and mark server-reported application errors as failed receipts so the agent can repair them. Release transports, clients, and watchers when connection setup fails.
+
+### Patch Changes
+
+- Prevent non-interactive commands from hanging on open stdin, preserve UTF-8 output
+  across stream boundaries, and retain the available prefix when sandbox output exceeds
+  its byte limit. Cancel complete subprocess trees through one shared implementation,
+  correctly distinguish cancellation from timeout, and avoid blocking the Windows
+  event loop during process cleanup. Handle background startup failures without
+  unhandled process errors and preserve captured output when display callbacks fail.
+  Resolve Windows termination tools from the system directory without relying on
+  PATH, report cleanup failures with a direct-child fallback, and honor cancellation
+  that arrives before background startup is acknowledged.
+
+- Keep long drafts usable in a responsive cursor-following viewport without truncating submitted content. Measure actual terminal cells and parent width for Unicode wrapping and resize handling. Restore drafts reliably during history navigation, including multiple keys delivered together. Forward model-discovery cancellation and retain the previous catalog when a refresh is cancelled.
+
+- Audit all 17 provider adapters, discover account-owned OpenAI fine-tunes, filter xAI media routes, preserve unknown prices, and correct Qwen Long's supported chat context and tool capabilities.
+
 ## 0.8.2
 
 ### Patch Changes
