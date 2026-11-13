@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DeepSeekProvider } from "../deepseek.js";
 import { MistralProvider } from "../mistral.js";
 import { OpenAICompatibleProvider } from "../openai-compat.js";
+import { QwenProvider } from "../qwen.js";
 import type { CompletionMessage, CompletionParams, StreamEvent } from "../types.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -64,6 +65,62 @@ const toolHistory: CompletionMessage[] = [
 ];
 
 describe.each([false, true])("real provider wire compatibility (stream=%s)", (stream) => {
+  it.each(["qwen4-max-preview", "qwen3.8-max", "qwen3.8-flash"])(
+    "keeps %s reasoning controls exclusive and retains tool-turn reasoning",
+    async (model) => {
+      const fetch = mockCompletion(stream, { role: "assistant", content: "Done" });
+      const provider = new QwenProvider();
+      await provider.initialize({
+        apiKey: "fixture",
+        baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+      });
+      const params: CompletionParams = {
+        model,
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "tool_use", id: "call_a", name: "lookup", input: {} }],
+            providerMetadata: { provider: "qwen", model, reasoningContent: "opaque" },
+          },
+          {
+            role: "user",
+            content: [{ type: "tool_result", toolUseId: "call_a", content: "Found" }],
+          },
+        ],
+        thinking: { enabled: true, reasoningEffort: "low", budgetTokens: 4096 },
+        extraBody: { reasoning_effort: "xhigh" },
+        maxTokens: 65536,
+      };
+      const consume = async (request: CompletionParams) => {
+        if (!stream) return provider.complete(request);
+        for await (const _ of provider.stream(request)) {
+          /* consume */
+        }
+      };
+      await consume(params);
+      expect(requestBody(fetch)).toMatchObject({
+        enable_thinking: true,
+        thinking_budget: 4096,
+        max_tokens: 65536,
+        messages: [{ role: "assistant", reasoning_content: "opaque" }, { role: "tool" }],
+      });
+      expect(requestBody(fetch)).not.toHaveProperty("reasoning_effort");
+      fetch.mockClear();
+      await consume({
+        ...params,
+        thinking: { enabled: true, reasoningEffort: "low" },
+        extraBody: {},
+      });
+      expect(requestBody(fetch)).toMatchObject({ enable_thinking: true, reasoning_effort: "low" });
+      expect(requestBody(fetch)).not.toHaveProperty("thinking_budget");
+      fetch.mockClear();
+      await consume({ ...params, thinking: { enabled: true, reasoningEffort: "none" } });
+      expect(requestBody(fetch)).toMatchObject({ enable_thinking: false });
+      expect(requestBody(fetch)).not.toHaveProperty("reasoning_effort");
+      expect(requestBody(fetch)).not.toHaveProperty("thinking_budget");
+    }
+  );
+
   it.each(["deepseek-flash", "deepseek-v4-pro"])(
     "honors the documented low reasoning effort and 384Ki output limit for %s",
     async (model) => {

@@ -724,7 +724,7 @@ export class OpenAIProvider {
    * Resolve reasoning effort for models that support reasoning.
    * Returns undefined when unsupported or explicitly disabled.
    */
-  private resolveReasoningEffort(params: CompletionParams): ReasoningEffort | undefined {
+  protected resolveReasoningEffort(params: CompletionParams): ReasoningEffort | undefined {
     if (!params.thinking?.enabled) {
       return undefined;
     }

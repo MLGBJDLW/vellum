@@ -110,9 +110,11 @@ const RETIRED_MODEL_REPLACEMENTS: Partial<Record<ProviderType, Record<string, st
     "gpt-4": "gpt-6.1-sol",
     "gpt-4-turbo": "gpt-6.1-sol",
     "gpt-4-32k": "gpt-6.1-sol",
+    "gpt-4-32k-0613": "gpt-6.1-sol",
     "gpt-3.5-turbo": "gpt-6-luna",
     "gpt-4.1-nano": "gpt-6-luna",
     o1: "gpt-6.1-sol",
+    "o1-pro": "gpt-5.6-sol",
     "o1-mini": "gpt-6-luna",
     "o1-preview": "gpt-6.1-sol",
     "o3-mini": "gpt-6-luna",
@@ -125,6 +127,22 @@ const RETIRED_MODEL_REPLACEMENTS: Partial<Record<ProviderType, Record<string, st
     "o4-mini": "gpt-5.6-terra",
     "o4-mini-2025-04-16": "gpt-5.6-terra",
     "gpt-4o-2024-05-13": "gpt-5.6-sol",
+    "gpt-3.5-turbo-0125": "gpt-5.6-terra",
+    "gpt-3.5-turbo-1106": "gpt-5.6-terra",
+    "gpt-3.5-turbo-instruct": "gpt-5.6-terra",
+    "gpt-4-0613": "gpt-5.6-sol",
+    "gpt-4-0314": "gpt-5.6-sol",
+    "gpt-4-1106-preview": "gpt-5.6-sol",
+    "gpt-4-0125-preview": "gpt-5.6-sol",
+    "gpt-4-turbo-preview": "gpt-5.6-sol",
+    "gpt-4.5-preview": "gpt-5.6-sol",
+    "gpt-5-chat-latest": "gpt-5.6-sol",
+    "gpt-5.1-chat-latest": "gpt-5.6-sol",
+    "gpt-5.2-chat-latest": "gpt-5.6-sol",
+    "gpt-5.3-chat-latest": "gpt-5.6-sol",
+    "chatgpt-4o-latest": "gpt-5.6-sol",
+    "o3-deep-research": "gpt-5.6-sol",
+    "o4-mini-deep-research": "gpt-5.6-sol",
   },
   google: {
     "gemini-1.5-pro": "gemini-4-argon",
@@ -155,7 +173,11 @@ export function getModelReplacement(
   provider: ProviderType | string,
   modelId: string
 ): string | undefined {
-  return RETIRED_MODEL_REPLACEMENTS[provider as ProviderType]?.[modelId];
+  const replacements = RETIRED_MODEL_REPLACEMENTS[provider as ProviderType];
+  return (
+    replacements?.[modelId] ??
+    (provider === "openai" ? replacements?.[modelId.replace(/-\d{4}-\d{2}-\d{2}$/, "")] : undefined)
+  );
 }
 
 /** Retired products without a compatible vendor replacement must not be rediscovered. */

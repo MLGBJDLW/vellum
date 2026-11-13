@@ -1,6 +1,28 @@
-/** anthropic catalog audited 2026-11-06. Sources: docs/research/provider-catalog-2026-11-06.md. */
+/** anthropic catalog audited 2026-11-13. Sources: docs/research/provider-catalog-2026-11-13.md. */
 import type { ModelInfo } from "../types.js";
 export const ANTHROPIC_MODELS: ModelInfo[] = [
+  {
+    id: "claude-fable-5-2",
+    name: "Claude Fable 5.2",
+    provider: "anthropic",
+    contextWindow: 1000000,
+    maxOutputTokens: 128000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    supportsSampling: false,
+    thinkingMode: "adaptive",
+    requiresThinking: true,
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    defaultReasoningEffort: "high",
+    inputPrice: 8,
+    outputPrice: 40,
+    cacheReadsPrice: 0.2,
+    cacheWritesPrice: 10,
+    deprecated: false,
+  },
   {
     id: "claude-sonnet-5-5",
     name: "Claude Sonnet 5.5",
