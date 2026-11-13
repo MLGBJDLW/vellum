@@ -30,7 +30,7 @@ const SESSION_TO_UI_ROLE: Record<SessionRole, MessageRole> = {
   user: "user",
   assistant: "assistant",
   system: "system",
-  tool_result: "tool",
+  tool_result: "tool_group",
 };
 
 /**
@@ -106,6 +106,9 @@ function extractToolResults(parts: readonly SessionMessagePart[]): readonly Tool
       name: "tool_result",
       arguments: {},
       result: part.content,
+      ...(part.isError
+        ? { error: typeof part.content === "string" ? part.content : JSON.stringify(part.content) }
+        : {}),
       status: part.isError ? ("error" as const) : ("completed" as const),
     }));
 }
@@ -145,23 +148,19 @@ export function toUIMessage(sessionMessage: SessionMessage): Message {
   // Combine tool calls and tool results
   const allToolCalls = [...toolCalls, ...toolResults];
 
-  // Build content - for tool_result messages, stringify the result if no text
-  let content = textContent;
-  if (!content && sessionMessage.role === "tool_result" && toolResults.length > 0) {
-    content = toolResults
-      .map((tr) => (typeof tr.result === "string" ? tr.result : JSON.stringify(tr.result, null, 2)))
-      .join("\n");
-  }
-
   return {
     id: sessionMessage.id,
-    role: SESSION_TO_UI_ROLE[sessionMessage.role],
-    content,
+    role:
+      sessionMessage.role === "tool_result" && toolResults.length === 0
+        ? "tool"
+        : SESSION_TO_UI_ROLE[sessionMessage.role],
+    content: textContent,
     timestamp: new Date(sessionMessage.metadata.createdAt),
     isStreaming: false,
     toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
     ...(reasoningContent ? { thinking: reasoningContent } : {}),
     ...(tokenUsage ? { tokenUsage } : {}),
+    sourceMessage: sessionMessage,
   };
 }
 
@@ -178,12 +177,75 @@ export function toUIMessage(sessionMessage: SessionMessage): Message {
  * ```
  */
 export function toUIMessages(sessionMessages: readonly SessionMessage[]): readonly Message[] {
-  return sessionMessages.map(toUIMessage);
+  const calls = new Map<string, SessionToolPart>();
+  return sessionMessages.map((message) => {
+    for (const part of message.parts) {
+      if (part.type === "tool") calls.set(part.id, part);
+    }
+    const uiMessage = toUIMessage(message);
+    if (message.role !== "tool_result" || !uiMessage.toolCalls) return uiMessage;
+    return {
+      ...uiMessage,
+      toolCalls: uiMessage.toolCalls.map((result) => {
+        const call = calls.get(result.id);
+        return call ? { ...result, name: call.name, arguments: call.input } : result;
+      }),
+    };
+  });
 }
 
 // =============================================================================
 // UI → Session Conversion
 // =============================================================================
+
+/** Replace only edited part kinds; preserve attachments, ordering and reasoning timestamps. */
+function mergeSourceParts(message: Message, generated: SessionMessagePart[]): SessionMessagePart[] {
+  const source = message.sourceMessage;
+  if (!source || source.role !== UI_TO_SESSION_ROLE[message.role]) return generated;
+
+  const changed = new Set<SessionMessagePart["type"]>();
+  if (extractTextContent(source.parts) !== message.content) changed.add("text");
+  if (extractReasoningContent(source.parts) !== (message.thinking || undefined)) {
+    changed.add("reasoning");
+  }
+  const sourceCalls = source.parts.filter((part) => part.type === "tool");
+  const newCalls = generated.filter((part) => part.type === "tool");
+  if (
+    sourceCalls.length !== newCalls.length ||
+    sourceCalls.some((call, index) => {
+      const next = newCalls[index];
+      return call.id !== next?.id || call.name !== next?.name || call.input !== next?.input;
+    })
+  )
+    changed.add("tool");
+  const sourceResults = source.parts.filter((part) => part.type === "tool_result");
+  const newResults = generated.filter((part) => part.type === "tool_result");
+  if (
+    sourceResults.length !== newResults.length ||
+    sourceResults.some((result, index) => {
+      const next = newResults[index];
+      return (
+        result.toolId !== next?.toolId ||
+        result.content !== next?.content ||
+        Boolean(result.isError) !== Boolean(next?.isError)
+      );
+    })
+  )
+    changed.add("tool_result");
+  if (changed.size === 0) return source.parts;
+
+  const parts: SessionMessagePart[] = [];
+  const replaced = new Set<SessionMessagePart["type"]>();
+  for (const part of source.parts) {
+    if (!changed.has(part.type)) parts.push(part);
+    else if (!replaced.has(part.type)) {
+      parts.push(...generated.filter((next) => next.type === part.type));
+      replaced.add(part.type);
+    }
+  }
+  parts.push(...generated.filter((part) => changed.has(part.type) && !replaced.has(part.type)));
+  return parts;
+}
 
 /**
  * Convert a UI message to session message format
@@ -249,21 +311,30 @@ export function toSessionMessage(uiMessage: Message): SessionMessage {
       parts.push({
         type: "tool_result",
         toolId: toolCall.id,
-        content: toolCall.result ?? toolCall.error ?? "",
+        content: toolCall.result !== undefined ? toolCall.result : (toolCall.error ?? ""),
         isError: toolCall.status === "error",
       });
     }
   }
 
+  const source = uiMessage.sourceMessage;
+  const mergedParts = mergeSourceParts(uiMessage, parts);
+  const metadata = {
+    ...source?.metadata,
+    createdAt: uiMessage.timestamp.getTime(),
+    ...(source ? {} : { completedAt: uiMessage.timestamp.getTime() }),
+    ...(tokens ? { tokens } : {}),
+  };
+  if (uiMessage.isStreaming) delete metadata.completedAt;
+  // Provider replay may contain signed copies of the original content.
+  if (source && mergedParts !== source.parts) delete metadata.providerMetadata;
+
   return {
+    ...source,
     id: uiMessage.id,
     role: UI_TO_SESSION_ROLE[uiMessage.role],
-    parts,
-    metadata: {
-      createdAt: uiMessage.timestamp.getTime(),
-      completedAt: uiMessage.isStreaming ? undefined : uiMessage.timestamp.getTime(),
-      ...(tokens ? { tokens } : {}),
-    },
+    parts: mergedParts,
+    metadata,
   };
 }
 
