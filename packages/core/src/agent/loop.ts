@@ -5,6 +5,7 @@
 import { EventEmitter } from "node:events";
 import type { ReasoningEffort, StreamEvent, ToolDefinition } from "@vellum/provider";
 import type { TokenUsage } from "@vellum/shared";
+import type { DelegationUpdate } from "../agents/orchestrator/checkpoint.js";
 import type { OrchestratorCore } from "../agents/orchestrator/core.js";
 import type { SubsessionManager } from "../agents/session/subsession-manager.js";
 import type { UserPromptSignal } from "../builtin/ask-followup.js";
@@ -101,6 +102,8 @@ export interface AgentSessionBudget {
 }
 
 export interface AgentLoopConfig {
+  /** Persist receipt-complete history before advancing to another model turn. */
+  onMessagesCheckpoint?: (messages: SessionMessage[], iterations: number) => Promise<void>;
   /** Session identifier */
   sessionId: string;
   /** Mode configuration */
@@ -333,6 +336,7 @@ export interface AgentLoopEvents {
   delegationStart: [delegationId: string, agent: string, task: string];
   /** Emitted when delegation to a subagent completes (T059) */
   delegationComplete: [delegationId: string, agent: string, result: string];
+  delegationUpdate: [update: DelegationUpdate];
   /** Emitted when text is streamed from a subagent (T059) */
   subagentText: [delegationId: string, agent: string, chunk: string];
   /** Emitted when a subagent executes a tool (T059) */
@@ -421,6 +425,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
   private context: StateContext;
   private cancellation: CancellationToken;
   private messages: SessionMessage[] = [];
+  private readonly delegations = new Map<string, DelegationUpdate>();
   private abortController: AbortController | null = null;
   private lastTurnUsage: TokenUsage | null = null;
 
@@ -811,6 +816,33 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    */
   getMessages(): SessionMessage[] {
     return [...this.messages, ...this.pendingSteering];
+  }
+
+  getDelegations(): readonly DelegationUpdate[] {
+    return Array.from(this.delegations.values(), (update) => ({ ...update }));
+  }
+
+  clearDelegations(): void {
+    if (
+      Array.from(this.delegations.values()).some((entry) =>
+        ["queued", "running", "waiting"].includes(entry.status)
+      )
+    ) {
+      throw new Error("Cannot switch sessions while delegated work is running");
+    }
+    this.delegations.clear();
+  }
+
+  private updateDelegation(update: DelegationUpdate): void {
+    this.delegations.set(update.id, update);
+    // Keep active work, but do not retain an unbounded UI transcript.
+    const terminal = Array.from(this.delegations.values()).filter((entry) =>
+      ["completed", "failed", "cancelled", "interrupted"].includes(entry.status)
+    );
+    for (const entry of terminal.slice(0, Math.max(0, terminal.length - 100))) {
+      this.delegations.delete(entry.id);
+    }
+    this.emit("delegationUpdate", { ...update });
   }
 
   /** Queue an instruction without interrupting an in-flight tool or resetting task budgets. */
@@ -1671,7 +1703,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       do {
         this.nextIterationRequested = false;
         if (!this.cancellation.isCancelled) this.applySteering();
-        await this.runIteration();
+        try {
+          await this.runIteration();
+        } finally {
+          await this.config.onMessagesCheckpoint?.(this.getMessages(), this.iterationCount);
+        }
       } while (this.nextIterationRequested && !this.cancellation.isCancelled);
     };
     this.activeRun = pump();
@@ -2592,6 +2628,11 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    * @param toolName - Name of the tool that returned the signal
    * @returns Subagent result string if delegation occurred, null otherwise
    */
+  /** Run an explicit CLI delegation through the same permission and budget owners. */
+  async executeDelegation(signal: DelegateAgentSignal): Promise<string | null> {
+    return this.handleDelegationSignal(signal, signal.delegationId, "delegate_agent");
+  }
+
   private async handleDelegationSignal(
     output: unknown,
     _callId: string,
@@ -2602,11 +2643,29 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return null;
     }
 
-    const signal = this.extractDelegationSignal(output);
+    const extracted = this.extractDelegationSignal(output);
+    const signal = { ...extracted, delegationId: extracted.resumeId ?? extracted.delegationId };
     const agent = signal.targetAgent ?? "auto";
     const task = signal.context
       ? `${signal.task}\n\nAdditional context:\n${signal.context}`
       : signal.task;
+    const startedAt = Date.now();
+    const children = new Set<string>();
+    let update: DelegationUpdate = {
+      id: signal.delegationId,
+      agent,
+      task: signal.task,
+      status: "queued",
+      startedAt,
+      updatedAt: startedAt,
+      providerType: this.config.providerType,
+      model: signal.model ?? this.config.model,
+    };
+    const publish = (patch: Partial<DelegationUpdate>) => {
+      update = { ...update, ...patch, updatedAt: Date.now() };
+      this.updateDelegation(update);
+    };
+    publish({});
 
     // Emit delegation start event
     this.emit("delegationStart", signal.delegationId, agent, signal.task);
@@ -2623,12 +2682,50 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       this.logger?.warn("Delegation requested but no orchestrator configured", {
         delegationId: signal.delegationId,
       });
-      // Return the signal message as-is when no orchestrator
-      return `Delegation requested (ID: ${signal.delegationId}) but no orchestrator available to spawn subagent. Task: ${signal.task}`;
+      const result = `Delegation failed: no orchestrator available. Task: ${signal.task}`;
+      publish({ status: "failed", error: result });
+      this.emit("delegationComplete", signal.delegationId, agent, result);
+      return result;
     }
 
     try {
       const delegated = await this.config.orchestrator.executeTask(task, 2, {
+        executionId: signal.delegationId,
+        parentSessionId: this.config.sessionId,
+        resumeId: signal.resumeId,
+        onProgress: (progress) => {
+          const id = progress.id ?? signal.delegationId;
+          const workerAgent = progress.agent ?? agent;
+          if (id !== signal.delegationId) {
+            children.add(id);
+            this.delegations.delete(signal.delegationId);
+          }
+          if (progress.text) this.emit("subagentText", id, workerAgent, progress.text);
+          if (progress.toolName) this.emit("subagentTool", id, workerAgent, progress.toolName);
+          const previous = this.delegations.get(id) ?? update;
+          const workerUpdate: DelegationUpdate = {
+            ...previous,
+            id,
+            agent: workerAgent,
+            task: progress.task ?? signal.task,
+            parentId: id !== signal.delegationId ? signal.delegationId : undefined,
+            updatedAt: Date.now(),
+            status: progress.status,
+            ...(progress.toolName !== undefined
+              ? { toolName: progress.toolName || undefined }
+              : {}),
+            ...(progress.text
+              ? { message: `${previous.message ?? ""}${progress.text}`.slice(-240) }
+              : {}),
+            ...(progress.iterations !== undefined ? { iterations: progress.iterations } : {}),
+            ...(progress.tokensUsed !== undefined ? { tokensUsed: progress.tokensUsed } : {}),
+            ...(["completed", "failed", "cancelled"].includes(progress.status)
+              ? { toolName: undefined, error: progress.error }
+              : {}),
+          };
+          if (id === signal.delegationId) update = workerUpdate;
+          this.updateDelegation(workerUpdate);
+        },
         targetAgent: signal.targetAgent,
         signal: this.cancellation.signal,
         providerType: this.config.providerType,
@@ -2643,16 +2740,27 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           checkPermission: async (name, input, context) => {
             const decision = await this.toolExecutor.checkPermission(name, input, context);
             if (decision !== "ask") return decision;
-            return (await this.requestToolApproval(
+            if (children.size === 0) publish({ status: "waiting", toolName: name });
+            const approved = await this.requestToolApproval(
               context.callId,
               name,
               input as Record<string, unknown>
-            ))
-              ? "allow"
-              : "deny";
+            );
+            if (children.size === 0) publish({ status: "running" });
+            return approved ? "allow" : "deny";
           },
         },
       });
+      if (children.size === 0)
+        publish({
+          status: this.cancellation.signal.aborted
+            ? "cancelled"
+            : delegated.overallStatus === "success"
+              ? "completed"
+              : "failed",
+          toolName: undefined,
+          error: delegated.results.find((result) => result.error)?.error?.message,
+        });
       const result = JSON.stringify({
         status: delegated.overallStatus,
         results: delegated.results.map(({ taskId, agentSlug, status, data, error }) => ({
@@ -2668,6 +2776,23 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      for (const child of children) {
+        const current = this.delegations.get(child);
+        if (current && ["queued", "running", "waiting"].includes(current.status)) {
+          this.updateDelegation({
+            ...current,
+            status: this.cancellation.signal.aborted ? "cancelled" : "failed",
+            error: errorMessage,
+            toolName: undefined,
+            updatedAt: Date.now(),
+          });
+        }
+      }
+      publish({
+        status: this.cancellation.signal.aborted ? "cancelled" : "failed",
+        error: errorMessage,
+        toolName: undefined,
+      });
       this.logger?.error("Subagent delegation failed", {
         delegationId: signal.delegationId,
         error: errorMessage,

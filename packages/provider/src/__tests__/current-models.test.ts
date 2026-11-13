@@ -600,7 +600,7 @@ describe("current provider contracts", () => {
     }).rejects.toThrow("without a completion event");
   });
 
-  it.each(["claude-opus-4-7", "claude-opus-5-5"])(
+  it.each(["claude-opus-4-7", "claude-opus-5-5", "claude-fable-5-2"])(
     "uses adaptive thinking without invalid sampling or manual budget on %s",
     async (model) => {
       const fetch = mockJson({
@@ -717,7 +717,11 @@ describe("current provider contracts", () => {
     ).not.toEqual([part]);
   });
 
-  it("configures Gemini 4 thinking levels through the same Google adapter", async () => {
+  it.each([
+    ["gemini-4-argon", "high", "HIGH"],
+    ["gemini-4-carbon", "xhigh", "MEDIUM"],
+    ["gemini-4-hydrogen", "xhigh", "XHIGH"],
+  ] as const)("configures supported thinking levels for %s", async (model, effort, wireLevel) => {
     const fetch = mockJson({
       candidates: [{ content: { role: "model", parts: [{ text: "Done" }] }, finishReason: "STOP" }],
       usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
@@ -725,13 +729,13 @@ describe("current provider contracts", () => {
     const provider = new GoogleProvider();
     await provider.initialize({ apiKey: "AIzaSyFixtureKey123" });
     await provider.complete({
-      model: "gemini-4-argon",
+      model,
       messages: [{ role: "user", content: "Hi" }],
-      thinking: { enabled: true, reasoningEffort: "high" },
+      thinking: { enabled: true, reasoningEffort: effort },
     });
     const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body)).generationConfig.thinkingConfig).toMatchObject({
-      thinkingLevel: "HIGH",
+      thinkingLevel: wireLevel,
     });
   });
 });
@@ -743,6 +747,12 @@ describe("audited model catalog", () => {
         { id: "gpt-5.2-codex" },
         { id: "o4-mini-2025-04-16" },
         { id: "gpt-4o-2024-05-13" },
+        { id: "gpt-4.1-nano-2025-04-14" },
+        { id: "o1-2024-12-17" },
+        { id: "o1-pro-2025-03-19" },
+        { id: "gpt-4-turbo-2024-04-09" },
+        { id: "gpt-3.5-turbo-0125" },
+        { id: "gpt-5.3-chat-latest" },
         { id: "gpt-5.3-codex" },
         { id: "gpt-6.1-sol" },
       ]).map((model) => model.id)
@@ -756,6 +766,18 @@ describe("audited model catalog", () => {
       normalizeDiscoveredModels("groq", [{ id: "groq/compound" }, { id: "groq/compound-mini" }])
     ).toEqual([]);
     expect(isRetiredModel("openrouter", "openai/gpt-5.2-codex")).toBe(false);
+    expect(isRetiredModel("openai", "gpt-4o-2024-08-06")).toBe(false);
+  });
+
+  it("excludes gateway routes whose declared transport cannot serve interactive chat", () => {
+    expect(
+      normalizeDiscoveredModels("openrouter", [
+        { id: "vendor/chat", endpoints: ["/api/v1/chat/completions"] },
+        { id: "vendor/future-batch-name", endpoints: ["/api/v1/batches"] },
+        { id: "vendor/image", endpoints: ["/api/v1/images/generations"] },
+        { id: "vendor/sparse" },
+      ]).map((model) => model.id)
+    ).toEqual(["vendor/chat", "vendor/sparse"]);
   });
 
   it("retains known lifecycle and capacity through sparse discovery and honors explicit reactivation", () => {

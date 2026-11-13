@@ -11,8 +11,6 @@ import type {
   SandboxPolicy,
   Session,
   SessionMode,
-  TaskChain,
-  TaskChainNode,
   ToolExecutor,
   ToolRegistry,
 } from "@vellum/core";
@@ -130,7 +128,8 @@ import { roleSlashCommands } from "./commands/role.js";
 import { getThinkingEffortOptions } from "./commands/think.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
 import { checkUpdateOnStartup } from "./commands/update.js";
-import { setShutdownCleanup } from "./shutdown.js";
+import { getOrchestrator } from "./orchestrator-singleton.js";
+import { getShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
 import { useAgentAdapter } from "./tui/adapters/agent-adapter.js";
 import { toUIMessages } from "./tui/adapters/message-adapter.js";
 import {
@@ -138,7 +137,6 @@ import {
   type SessionStorage,
   useSessionAdapter,
 } from "./tui/adapters/session-adapter.js";
-import { AgentProgress } from "./tui/components/AgentProgress.js";
 import { Banner } from "./tui/components/Banner/index.js";
 import { BacktrackControls } from "./tui/components/backtrack/BacktrackControls.js";
 import { CheckpointDiffView } from "./tui/components/Checkpoint/CheckpointDiffView.js";
@@ -150,7 +148,6 @@ import { Clickable } from "./tui/components/common/Clickable.js";
 import { CostWarning } from "./tui/components/common/CostWarning.js";
 import { ErrorBoundary } from "./tui/components/common/ErrorBoundary.js";
 import { DEFAULT_HOTKEYS, HotkeyHelpModal } from "./tui/components/common/HotkeyHelpModal.js";
-import { MaxSizedBox } from "./tui/components/common/MaxSizedBox.js";
 import { LoadingIndicator } from "./tui/components/common/Spinner.js";
 import { LspConfirmDialog } from "./tui/components/Dialogs/LspConfirmDialog.js";
 import type { AutocompleteOption } from "./tui/components/Input/Autocomplete.js";
@@ -174,6 +171,7 @@ import {
   SidebarToggle,
 } from "./tui/components/Sidebar/SidebarHeader.js";
 import { SystemStatusPanel } from "./tui/components/Sidebar/SystemStatusPanel.js";
+import { TaskWorkspacePanel } from "./tui/components/Sidebar/TaskWorkspacePanel.js";
 import { ModelStatusBar } from "./tui/components/Status/ModelStatusBar.js";
 import { FileChangesIndicator } from "./tui/components/StatusBar/FileChangesIndicator.js";
 import { StatusBar } from "./tui/components/StatusBar/StatusBar.js";
@@ -183,7 +181,6 @@ import { SessionPicker } from "./tui/components/session/SessionPicker.js";
 import type { SessionMetadata, SessionPreviewMessage } from "./tui/components/session/types.js";
 import { TipBanner } from "./tui/components/TipBanner.js";
 import type { TodoItemData } from "./tui/components/TodoItem.js";
-import { TodoPanel } from "./tui/components/TodoPanel.js";
 import { ApprovalQueue } from "./tui/components/Tools/ApprovalQueue.js";
 import { OptionSelector } from "./tui/components/Tools/OptionSelector.js";
 import { PermissionDialog } from "./tui/components/Tools/PermissionDialog.js";
@@ -1075,123 +1072,6 @@ function AppContent({
     };
   }, [agentLoopProp, adapterConnect, adapterDisconnect]);
 
-  const upsertTaskChainNode = useCallback(
-    (taskId: string, agentSlug: string | undefined, status: TaskChainNode["status"]) => {
-      setTaskChain((prev) => {
-        const now = new Date();
-        if (!prev) {
-          const rootNode: TaskChainNode = {
-            taskId,
-            parentTaskId: undefined,
-            agentSlug: agentSlug ?? "agent",
-            depth: 0,
-            createdAt: now,
-            status,
-          };
-
-          return {
-            chainId: `ui-${createId()}`,
-            rootTaskId: taskId,
-            nodes: new Map([[taskId, rootNode]]),
-            maxDepth: 0,
-          };
-        }
-
-        const nodes = new Map(prev.nodes);
-        const existing = nodes.get(taskId);
-        const node: TaskChainNode = {
-          taskId,
-          parentTaskId: existing?.parentTaskId,
-          agentSlug: agentSlug ?? existing?.agentSlug ?? "agent",
-          depth: existing?.depth ?? 0,
-          createdAt: existing?.createdAt ?? now,
-          status,
-        };
-
-        nodes.set(taskId, node);
-
-        return {
-          ...prev,
-          nodes,
-          rootTaskId: prev.rootTaskId ?? taskId,
-          maxDepth: prev.maxDepth ?? 0,
-        };
-      });
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (!agentLoopProp) {
-      setTaskChain(null);
-      setCurrentTaskId(undefined);
-      return;
-    }
-
-    const handleDelegationStart = (delegationId: string, agent: string) => {
-      upsertTaskChainNode(delegationId, agent, "running");
-      setCurrentTaskId(delegationId);
-    };
-
-    const handleDelegationComplete = (delegationId: string) => {
-      upsertTaskChainNode(delegationId, undefined, "completed");
-      setCurrentTaskId((prev) => (prev === delegationId ? undefined : prev));
-    };
-
-    agentLoopProp.on("delegationStart", handleDelegationStart);
-    agentLoopProp.on("delegationComplete", handleDelegationComplete);
-
-    return () => {
-      agentLoopProp.off("delegationStart", handleDelegationStart);
-      agentLoopProp.off("delegationComplete", handleDelegationComplete);
-    };
-  }, [agentLoopProp, upsertTaskChainNode]);
-
-  useEffect(() => {
-    const orchestrator = agentLoopProp?.getConfig().orchestrator;
-    if (!orchestrator) {
-      return;
-    }
-
-    const handleSpawned = (event: { data?: { taskId?: string; agentSlug?: string } }) => {
-      if (!event.data?.taskId) return;
-      upsertTaskChainNode(event.data.taskId, event.data.agentSlug, "running");
-      setCurrentTaskId(event.data.taskId);
-    };
-
-    const handleCompleted = (event: { data?: { taskId?: string; agentSlug?: string } }) => {
-      if (!event.data?.taskId) return;
-      upsertTaskChainNode(event.data.taskId, event.data.agentSlug, "completed");
-      setCurrentTaskId((prev) => (prev === event.data?.taskId ? undefined : prev));
-    };
-
-    const handleFailed = (event: { data?: { taskId?: string; agentSlug?: string } }) => {
-      if (!event.data?.taskId) return;
-      upsertTaskChainNode(event.data.taskId, event.data.agentSlug, "failed");
-      setCurrentTaskId((prev) => (prev === event.data?.taskId ? undefined : prev));
-    };
-
-    const handleStarted = (event: { data?: { taskId?: string; agentSlug?: string } }) => {
-      if (!event.data?.taskId) return;
-      upsertTaskChainNode(event.data.taskId, event.data.agentSlug, "running");
-      setCurrentTaskId(event.data.taskId);
-    };
-
-    orchestrator.on("subagent_spawned", handleSpawned);
-    orchestrator.on("task_started", handleStarted);
-    orchestrator.on("task_completed", handleCompleted);
-    orchestrator.on("task_failed", handleFailed);
-    orchestrator.on("subagent_cancelled", handleFailed);
-
-    return () => {
-      orchestrator.off("subagent_spawned", handleSpawned);
-      orchestrator.off("task_started", handleStarted);
-      orchestrator.off("task_completed", handleCompleted);
-      orchestrator.off("task_failed", handleFailed);
-      orchestrator.off("subagent_cancelled", handleFailed);
-    };
-  }, [agentLoopProp, upsertTaskChainNode]);
-
   // ==========================================================================
   // Core Services - Tools, Credentials, Sessions
   // ==========================================================================
@@ -1300,10 +1180,6 @@ function AppContent({
   // Model selection state (moved earlier for onboarding config loading)
   const [currentModel, setCurrentModel] = useState(model);
   const [currentProvider, setCurrentProvider] = useState(provider);
-
-  // Agent task chain state for AgentProgress display
-  const [taskChain, setTaskChain] = useState<TaskChain | null>(null);
-  const [currentTaskId, setCurrentTaskId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     currentModeRef.current = currentMode;
@@ -1455,6 +1331,17 @@ function AppContent({
         });
         return false;
       }
+      if (sessionId !== activeSessionId) {
+        try {
+          agentLoopProp?.clearDelegations?.();
+        } catch {
+          addMessage({
+            role: "assistant",
+            content: "Finish or stop delegated work before switching sessions.",
+          });
+          return false;
+        }
+      }
       sessionCacheRef.current = session ?? null;
       setContextTokens(undefined);
       previousTokenUsageRef.current = { inputTokens: 0, outputTokens: 0 };
@@ -1484,7 +1371,7 @@ function AppContent({
       setActiveSessionId(sessionId);
       return true;
     },
-    [addMessage]
+    [activeSessionId, addMessage, agentLoopProp]
   );
 
   const refreshSessions = useCallback(async () => {
@@ -2884,18 +2771,23 @@ function AppContent({
 
   // Register shutdown cleanup on mount
   useEffect(() => {
-    setShutdownCleanup(() => {
+    const previousCleanup = getShutdownCleanup();
+    const cleanup = async () => {
       if (cancellationRef.current) {
         cancellationRef.current.cancel("shutdown");
       }
+      agentLoopProp?.cancel("shutdown");
+      await getOrchestrator()?.shutdown();
       // Save session on shutdown
-      void saveSession();
-    });
+      await saveSession();
+      await previousCleanup?.();
+    };
+    setShutdownCleanup(cleanup);
 
     return () => {
-      setShutdownCleanup(null);
+      if (getShutdownCleanup() === cleanup) setShutdownCleanup(previousCleanup);
     };
-  }, [saveSession]);
+  }, [agentLoopProp, saveSession]);
 
   const handleCommandResult = useCallback(
     async function process(result: CommandResult): Promise<void> {
@@ -4176,8 +4068,7 @@ function AppContent({
       sidebarContent={sidebarContent}
       specPhase={specPhase}
       themeContext={themeContext}
-      taskChain={taskChain}
-      currentTaskId={currentTaskId}
+      agentLoop={agentLoopProp}
       todoItems={todoItems}
       refreshTodos={refreshTodos}
       toolRegistry={toolRegistry}
@@ -4322,8 +4213,7 @@ interface AppContentViewProps {
   readonly sidebarContent: SidebarContent;
   readonly specPhase: number;
   readonly themeContext: ThemeContextValue;
-  readonly taskChain: TaskChain | null;
-  readonly currentTaskId?: string;
+  readonly agentLoop?: AgentLoop;
   readonly todoItems: readonly TodoItemData[];
   readonly refreshTodos: () => void;
   readonly toolRegistry: ToolRegistry;
@@ -4393,6 +4283,7 @@ interface AppContentViewProps {
 }
 
 function renderSidebarContent({
+  sessionId,
   announce,
   showSidebar,
   isFocused,
@@ -4410,10 +4301,10 @@ function renderSidebarContent({
   toolRegistry,
   persistence,
   snapshots,
-  taskChain,
-  currentTaskId,
+  agentLoop,
   onOpenCheckpointDiff,
 }: {
+  readonly sessionId: string;
   readonly announce: (message: string) => void;
   readonly showSidebar: boolean;
   readonly isFocused: boolean;
@@ -4435,8 +4326,7 @@ function renderSidebarContent({
     lastSavedAt: Date | null;
   };
   readonly snapshots: ReturnType<typeof useSnapshots>;
-  readonly taskChain: TaskChain | null;
-  readonly currentTaskId?: string;
+  readonly agentLoop?: AgentLoop;
   readonly onOpenCheckpointDiff: (hash: string) => void;
 }): React.ReactNode | undefined {
   if (!showSidebar) return undefined;
@@ -4445,7 +4335,9 @@ function renderSidebarContent({
 
   if (sidebarContent === "todo") {
     panelContent = (
-      <TodoPanel
+      <TaskWorkspacePanel
+        key={sessionId}
+        loop={agentLoop}
         items={todoItems}
         isFocused={isFocused}
         mouseEnabled={mouseEnabled}
@@ -4530,18 +4422,6 @@ function renderSidebarContent({
         <Box flexGrow={1} minHeight={0} overflow="hidden">
           {panelContent}
         </Box>
-        {taskChain && taskChain.nodes.size > 0 && (
-          <Box marginTop={1}>
-            <MaxSizedBox maxHeight={12} truncationIndicator="... (more tasks)">
-              <AgentProgress
-                chain={taskChain}
-                currentTaskId={currentTaskId}
-                showDetails={false}
-                progressBarWidth={12}
-              />
-            </MaxSizedBox>
-          </Box>
-        )}
         <SystemStatusPanel
           context={context}
           compact={panelHeight < 14}
@@ -5158,8 +5038,7 @@ function AppContentView({
   sidebarContent,
   specPhase,
   themeContext,
-  taskChain,
-  currentTaskId,
+  agentLoop,
   todoItems,
   refreshTodos,
   toolRegistry,
@@ -5208,6 +5087,7 @@ function AppContentView({
   const sidebarWidth = getSidebarWidth(terminalSize.width) || terminalSize.width;
 
   const sidebar = renderSidebarContent({
+    sessionId: activeSessionId,
     context: {
       tokens: contextTokens,
       estimated: contextEstimated,
@@ -5224,10 +5104,7 @@ function AppContentView({
     onSelectPanel: onSelectSidebar,
     onClose: closeSidebar,
     panelWidth: Math.max(12, sidebarWidth - 3),
-    panelHeight: Math.max(
-      6,
-      terminalSize.height - (taskChain && taskChain.nodes.size > 0 ? 22 : 15)
-    ),
+    panelHeight: Math.max(6, terminalSize.height - 15),
     sidebarContent,
     todoItems,
     refreshTodos,
@@ -5235,8 +5112,7 @@ function AppContentView({
     toolRegistry,
     persistence,
     snapshots,
-    taskChain,
-    currentTaskId,
+    agentLoop,
     onOpenCheckpointDiff,
   });
 

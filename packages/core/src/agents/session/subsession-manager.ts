@@ -226,10 +226,10 @@ export interface SubsessionManager {
  * Default resource quota for subsessions when not specified.
  */
 const DEFAULT_QUOTA: ResourceQuota = {
-  maxTokens: 100000,
-  maxDurationMs: 300000, // 5 minutes
+  maxTokens: Number.POSITIVE_INFINITY,
+  maxDurationMs: Number.POSITIVE_INFINITY,
   maxSubagents: 3,
-  maxFileOps: 50,
+  maxFileOps: Number.POSITIVE_INFINITY,
 };
 
 /**

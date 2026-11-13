@@ -1,6 +1,47 @@
-/** google catalog audited 2026-11-06. Sources: docs/research/provider-catalog-2026-11-06.md. */
+/** google catalog audited 2026-11-13. Sources: docs/research/provider-catalog-2026-11-13.md. */
 import type { ModelInfo } from "../types.js";
 export const GOOGLE_MODELS: ModelInfo[] = [
+  {
+    id: "gemini-4-carbon",
+    name: "Gemini 4 Carbon",
+    provider: "google",
+    contextWindow: 1048576,
+    maxOutputTokens: 65536,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    requiresThinking: true,
+    reasoningEfforts: ["low", "medium", "high"],
+    defaultReasoningEffort: "medium",
+    inputPrice: 2,
+    outputPrice: 10,
+    cacheReadsPrice: 0.1,
+    deprecated: false,
+    description:
+      "Synchronous output limit; long decode requires a separate API workflow. Promotional standard rates through 2026-11-30.",
+  },
+  {
+    id: "gemini-4-hydrogen",
+    name: "Gemini 4 Hydrogen",
+    provider: "google",
+    contextWindow: 1048576,
+    maxOutputTokens: 65536,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    requiresThinking: true,
+    reasoningEfforts: ["low", "medium", "high", "xhigh"],
+    defaultReasoningEffort: "high",
+    inputPrice: 1.5,
+    outputPrice: 7.5,
+    cacheReadsPrice: 0.075,
+    deprecated: false,
+    description: "Synchronous output limit; long decode requires a separate API workflow.",
+  },
   {
     id: "gemini-4-argon",
     name: "Gemini 4 Argon",

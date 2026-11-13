@@ -14,6 +14,13 @@ import { defineTool, ok } from "../types/index.js";
  * Schema for delegate_agent tool parameters
  */
 export const delegateAgentParamsSchema = z.object({
+  resumeId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Resume a saved delegation by ID; task supplies continuation instructions. Completed work is retained."
+    ),
   /** Task description for the subagent */
   task: z.string().min(1).describe("The task description for the subagent to complete"),
   /** Target agent slug to spawn (e.g. 'coder', 'reviewer'). If not provided, defaults to 'subagent' */
@@ -44,6 +51,7 @@ export type DelegateAgentParams = z.infer<typeof delegateAgentParamsSchema>;
  * The agent loop will handle the actual spawning
  */
 export interface DelegateAgentSignal {
+  resumeId?: string;
   /** Signal type identifier */
   type: "delegate_agent";
   /** Target agent slug to spawn (e.g. 'coder', 'reviewer') */
@@ -115,7 +123,7 @@ export const delegateAgentTool = defineTool({
   async execute(input, _ctx) {
     // Note: Cancellation is handled at the agent loop level for delegations
 
-    const { task, targetAgent, context, model, maxTurns } = input;
+    const { task, targetAgent, context, model, maxTurns, resumeId } = input;
 
     const delegationId = generateDelegationId();
 
@@ -127,6 +135,7 @@ export const delegateAgentTool = defineTool({
       model,
       maxTurns,
       delegationId,
+      resumeId,
     };
 
     // Build message describing the delegation

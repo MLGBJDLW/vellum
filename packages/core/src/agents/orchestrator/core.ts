@@ -5,6 +5,7 @@
 // Implements REQ-012: Task Execution Pipeline
 // T031: Handle spec workflow handoff callbacks
 
+import { resolve } from "node:path";
 import { BUILT_IN_AGENTS } from "../../agent/agent-config.js";
 import type { AgentLevel } from "../../agent/level.js";
 import { canSpawn } from "../../agent/level.js";
@@ -17,10 +18,17 @@ import { createTaskPacket } from "../protocol/task-packet.js";
 import type { SubsessionManager } from "../session/subsession-manager.js";
 import { BUILTIN_WORKERS } from "../workers/builtin/index.js";
 import { executeWorkerTask, type WorkerExecutionConfig } from "../workers/worker-executor.js";
-import type { AggregatedResult, ResultAggregator, TaskResult } from "./aggregator.js";
+import type { AggregatedResult, ResultAggregator } from "./aggregator.js";
 import { createResultAggregator } from "./aggregator.js";
 import type { ApprovalForwarder, ApprovalRequest } from "./approval-forwarder.js";
 import { createApprovalForwarder } from "./approval-forwarder.js";
+import {
+  type OrchestratorCheckpoint,
+  OrchestratorCheckpointSchema,
+  type OrchestratorPersistence,
+  type WorkerCheckpoint,
+  type WorkerProgress,
+} from "./checkpoint.js";
 import type { TaskDecomposer } from "./decomposer.js";
 import { createTaskDecomposer } from "./decomposer.js";
 import type { TaskRouter } from "./router.js";
@@ -112,6 +120,8 @@ function getAgentLevel(slug: string): AgentLevel {
  * ```
  */
 export interface OrchestratorConfig {
+  persistence?: OrchestratorPersistence;
+  onCheckpoint?: (checkpoint: OrchestratorCheckpoint) => Promise<void>;
   /** Registry containing all registered agent modes */
   modeRegistry: ModeRegistry;
   /** Subsession manager for agent isolation (optional) */
@@ -128,6 +138,14 @@ export interface OrchestratorConfig {
 
 /** Per-delegation runtime inherited from the calling agent. */
 export interface ExecuteTaskOptions {
+  executionId?: string;
+  parentSessionId?: string;
+  resumeId?: string;
+  checkpoint?: OrchestratorCheckpoint;
+  onCheckpoint?: (checkpoint: OrchestratorCheckpoint) => Promise<void>;
+  onProgress?: (progress: WorkerProgress) => void;
+  workerCheckpoint?: WorkerCheckpoint;
+  onWorkerCheckpoint?: (checkpoint: WorkerCheckpoint) => Promise<void>;
   sessionBudget?: AgentSessionBudget;
   targetAgent?: string;
   signal?: AbortSignal;
@@ -265,6 +283,8 @@ export interface OrchestratorCore {
    * @returns Promise resolving when all subagents are cancelled
    */
   cancelAll(): Promise<void>;
+  /** Cancel queued/running work and flush final checkpoints before process exit. */
+  shutdown(): Promise<void>;
 
   /**
    * Cancel a specific subagent by its handle ID.
@@ -461,6 +481,11 @@ class OrchestratorCoreImpl implements OrchestratorCore {
   readonly taskChainManager: TaskChainManager;
 
   private readonly handles = new Map<string, SubagentHandle>();
+  private readonly executions = new Set<string>();
+  private readonly pendingExecutions = new Set<Promise<AggregatedResult<unknown>>>();
+  private readonly executionControllers = new Set<AbortController>();
+  private stopping = false;
+  private readonly runningWorkers = new Set<string>();
   private readonly taskToChain = new Map<string, string>(); // taskId -> chainId
   private readonly taskDeadlines = new Map<string, number>(); // taskId -> deadline timestamp
   private readonly deadlineTimers = new Map<string, NodeJS.Timeout>(); // taskId -> deadline timer
@@ -529,7 +554,8 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     // Only cancel if still active
     if (targetHandle.status === "running" || targetHandle.status === "spawning") {
       this.taskControllers.get(targetHandle.id)?.abort(new Error("Task exceeded deadline"));
-      setHandleStatus(targetHandle, "cancelled");
+      if (this.runningWorkers.has(targetHandle.id)) targetHandle.status = "cancelled";
+      else setHandleStatus(targetHandle, "cancelled");
       targetHandle.completedAt = new Date();
 
       // Update chain status
@@ -578,7 +604,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
    */
   private cleanup(handleId: string): void {
     const handle = this.handles.get(handleId);
-    if (!handle) {
+    if (!handle || this.runningWorkers.has(handleId)) {
       return;
     }
 
@@ -650,9 +676,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     // Note: _task is available for future use in task execution/logging
 
     // Check concurrent limit before spawning (Issue #8)
-    const activeCount = this.getActiveSubagents().filter(
-      (h) => h.status === "running" || h.status === "spawning"
-    ).length;
+    const activeCount = this.capacityHandles().length;
 
     if (activeCount >= this.maxConcurrent) {
       throw new Error(
@@ -785,223 +809,327 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     return handle;
   }
 
+  private capacityHandles(): SubagentHandle[] {
+    return Array.from(this.handles.values()).filter(
+      (h) => this.runningWorkers.has(h.id) || !TERMINAL_STATUSES.has(h.status)
+    );
+  }
+
+  private async waitForSlot(signal?: AbortSignal): Promise<void> {
+    while (this.capacityHandles().length >= this.maxConcurrent) {
+      signal?.throwIfAborted();
+      await new Promise<void>((done, reject) => {
+        const clean = () => signal?.removeEventListener("abort", abort);
+        const abort = () => {
+          clean();
+          reject(signal?.reason ?? new Error("Delegation cancelled"));
+        };
+        signal?.addEventListener("abort", abort, { once: true });
+        if (signal?.aborted) {
+          abort();
+          return;
+        }
+        void Promise.race(this.capacityHandles().map((h) => h.completion)).then(() => {
+          clean();
+          done();
+        });
+      });
+    }
+    signal?.throwIfAborted();
+  }
+
   async executeTask(
     task: string,
     level: AgentLevel,
     options: ExecuteTaskOptions = {}
   ): Promise<AggregatedResult<unknown>> {
-    options.signal?.throwIfAborted();
-    // Each execution owns its receipts; concurrent calls must not reset each other.
-    const aggregator = createResultAggregator<unknown>();
-    // Emit task_started event
-    const executionTaskId = generateTaskId();
-    this.emit({
-      type: "task_started",
-      timestamp: new Date(),
-      data: {
-        taskId: executionTaskId,
-      },
-    });
-
-    // Reset aggregator for fresh execution
-
-    // Analyze and potentially decompose the task
-    const analysis = this.decomposer.analyze(task);
-
-    if (options.targetAgent || !analysis.shouldDecompose) {
-      // Simple task - route directly
-      const routeResult = this.router.route(task, level);
-      if (options.targetAgent) routeResult.selectedAgent = options.targetAgent;
-      else if (!routeResult.selectedAgent && level === 2) {
-        routeResult.selectedAgent =
-          BUILTIN_WORKERS.find((worker) => worker.canHandle(task))?.slug ?? "coder";
+    if (this.stopping) throw new Error("Orchestrator is shutting down");
+    const invocation = new AbortController();
+    const abortInvocation = () => invocation.abort(options.signal?.reason);
+    options.signal?.addEventListener("abort", abortInvocation, { once: true });
+    if (options.signal?.aborted) abortInvocation();
+    this.executionControllers.add(invocation);
+    const execution = (async () => {
+      const id =
+        options.resumeId ?? options.checkpoint?.id ?? options.executionId ?? generateTaskId();
+      const release = await this.config.persistence?.acquire?.(id);
+      try {
+        invocation.signal.throwIfAborted();
+        return await this.executePlan(task, level, {
+          ...options,
+          executionId: id,
+          signal: invocation.signal,
+        });
+      } finally {
+        await release?.();
       }
+    })();
+    this.pendingExecutions.add(execution);
+    try {
+      return await execution;
+    } finally {
+      this.pendingExecutions.delete(execution);
+      this.executionControllers.delete(invocation);
+      options.signal?.removeEventListener("abort", abortInvocation);
+    }
+  }
 
-      if (!routeResult.selectedAgent) {
-        // No agent found - return failure
-        const noAgentError = new Error(`No agent found to handle task at level ${level}`);
-        const failResult: TaskResult<unknown> = {
-          taskId: executionTaskId,
-          agentSlug: "",
-          status: "failure",
-          error: noAgentError,
-          startedAt: new Date(),
-          completedAt: new Date(),
-        };
-        aggregator.addResult(failResult);
-
-        // Emit task_failed event
+  private async executePlan(
+    task: string,
+    level: AgentLevel,
+    options: ExecuteTaskOptions
+  ): Promise<AggregatedResult<unknown>> {
+    if (this.stopping) throw new Error("Orchestrator is shutting down");
+    options.signal?.throwIfAborted();
+    const loaded =
+      options.checkpoint ??
+      (options.resumeId ? await this.config.persistence?.load(options.resumeId) : undefined);
+    options.signal?.throwIfAborted();
+    if (options.resumeId && !loaded) throw new Error(`No checkpoint found for ${options.resumeId}`);
+    let checkpoint: OrchestratorCheckpoint;
+    if (loaded) {
+      checkpoint = OrchestratorCheckpointSchema.parse(structuredClone(loaded));
+      if (options.cwd && checkpoint.cwd && resolve(options.cwd) !== resolve(checkpoint.cwd))
+        throw new Error("Cannot resume a delegation from a different workspace");
+      if (
+        (options.providerType &&
+          checkpoint.providerType &&
+          options.providerType !== checkpoint.providerType) ||
+        (options.model && checkpoint.model && options.model !== checkpoint.model)
+      ) {
+        for (const entry of checkpoint.tasks)
+          for (const message of entry.checkpoint?.messages ?? [])
+            delete message.metadata.providerMetadata;
+      }
+    } else {
+      const id = options.executionId ?? generateTaskId();
+      const route = (description: string) =>
+        this.router.route(description, level).selectedAgent ||
+        (level === 2
+          ? (BUILTIN_WORKERS.find((worker) => worker.canHandle(description))?.slug ?? "coder")
+          : "");
+      const analysis = this.decomposer.analyze(task);
+      const plan =
+        options.targetAgent || !analysis.shouldDecompose
+          ? undefined
+          : this.decomposer.decompose(task);
+      checkpoint = {
+        version: 1,
+        id,
+        task,
+        level,
+        status: "running",
+        updatedAt: Date.now(),
+        tasks: plan
+          ? plan.subtasks.map((e) => ({
+              id: `${id}-${e.id}`,
+              task: e.description,
+              agent: e.suggestedAgent || route(e.description),
+              status: "pending",
+            }))
+          : [{ id, task, agent: options.targetAgent ?? route(task), status: "pending" }],
+        groups: plan ? plan.canParallelize.map((g) => g.map((e) => `${id}-${e}`)) : [[id]],
+      };
+    }
+    if (this.executions.has(checkpoint.id))
+      throw new Error(`Delegation ${checkpoint.id} is already running`);
+    this.executions.add(checkpoint.id);
+    const controller = new AbortController();
+    this.executionControllers.add(controller);
+    const onAbort = () => controller.abort(options.signal?.reason);
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    if (options.signal?.aborted) onAbort();
+    checkpoint.parentSessionId = options.parentSessionId ?? checkpoint.parentSessionId;
+    checkpoint.providerType = options.providerType ?? checkpoint.providerType;
+    checkpoint.model = options.model ?? checkpoint.model;
+    checkpoint.cwd = options.cwd ?? checkpoint.cwd;
+    checkpoint.maxIterations = options.maxIterations ?? checkpoint.maxIterations;
+    checkpoint.status = "running";
+    let saveQueue = Promise.resolve();
+    const persist = (): Promise<void> => {
+      checkpoint.updatedAt = Date.now();
+      if (!this.config.persistence && !this.config.onCheckpoint && !options.onCheckpoint)
+        return Promise.resolve();
+      const snapshot = structuredClone(checkpoint);
+      saveQueue = saveQueue.then(async () => {
+        await this.config.persistence?.save(snapshot);
+        await this.config.onCheckpoint?.(snapshot);
+        await options.onCheckpoint?.(snapshot);
+      });
+      return saveQueue;
+    };
+    const aggregator = createResultAggregator<unknown>();
+    this.emit({ type: "task_started", timestamp: new Date(), data: { taskId: checkpoint.id } });
+    try {
+      await persist();
+      for (const group of checkpoint.groups) {
+        controller.signal.throwIfAborted();
+        const work = group.map(async (id) => {
+          const entry = checkpoint.tasks.find((candidate) => candidate.id === id);
+          if (!entry) throw new Error(`Checkpoint references unknown task ${id}`);
+          const progress = (update: WorkerProgress) =>
+            options.onProgress?.({ ...update, id: entry.id, agent: entry.agent, task: entry.task });
+          if (entry.status === "completed" && entry.result) {
+            aggregator.addResult({
+              taskId: id,
+              agentSlug: entry.agent,
+              ...entry.result,
+              error: entry.result.error ? new Error(entry.result.error) : undefined,
+              startedAt: new Date(entry.result.startedAt),
+              completedAt: new Date(entry.result.completedAt),
+            });
+            progress({
+              status: "completed",
+              iterations: entry.checkpoint?.iterations,
+              tokensUsed: entry.checkpoint?.tokensUsed,
+            });
+            return;
+          }
+          progress({ status: "queued" });
+          let handle: SubagentHandle | undefined;
+          while (!handle) {
+            await this.waitForSlot(controller.signal);
+            if (this.capacityHandles().length >= this.maxConcurrent) continue;
+            if (!entry.agent) break;
+            handle = await this.spawnSubagent(entry.agent, entry.task, { taskId: entry.id });
+          }
+          let result: { success: boolean; output?: unknown; error?: Error };
+          try {
+            entry.status = "running";
+            await persist();
+            progress({ status: "running" });
+            result = handle
+              ? await this.runWorkerTask(
+                  handle,
+                  loaded ? `${entry.task}\n\nContinuation: ${task}` : entry.task,
+                  {
+                    ...options,
+                    signal: controller.signal,
+                    providerType: checkpoint.providerType,
+                    model: checkpoint.model,
+                    cwd: checkpoint.cwd,
+                    maxIterations: checkpoint.maxIterations,
+                    workerCheckpoint: entry.checkpoint,
+                    onProgress: progress,
+                    onWorkerCheckpoint: async (workerCheckpoint) => {
+                      entry.checkpoint = workerCheckpoint;
+                      await persist();
+                    },
+                  }
+                )
+              : {
+                  success: false,
+                  error: new Error(`No agent found to handle task at level ${level}`),
+                };
+          } finally {
+            if (handle) {
+              if (!TERMINAL_STATUSES.has(handle.status)) setHandleStatus(handle, "failed");
+              this.cleanup(handle.id);
+            }
+          }
+          entry.status =
+            controller.signal.aborted || handle?.status === "cancelled"
+              ? "cancelled"
+              : result.success
+                ? "completed"
+                : "failed";
+          const startedAt = handle?.startedAt ?? new Date();
+          const completedAt = handle?.completedAt ?? new Date();
+          entry.result = {
+            status: result.success ? "success" : "failure",
+            data: result.output,
+            error: result.error?.message,
+            startedAt: startedAt.getTime(),
+            completedAt: completedAt.getTime(),
+          };
+          aggregator.addResult({
+            taskId: id,
+            agentSlug: entry.agent,
+            ...entry.result,
+            error: result.error,
+            startedAt,
+            completedAt,
+          });
+          await persist();
+          progress({ status: entry.status, error: entry.result.error });
+        });
+        const settled = await Promise.allSettled(
+          work.map(async (promise) => {
+            try {
+              await promise;
+            } catch (error) {
+              controller.abort(error);
+              throw error;
+            }
+          })
+        );
+        const rejected = settled.find((entry) => entry.status === "rejected");
+        if (rejected?.status === "rejected") throw rejected.reason;
         this.emit({
-          type: "task_failed",
+          type: "task_progress",
           timestamp: new Date(),
           data: {
-            taskId: executionTaskId,
-            error: noAgentError,
+            taskId: checkpoint.id,
+            progress: Math.round(
+              ((checkpoint.groups.indexOf(group) + 1) / checkpoint.groups.length) * 100
+            ),
           },
         });
-
-        return aggregator.aggregate();
+        // Later groups depend on this group's receipts. Leave them pending for resume.
+        if (
+          checkpoint.tasks.some((entry) => group.includes(entry.id) && entry.status !== "completed")
+        )
+          break;
       }
-
-      // Spawn single agent
-      const handle = await this.spawnSubagent(routeResult.selectedAgent, task);
-
-      // Execute the worker task (Issue #3 fix: actually run the task)
-      const execResult = await this.runWorkerTask(handle, task, options);
-
-      const result: TaskResult<unknown> = {
-        taskId: handle.taskId,
-        agentSlug: handle.agentSlug,
-        status: execResult.success ? "success" : "failure",
-        data: execResult.output,
-        error: execResult.error,
-        startedAt: handle.startedAt,
-        completedAt: handle.completedAt ?? new Date(),
-      };
-
-      aggregator.addResult(result);
-
-      // Emit task_completed event
+      const aggregated = aggregator.aggregate();
+      checkpoint.status = controller.signal.aborted
+        ? "cancelled"
+        : aggregated.overallStatus === "success"
+          ? "completed"
+          : "failed";
+      await persist();
       this.emit({
-        type: "task_completed",
+        type: checkpoint.status === "completed" ? "task_completed" : "task_failed",
+        timestamp: new Date(),
+        data: { taskId: checkpoint.id, result: aggregated },
+      });
+      return aggregated;
+    } catch (error) {
+      checkpoint.status = options.signal?.aborted ? "cancelled" : "failed";
+      for (const entry of checkpoint.tasks)
+        if (entry.status === "running") entry.status = "cancelled";
+      await persist().catch(() => undefined);
+      this.emit({
+        type: "task_failed",
         timestamp: new Date(),
         data: {
-          taskId: executionTaskId,
-          agentSlug: handle.agentSlug,
-          handleId: handle.id,
+          taskId: checkpoint.id,
+          error: error instanceof Error ? error : new Error(String(error)),
         },
       });
-
-      // Cleanup completed handle (Issue #6: memory leak prevention)
-      this.cleanup(handle.id);
-
-      return aggregator.aggregate();
+      throw error;
+    } finally {
+      options.signal?.removeEventListener("abort", onAbort);
+      this.executions.delete(checkpoint.id);
+      this.executionControllers.delete(controller);
     }
-
-    // Complex task - decompose and execute subtasks
-    const decomposition = this.decomposer.decompose(task);
-
-    // Execute subtasks in order, respecting parallelization groups
-    for (const parallelGroup of decomposition.canParallelize) {
-      // Execute all tasks in this group (up to maxConcurrent at a time)
-      const groupPromises = new Set<Promise<void>>();
-
-      for (const subtaskId of parallelGroup) {
-        const subtask = decomposition.subtasks.find((s) => s.id === subtaskId);
-        if (!subtask) continue;
-
-        // Check concurrent limit
-        const activeCount = this.getActiveSubagents().filter(
-          (h) => h.status === "running" || h.status === "spawning"
-        ).length;
-
-        if (activeCount >= this.maxConcurrent) {
-          await Promise.race(this.getActiveSubagents().map((handle) => handle.completion));
-        }
-        options.signal?.throwIfAborted();
-
-        // Route subtask
-        const routeResult = this.router.route(subtask.description, level);
-        const agentSlug =
-          subtask.suggestedAgent ||
-          routeResult.selectedAgent ||
-          (level === 2
-            ? (BUILTIN_WORKERS.find((worker) => worker.canHandle(subtask.description))?.slug ??
-              "coder")
-            : "");
-
-        if (!agentSlug) {
-          // Record failure for this subtask
-          const failResult: TaskResult<unknown> = {
-            taskId: subtaskId,
-            agentSlug: "",
-            status: "failure",
-            error: new Error(`No agent found for subtask: ${subtask.description}`),
-            startedAt: new Date(),
-            completedAt: new Date(),
-          };
-          aggregator.addResult(failResult);
-          continue;
-        }
-
-        // Spawn and track
-        const subtaskPromise = (async () => {
-          try {
-            const handle = await this.spawnSubagent(agentSlug, subtask.description, {
-              taskId: `${executionTaskId}-${subtaskId}`,
-            });
-
-            // Execute the worker task (Issue #3 fix: actually run the task)
-            const execResult = await this.runWorkerTask(handle, subtask.description, options);
-
-            const result: TaskResult<unknown> = {
-              taskId: handle.taskId,
-              agentSlug: handle.agentSlug,
-              status: execResult.success ? "success" : "failure",
-              data: execResult.output,
-              error: execResult.error,
-              startedAt: handle.startedAt,
-              completedAt: handle.completedAt ?? new Date(),
-            };
-
-            aggregator.addResult(result);
-
-            // Cleanup completed handle (Issue #6: memory leak prevention)
-            this.cleanup(handle.id);
-          } catch (error) {
-            const failResult: TaskResult<unknown> = {
-              taskId: `${executionTaskId}-${subtaskId}`,
-              agentSlug,
-              status: "failure",
-              error: error instanceof Error ? error : new Error(String(error)),
-              startedAt: new Date(),
-              completedAt: new Date(),
-            };
-            aggregator.addResult(failResult);
-          }
-        })();
-
-        groupPromises.add(subtaskPromise);
-        void subtaskPromise.finally(() => groupPromises.delete(subtaskPromise));
-      }
-
-      // Wait for all in group to complete
-      await Promise.all(groupPromises);
-
-      // Emit task_progress event after each parallel group completes
-      const totalGroups = decomposition.canParallelize.length;
-      const currentGroupIndex = decomposition.canParallelize.indexOf(parallelGroup);
-      const progress = Math.round(((currentGroupIndex + 1) / totalGroups) * 100);
-      this.emit({
-        type: "task_progress",
-        timestamp: new Date(),
-        data: {
-          taskId: executionTaskId,
-          progress,
-        },
-      });
-    }
-
-    // Emit task_completed event for the entire complex task
-    const aggregated = aggregator.aggregate();
-    this.emit({
-      type: "task_completed",
-      timestamp: new Date(),
-      data: {
-        taskId: executionTaskId,
-        result: aggregated,
-      },
-    });
-
-    return aggregated;
   }
 
   async cancelAll(): Promise<void> {
+    for (const controller of this.executionControllers)
+      controller.abort(new Error("All subagents cancelled"));
     const activeHandles = this.getActiveSubagents();
 
     for (const handle of activeHandles) {
       await this.cancelSubagent(handle.id);
     }
+  }
+
+  async shutdown(): Promise<void> {
+    this.stopping = true;
+    await this.cancelAll();
+    await Promise.allSettled(this.pendingExecutions);
+    this.cleanupAll();
   }
 
   async cancelSubagent(handleId: string): Promise<boolean> {
@@ -1013,7 +1141,8 @@ class OrchestratorCoreImpl implements OrchestratorCore {
     // Only cancel if still active
     if (handle.status === "spawning" || handle.status === "running") {
       this.taskControllers.get(handleId)?.abort(new Error("Subagent cancelled"));
-      setHandleStatus(handle, "cancelled");
+      if (this.runningWorkers.has(handleId)) handle.status = "cancelled";
+      else setHandleStatus(handle, "cancelled");
       handle.completedAt = new Date();
 
       // Update chain status
@@ -1086,6 +1215,9 @@ class OrchestratorCoreImpl implements OrchestratorCore {
 
         // Configure worker execution
         const execConfig: WorkerExecutionConfig = {
+          checkpoint: options.workerCheckpoint,
+          onCheckpoint: options.onWorkerCheckpoint,
+          onProgress: options.onProgress,
           maxIterations: options.maxIterations,
           timeout: this.defaultTaskTimeout,
           providerType: options.providerType,
@@ -1100,6 +1232,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
         if (options.signal?.aborted) onAbort();
 
         try {
+          this.runningWorkers.add(handle.id);
           // Execute the worker task
           const workerResult = await executeWorkerTask(
             handle.agentSlug,
@@ -1112,7 +1245,10 @@ class OrchestratorCoreImpl implements OrchestratorCore {
           );
 
           // Update handle based on result
-          if (workerResult.success) {
+          const cancelled = controller.signal.aborted || handle.status === "cancelled";
+          if (cancelled) {
+            setHandleStatus(handle, "cancelled");
+          } else if (workerResult.success) {
             setHandleStatus(handle, "completed");
           } else {
             setHandleStatus(handle, "failed");
@@ -1124,17 +1260,17 @@ class OrchestratorCoreImpl implements OrchestratorCore {
             this.taskChainManager.updateStatus(
               chainId,
               handle.taskId,
-              workerResult.success ? "completed" : "failed"
+              workerResult.success && !cancelled ? "completed" : "failed"
             );
           }
 
           return {
-            success: workerResult.success,
+            success: workerResult.success && !cancelled,
             output: workerResult.data,
             error: workerResult.error,
           };
         } catch (error) {
-          setHandleStatus(handle, "failed");
+          setHandleStatus(handle, controller.signal.aborted ? "cancelled" : "failed");
           handle.completedAt = new Date();
           const chainId = this.taskToChain.get(handle.taskId);
           if (chainId) {
@@ -1146,6 +1282,7 @@ class OrchestratorCoreImpl implements OrchestratorCore {
             error: error instanceof Error ? error : new Error(String(error)),
           };
         } finally {
+          this.runningWorkers.delete(handle.id);
           options.signal?.removeEventListener("abort", onAbort);
         }
       }

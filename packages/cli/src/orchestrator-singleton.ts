@@ -9,6 +9,7 @@
  * @module cli/orchestrator-singleton
  */
 
+import { join } from "node:path";
 import {
   createContextIsolator,
   createModeRegistry,
@@ -20,6 +21,7 @@ import {
   type OrchestratorCore,
   type UnifiedToolContainer,
 } from "@vellum/core";
+import { createTaskPersistence } from "./agents/task-persistence.js";
 
 // =============================================================================
 // Singleton State
@@ -91,6 +93,9 @@ export function getOrCreateOrchestrator(config?: OrchestratorSingletonConfig): O
       parentSessionId: rootSession?.id,
       maxConcurrentSubagents: config?.maxConcurrentSubagents ?? 3,
       taskTimeout: config?.taskTimeout,
+      persistence: createTaskPersistence(
+        join(config?.toolContainer?.getCwd() ?? process.cwd(), ".vellum", "tasks")
+      ),
     });
   }
   return orchestratorInstance;
@@ -141,11 +146,11 @@ export function getModeRegistry(): ModeRegistry | null {
  * resetOrchestrator();
  * ```
  */
-export function resetOrchestrator(): void {
-  if (orchestratorInstance) {
-    // Cancel any active tasks
-    orchestratorInstance.cancelAll();
+export async function resetOrchestrator(): Promise<void> {
+  const previous = orchestratorInstance;
+  await previous?.shutdown();
+  if (orchestratorInstance === previous) {
+    orchestratorInstance = null;
+    modeRegistryInstance = null;
   }
-  orchestratorInstance = null;
-  modeRegistryInstance = null;
 }

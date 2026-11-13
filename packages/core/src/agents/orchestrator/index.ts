@@ -1,4 +1,13 @@
 // ============================================
+export {
+  type DelegationUpdate,
+  type OrchestratorCheckpoint,
+  OrchestratorCheckpointSchema,
+  type OrchestratorPersistence,
+  type WorkerCheckpoint,
+  WorkerCheckpointSchema,
+  type WorkerProgress,
+} from "./checkpoint.js";
 // Orchestrator Module - Barrel Export
 // ============================================
 
@@ -25,6 +34,7 @@ export {
 } from "./approval-forwarder.js";
 export {
   createOrchestrator,
+  type ExecuteTaskOptions,
   type OrchestratorConfig,
   type OrchestratorCore,
   type OrchestratorEvent,

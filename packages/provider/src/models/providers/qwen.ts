@@ -1,6 +1,23 @@
-/** qwen catalog audited 2026-10-29. Sources: docs/research/provider-model-audit.md. */
+/** qwen catalog audited 2026-11-13. Sources: docs/research/provider-catalog-2026-11-13.md. */
 import type { ModelInfo } from "../types.js";
 export const QWEN_MODELS: ModelInfo[] = [
+  {
+    id: "qwen4-max-preview",
+    name: "Qwen4 Max Preview (Token Plan)",
+    provider: "qwen",
+    contextWindow: 1000000,
+    maxOutputTokens: 393216,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: false,
+    reasoningEfforts: ["none", "low", "medium", "xhigh"],
+    defaultReasoningEffort: "xhigh",
+    deprecated: false,
+    description:
+      "Token Plan only: configure its dedicated API key and https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1 endpoint. Preview ends 2026-11-25 (UTC+8). Output budget includes thinking; credit-based pricing is unknown.",
+  },
   {
     id: "qwen3.8-max",
     name: "qwen3.8-max",
@@ -9,6 +26,8 @@ export const QWEN_MODELS: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     supportsReasoning: true,
+    reasoningEfforts: ["none", "low", "medium", "xhigh"],
+    defaultReasoningEffort: "xhigh",
     supportsStreaming: true,
     supportsPromptCache: true,
     deprecated: false,
@@ -22,6 +41,8 @@ export const QWEN_MODELS: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     supportsReasoning: true,
+    reasoningEfforts: ["none", "low", "medium", "xhigh"],
+    defaultReasoningEffort: "xhigh",
     supportsStreaming: true,
     supportsPromptCache: true,
     deprecated: false,
@@ -35,6 +56,8 @@ export const QWEN_MODELS: ModelInfo[] = [
     supportsTools: true,
     supportsVision: true,
     supportsReasoning: true,
+    reasoningEfforts: ["none", "low", "medium", "xhigh"],
+    defaultReasoningEffort: "xhigh",
     supportsStreaming: true,
     supportsPromptCache: true,
     deprecated: false,
@@ -107,8 +130,7 @@ export const QWEN_MODELS: ModelInfo[] = [
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0,
-    outputPrice: 0,
+    description: "Availability and pricing vary by DashScope deployment region.",
     deprecated: false,
   },
   {
@@ -252,13 +274,12 @@ export const QWEN_MODELS: ModelInfo[] = [
     provider: "qwen",
     contextWindow: 1000000,
     maxOutputTokens: 65536,
-    supportsTools: false,
+    supportsTools: true,
     supportsVision: false,
     supportsReasoning: false,
     supportsStreaming: true,
     supportsPromptCache: false,
-    inputPrice: 0,
-    outputPrice: 0,
+    description: "Availability and pricing vary by DashScope deployment region.",
     deprecated: false,
   },
   {

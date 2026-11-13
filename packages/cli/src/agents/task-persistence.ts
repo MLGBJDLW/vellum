@@ -1,272 +1,204 @@
-/**
- * Task Persistence for Resumable Workflows
- *
- * Enables saving and loading task chain state to support
- * pausing and resuming multi-agent workflows.
- */
-
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
+import { hostname } from "node:os";
 import * as path from "node:path";
-import type { TaskChain } from "@vellum/core";
+import {
+  type OrchestratorCheckpoint,
+  OrchestratorCheckpointSchema,
+  type OrchestratorPersistence,
+} from "@vellum/core";
 
-/**
- * Serializable version of TaskChain for JSON persistence
- */
-interface SerializedTaskChain {
-  chainId: string;
-  rootTaskId: string;
-  nodes: Array<{
-    taskId: string;
-    parentTaskId?: string;
-    agentSlug: string;
-    depth: number;
-    createdAt: string;
-    status: "pending" | "running" | "completed" | "failed";
-  }>;
-  maxDepth: number;
+export interface TaskSummary {
+  id: string;
+  task: string;
+  status: OrchestratorCheckpoint["status"];
+  updatedAt: number;
+  completed: number;
+  total: number;
 }
 
-/**
- * Represents the persisted state of a task chain
- */
-export interface PersistedTaskState {
-  chainId: string;
-  chain: TaskChain;
-  status: "running" | "paused" | "completed" | "failed";
-  lastTaskId: string;
-  checkpoint: {
-    completedTasks: string[];
-    pendingTasks: string[];
-    failedTasks: string[];
-  };
-  savedAt: Date;
+export interface TaskPersistence extends OrchestratorPersistence {
+  acquire(id: string): Promise<() => Promise<void>>;
+  listResumable(): Promise<TaskSummary[]>;
+  delete(id: string): Promise<boolean>;
 }
 
-/**
- * Serialized format for JSON storage
- */
-interface SerializedPersistedTaskState {
-  chainId: string;
-  chain: SerializedTaskChain;
-  status: "running" | "paused" | "completed" | "failed";
-  lastTaskId: string;
-  checkpoint: {
-    completedTasks: string[];
-    pendingTasks: string[];
-    failedTasks: string[];
-  };
-  savedAt: string;
-}
+// Shared by store instances in one process. A failed write must not poison later saves.
+const writes = new Map<string, Promise<void>>();
 
-/**
- * Interface for task state persistence operations
- */
-export interface TaskPersistence {
-  /**
-   * Save task chain state to persistent storage
-   */
-  saveTaskState(state: PersistedTaskState): Promise<void>;
-
-  /**
-   * Load task chain state from persistent storage
-   * @returns The persisted state, or null if not found
-   */
-  loadTaskState(chainId: string): Promise<PersistedTaskState | null>;
-
-  /**
-   * List all resumable task states
-   */
-  listResumable(): Promise<{ chainId: string; savedAt: Date; status: string }[]>;
-
-  /**
-   * Delete a persisted task state
-   * @returns true if deleted, false if not found
-   */
-  deleteTaskState(chainId: string): Promise<boolean>;
-}
-
-/**
- * Convert TaskChain to serializable format
- */
-function serializeTaskChain(chain: TaskChain): SerializedTaskChain {
-  const nodesArray = Array.from(chain.nodes.values()).map((node) => ({
-    taskId: node.taskId,
-    parentTaskId: node.parentTaskId,
-    agentSlug: node.agentSlug,
-    depth: node.depth,
-    createdAt: node.createdAt.toISOString(),
-    status: node.status,
-  }));
-
-  return {
-    chainId: chain.chainId,
-    rootTaskId: chain.rootTaskId,
-    nodes: nodesArray,
-    maxDepth: chain.maxDepth,
-  };
-}
-
-/**
- * Convert serialized format back to TaskChain
- */
-function deserializeTaskChain(serialized: SerializedTaskChain): TaskChain {
-  const nodes = new Map(
-    serialized.nodes.map((node) => [
-      node.taskId,
-      {
-        taskId: node.taskId,
-        parentTaskId: node.parentTaskId,
-        agentSlug: node.agentSlug,
-        depth: node.depth,
-        createdAt: new Date(node.createdAt),
-        status: node.status,
-      },
-    ])
-  );
-
-  return {
-    chainId: serialized.chainId,
-    rootTaskId: serialized.rootTaskId,
-    nodes,
-    maxDepth: serialized.maxDepth,
-  };
-}
-
-/**
- * Convert PersistedTaskState to JSON-serializable format
- */
-function serializeState(state: PersistedTaskState): SerializedPersistedTaskState {
-  return {
-    chainId: state.chainId,
-    chain: serializeTaskChain(state.chain),
-    status: state.status,
-    lastTaskId: state.lastTaskId,
-    checkpoint: state.checkpoint,
-    savedAt: state.savedAt.toISOString(),
-  };
-}
-
-/**
- * Convert JSON data back to PersistedTaskState
- */
-function deserializeState(data: SerializedPersistedTaskState): PersistedTaskState {
-  return {
-    chainId: data.chainId,
-    chain: deserializeTaskChain(data.chain),
-    status: data.status,
-    lastTaskId: data.lastTaskId,
-    checkpoint: data.checkpoint,
-    savedAt: new Date(data.savedAt),
-  };
-}
-
-/**
- * Sanitize chainId to prevent path traversal attacks
- */
-function sanitizeChainId(chainId: string): string {
-  // Remove any path separators and dots that could cause traversal
-  return chainId.replace(/[/\\.:]/g, "_");
-}
-
-/**
- * Create a TaskPersistence instance
- * @param baseDir Base directory for task storage (default: '.vellum/tasks/')
- */
-export function createTaskPersistence(baseDir = ".vellum/tasks/"): TaskPersistence {
-  const resolvedBaseDir = path.resolve(baseDir);
-
-  /**
-   * Ensure the storage directory exists
-   */
-  async function ensureDirectory(): Promise<void> {
-    await fs.mkdir(resolvedBaseDir, { recursive: true });
+function fileName(id: string): string {
+  if (!/^[a-zA-Z0-9_-]+$/.test(id) || id.length > 180) {
+    throw new Error("Invalid task ID. Use the exact ID shown by vellum resume.");
   }
+  return `${id}.json`;
+}
 
-  /**
-   * Get the file path for a chain ID
-   */
-  function getFilePath(chainId: string): string {
-    const safeChainId = sanitizeChainId(chainId);
-    return path.join(resolvedBaseDir, `${safeChainId}.json`);
+function parseCheckpoint(content: string, id: string): OrchestratorCheckpoint {
+  const parsed = OrchestratorCheckpointSchema.safeParse(JSON.parse(content));
+  if (!parsed.success || parsed.data.id !== id) {
+    throw new Error(`Task ${id} has an invalid or legacy checkpoint; it cannot be resumed safely.`);
   }
+  return parsed.data;
+}
 
-  return {
-    async saveTaskState(state: PersistedTaskState): Promise<void> {
-      await ensureDirectory();
-      const filePath = getFilePath(state.chainId);
-      const serialized = serializeState(state);
-      await fs.writeFile(filePath, JSON.stringify(serialized, null, 2), "utf-8");
-    },
+async function hasExited(lock: string): Promise<boolean> {
+  try {
+    const owner = JSON.parse(await fs.readFile(lock, "utf8")) as Record<string, unknown>;
+    if (owner.host !== hostname() || !Number.isSafeInteger(owner.pid) || (owner.pid as number) <= 0)
+      return false;
+    try {
+      process.kill(owner.pid as number, 0);
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ESRCH";
+    }
+  } catch {
+    // An incomplete or inaccessible owner is not proof that its worker has stopped.
+  }
+  return false;
+}
 
-    async loadTaskState(chainId: string): Promise<PersistedTaskState | null> {
-      const filePath = getFilePath(chainId);
-
+/** Atomic owner installation avoids anonymous locks after a crash during acquisition. */
+async function acquireFileLease(lock: string, id: string): Promise<() => Promise<void>> {
+  const token = randomUUID();
+  const claim = async () => {
+    const temporary = `${lock}.${token}.owner`;
+    try {
+      const handle = await fs.open(temporary, "wx", 0o600);
       try {
-        const content = await fs.readFile(filePath, "utf-8");
-        const data = JSON.parse(content) as SerializedPersistedTaskState;
-        return deserializeState(data);
-      } catch (error) {
-        // Return null if file doesn't exist
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          return null;
-        }
-        throw error;
+        await handle.writeFile(JSON.stringify({ pid: process.pid, host: hostname(), token }));
+        await handle.sync();
+      } finally {
+        await handle.close();
       }
+      // Hard linking installs complete owner metadata only if the lock is absent.
+      await fs.link(temporary, lock);
+    } finally {
+      await fs.rm(temporary, { force: true });
+    }
+  };
+  try {
+    await claim();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    if (!(await hasExited(lock))) {
+      throw new Error(`Task ${id} is already active or its lock owner cannot be verified.`);
+    }
+    // Recovery guards use the same owner protocol, so a crash while reclaiming
+    // is itself recoverable. Every stale deletion is serialized by its guard.
+    const releaseRecovery = await acquireFileLease(`${lock}.reclaim`, id);
+    try {
+      if (!(await hasExited(lock))) throw new Error(`Task ${id} has another active owner.`);
+      await fs.unlink(lock);
+      await claim();
+    } finally {
+      await releaseRecovery();
+    }
+  }
+  return async () => {
+    try {
+      const owner = JSON.parse(await fs.readFile(lock, "utf8")) as Record<string, unknown>;
+      if (owner.token === token) await fs.unlink(lock);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  };
+}
+
+/** The same workspace task store backs interactive delegation and CLI recovery. */
+export function createTaskPersistence(baseDir = ".vellum/tasks"): TaskPersistence {
+  const directory = path.resolve(baseDir);
+  const filePath = (id: string) => path.join(directory, fileName(id));
+
+  const store: TaskPersistence = {
+    async acquire(id) {
+      const lock = `${filePath(id)}.lock`;
+      await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+      return acquireFileLease(lock, id);
     },
-
-    async listResumable(): Promise<{ chainId: string; savedAt: Date; status: string }[]> {
-      try {
-        await ensureDirectory();
-        const files = await fs.readdir(resolvedBaseDir);
-        const jsonFiles = files.filter((f) => f.endsWith(".json"));
-
-        const results: { chainId: string; savedAt: Date; status: string }[] = [];
-
-        for (const file of jsonFiles) {
+    async save(checkpoint) {
+      const target = filePath(checkpoint.id);
+      // Snapshot now: a queued write must not observe a later mutation of the plan.
+      const content = JSON.stringify(OrchestratorCheckpointSchema.parse(checkpoint));
+      const previous = writes.get(target) ?? Promise.resolve();
+      const pending = previous
+        .catch(() => {})
+        .then(async () => {
+          await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+          const temporary = `${target}.${randomUUID()}.tmp`;
           try {
-            const filePath = path.join(resolvedBaseDir, file);
-            const content = await fs.readFile(filePath, "utf-8");
-            const data = JSON.parse(content) as SerializedPersistedTaskState;
-
-            // Only include resumable states (running or paused)
-            if (data.status === "running" || data.status === "paused") {
-              results.push({
-                chainId: data.chainId,
-                savedAt: new Date(data.savedAt),
-                status: data.status,
-              });
+            const handle = await fs.open(temporary, "wx", 0o600);
+            try {
+              await handle.writeFile(content, "utf8");
+              await handle.sync();
+            } finally {
+              await handle.close();
             }
-          } catch {
-            // Skip files that can't be parsed
+            // Same-directory replacement leaves either the old or the complete new file.
+            await fs.rename(temporary, target);
+          } finally {
+            await fs.rm(temporary, { force: true });
           }
-        }
+        });
+      writes.set(target, pending);
+      try {
+        await pending;
+      } finally {
+        if (writes.get(target) === pending) writes.delete(target);
+      }
+    },
 
-        // Sort by savedAt descending (most recent first)
-        results.sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime());
-
-        return results;
+    async load(id) {
+      const target = filePath(id);
+      await writes.get(target);
+      try {
+        return parseCheckpoint(await fs.readFile(target, "utf8"), id);
       } catch (error) {
-        // Return empty list if directory doesn't exist
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          return [];
-        }
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
         throw error;
       }
     },
 
-    async deleteTaskState(chainId: string): Promise<boolean> {
-      const filePath = getFilePath(chainId);
-
+    async listResumable() {
+      let entries: string[];
       try {
-        await fs.unlink(filePath);
+        entries = await fs.readdir(directory);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+        throw error;
+      }
+      const summaries: TaskSummary[] = [];
+      // Read sequentially to avoid opening every long transcript at once.
+      for (const entry of entries) {
+        if (!entry.endsWith(".json")) continue;
+        try {
+          const checkpoint = await store.load(entry.slice(0, -5));
+          if (!checkpoint || checkpoint.status === "completed") continue;
+          summaries.push({
+            id: checkpoint.id,
+            task: checkpoint.task,
+            status: checkpoint.status,
+            updatedAt: checkpoint.updatedAt,
+            completed: checkpoint.tasks.filter((task) => task.status === "completed").length,
+            total: checkpoint.tasks.length,
+          });
+        } catch {
+          // A damaged or pre-checkpoint file cannot hide other recoverable tasks.
+        }
+      }
+      return summaries.sort((a, b) => b.updatedAt - a.updatedAt);
+    },
+
+    async delete(id) {
+      const target = filePath(id);
+      await writes.get(target);
+      try {
+        await fs.unlink(target);
         return true;
       } catch (error) {
-        // Return false if file doesn't exist
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          return false;
-        }
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
         throw error;
       }
     },
   };
+  return store;
 }

@@ -14,14 +14,15 @@ import { createPermissionInheritance } from "../../session/permission-inheritanc
 import { createResourceQuotaManager } from "../../session/resource-quota.js";
 import { createSubsessionManager } from "../../session/subsession-manager.js";
 import { coderWorker } from "../../workers/builtin/coder.js";
-import { createOrchestrator } from "../core.js";
+import type { OrchestratorCheckpoint } from "../checkpoint.js";
+import { createOrchestrator, type OrchestratorConfig } from "../core.js";
 
 vi.mock("../../../session/index.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../session/index.js")>()),
   LLM: { stream: vi.fn() },
 }));
 
-function createRuntime() {
+function createRuntime(config: Partial<OrchestratorConfig> = {}) {
   const tools = new UnifiedToolContainer({ cwd: process.cwd() });
   const readFile = vi.fn(async () => ({ success: true as const, output: "worker read evidence" }));
   tools.registerTool({
@@ -49,6 +50,7 @@ function createRuntime() {
       modeRegistry: createModeRegistry(),
       subsessionManager: sessions,
       parentSessionId: root.id,
+      ...config,
     }),
   };
 }
@@ -63,6 +65,351 @@ function finalStream(text: string): ReturnType<typeof LLM.stream> {
 afterEach(() => vi.resetAllMocks());
 
 describe("Orchestrator worker runtime", () => {
+  it("rejects a corrupt persisted plan before requesting a model or executing tools", async () => {
+    const { orchestrator, readFile } = createRuntime();
+    const checkpoint: OrchestratorCheckpoint = {
+      version: 1,
+      id: "corrupt",
+      task: "Inspect evidence",
+      level: 2,
+      status: "failed",
+      updatedAt: Date.now(),
+      tasks: [
+        { id: "one", task: "Inspect first", agent: "researcher", status: "pending" },
+        { id: "two", task: "Inspect second", agent: "researcher", status: "pending" },
+      ],
+      groups: [["one", "one"]],
+    };
+    await expect(orchestrator.executeTask("Continue", 2, { checkpoint })).rejects.toThrow(
+      "schedule every task exactly once"
+    );
+    expect(LLM.stream).not.toHaveBeenCalled();
+    expect(readFile).not.toHaveBeenCalled();
+    expect(orchestrator.getActiveSubagents()).toEqual([]);
+  });
+
+  it("reports failure when a late permission recheck stops a worker", async () => {
+    const { orchestrator, readFile } = createRuntime();
+    const permission = vi.fn().mockResolvedValueOnce("allow").mockResolvedValue("deny");
+    vi.mocked(LLM.stream).mockReturnValueOnce(
+      (async function* () {
+        yield {
+          type: "toolCall" as const,
+          id: "denied",
+          name: "read_file",
+          input: { path: "evidence.ts" },
+        };
+        yield { type: "done" as const, stopReason: "tool_use" as const };
+      })()
+    );
+    const result = await orchestrator.executeTask("Inspect evidence", 2, {
+      targetAgent: "researcher",
+      permissionChecker: { checkPermission: permission },
+    });
+    expect(result.overallStatus).toBe("failure");
+    expect(result.results[0]?.error?.message).toContain("Permission denied");
+    expect(readFile).not.toHaveBeenCalled();
+    expect(LLM.stream).toHaveBeenCalledTimes(1);
+  });
+  it("does not start resumed work when shutdown races checkpoint loading", async () => {
+    let finishLoad: ((checkpoint: OrchestratorCheckpoint | null) => void) | undefined;
+    let notifyLoading: (() => void) | undefined;
+    const loading = new Promise<void>((resolve) => {
+      notifyLoading = resolve;
+    });
+    const loaded = new Promise<OrchestratorCheckpoint | null>((resolve) => {
+      finishLoad = resolve;
+    });
+    const release = vi.fn(async () => undefined);
+    const { orchestrator } = createRuntime({
+      persistence: {
+        acquire: async () => release,
+        load: async () => {
+          notifyLoading?.();
+          return loaded;
+        },
+        save: async () => undefined,
+      },
+    });
+    const running = orchestrator.executeTask("Continue", 2, { resumeId: "saved" });
+    const cancelled = expect(running).rejects.toThrow("All subagents cancelled");
+    await loading;
+    const shutdown = orchestrator.shutdown();
+    finishLoad?.(null);
+    await cancelled;
+    await shutdown;
+    expect(LLM.stream).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+  it("waits for the cancelled checkpoint before shutdown releases worker resources", async () => {
+    let releaseSave: (() => void) | undefined;
+    let notifySave: (() => void) | undefined;
+    let notifyStream: (() => void) | undefined;
+    const saving = new Promise<void>((resolve) => {
+      notifySave = resolve;
+    });
+    const saved = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    const streaming = new Promise<void>((resolve) => {
+      notifyStream = resolve;
+    });
+    const { orchestrator, sessions } = createRuntime({
+      onCheckpoint: async (state) => {
+        if (state.status === "cancelled") {
+          notifySave?.();
+          await saved;
+        }
+      },
+    });
+    vi.mocked(LLM.stream).mockImplementation(({ abortSignal }) =>
+      (async function* () {
+        notifyStream?.();
+        yield { type: "text" as const, content: "Partial evidence" };
+        await new Promise<void>((resolve) => {
+          if (abortSignal?.aborted) resolve();
+          else abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        yield { type: "done" as const, stopReason: "end_turn" as const };
+      })()
+    );
+    const running = orchestrator.executeTask("Inspect evidence", 2, { targetAgent: "researcher" });
+    await streaming;
+    let stopped = false;
+    const shutdown = orchestrator.shutdown().then(() => {
+      stopped = true;
+    });
+    await saving;
+    expect(stopped).toBe(false);
+    releaseSave?.();
+    await shutdown;
+    expect((await running).overallStatus).toBe("failure");
+    expect(sessions.getActiveCount()).toBe(1);
+    await expect(orchestrator.executeTask("Late task", 2)).rejects.toThrow("shutting down");
+  });
+
+  it("retains successful dependencies and leaves downstream work pending after failure", async () => {
+    let checkpoint: OrchestratorCheckpoint = {
+      version: 1,
+      id: "plan",
+      task: "Analyze evidence and write report",
+      level: 2,
+      status: "failed",
+      updatedAt: Date.now(),
+      maxIterations: 1,
+      tasks: [
+        {
+          id: "done",
+          task: "Gather evidence",
+          agent: "researcher",
+          status: "completed",
+          result: { status: "success", data: "Existing evidence", startedAt: 1, completedAt: 2 },
+        },
+        { id: "inspect", task: "Analyze evidence", agent: "analyst", status: "pending" },
+        { id: "report", task: "Write report", agent: "writer", status: "pending" },
+      ],
+      groups: [["done"], ["inspect"], ["report"]],
+    };
+    const { orchestrator } = createRuntime({
+      onCheckpoint: async (state) => {
+        checkpoint = state;
+      },
+    });
+    vi.mocked(LLM.stream).mockReturnValueOnce(
+      (async function* () {
+        yield {
+          type: "toolCall" as const,
+          id: "receipt",
+          name: "read_file",
+          input: { path: "evidence.ts" },
+        };
+        yield { type: "done" as const, stopReason: "tool_use" as const };
+      })()
+    );
+    await orchestrator.executeTask("Continue", 2, { checkpoint });
+    expect(checkpoint.tasks.map((task) => task.status)).toEqual(["completed", "failed", "pending"]);
+    expect(LLM.stream).toHaveBeenCalledTimes(1);
+    vi.mocked(LLM.stream).mockImplementation(() => finalStream("Finished"));
+    const result = await orchestrator.executeTask("Continue", 2, { checkpoint, maxIterations: 2 });
+    expect(result.overallStatus).toBe("success");
+    expect(result.results.find((task) => task.taskId === "done")?.data).toBe("Existing evidence");
+    expect(LLM.stream).toHaveBeenCalledTimes(3);
+  });
+  it("resumes persisted receipts after interruption without redoing the tool", async () => {
+    let checkpoint: OrchestratorCheckpoint | undefined;
+    const controller = new AbortController();
+    const { orchestrator, readFile } = createRuntime({
+      onCheckpoint: async (state) => {
+        checkpoint = structuredClone(state);
+        if (state.tasks[0]?.checkpoint?.iterations === 1 && !controller.signal.aborted)
+          controller.abort();
+      },
+    });
+    vi.mocked(LLM.stream).mockReturnValueOnce(
+      (async function* () {
+        yield {
+          type: "toolCall" as const,
+          id: "receipt",
+          name: "read_file",
+          input: { path: "evidence.ts" },
+        };
+        yield { type: "done" as const, stopReason: "tool_use" as const };
+      })()
+    );
+    await orchestrator.executeTask("Inspect evidence", 2, {
+      targetAgent: "researcher",
+      signal: controller.signal,
+      cwd: process.cwd(),
+    });
+    expect(checkpoint?.status).toBe("cancelled");
+    expect(readFile).toHaveBeenCalledTimes(1);
+    const restored = createRuntime();
+    vi.mocked(LLM.stream).mockReturnValueOnce(finalStream("Verified saved evidence."));
+    const result = await restored.orchestrator.executeTask("Finish the analysis", 2, {
+      checkpoint,
+      cwd: process.cwd(),
+    });
+    expect(result.overallStatus).toBe("success");
+    expect(restored.readFile).not.toHaveBeenCalled();
+    expect(JSON.stringify(vi.mocked(LLM.stream).mock.calls[1]?.[0].messages)).toContain(
+      "worker read evidence"
+    );
+    expect(result.results[0]?.data).toMatchObject({ iterations: 2 });
+  });
+
+  it("stops before another model request when the durable receipt cannot be saved", async () => {
+    const { orchestrator, sessions } = createRuntime({
+      onCheckpoint: async (state) => {
+        if (state.tasks[0]?.checkpoint?.iterations === 1) throw new Error("Disk full");
+      },
+    });
+    vi.mocked(LLM.stream).mockReturnValueOnce(
+      (async function* () {
+        yield {
+          type: "toolCall" as const,
+          id: "receipt",
+          name: "read_file",
+          input: { path: "evidence.ts" },
+        };
+        yield { type: "done" as const, stopReason: "tool_use" as const };
+      })()
+    );
+    await expect(
+      orchestrator.executeTask("Inspect evidence", 2, { targetAgent: "researcher" })
+    ).rejects.toThrow("Disk full");
+    expect(LLM.stream).toHaveBeenCalledTimes(1);
+    expect(orchestrator.getActiveSubagents()).toEqual([]);
+    expect(sessions.getActiveCount()).toBe(1);
+  });
+
+  it("queues independent delegations and removes a cancelled waiter promptly", async () => {
+    const { orchestrator } = createRuntime({ maxConcurrentSubagents: 1 });
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(LLM.stream)
+      .mockReturnValueOnce(
+        (async function* () {
+          await gate;
+          yield { type: "text" as const, content: "First finished" };
+          yield { type: "done" as const, stopReason: "end_turn" as const };
+        })()
+      )
+      .mockReturnValueOnce(finalStream("Third finished"));
+    const first = orchestrator.executeTask("First", 2, { targetAgent: "researcher" });
+    await vi.waitFor(() => expect(LLM.stream).toHaveBeenCalledTimes(1));
+    const controller = new AbortController();
+    const second = orchestrator.executeTask("Second", 2, {
+      targetAgent: "researcher",
+      signal: controller.signal,
+    });
+    const rejected = expect(second).rejects.toThrow("Cancelled waiter");
+    const third = orchestrator.executeTask("Third", 2, { targetAgent: "researcher" });
+    controller.abort(new Error("Cancelled waiter"));
+    await rejected;
+    expect(LLM.stream).toHaveBeenCalledTimes(1);
+    release?.();
+    expect((await first).overallStatus).toBe("success");
+    expect((await third).overallStatus).toBe("success");
+    expect(LLM.stream).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains completed plan receipts and the explicit worker budget across resume", async () => {
+    let checkpoint: OrchestratorCheckpoint | undefined;
+    const { orchestrator } = createRuntime({
+      onCheckpoint: async (state) => {
+        checkpoint = structuredClone(state);
+      },
+    });
+    vi.mocked(LLM.stream).mockReturnValueOnce(
+      (async function* () {
+        yield {
+          type: "toolCall" as const,
+          id: "receipt",
+          name: "read_file",
+          input: { path: "evidence.ts" },
+        };
+        yield { type: "done" as const, stopReason: "tool_use" as const };
+      })()
+    );
+    await orchestrator.executeTask("Inspect evidence", 2, {
+      targetAgent: "researcher",
+      maxIterations: 1,
+    });
+    const resumed = await orchestrator.executeTask("Continue", 2, { checkpoint });
+    expect(resumed.overallStatus).toBe("failure");
+    expect(resumed.results[0]?.error?.message).toContain("explicit turn budget exhausted");
+    expect(LLM.stream).toHaveBeenCalledTimes(1);
+    vi.mocked(LLM.stream).mockReturnValueOnce(finalStream("Completed after approved extension"));
+    expect(
+      (await orchestrator.executeTask("Continue", 2, { checkpoint, maxIterations: 2 }))
+        .overallStatus
+    ).toBe("success");
+    expect(
+      (await orchestrator.executeTask("Inspect saved completion", 2, { checkpoint })).overallStatus
+    ).toBe("success");
+    expect(LLM.stream).toHaveBeenCalledTimes(2);
+  });
+
+  it("emits real worker activity and failure instead of a successful completion", async () => {
+    const { orchestrator } = createRuntime();
+    const updates: string[] = [];
+    const loop = new AgentLoop({
+      sessionId: "parent",
+      mode: { ...ORCH_MODE, name: "code" },
+      providerType: "openai",
+      model: "test-model",
+      cwd: process.cwd(),
+      orchestrator,
+    });
+    loop.on("delegationUpdate", (update) => updates.push(update.status));
+    vi.mocked(LLM.stream).mockReturnValueOnce(finalStream("Evidence"));
+    await loop.executeDelegation({
+      type: "delegate_agent",
+      delegationId: "worker-one",
+      targetAgent: "researcher",
+      task: "Inspect evidence",
+    });
+    expect(updates).toContain("queued");
+    expect(updates).toContain("running");
+    expect(loop.getDelegations()).toMatchObject([
+      { id: "worker-one", status: "completed", message: "Evidence" },
+    ]);
+    const missing = new AgentLoop({
+      sessionId: "parent-missing",
+      mode: { ...ORCH_MODE, name: "code" },
+      providerType: "openai",
+      model: "test-model",
+      cwd: process.cwd(),
+    });
+    await missing.executeDelegation({
+      type: "delegate_agent",
+      delegationId: "missing",
+      task: "Inspect",
+    });
+    expect(missing.getDelegations()).toMatchObject([{ status: "failed" }]);
+  });
   it("allows a built-in worker to complete useful work beyond its former implicit turn limit", async () => {
     const { sessions, root } = createRuntime();
     const worker = sessions.create({ agentSlug: "coder", level: 2, parentId: root.id });
@@ -446,12 +793,23 @@ describe("Delegated session budgets", () => {
     loop.on("cost:awaitingApproval", () => undefined);
     const integration = loop.getCostLimitIntegration();
     if (!integration) throw new Error("The fixture must have a session budget");
-    const waitForApproval = vi.spyOn(integration, "waitForApproval");
+    let notifyWaiting: (() => void) | undefined;
+    const waiting = new Promise<void>((resolve) => {
+      notifyWaiting = resolve;
+    });
+    const originalWait = integration.waitForApproval.bind(integration);
+    const waitForApproval = vi
+      .spyOn(integration, "waitForApproval")
+      .mockImplementation((...args) => {
+        const result = originalWait(...args);
+        notifyWaiting?.();
+        return result;
+      });
     vi.mocked(LLM.stream)
       .mockReturnValueOnce(parentStream())
       .mockImplementation(() => finalStream("Unexpected request"));
     const running = loop.run();
-    await vi.waitFor(() => expect(waitForApproval).toHaveBeenCalled());
+    await waiting;
     const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 20_000);
     try {
       loop.grantCostApproval({ requests: 3 });

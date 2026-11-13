@@ -4,20 +4,21 @@
  */
 
 /** Cleanup function to be called on shutdown */
-let shutdownCleanup: (() => void) | null = null;
+type ShutdownCleanup = () => void | Promise<void>;
+let shutdownCleanup: ShutdownCleanup | null = null;
 
 /**
  * Set the shutdown cleanup function.
  * Called by App component when agent loop is created.
  */
-export function setShutdownCleanup(cleanup: (() => void) | null): void {
+export function setShutdownCleanup(cleanup: ShutdownCleanup | null): void {
   shutdownCleanup = cleanup;
 }
 
 /**
  * Get the current shutdown cleanup function
  */
-export function getShutdownCleanup(): (() => void) | null {
+export function getShutdownCleanup(): ShutdownCleanup | null {
   return shutdownCleanup;
 }
 
@@ -25,9 +26,8 @@ export function getShutdownCleanup(): (() => void) | null {
  * Execute shutdown cleanup if set.
  * Clears the cleanup function after execution.
  */
-export function executeShutdownCleanup(): void {
-  if (shutdownCleanup) {
-    shutdownCleanup();
-    shutdownCleanup = null;
-  }
+export async function executeShutdownCleanup(): Promise<void> {
+  const cleanup = shutdownCleanup;
+  shutdownCleanup = null;
+  await cleanup?.();
 }

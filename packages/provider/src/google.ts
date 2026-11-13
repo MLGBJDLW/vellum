@@ -108,7 +108,9 @@ const THINKING_LEVEL_BY_EFFORT: Partial<Record<ReasoningEffort, ThinkingLevel>> 
   low: ThinkingLevel.LOW,
   medium: ThinkingLevel.MEDIUM,
   high: ThinkingLevel.HIGH,
-  xhigh: ThinkingLevel.HIGH,
+  // The API added XHIGH for Hydrogen before the installed SDK enum did.
+  // Catalog validation prevents sending it to models which only accept HIGH.
+  xhigh: "XHIGH" as ThinkingLevel,
 };
 
 // =============================================================================

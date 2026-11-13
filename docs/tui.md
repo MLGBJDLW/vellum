@@ -65,6 +65,22 @@ Vellum’s sidebar panels are designed to be discoverable via keyboard. When the
 
 The sidebar has its own keyboard focus. Typing in the composer cannot activate a task or checkpoint. Below 96 columns, focusing the sidebar opens it in the content pane; returning to chat preserves the draft and history position.
 
+The **Tasks** panel contains a nested **Subagents** window whenever work has been
+delegated. It shows every concurrent worker separately, its actual status, and its
+latest tool or activity. Waiting workers appear first, followed by active work,
+failures, and recent completed receipts. Failure and cancellation remain visible
+after the parent continues. The counter shows active workers / retained workers;
+it is not a completion percentage.
+
+While Tasks has focus, press `a` to switch between the task list and subagents.
+Use arrows or the mouse wheel to browse workers, and `Enter` or a click to inspect
+the task, recorded turns, token usage, and effective provider/model (or delegation
+ID when model information is unavailable). On short terminals the
+focused section uses the available space; the other section remains a one-line
+switch. No worker controls consume composer input. Stream activity is coalesced
+locally, and reopening the sidebar reads the runtime snapshot rather than
+reconstructing workers from text or creating another execution system.
+
 Responses, tool results, and streaming text share one scrollable viewport. PageUp pauses following; additional output and typing preserve your reading position. PageDown to the bottom resumes following. Arrow keys stay with the composer while it is focused. Mouse wheel events over the sidebar do not move chat history.
 
 Set `VELLUM_REDUCED_MOTION=1` to disable decorative clock animations and skip the startup transition. Loading states remain visible. Scrollbar feedback only animates while active, and completed tool rows and text inputs do not subscribe to animation frames.

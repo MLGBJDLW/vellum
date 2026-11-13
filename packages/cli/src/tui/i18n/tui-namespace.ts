@@ -14,6 +14,22 @@ import type { TranslationFunction, UseTUITranslationReturn } from "./types.js";
  * English translations (embedded for bundling compatibility).
  */
 const EN_TRANSLATIONS: Record<string, unknown> = {
+  subagents: {
+    title: "Subagents",
+    empty: "Delegated work will appear here",
+    queued: "Queued",
+    running: "Working",
+    waiting: "Waiting",
+    completed: "Done",
+    failed: "Failed",
+    cancelled: "Cancelled",
+    interrupted: "Interrupted",
+    turns: "{{count}} turns",
+    tokens: "{{count}} tokens",
+    keys: "↑/↓ · Enter details",
+    focus: "[a] inspect",
+    switch: "[a] switch",
+  },
   tip: { dismiss: "Dismiss", relatedLesson: "Related lesson" },
   persistence: { saving: "Saving", saved: "Saved", saveError: "Save failed", unsaved: "Unsaved" },
   status: {
@@ -256,6 +272,22 @@ const EN_TRANSLATIONS: Record<string, unknown> = {
  * Chinese translations (embedded for bundling compatibility).
  */
 const ZH_TRANSLATIONS: Record<string, unknown> = {
+  subagents: {
+    title: "子代理",
+    empty: "委派工作将在这里显示",
+    queued: "排队中",
+    running: "工作中",
+    waiting: "等待中",
+    completed: "已完成",
+    failed: "失败",
+    cancelled: "已取消",
+    interrupted: "已中断",
+    turns: "{{count}} 轮",
+    tokens: "{{count}} 令牌",
+    keys: "↑/↓ 选择 · Enter 详情",
+    focus: "[a] 查看",
+    switch: "[a] 切换",
+  },
   tip: { dismiss: "关闭", relatedLesson: "相关教程" },
   persistence: { saving: "保存中", saved: "已保存", saveError: "保存失败", unsaved: "未保存" },
   todo: {

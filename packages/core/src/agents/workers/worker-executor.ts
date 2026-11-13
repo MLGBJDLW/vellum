@@ -15,6 +15,7 @@ import { PromptLoader } from "../../prompts/prompt-loader.js";
 import { createUserMessage, SessionParts } from "../../session/message.js";
 import type { PermissionChecker } from "../../tool/index.js";
 import { getToolInputSchema } from "../../tool/schema.js";
+import type { WorkerCheckpoint, WorkerProgress } from "../orchestrator/checkpoint.js";
 import type { WorkerContext, WorkerResult } from "./base.js";
 import { createWorkerToolBridge } from "./worker-tool-bridge.js";
 import { WORKER_TOOL_SETS } from "./worker-tool-constants.js";
@@ -154,6 +155,9 @@ export { WORKER_TOOL_SETS };
  * Configuration options for worker execution.
  */
 export interface WorkerExecutionConfig {
+  checkpoint?: WorkerCheckpoint;
+  onCheckpoint?: (checkpoint: WorkerCheckpoint) => Promise<void>;
+  onProgress?: (progress: WorkerProgress) => void;
   sessionBudget?: AgentSessionBudget;
   /** Maximum iterations for the agent loop */
   maxIterations?: number;
@@ -236,13 +240,26 @@ export async function executeWorkerTask(
 
   // Get allowed tools for this worker
   const allowedToolNames = WORKER_TOOL_SETS[workerSlug] ?? WORKER_TOOL_SETS.coder ?? [];
+  const parentPermissions = config?.permissionChecker;
+  const permissionChecker: PermissionChecker | undefined = parentPermissions
+    ? {
+        checkPermission: async (name, input, toolContext) => {
+          config?.onProgress?.({ status: "waiting", toolName: name });
+          try {
+            return await parentPermissions.checkPermission(name, input, toolContext);
+          } finally {
+            config?.onProgress?.({ status: "running", toolName: name });
+          }
+        },
+      }
+    : undefined;
 
   // Create WorkerToolBridge to bridge subsession tools to ToolExecutor
   // This respects 3-level hierarchy (workers are Level 2, cannot spawn agents)
   const toolBridge = createWorkerToolBridge({
     workerSlug,
     toolRegistry: subsession.toolRegistry,
-    permissionChecker: config?.permissionChecker,
+    permissionChecker,
   });
 
   // Validate bridge configuration
@@ -280,6 +297,18 @@ export async function executeWorkerTask(
     (subsession.context.sharedMemory.cwd as string) ??
     process.cwd();
 
+  const previousIterations = config?.checkpoint?.iterations ?? 0;
+  let output = config?.checkpoint?.output ?? "";
+  let tokensUsed = config?.checkpoint?.tokensUsed ?? 0;
+  if (execConfig.maxIterations !== undefined && previousIterations >= execConfig.maxIterations) {
+    return {
+      success: false,
+      error: new Error("Worker explicit turn budget exhausted"),
+      data: { output, iterations: previousIterations },
+      tokensUsed,
+    };
+  }
+
   // Create AgentLoop configuration
   const loopConfig: AgentLoopConfig = {
     sessionId,
@@ -292,13 +321,27 @@ export async function executeWorkerTask(
     cwd,
     tools: toolDefinitions,
     toolExecutor, // Bridge worker tools to AgentLoop
-    permissionChecker: config?.permissionChecker,
+    permissionChecker,
     agentLevel: AgentLevel.worker,
-    maxIterations: execConfig.maxIterations,
+    maxIterations:
+      execConfig.maxIterations === undefined
+        ? undefined
+        : execConfig.maxIterations - previousIterations,
+    onMessagesCheckpoint: async (messages, iterations) => {
+      await config?.onCheckpoint?.({
+        messages,
+        iterations: previousIterations + iterations,
+        output,
+        tokensUsed,
+      });
+    },
     sessionBudget: config?.sessionBudget,
     contextManagement: { enabled: true },
     terminationLimits: {
-      maxSteps: execConfig.maxIterations,
+      maxSteps:
+        execConfig.maxIterations === undefined
+          ? undefined
+          : execConfig.maxIterations - previousIterations,
       maxTimeMs: execConfig.timeout,
     },
   };
@@ -308,20 +351,37 @@ export async function executeWorkerTask(
 
   // Track results
   const filesModified: string[] = [];
-  let output = "";
-  let tokensUsed = 0;
   let error: Error | undefined;
+  let lastDenied: { iteration: number; reason: string } | undefined;
 
   // Set up event handlers
   loop.on("text", (text) => {
     output += text;
+    config?.onProgress?.({ status: "running", text });
   });
 
   loop.on("usage", (usage) => {
     tokensUsed += usage.inputTokens + usage.outputTokens;
+    config?.onProgress?.({ status: "running", tokensUsed });
+  });
+
+  loop.on("iterationStart", (iterations) =>
+    config?.onProgress?.({ status: "running", iterations: previousIterations + iterations })
+  );
+  loop.on("toolStart", (_id, toolName) => config?.onProgress?.({ status: "running", toolName }));
+  loop.on("permissionRequired", (_id, toolName) =>
+    config?.onProgress?.({ status: "waiting", toolName })
+  );
+  loop.on("permissionGranted", (_id, toolName) =>
+    config?.onProgress?.({ status: "running", toolName })
+  );
+  loop.on("permissionDenied", (_id, toolName, reason) => {
+    lastDenied = { iteration: loop.getIterationCount(), reason };
+    config?.onProgress?.({ status: "running", toolName });
   });
 
   loop.on("toolEnd", (_callId, name, result) => {
+    config?.onProgress?.({ status: "running", toolName: "" });
     // Track file modifications
     if (
       (name === "write_file" || name === "smart_edit" || name === "apply_diff") &&
@@ -345,7 +405,16 @@ export async function executeWorkerTask(
 
   // Start the turn before linking cancellation: addMessage resets a stopped loop
   // for a new user turn, so doing this after cancel() would revive the worker.
-  loop.addMessage(createUserMessage([SessionParts.text(taskPacket.task)]));
+  for (const message of config?.checkpoint?.messages ?? []) loop.addMessage(message);
+  loop.addMessage(
+    createUserMessage([
+      SessionParts.text(
+        config?.checkpoint
+          ? `Continue this delegated task using the recorded results. Do not repeat completed work. Check the workspace before retrying any operation whose result is uncertain after interruption.\n\n${taskPacket.task}`
+          : taskPacket.task
+      ),
+    ])
+  );
 
   // Handle abort signal
   const onAbort = () => loop.cancel("Parent cancelled delegation");
@@ -358,11 +427,22 @@ export async function executeWorkerTask(
   try {
     // Prompt loading may have completed after the parent was cancelled.
     if (signal?.aborted) onAbort();
+    await config?.onCheckpoint?.({
+      messages: loop.getMessages(),
+      iterations: previousIterations,
+      output,
+      tokensUsed,
+    });
     // Run the agent loop
     await loop.run();
 
     // Check final state
     const finalState = loop.getState();
+    // A late permission recheck may stop the loop in idle after recording its
+    // denied receipt. Only a later model turn can recover from that denial.
+    if (!error && lastDenied?.iteration === loop.getIterationCount()) {
+      error = new Error(lastDenied.reason);
+    }
     const success = finalState !== "terminated" && !error;
 
     return {
@@ -370,7 +450,7 @@ export async function executeWorkerTask(
       data: {
         output,
         finalState,
-        iterations: loop.getIterationCount(),
+        iterations: previousIterations + loop.getIterationCount(),
       },
       filesModified,
       tokensUsed,
@@ -380,6 +460,11 @@ export async function executeWorkerTask(
     return {
       success: false,
       error: err instanceof Error ? err : new Error(String(err)),
+      data: {
+        output,
+        iterations: previousIterations + loop.getIterationCount(),
+        finalState: loop.getState(),
+      },
       filesModified,
       tokensUsed,
     };

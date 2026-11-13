@@ -47,14 +47,19 @@ export {
   createTaskRouter,
   type DecompositionResult,
   DecompositionResultSchema,
+  type DelegationUpdate,
   type EstimatedEffort,
   EstimatedEffortSchema,
+  type ExecuteTaskOptions,
   MAX_DELEGATION_DEPTH,
+  type OrchestratorCheckpoint,
+  OrchestratorCheckpointSchema,
   type OrchestratorConfig,
   type OrchestratorCore,
   type OrchestratorEvent,
   type OrchestratorEventHandler,
   type OrchestratorEventType,
+  type OrchestratorPersistence,
   type PartialFailureStrategy,
   PartialFailureStrategySchema,
   type ResultAggregator,
@@ -83,6 +88,8 @@ export {
   type TaskRouter,
   type TaskStatus,
   TaskStatusSchema,
+  type WorkerCheckpoint,
+  type WorkerProgress,
 } from "./orchestrator/index.js";
 
 // Re-export all protocol types and schemas

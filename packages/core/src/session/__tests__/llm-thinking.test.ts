@@ -125,7 +125,7 @@ describe("LLM.stream thinking gating", () => {
 
     const stream = LLM.stream({
       providerType: "qwen",
-      model: "qwen3.8-max",
+      model: "qwen-plus",
       messages: [{ role: "user", content: "Hi" }],
       thinking: { enabled: true, reasoningEffort: "high" },
     });

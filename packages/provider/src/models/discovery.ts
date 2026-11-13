@@ -65,8 +65,14 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
         (localCapabilities?.includes("embedding") && !localCapabilities.includes("completion")))
     )
       continue;
-    // Batch products use a separate asynchronous API, not this interactive chat transport.
-    if (provider === "openrouter" && id.endsWith(":batch")) continue;
+    // Gateway model inventories include asynchronous and media-only products.
+    // Prefer declared endpoints over ID heuristics so new suffixes cannot leak in.
+    if (
+      provider === "openrouter" &&
+      (id.endsWith(":batch") ||
+        (Array.isArray(data.endpoints) && !data.endpoints.includes("/api/v1/chat/completions")))
+    )
+      continue;
     if (Array.isArray(methods) && !methods.includes("generateContent")) continue;
     if (
       Array.isArray(architecture.output_modalities) &&

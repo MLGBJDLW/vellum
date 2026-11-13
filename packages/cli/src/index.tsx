@@ -29,7 +29,7 @@ import {
 import { createId } from "@vellum/shared";
 import { Command } from "commander";
 import { render } from "ink";
-import { registerDelegateCommand } from "./agents/commands/index.js";
+import { registerDelegateCommand, registerResumeCommand } from "./agents/commands/index.js";
 import { App } from "./app.js";
 import { handleAgentsGenerate } from "./commands/agents/generate.js";
 import { handleAgentsShow } from "./commands/agents/show.js";
@@ -50,7 +50,7 @@ import {
 } from "./commands/skill.js";
 import { getEffectiveThinkingConfig } from "./commands/think.js";
 import type { CommandResult } from "./commands/types.js";
-import { getOrCreateOrchestrator } from "./orchestrator-singleton.js";
+import { getOrCreateOrchestrator, resetOrchestrator } from "./orchestrator-singleton.js";
 import { executeShutdownCleanup, getShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
 import { BufferedStdout, createCompatStdout, setActiveStdout } from "./tui/buffered-stdout.js";
 import { initializeKittyDetection } from "./tui/hooks/useKittyKeyboard.js";
@@ -135,19 +135,24 @@ function createWorkingStdio(): {
  */
 function setupGlobalShutdownHandlers(): void {
   const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
+  let shuttingDown = false;
 
   for (const signal of signals) {
-    process.on(signal, () => {
+    process.on(signal, async () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
       console.log(`\n[CLI] Received ${signal}, shutting down gracefully...`);
-      executeShutdownCleanup();
-      // Give time for cleanup, then exit
-      setTimeout(() => process.exit(0), 100);
+      try {
+        await executeShutdownCleanup();
+        await resetOrchestrator();
+        process.exit(signal === "SIGINT" ? 130 : 143);
+      } catch (error) {
+        console.error("[CLI] Shutdown failed:", error);
+        process.exit(1);
+      }
     });
   }
 }
-
-// Setup handlers early
-setupGlobalShutdownHandlers();
 
 // =============================================================================
 // T037-T040: Mode CLI Flag Interfaces
@@ -267,6 +272,8 @@ program
   .option("--theme <theme>", "UI theme (dark|parchment|dracula|etc.)", "parchment")
   .option("--banner", "Show banner on startup", false)
   .action(async (options: ChatOptions, command: Command) => {
+    // Headless run/delegate/resume own cancellation and await their final checkpoint.
+    setupGlobalShutdownHandlers();
     // T040: Apply --full-auto shortcut
     const effectiveMode =
       command.getOptionValueSource("mode") !== "cli" && process.env.VELLUM_MODE
@@ -387,7 +394,7 @@ program
         // Compose LSP cleanup with existing shutdown cleanup
         const previousCleanup = getShutdownCleanup();
         setShutdownCleanup(async () => {
-          previousCleanup?.();
+          await previousCleanup?.();
           await lspHub.dispose();
         });
       } catch {
@@ -454,8 +461,8 @@ program
     if (useBufferedStdout) {
       // Compose with existing shutdown cleanup so we don't lose agent cleanup.
       const previousCleanup = getShutdownCleanup();
-      setShutdownCleanup(() => {
-        previousCleanup?.();
+      setShutdownCleanup(async () => {
+        await previousCleanup?.();
         (compatStdout as BufferedStdout).dispose();
       });
     }
@@ -715,6 +722,7 @@ skillCmd
 // =============================================================================
 
 registerDelegateCommand(program);
+registerResumeCommand(program);
 
 // =============================================================================
 // LSP Command (Phase 30)
