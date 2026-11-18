@@ -3259,7 +3259,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         this.emit("permissionRequired", callId, name, input);
       });
       this.pendingPermission = null;
-      if (this.cancellation.isCancelled) return false;
+      if (this.cancellation.isCancelled) {
+        this.emit("permissionDenied", callId, name, "Operation cancelled");
+        return false;
+      }
       this.transitionTo("tool_executing");
       if (granted) this.emit("permissionGranted", callId, name);
       else this.emit("permissionDenied", callId, name, "User denied permission");
