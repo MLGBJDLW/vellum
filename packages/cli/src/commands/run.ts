@@ -163,7 +163,7 @@ export async function handleRun(prompt: string, options: RunOptions): Promise<vo
     if (deadline) clearTimeout(deadline);
     process.removeListener("SIGINT", onInterrupt);
     process.removeListener("SIGTERM", onInterrupt);
-    agentLoop?.cancel("CLI session closed");
+    await agentLoop?.cancel("CLI session closed", { closeSession: true });
     await resetOrchestrator();
     agentLoop?.removeAllListeners();
     cleanup?.();

@@ -510,27 +510,33 @@ export async function* streamWithAbort<T>(
   let interruptRead: (() => void) | undefined;
   const onAbort = () => interruptRead?.();
   signal.addEventListener("abort", onAbort, { once: true });
-
+  const waitForIterator = (pending: Promise<IteratorResult<T>>): Promise<IteratorResult<T>> =>
+    new Promise((resolve, reject) => {
+      interruptRead = () => resolve({ done: true, value: undefined });
+      pending.then(resolve, reject);
+      if (signal.aborted) interruptRead();
+    });
+  let exhausted = false;
   try {
     while (!signal.aborted) {
-      const result = await new Promise<IteratorResult<T>>((resolve, reject) => {
-        interruptRead = () => resolve({ done: true, value: undefined });
-        iterator.next().then(resolve, reject);
-      });
+      const result = await waitForIterator(iterator.next());
       interruptRead = undefined;
-      if (result.done || signal.aborted) {
+      if (signal.aborted) return;
+      if (result.done) {
+        exhausted = true;
         return;
       }
 
       yield result.value;
     }
   } finally {
-    signal.removeEventListener("abort", onAbort);
-    // Async generators queue return() behind any outstanding next(). A stalled
-    // transport must not retain ownership of the turn while it winds down.
-    const closing = iterator.return?.();
-    if (signal.aborted) void closing?.catch(() => {});
-    else await closing;
+    try {
+      // return() can queue behind a pending read or stall in transport cleanup.
+      if (!exhausted && iterator.return) await waitForIterator(iterator.return());
+    } finally {
+      interruptRead = undefined;
+      signal.removeEventListener("abort", onAbort);
+    }
   }
 }
 

@@ -644,10 +644,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
               evidence: result.evidence,
               confidence: result.confidence,
             });
-            return {
-              detected: this.terminationManager.shouldInterruptOnStreamingLoop(),
-              result,
-            };
+            const interrupt = this.terminationManager.shouldInterruptOnStreamingLoop();
+            if (interrupt) this.abortController?.abort();
+            return { detected: interrupt, result };
           }
           return { detected: false };
         },
@@ -1636,7 +1635,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // and delegated agents, before the first model request.
     systemPrompt += `\n\n${buildEnvironmentInfo({ cwd: this.config.cwd })}`;
 
-    // Append AGENTS.md prompt sections
+    // The first request must observe the same project instructions as later turns.
+    await this.agentsInitialization;
     if (this.agentsIntegration?.getState() === "ready") {
       const agentsSections = this.agentsIntegration.getSystemPromptStrings();
       if (agentsSections.length > 0) {
@@ -1739,11 +1739,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // Copy pending tool calls from result
     for (const toolCall of result.pendingToolCalls) {
       pendingToolCalls.push(toolCall);
-    }
-
-    // Handle abort on interruption
-    if (result.interrupted) {
-      this.abortController?.abort();
     }
 
     return { interrupted: result.interrupted };
@@ -1855,6 +1850,12 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         if (!this.cancellation.isCancelled) this.applySteering();
         try {
           await this.runIteration();
+        } catch (error) {
+          this.emit("terminated", TerminationReason.ERROR, {
+            shouldTerminate: true,
+            reason: TerminationReason.ERROR,
+          });
+          throw error;
         } finally {
           await this.config.onMessagesCheckpoint?.(this.getMessages(), this.iterationCount);
         }
@@ -3433,7 +3434,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    *
    * @param reason - Optional reason for cancellation
    */
-  cancel(reason?: string): Promise<void> {
+  cancel(reason?: string, options?: { closeSession?: boolean }): Promise<void> {
     this.cancellation.cancel(reason);
     this.costManager.denyApproval();
     this.pendingPermission?.resolve(false);
@@ -3452,8 +3453,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // Also emit complete to finalize any pending operations (T038 fix)
     this.emit("complete");
 
-    // Dispose AGENTS.md integration
-    if (this.agentsIntegration) {
+    // A stopped turn can resume in the same workspace with its rules intact.
+    if (options?.closeSession && this.agentsIntegration) {
       return this.agentsIntegration.dispose().catch((error) => {
         this.logger?.warn("Error disposing AGENTS.md integration", { error });
       });

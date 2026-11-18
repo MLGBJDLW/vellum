@@ -211,7 +211,7 @@ export class GracefulShutdownHandler {
 
     try {
       // Cancel the agent loop
-      this.agentLoop.cancel(`Received ${signal}`);
+      await this.agentLoop.cancel(`Received ${signal}`, { closeSession: true });
 
       // Create snapshot
       const snapshot = this.createSnapshotFromLoop();

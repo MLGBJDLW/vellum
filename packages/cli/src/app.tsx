@@ -2778,10 +2778,8 @@ function AppContent({
   useEffect(() => {
     const previousCleanup = getShutdownCleanup();
     const cleanup = async () => {
-      if (cancellationRef.current) {
-        cancellationRef.current.cancel("shutdown");
-      }
-      agentLoopProp?.cancel("shutdown");
+      if (agentLoopProp) await agentLoopProp.cancel("shutdown", { closeSession: true });
+      else cancellationRef.current?.cancel("shutdown");
       try {
         await getOrchestrator()?.shutdown();
         await saveSession();
@@ -3129,8 +3127,9 @@ function AppContent({
       // A message typed in that window starts a fresh turn as soon as it closes.
       if (taskSubmissionRef.current?.closing) await taskSubmissionRef.current.finished;
 
-      if (followupPrompt && agentLoopProp) {
-        const response = resolveFollowupResponse(text, followupPrompt.suggestions);
+      const pendingQuestion = agentLoopProp?.getPendingUserPrompt();
+      if (pendingQuestion && agentLoopProp) {
+        const response = resolveFollowupResponse(text, pendingQuestion.suggestions ?? []);
         setFollowupPrompt(null);
         addToHistory(response);
         addMessage({ role: "user", content: response });
@@ -3302,11 +3301,13 @@ function AppContent({
           // Start the fresh turn before asynchronous preparation so Stop cannot be reset.
           let interrupted = false;
           const observeTermination = (reason: TerminationReason) => {
+            if (reason === TerminationReason.ERROR) submission.closing = true;
             if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
               interrupted = true;
           };
           const observeComplete = () => {
             submission.closing = true;
+            setFollowupPrompt(null);
           };
           agentLoopProp.on("complete", observeComplete);
           agentLoopProp.on("terminated", observeTermination);
@@ -3431,7 +3432,6 @@ function AppContent({
       currentProvider,
       credentialManager,
       handleCommandResult,
-      followupPrompt,
       modeManager,
       notifyTaskComplete,
       notifyError,

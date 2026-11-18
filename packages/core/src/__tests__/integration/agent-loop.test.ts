@@ -437,12 +437,20 @@ describe("AgentLoop Integration (T034)", () => {
             },
           ]) as ReturnType<typeof LLM.stream>
         );
+        const terminated = vi.fn();
         const loop = new AgentLoop({
           ...config,
           useStreamProcessor,
           maxRetries: 0,
           enableEvidencePack: false,
+          onMessagesCheckpoint: async () => {
+            expect(terminated).toHaveBeenCalledWith(
+              "error",
+              expect.objectContaining({ shouldTerminate: true })
+            );
+          },
         });
+        loop.on("terminated", terminated);
         const complete = vi.fn();
         const error = vi.fn();
         loop.on("complete", complete);
