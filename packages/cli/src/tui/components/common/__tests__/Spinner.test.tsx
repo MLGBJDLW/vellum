@@ -1,4 +1,4 @@
-import { setIconSet, themes } from "@vellum/shared";
+import { resetIconDetection, setIconSet, themes } from "@vellum/shared";
 import { Box, Text } from "ink";
 import { cleanup, render } from "ink-testing-library";
 import { act, type ReactElement } from "react";
@@ -48,7 +48,9 @@ describe("Vellum activity ink mark", () => {
   it.each(["unicode", "ascii"] as const)(
     "keeps the label aligned across %s frames",
     async (icons) => {
-      setIconSet(icons);
+      vi.stubEnv("VELLUM_ICONS", icons);
+      vi.stubEnv("NERD_FONT", "1");
+      resetIconDetection();
       const frames = icons === "ascii" ? ASCII_SPINNER_FRAMES : SPINNER_FRAMES;
       const view = (frame: number) => (
         <ThemeProvider>

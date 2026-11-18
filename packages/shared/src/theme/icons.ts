@@ -240,8 +240,8 @@ export const asciiIcons: IconSet = {
 function detectIconSupport(): IconSupport {
   // Check explicit config first
   const vellumIcons = process.env.VELLUM_ICONS;
-  if (vellumIcons === "nerd") return "nerd";
-  if (vellumIcons === "ascii") return "ascii";
+  if (vellumIcons === "nerd" || vellumIcons === "ascii" || vellumIcons === "unicode")
+    return vellumIcons;
 
   // Check for Nerd Font indicators
   const nerdFontEnvs = ["NERD_FONT", "NERDFONT", "NERD_FONTS"];
