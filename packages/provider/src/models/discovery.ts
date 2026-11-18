@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ProviderType } from "../types.js";
 import { ALL_MODELS, getBundledModelMetadata, isRetiredModel, MODEL_CATALOG } from "./catalog.js";
-import { type ModelInfo, reasoningEffortSchema } from "./types.js";
+import { type ModelInfo, type PricingTier, reasoningEffortSchema } from "./types.js";
 
 const recordSchema = z.record(z.string(), z.unknown());
 const record = (value: unknown): Record<string, unknown> =>
@@ -21,6 +21,59 @@ const boolean = (value: unknown): boolean | undefined =>
 // xAI reports cents per 100M tokens; catalog prices are USD per 1M tokens.
 const xaiPrice = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? value / 10_000 : undefined;
+
+/** OpenRouter's min_prompt_tokens applies strictly above the boundary. */
+function openRouterContextTiers(
+  pricing: Record<string, unknown>,
+  model: ModelInfo
+): PricingTier[] | undefined {
+  if (
+    !Array.isArray(pricing.overrides) ||
+    model.inputPrice === undefined ||
+    model.outputPrice === undefined
+  ) {
+    return undefined;
+  }
+  const maxContext = model.contextWindowKnown ? model.contextWindow : Number.MAX_SAFE_INTEGER;
+  const overrides = pricing.overrides.flatMap((value) => {
+    const rule = record(value);
+    const minimum = rule.min_prompt_tokens;
+    // A UTC schedule cannot be represented by a context length alone.
+    if (
+      typeof minimum !== "number" ||
+      !Number.isSafeInteger(minimum) ||
+      minimum < 0 ||
+      minimum >= maxContext ||
+      rule.utc_days != null ||
+      rule.utc_start != null ||
+      rule.utc_end != null
+    )
+      return [];
+    return [{ minimum, rule }];
+  });
+  if (!overrides.length) return undefined;
+  const bounds = [...new Set(overrides.map(({ minimum }) => minimum))].sort((a, b) => a - b);
+  bounds.push(maxContext);
+  const base = {
+    inputPrice: model.inputPrice,
+    outputPrice: model.outputPrice,
+    cacheReadsPrice: model.cacheReadsPrice,
+    cacheWritesPrice: model.cacheWritesPrice,
+  };
+  return bounds.map((contextWindow) => {
+    const tier = { ...base, contextWindow };
+    // Later matching rules win for each price they supply, even when the API
+    // returns rows out of threshold order or repeats the same boundary.
+    for (const { minimum, rule } of overrides) {
+      if (contextWindow <= minimum) continue;
+      tier.inputPrice = price(rule.prompt) ?? tier.inputPrice;
+      tier.outputPrice = price(rule.completion) ?? tier.outputPrice;
+      tier.cacheReadsPrice = price(rule.input_cache_read) ?? tier.cacheReadsPrice;
+      tier.cacheWritesPrice = price(rule.input_cache_write) ?? tier.cacheWritesPrice;
+    }
+    return tier;
+  });
+}
 
 /** Normalize provider discovery without inventing capabilities or prices. */
 export function normalizeDiscoveredModels(provider: ProviderType, records: unknown[]): ModelInfo[] {
@@ -88,7 +141,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       (provider === "ollama" || provider === "lmstudio") &&
       (data.type === "embedding" ||
         data.type === "decision" ||
-        (localCapabilities?.includes("embedding") && !localCapabilities.includes("completion")))
+        (provider === "ollama" && localCapabilities && !localCapabilities.includes("completion")))
     )
       continue;
     // Gateway model inventories include asynchronous and media-only products.
@@ -103,8 +156,16 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
     if (Array.isArray(outputModalities) && !outputModalities.includes("text")) continue;
     if (
       provider === "openai" &&
-      (!/^(gpt-\d|o\d|chatgpt-)/.test(familyId) ||
-        /audio|realtime|transcribe|tts|search-api/.test(familyId))
+      ((familyId !== "chat-latest" && !/^(gpt-(?:\d|rosalind-)|o\d|chatgpt-)/.test(familyId)) ||
+        /audio|realtime|transcribe|tts|search-api|image/.test(familyId))
+    )
+      continue;
+    // Gemini TTS and image models also declare generateContent. Their payloads
+    // need audio/image output handling outside the text conversation adapter.
+    if (
+      provider === "google" &&
+      (/^gemini-(?:.*-)?(?:tts|image|live|transcribe|native-audio)(?:-|$)/.test(id) ||
+        /^(?:gemini-(?:nano-banana|omni)|imagen|veo|lyria)(?:-|$)/.test(id))
     )
       continue;
     // xAI's sparse /models response includes image generation products without
@@ -151,7 +212,8 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       ...(known && known.id !== id ? { aliases: undefined } : {}),
       id,
       provider,
-      ...(provider === "openai" && /^(gpt-[5-9]|o[134])/.test(familyId)
+      ...(provider === "xai" ? { api: "responses" as const } : {}),
+      ...(provider === "openai" && /^(gpt-(?:[5-9]|rosalind-)|o[134])/.test(familyId)
         ? { api: "responses" as const, supportsSampling: false }
         : {}),
       name:
@@ -199,10 +261,11 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
           : known?.supportsReasoning === true),
       supportsStreaming: boolean(capabilities.streaming) ?? known?.supportsStreaming ?? true,
       supportsPromptCache:
-        price(pricing.input_cache_read) !== undefined ||
-        price(pricing.input_cache_write) !== undefined ||
-        (provider === "xai" && xaiPrice(data.cached_prompt_text_token_price) !== undefined) ||
-        known?.supportsPromptCache === true,
+        boolean(capabilities.prompt_cache) ??
+        (price(pricing.input_cache_read) !== undefined ||
+          price(pricing.input_cache_write) !== undefined ||
+          (provider === "xai" && xaiPrice(data.cached_prompt_text_token_price) !== undefined) ||
+          known?.supportsPromptCache === true),
       ...(Array.isArray(data.supported_parameters)
         ? { supportsSampling: supported.includes("temperature") || supported.includes("top_p") }
         : {}),
@@ -246,6 +309,11 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
         known?.description ??
         "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     };
+    // A priced gateway record supplies the current schedule, including routes
+    // which removed their old overrides. Sparse proxies can still return IDs only.
+    if (provider === "openrouter" && Object.keys(pricing).length > 0) {
+      model.tiers = openRouterContextTiers(pricing, model);
+    }
     result.set(id, model);
   }
   return [...result.values()];
@@ -253,7 +321,10 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
 
 /** Replace the current provider view after an explicit successful refresh. */
 export function updateDiscoveredModels(provider: ProviderType, models: ModelInfo[]): void {
-  if (models.length === 0) throw new Error(`No chat models were returned by ${provider}`);
+  // Local servers legitimately become empty after a user removes their last model.
+  if (models.length === 0 && provider !== "ollama" && provider !== "lmstudio") {
+    throw new Error(`No chat models were returned by ${provider}`);
+  }
   MODEL_CATALOG.set(provider, models);
   ALL_MODELS.splice(0, ALL_MODELS.length, ...[...MODEL_CATALOG.values()].flat());
 }

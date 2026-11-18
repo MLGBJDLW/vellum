@@ -1,4 +1,4 @@
-/** anthropic catalog audited 2026-11-13. Sources: docs/research/provider-catalog-2026-11-13.md. */
+/** Anthropic text models and rates: https://platform.claude.com/docs/en/about-claude/pricing */
 import type { ModelInfo } from "../types.js";
 export const ANTHROPIC_MODELS: ModelInfo[] = [
   {
@@ -37,6 +37,8 @@ export const ANTHROPIC_MODELS: ModelInfo[] = [
     maxOutputTokens: 128000,
     inputPrice: 2,
     outputPrice: 10,
+    cacheReadsPrice: 0.1,
+    cacheWritesPrice: 2.5,
     thinkingMode: "adaptive",
     supportsSampling: false,
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
@@ -78,6 +80,24 @@ export const ANTHROPIC_MODELS: ModelInfo[] = [
     maxOutputTokens: 128000,
     inputPrice: 0.1,
     outputPrice: 0.5,
+    cacheReadsPrice: 0.01,
+    cacheWritesPrice: 0.125,
+    tiers: [
+      {
+        contextWindow: 100000,
+        inputPrice: 0.1,
+        outputPrice: 0.5,
+        cacheReadsPrice: 0.01,
+        cacheWritesPrice: 0.125,
+      },
+      {
+        contextWindow: 1000000,
+        inputPrice: 0.5,
+        outputPrice: 2.5,
+        cacheReadsPrice: 0.05,
+        cacheWritesPrice: 0.625,
+      },
+    ],
     thinkingMode: "adaptive",
     supportsSampling: false,
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
@@ -99,6 +119,8 @@ export const ANTHROPIC_MODELS: ModelInfo[] = [
     maxOutputTokens: 128000,
     inputPrice: 10,
     outputPrice: 50,
+    cacheReadsPrice: 0.25,
+    cacheWritesPrice: 12.5,
     thinkingMode: "adaptive",
     supportsSampling: false,
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
@@ -254,10 +276,11 @@ export const ANTHROPIC_MODELS: ModelInfo[] = [
   },
   {
     id: "claude-haiku-4-5-20251001",
+    aliases: ["claude-haiku-4-5"],
     name: "Claude Haiku 4.5",
     provider: "anthropic",
     contextWindow: 200000,
-    maxOutputTokens: 32000,
+    maxOutputTokens: 64000,
     supportsTools: true,
     supportsVision: true,
     supportsReasoning: true,
@@ -313,10 +336,11 @@ export const ANTHROPIC_MODELS: ModelInfo[] = [
   },
   {
     id: "claude-opus-4-5-20251101",
+    aliases: ["claude-opus-4-5"],
     name: "Claude Opus 4.5",
     provider: "anthropic",
     contextWindow: 200000,
-    maxOutputTokens: 32000,
+    maxOutputTokens: 64000,
     supportsTools: true,
     supportsVision: true,
     supportsReasoning: true,
@@ -328,7 +352,7 @@ export const ANTHROPIC_MODELS: ModelInfo[] = [
     cacheWritesPrice: 6.25,
     cacheReadsPrice: 0.5,
     reasoningEfforts: ["low", "medium", "high"],
-    defaultReasoningEffort: "medium",
+    defaultReasoningEffort: "high",
     deprecated: false,
   },
 ];

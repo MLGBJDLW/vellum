@@ -75,13 +75,15 @@ export function buildResponsesRequest(
       }
     }
   }
+  const modelInfo = getModelInfo(provider, params.model);
+  const grokMultiAgent = provider === "xai" && params.model.startsWith("grok-4.20-multi-agent");
   const request: ResponseCreateParamsNonStreaming = {
     model: params.model,
     input,
     store: false,
     include: ["reasoning.encrypted_content"],
-    max_output_tokens: params.maxTokens ?? 32_768,
-    ...(params.tools?.length
+    ...(grokMultiAgent ? {} : { max_output_tokens: params.maxTokens ?? 32_768 }),
+    ...(params.tools?.length && !grokMultiAgent && modelInfo.supportsTools !== false
       ? {
           tools: params.tools.map((tool) => ({
             type: "function" as const,
@@ -95,7 +97,6 @@ export function buildResponsesRequest(
   };
   // New API effort values are valid wire values even when the installed SDK's
   // generated TypeScript union predates the model (e.g. GPT-6's "max").
-  const modelInfo = getModelInfo(provider, params.model);
   const includeSummary =
     provider === "openai" &&
     modelInfo.api === "responses" &&
@@ -173,6 +174,7 @@ export function normalizeResponsesResult(
       inputTokens: response.usage?.input_tokens ?? 0,
       outputTokens: response.usage?.output_tokens ?? 0,
       cacheReadTokens: response.usage?.input_tokens_details?.cached_tokens,
+      cacheWriteTokens: response.usage?.input_tokens_details?.cache_write_tokens,
       thinkingTokens: response.usage?.output_tokens_details?.reasoning_tokens,
     },
     ...(!response.usage ? { usageReported: false } : {}),

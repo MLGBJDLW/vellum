@@ -1,46 +1,9 @@
 import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
-/**
- * DeepSeek Provider
- *
- * Implements support for DeepSeek's OpenAI-compatible API.
- * Provides access to DeepSeek Chat, Coder, and Reasoner models.
- *
- * The deepseek-reasoner model returns reasoning content in a `reasoning_content`
- * field, which is extracted and emitted as StreamReasoningEvent during streaming.
- *
- * @module @vellum/provider/deepseek
- */
-
 import { DEEPSEEK_MODELS } from "./models/providers/deepseek.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { CompletionParams, ModelInfo } from "./types.js";
 
-// =============================================================================
-// DeepSeek Provider Implementation
-// =============================================================================
-
-/**
- * DeepSeek LLM Provider
- *
- * Supports DeepSeek's suite of models including:
- * - deepseek-chat: General-purpose conversational model
- * - deepseek-coder: Specialized for code generation
- * - deepseek-reasoner: Advanced reasoning capabilities with `reasoning_content`
- *
- * @example
- * ```typescript
- * const provider = new DeepSeekProvider();
- * await provider.initialize({ apiKey: 'sk-...' });
- *
- * const result = await provider.complete({
- *   model: 'deepseek-reasoner',
- *   messages: [{ role: 'user', content: 'Solve this step by step...' }],
- * });
- *
- * // Access reasoning content
- * console.log(result.thinking); // Contains the reasoning process
- * ```
- */
+/** DeepSeek Flash and Pro use OpenAI-compatible chat with a separate thinking field. */
 export class DeepSeekProvider extends OpenAICompatibleProvider {
   /**
    * Default base URL for DeepSeek API

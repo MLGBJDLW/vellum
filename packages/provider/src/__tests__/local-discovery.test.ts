@@ -46,10 +46,7 @@ describe("local provider discovery", () => {
         updateDiscoveredModels(provider, models);
         expect(instance.listModels()).toEqual(["custom-vision"]);
       } finally {
-        MODEL_CATALOG.set(provider, previous);
-        // Restore the flattened catalog too; local offline catalogs are deliberately empty.
-        const active = MODEL_CATALOG.get("openai");
-        if (active) updateDiscoveredModels("openai", active);
+        updateDiscoveredModels(provider, previous);
       }
     }
   );
@@ -83,12 +80,62 @@ describe("local provider discovery", () => {
       await provider.initialize({});
       const pending = provider.refreshModels(controller.signal);
       await vi.waitFor(() => expect(signals).toHaveLength(4));
-      if (cause === "caller") controller.abort();
-      else await vi.advanceTimersByTimeAsync(10_001);
-      expect(await pending).toEqual([]);
+      if (cause === "caller") {
+        controller.abort();
+        await expect(pending).rejects.toThrow();
+      } else {
+        await vi.advanceTimersByTimeAsync(10_001);
+        const models = await pending;
+        expect(models).toHaveLength(20);
+        expect(models.every((model) => model.supportsTools === undefined)).toBe(true);
+      }
       expect(signals).toHaveLength(4);
       expect(signals.every((signal) => signal.aborted)).toBe(true);
       expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it.each([
+    ["ollama", () => new OllamaProvider()],
+    ["lmstudio", () => new LMStudioProvider()],
+  ] as const)(
+    "clears a removed %s inventory only after a successful refresh",
+    async (name, create) => {
+      const provider = create();
+      await provider.initialize({});
+      const previous = MODEL_CATALOG.get(name) ?? [];
+      const records =
+        name === "ollama"
+          ? [{ name: "local-chat" }, { name: "local-decision" }]
+          : [
+              { key: "local-chat", type: "llm" },
+              { key: "local-decision", type: "decision" },
+            ];
+      const refresh = async () => updateDiscoveredModels(name, await provider.refreshModels());
+      try {
+        vi.mocked(fetchWithPool).mockImplementation(async (url, options) => {
+          if (String(url).endsWith("/api/show")) {
+            const capability =
+              JSON.parse(String(options?.body)).model === "local-chat" ? "completion" : "decision";
+            return Response.json({ capabilities: [capability] });
+          }
+          return Response.json({ models: records });
+        });
+        await refresh();
+        expect(provider.listModels()).toEqual(["local-chat"]);
+        vi.mocked(fetchWithPool).mockImplementation(
+          async () => new Response(null, { status: 503 })
+        );
+        await expect(refresh()).rejects.toThrow("503");
+        vi.mocked(fetchWithPool).mockImplementation(async () => Response.json({ models: [{}] }));
+        await expect(refresh()).rejects.toThrow("identifier");
+        expect(provider.listModels()).toEqual(["local-chat"]);
+        vi.mocked(fetchWithPool).mockImplementation(async () => Response.json({ models: [] }));
+        await refresh();
+        expect(provider.listModels()).toEqual([]);
+      } finally {
+        updateDiscoveredModels(name, previous);
+      }
     }
   );
 

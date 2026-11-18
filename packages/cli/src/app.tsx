@@ -42,6 +42,7 @@ import {
   DEFAULT_MODEL_IDS,
   getDefaultModelId,
   getProviderModels,
+  getSupportedProviders,
   getUsageInputTokens,
   getUsageOutputTokens,
 } from "@vellum/provider";
@@ -3518,6 +3519,21 @@ function AppContent({
   // Get level 3 items for three-level autocomplete (e.g., /model anthropic claude-)
   const getLevel3Items = useCallback(
     (commandName: string, arg1: string, partial: string): AutocompleteOption[] | undefined => {
+      const refreshing = commandName === "model" && arg1 === "refresh";
+      const editingCredential =
+        commandName === "auth" &&
+        ["set", "add", "login", "clear", "remove", "delete", "logout"].includes(arg1);
+      if (refreshing || editingCredential) {
+        const prefix = partial.toLowerCase();
+        return getSupportedProviders()
+          .filter((provider) => provider.startsWith(prefix))
+          .map((provider) => ({
+            name: provider,
+            description: refreshing
+              ? `Refresh ${provider} models`
+              : `Configure ${provider} API key`,
+          }));
+      }
       // /model command: level 3 shows model IDs for the selected provider
       if (commandName === "model") {
         // arg1 is the provider name
@@ -3541,45 +3557,6 @@ function AppContent({
           description: m.name,
           category: arg1,
         }));
-      }
-
-      // /auth command: level 3 shows provider list for set/clear subcommands
-      if (commandName === "auth") {
-        const setAliases = ["set", "add", "login"];
-        const clearAliases = ["clear", "remove", "delete", "logout"];
-
-        // Only show providers for set/clear subcommands (not for status)
-        if (setAliases.includes(arg1) || clearAliases.includes(arg1)) {
-          const providers = [
-            "anthropic",
-            "openai",
-            "google",
-            "azure",
-            "bedrock",
-            "vertex",
-            "ollama",
-            "openrouter",
-            "together",
-            "mistral",
-            "cohere",
-            "groq",
-            "deepseek",
-            "qwen",
-            "xai",
-          ];
-
-          const lowerPartial = partial.toLowerCase();
-          const filtered = lowerPartial
-            ? providers.filter((p) => p.toLowerCase().startsWith(lowerPartial))
-            : providers;
-
-          return filtered.map((p) => ({
-            name: p,
-            description: `Configure ${p} API key`,
-          }));
-        }
-
-        return undefined; // status doesn't need level 3
       }
 
       // /lsp command: level 3 shows server names for specific subcommands

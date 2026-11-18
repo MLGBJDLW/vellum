@@ -134,7 +134,7 @@ export const modelCommand: SlashCommand = {
   examples: [
     "/model                         - Show current model and options",
     "/model anthropic/claude-opus-4-7 - Switch to Claude Opus 4.7",
-    "/model openai/gpt-6.1-sol       - Switch to GPT-6.1 Sol",
+    "/model openai/gpt-6.2-sol       - Switch to GPT-6.2 Sol",
     "/model refresh openrouter      - Discover current models from the provider",
   ],
   // Dynamic subcommands: list all providers for autocomplete
@@ -234,7 +234,9 @@ function showProviderModels(provider: string): CommandResult {
   const models = getProviderModels(normalizedProvider);
 
   if (models.length === 0) {
-    return error("INVALID_ARGUMENT", `No models available for ${provider}`);
+    return success(
+      `No chat models listed for ${provider}. Run /model refresh ${normalizedProvider} to check its endpoint.`
+    );
   }
 
   const lines: string[] = [`${provider} Models`, ""];
@@ -374,6 +376,11 @@ async function refreshModels(
     const models = await instance.refreshModels(ctx.signal);
     ctx.signal?.throwIfAborted();
     updateDiscoveredModels(type as ProviderType, models);
+    if (models.length === 0) {
+      return success(
+        `No chat models found on ${type}. Install a chat model on that server, then run /model refresh ${type}.`
+      );
+    }
     return success(
       `Refreshed ${models.length} models from ${type}. Use /model ${type} to select one. Availability does not verify inference access or billing.`
     );

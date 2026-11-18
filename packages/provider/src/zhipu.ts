@@ -7,9 +7,10 @@ import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
  * @module @vellum/provider/zhipu
  */
 
+import { getModelInfo } from "./models/index.js";
 import { ZHIPU_MODELS } from "./models/providers/zhipu.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
-import type { ModelInfo, ProviderOptions } from "./types.js";
+import type { CompletionParams, ModelInfo, ProviderOptions } from "./types.js";
 
 // =============================================================================
 // JWT Token Generation for Zhipu
@@ -154,5 +155,20 @@ export class ZhipuProvider extends OpenAICompatibleProvider {
    */
   getDefaultModel(): string {
     return DEFAULT_MODEL_IDS.zhipu;
+  }
+
+  protected override buildExtraBody(params: CompletionParams): Record<string, unknown> | undefined {
+    const info = getModelInfo("zhipu", params.model);
+    if (!params.thinking || !info.supportsReasoning || !/^glm-(?:5|4\.[567])/.test(params.model)) {
+      return params.extraBody;
+    }
+    const options = params.extraBody?.thinking;
+    return {
+      ...params.extraBody,
+      thinking: {
+        ...(options && typeof options === "object" ? options : {}),
+        type: info.requiresThinking || params.thinking.enabled ? "enabled" : "disabled",
+      },
+    };
   }
 }

@@ -132,6 +132,20 @@ export function getContextWindow(provider: string, modelId: string): number {
   return getModelInfo(provider, modelId).contextWindow;
 }
 
+/** Select the inclusive prompt-size tier for a Standard request. */
+export function getContextPricingTier<T extends { name?: string; contextWindow: number }>(
+  tiers: readonly T[] | undefined,
+  inputTokens: number
+): T | undefined {
+  let lastTier: T | undefined;
+  for (const tier of tiers ?? []) {
+    if (tier.name === "flex" || tier.name === "priority") continue;
+    if (inputTokens <= tier.contextWindow) return tier;
+    lastTier = tier;
+  }
+  return lastTier;
+}
+
 /**
  * Calculate estimated cost for token usage.
  */
@@ -143,8 +157,9 @@ export function calculateCost(
 ): number | undefined {
   const info = getModelInfo(provider, modelId);
   if (info.inputPrice === undefined || info.outputPrice === undefined) return undefined;
-  const inputCost = (inputTokens / 1_000_000) * info.inputPrice;
-  const outputCost = (outputTokens / 1_000_000) * info.outputPrice;
+  const tier = getContextPricingTier(info.tiers, inputTokens);
+  const inputCost = (inputTokens / 1_000_000) * (tier?.inputPrice ?? info.inputPrice);
+  const outputCost = (outputTokens / 1_000_000) * (tier?.outputPrice ?? info.outputPrice);
   return inputCost + outputCost;
 }
 

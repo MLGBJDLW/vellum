@@ -71,7 +71,7 @@ export function getProviderModels(provider: ProviderType | string): ModelInfo[] 
 /** Defaults are shared by adapters, CLI configuration and onboarding. */
 export const DEFAULT_MODEL_IDS: Record<ProviderType, string> = {
   anthropic: "claude-sonnet-5-5",
-  openai: "gpt-6.1-sol",
+  openai: "gpt-6.2-sol",
   google: "gemini-3.8-flash",
   deepseek: "deepseek-flash",
   qwen: "qwen3.8-flash",
@@ -83,8 +83,8 @@ export const DEFAULT_MODEL_IDS: Record<ProviderType, string> = {
   zhipu: "glm-5.3",
   moonshot: "kimi-k3.1-pro",
   mistral: "mistral-large-4",
-  yi: "yi-large",
-  baichuan: "Baichuan4",
+  yi: "yi-lightning",
+  baichuan: "Baichuan4-Turbo",
   doubao: "doubao-seed-2-1-pro-260915",
   minimax: "MiniMax-M3.1-Flash",
 };
@@ -96,6 +96,16 @@ export function getDefaultModelId(provider: ProviderType | string): string | und
 /** Exact vendor retirements only; custom IDs and working historical models stay untouched. */
 const RETIRED_MODEL_REPLACEMENTS: Partial<Record<ProviderType, Record<string, string>>> = {
   anthropic: {
+    "claude-1.0": "claude-haiku-4-5-20251001",
+    "claude-1.1": "claude-haiku-4-5-20251001",
+    "claude-1.2": "claude-haiku-4-5-20251001",
+    "claude-1.3": "claude-haiku-4-5-20251001",
+    "claude-instant-1.0": "claude-haiku-4-5-20251001",
+    "claude-instant-1.1": "claude-haiku-4-5-20251001",
+    "claude-instant-1.2": "claude-haiku-4-5-20251001",
+    "claude-2.0": "claude-opus-4-8",
+    "claude-2.1": "claude-opus-4-8",
+    "claude-3-sonnet-20240229": "claude-sonnet-5-5",
     "claude-3-opus-20240229": "claude-opus-5-5",
     "claude-3-5-sonnet-20240620": "claude-sonnet-5-5",
     "claude-3-5-sonnet-20241022": "claude-sonnet-5-5",
@@ -154,6 +164,41 @@ const RETIRED_MODEL_REPLACEMENTS: Partial<Record<ProviderType, Record<string, st
     "gemini-2.0-flash-lite-001": "gemini-3.5-flash-lite",
     "gemini-3-pro-preview": "gemini-3.1-pro-preview",
     "gemini-3.1-flash-lite-preview": "gemini-3.1-flash-lite",
+  },
+  mistral: {
+    // Earlier Vellum catalogs accidentally included a redundant family number.
+    "ministral-3-14b-2512": "ministral-14b-2512",
+    "ministral-3-8b-2512": "ministral-8b-2512",
+    "ministral-3-3b-2512": "ministral-3b-2512",
+  },
+  baichuan: { "Baichuan2-Turbo-192k": "Baichuan3-Turbo-128k" },
+  doubao: {
+    "doubao-seed-2-0-lite-260215": "doubao-seed-2-0-lite-260428",
+    "doubao-seed-2-0-mini-260215": "doubao-seed-2-0-mini-260428",
+  },
+  deepseek: {
+    "deepseek-chat": "deepseek-flash",
+    "deepseek-reasoner": "deepseek-flash",
+  },
+  qwen: {
+    "qwen3-max": "qwen4-max",
+    "qwen3-max-preview": "qwen4-max",
+    "qwen3.6-max-preview": "qwen4-max",
+    "qwen3-max-2026-01-23": "qwen4-max",
+    "qwen3-max-2025-09-23": "qwen4-max",
+    "qwen3-vl-flash": "qwen3.8-flash",
+    "qwen3-vl-flash-2026-01-22": "qwen3.8-flash",
+    "qwen3-vl-flash-2025-10-15": "qwen3.8-flash",
+    "qwen3-coder-plus": "qwen3.7-plus",
+    "qwen3-coder-plus-2025-09-23": "qwen3.7-plus",
+    "qwen3-coder-plus-2025-07-22": "qwen3.7-plus",
+    "qwen-turbo": "qwen3.8-flash",
+  },
+  zhipu: {
+    "glm-z1-air": "glm-4.6",
+    "glm-z1-airx": "glm-4.6",
+    "glm-z1-flash": "glm-4.6",
+    "glm-z1-flashx": "glm-4.6",
   },
   moonshot: {
     "moonshot-v1-8k": "kimi-k3.1-pro",

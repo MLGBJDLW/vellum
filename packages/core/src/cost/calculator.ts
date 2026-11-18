@@ -74,7 +74,10 @@ export function calculateCostBreakdown(params: CostCalculationParams): CostBreak
 
   // Get tiered pricing if applicable
   const contextTokens = usage.contextTokens ?? getUsageInputTokens(provider, usage);
-  const { inputPrice, outputPrice } = getTieredPricing(pricing, contextTokens);
+  const { inputPrice, outputPrice, cacheReadPrice, cacheWritePrice } = getTieredPricing(
+    pricing,
+    contextTokens
+  );
 
   // Calculate each cost component
   const inputCost = (adjustedInputTokens / MILLION) * inputPrice;
@@ -89,11 +92,11 @@ export function calculateCostBreakdown(params: CostCalculationParams): CostBreak
   const outputCost = (visibleOutputTokens / MILLION) * outputPrice;
 
   const cacheReadCost = usage.cacheReadTokens
-    ? (usage.cacheReadTokens / MILLION) * (pricing.cacheReadPricePerMillion ?? Number.NaN)
+    ? (usage.cacheReadTokens / MILLION) * (cacheReadPrice ?? Number.NaN)
     : 0;
 
   const cacheWriteCost = usage.cacheWriteTokens
-    ? (usage.cacheWriteTokens / MILLION) * (pricing.cacheWritePricePerMillion ?? Number.NaN)
+    ? (usage.cacheWriteTokens / MILLION) * (cacheWritePrice ?? Number.NaN)
     : 0;
 
   const reasoningCost = thinkingTokens

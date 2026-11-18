@@ -3,6 +3,7 @@
 // Phase 1: Agent System Upgrade
 // =============================================================================
 
+import { getModelInfo } from "../models/index.js";
 import type {
   CompletionMessage,
   ContentPart,
@@ -108,6 +109,22 @@ export type OpenAIMessage =
   | OpenAIUserMessage
   | OpenAIAssistantMessage
   | OpenAIToolMessage;
+
+function asTextToolHistory(message: OpenAIMessage): OpenAIMessage {
+  if (message.role === "tool") {
+    return { role: "user", content: `Tool result (${message.tool_call_id})\n${message.content}` };
+  }
+  if (message.role !== "assistant" || !message.tool_calls?.length) return message;
+  const content = Array.isArray(message.content)
+    ? message.content
+        .flatMap((part) => (typeof part.text === "string" ? [part.text] : []))
+        .join("\n")
+    : message.content;
+  const calls = message.tool_calls.map(
+    (call) => `Tool call ${call.function.name} (${call.id})\n${call.function.arguments}`
+  );
+  return { role: "assistant", content: [content, ...calls].filter(Boolean).join("\n\n") };
+}
 
 /**
  * OpenAI tool definition format (function calling)
@@ -241,6 +258,10 @@ export class OpenAITransform extends AbstractProviderTransform<
       result.push(...transformed);
     }
 
+    // Existing sessions may contain tool turns from a previously selected model.
+    if (config.modelId && getModelInfo(config.provider, config.modelId).supportsTools === false) {
+      return this.createResult(result.map(asTextToolHistory), warnings);
+    }
     return this.createResult(result, warnings);
   }
 

@@ -1,8 +1,192 @@
-/** OpenRouter offline shortlist from https://openrouter.ai/api/v1/models, 2026-11-13.
+/** OpenRouter offline shortlist from https://openrouter.ai/api/v1/models, 2026-11-18.
  * Regenerate: pnpm exec tsx scripts/update-openrouter-catalog.ts
  */
 import type { ModelInfo } from "../types.js";
 export const OPENROUTER_MODELS: ModelInfo[] = [
+  {
+    id: "openai/gpt-6.2-astra-pro",
+    provider: "openrouter",
+    name: "OpenAI: GPT-6.2 Astra Pro",
+    contextWindow: 1050000,
+    contextWindowKnown: true,
+    maxOutputTokens: 128000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    supportsSampling: false,
+    reasoningEfforts: ["max", "xhigh", "high", "medium", "low"],
+    defaultReasoningEffort: "medium",
+    requiresThinking: true,
+    deprecated: false,
+    inputPrice: 8,
+    outputPrice: 40,
+    cacheReadsPrice: 0.4,
+    cacheWritesPrice: 10,
+    description:
+      "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
+    tiers: [
+      {
+        inputPrice: 8,
+        outputPrice: 40,
+        cacheReadsPrice: 0.4,
+        cacheWritesPrice: 10,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 16,
+        outputPrice: 60,
+        cacheReadsPrice: 0.8,
+        cacheWritesPrice: 20,
+        contextWindow: 1050000,
+      },
+    ],
+  },
+  {
+    id: "openai/gpt-6.2-astra",
+    provider: "openrouter",
+    name: "OpenAI: GPT-6.2 Astra",
+    contextWindow: 1050000,
+    contextWindowKnown: true,
+    maxOutputTokens: 128000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    supportsSampling: false,
+    reasoningEfforts: ["max", "xhigh", "high", "medium", "low"],
+    defaultReasoningEffort: "medium",
+    requiresThinking: true,
+    deprecated: false,
+    inputPrice: 8,
+    outputPrice: 40,
+    cacheReadsPrice: 0.4,
+    cacheWritesPrice: 10,
+    description:
+      "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
+    tiers: [
+      {
+        inputPrice: 8,
+        outputPrice: 40,
+        cacheReadsPrice: 0.4,
+        cacheWritesPrice: 10,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 16,
+        outputPrice: 60,
+        cacheReadsPrice: 0.8,
+        cacheWritesPrice: 20,
+        contextWindow: 1050000,
+      },
+    ],
+  },
+  {
+    id: "openai/gpt-6.2-sol-pro",
+    provider: "openrouter",
+    name: "OpenAI: GPT-6.2 Sol Pro",
+    contextWindow: 1050000,
+    contextWindowKnown: true,
+    maxOutputTokens: 128000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    supportsSampling: false,
+    reasoningEfforts: ["max", "xhigh", "high", "medium", "low"],
+    defaultReasoningEffort: "medium",
+    requiresThinking: true,
+    deprecated: false,
+    inputPrice: 2,
+    outputPrice: 10,
+    cacheReadsPrice: 0.1,
+    cacheWritesPrice: 2.5,
+    description:
+      "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
+    tiers: [
+      {
+        inputPrice: 2,
+        outputPrice: 10,
+        cacheReadsPrice: 0.1,
+        cacheWritesPrice: 2.5,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 4,
+        outputPrice: 15,
+        cacheReadsPrice: 0.2,
+        cacheWritesPrice: 5,
+        contextWindow: 1050000,
+      },
+    ],
+  },
+  {
+    id: "openai/gpt-6.2-sol",
+    provider: "openrouter",
+    name: "OpenAI: GPT-6.2 Sol",
+    contextWindow: 1050000,
+    contextWindowKnown: true,
+    maxOutputTokens: 128000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    supportsSampling: false,
+    reasoningEfforts: ["max", "xhigh", "high", "medium", "low"],
+    defaultReasoningEffort: "medium",
+    requiresThinking: true,
+    deprecated: false,
+    inputPrice: 2,
+    outputPrice: 10,
+    cacheReadsPrice: 0.1,
+    cacheWritesPrice: 2.5,
+    description:
+      "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
+    tiers: [
+      {
+        inputPrice: 2,
+        outputPrice: 10,
+        cacheReadsPrice: 0.1,
+        cacheWritesPrice: 2.5,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 4,
+        outputPrice: 15,
+        cacheReadsPrice: 0.2,
+        cacheWritesPrice: 5,
+        contextWindow: 1050000,
+      },
+    ],
+  },
+  {
+    id: "qwen/qwen4-max",
+    provider: "openrouter",
+    name: "Qwen: Qwen4 Max",
+    contextWindow: 1000000,
+    contextWindowKnown: true,
+    maxOutputTokens: 131072,
+    supportsTools: true,
+    supportsVision: true,
+    supportsReasoning: true,
+    supportsStreaming: true,
+    supportsPromptCache: true,
+    supportsSampling: true,
+    reasoningEfforts: ["xhigh", "high", "low", "none"],
+    defaultReasoningEffort: "high",
+    requiresThinking: false,
+    deprecated: false,
+    inputPrice: 1.425,
+    outputPrice: 4.275,
+    cacheReadsPrice: 0.07125,
+    cacheWritesPrice: 1.78125,
+    description:
+      "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
+  },
   {
     id: "google/gemini-4-hydrogen",
     provider: "openrouter",
@@ -121,6 +305,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 1,
+        outputPrice: 5,
+        cacheReadsPrice: 0.05,
+        cacheWritesPrice: 1.25,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 2,
+        outputPrice: 7.5,
+        cacheReadsPrice: 0.1,
+        cacheWritesPrice: 2.5,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "openai/gpt-6.1-terra",
@@ -145,6 +345,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 1,
+        outputPrice: 5,
+        cacheReadsPrice: 0.05,
+        cacheWritesPrice: 1.25,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 2,
+        outputPrice: 7.5,
+        cacheReadsPrice: 0.1,
+        cacheWritesPrice: 2.5,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "moonshotai/kimi-k3.1-pro",
@@ -157,8 +373,8 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: true,
-    inputPrice: 2,
-    outputPrice: 10,
+    inputPrice: 0.2403,
+    outputPrice: 8.4023,
     deprecated: false,
     supportsSampling: true,
     reasoningEfforts: ["max", "high", "low", "none"],
@@ -197,20 +413,20 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     name: "DeepSeek: DeepSeek V4.1 Flash 1017",
     provider: "openrouter",
     contextWindow: 1048576,
-    maxOutputTokens: 393216,
+    maxOutputTokens: 943718,
     supportsTools: true,
     supportsVision: true,
     supportsReasoning: true,
     supportsStreaming: true,
     supportsPromptCache: true,
-    inputPrice: 0.3,
-    outputPrice: 1.2,
+    inputPrice: 0.036,
+    outputPrice: 0.5,
     deprecated: false,
     supportsSampling: true,
     reasoningEfforts: ["max", "high", "low", "none"],
     defaultReasoningEffort: "high",
     requiresThinking: false,
-    cacheReadsPrice: 0.006,
+    cacheReadsPrice: 0.01,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
@@ -262,6 +478,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 0.1,
+        outputPrice: 0.5,
+        cacheReadsPrice: 0.01,
+        cacheWritesPrice: 0.125,
+        contextWindow: 100000,
+      },
+      {
+        inputPrice: 0.5,
+        outputPrice: 2.5,
+        cacheReadsPrice: 0.05,
+        cacheWritesPrice: 0.625,
+        contextWindow: 1000000,
+      },
+    ],
   },
   {
     id: "mistralai/mistral-large-4-0",
@@ -309,6 +541,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 2,
+        outputPrice: 10,
+        cacheReadsPrice: 0.1,
+        cacheWritesPrice: 2.5,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 4,
+        outputPrice: 15,
+        cacheReadsPrice: 0.2,
+        cacheWritesPrice: 5,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "openai/gpt-6.1-sol",
@@ -333,6 +581,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 2,
+        outputPrice: 10,
+        cacheReadsPrice: 0.1,
+        cacheWritesPrice: 2.5,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 4,
+        outputPrice: 15,
+        cacheReadsPrice: 0.2,
+        cacheWritesPrice: 5,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "anthropic/claude-sonnet-5.5",
@@ -374,9 +638,9 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "max",
     requiresThinking: true,
     deprecated: false,
-    inputPrice: 2.8,
-    outputPrice: 8.8,
-    cacheReadsPrice: 0.56,
+    inputPrice: 1.68,
+    outputPrice: 5.28,
+    cacheReadsPrice: 0.336,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
@@ -427,6 +691,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 0.1,
+        outputPrice: 0.5,
+        cacheReadsPrice: 0.01,
+        cacheWritesPrice: 0.125,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 0.2,
+        outputPrice: 0.75,
+        cacheReadsPrice: 0.02,
+        cacheWritesPrice: 0.25,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "openai/gpt-6-luna",
@@ -451,6 +731,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 0.1,
+        outputPrice: 0.5,
+        cacheReadsPrice: 0.01,
+        cacheWritesPrice: 0.125,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 0.2,
+        outputPrice: 0.75,
+        cacheReadsPrice: 0.02,
+        cacheWritesPrice: 0.25,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "openai/gpt-6-sol-pro",
@@ -475,6 +771,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 2,
+        outputPrice: 10,
+        cacheReadsPrice: 0.2,
+        cacheWritesPrice: 2.5,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 4,
+        outputPrice: 15,
+        cacheReadsPrice: 0.4,
+        cacheWritesPrice: 5,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "openai/gpt-6-sol",
@@ -499,6 +811,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 2,
+        outputPrice: 10,
+        cacheReadsPrice: 0.2,
+        cacheWritesPrice: 2.5,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 4,
+        outputPrice: 15,
+        cacheReadsPrice: 0.4,
+        cacheWritesPrice: 5,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "anthropic/claude-opus-5.5",
@@ -546,6 +874,20 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 2,
+        outputPrice: 6,
+        cacheReadsPrice: 0.5,
+        contextWindow: 200000,
+      },
+      {
+        inputPrice: 4,
+        outputPrice: 12,
+        cacheReadsPrice: 1,
+        contextWindow: 500000,
+      },
+    ],
   },
   {
     id: "qwen/qwen3.8-omni-flash",
@@ -607,9 +949,9 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "high",
     requiresThinking: false,
     deprecated: false,
-    inputPrice: 0.3,
-    outputPrice: 1.2,
-    cacheReadsPrice: 0.006,
+    inputPrice: 0.051,
+    outputPrice: 0.567,
+    cacheReadsPrice: 0.018,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
@@ -637,6 +979,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 10,
+        outputPrice: 50,
+        cacheReadsPrice: 1,
+        cacheWritesPrice: 12.5,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 20,
+        outputPrice: 75,
+        cacheReadsPrice: 2,
+        cacheWritesPrice: 25,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "openai/gpt-6-astra-pro",
@@ -661,6 +1019,22 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 10,
+        outputPrice: 50,
+        cacheReadsPrice: 1,
+        cacheWritesPrice: 12.5,
+        contextWindow: 272000,
+      },
+      {
+        inputPrice: 20,
+        outputPrice: 75,
+        cacheReadsPrice: 2,
+        cacheWritesPrice: 25,
+        contextWindow: 1050000,
+      },
+    ],
   },
   {
     id: "qwen/qwen3.8-max-0902",
@@ -759,7 +1133,7 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     provider: "openrouter",
     name: "Z.ai: GLM 5.3 Flash",
     contextWindow: 1048576,
-    maxOutputTokens: 131072,
+    maxOutputTokens: 943717,
     supportsTools: true,
     supportsVision: true,
     supportsReasoning: true,
@@ -770,8 +1144,8 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "max",
     requiresThinking: true,
     deprecated: false,
-    inputPrice: 0.0399,
-    outputPrice: 0.0784,
+    inputPrice: 0.15,
+    outputPrice: 0.5,
     cacheReadsPrice: 0.03,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
@@ -816,9 +1190,9 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "max",
     requiresThinking: true,
     deprecated: false,
-    inputPrice: 0.084,
-    outputPrice: 3.6,
-    cacheReadsPrice: 0.079,
+    inputPrice: 0.0699,
+    outputPrice: 1.4,
+    cacheReadsPrice: 0.0689,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
@@ -827,7 +1201,7 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     id: "qwen/qwen3.8-27b",
     provider: "openrouter",
     name: "Qwen: Qwen3.8 27B",
-    contextWindow: 1048575,
+    contextWindow: 1024000,
     maxOutputTokens: 235929,
     supportsTools: true,
     supportsVision: true,
@@ -839,9 +1213,9 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "xhigh",
     requiresThinking: false,
     deprecated: false,
-    inputPrice: 0.15,
-    outputPrice: 1.875,
-    cacheReadsPrice: 0.0375,
+    inputPrice: 0.06,
+    outputPrice: 2.2,
+    cacheReadsPrice: 0.059,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
@@ -914,13 +1288,27 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,
+    tiers: [
+      {
+        inputPrice: 2,
+        outputPrice: 6,
+        cacheReadsPrice: 0.5,
+        contextWindow: 200000,
+      },
+      {
+        inputPrice: 4,
+        outputPrice: 12,
+        cacheReadsPrice: 1,
+        contextWindow: 500000,
+      },
+    ],
   },
   {
     id: "deepseek/deepseek-v4-flash-0731",
     provider: "openrouter",
     name: "DeepSeek: DeepSeek V4 Flash 0731",
     contextWindow: 1048576,
-    maxOutputTokens: 943718,
+    maxOutputTokens: 384000,
     supportsTools: true,
     supportsVision: false,
     supportsReasoning: true,
@@ -931,9 +1319,9 @@ export const OPENROUTER_MODELS: ModelInfo[] = [
     defaultReasoningEffort: "high",
     requiresThinking: false,
     deprecated: false,
-    inputPrice: 0.0434,
-    outputPrice: 0.3,
-    cacheReadsPrice: 0.035,
+    inputPrice: 0.06,
+    outputPrice: 0.18,
+    cacheReadsPrice: 0.015,
     description:
       "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     contextWindowKnown: true,

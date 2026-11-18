@@ -3,6 +3,7 @@ import { AnthropicProvider } from "../anthropic.js";
 import { GoogleProvider } from "../google.js";
 import { GroqProvider } from "../groq.js";
 import { OpenAIProvider } from "../openai.js";
+import { QwenProvider } from "../qwen.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -11,9 +12,68 @@ const providers = [
   ["anthropic", () => new AnthropicProvider()],
   ["google", () => new GoogleProvider()],
   ["groq", () => new GroqProvider()],
+  ["qwen", () => new QwenProvider()],
 ] as const;
 
 describe("cloud model discovery", () => {
+  it("reads each native Model Studio page and keeps text-generating chat routes", async () => {
+    const fetch = vi.fn(async (url: string) => {
+      const request = new URL(url);
+      expect(request.pathname).toBe("/api/v1/models");
+      expect(request.searchParams.get("supports")).toBe("inference");
+      const page = Number(request.searchParams.get("page_no"));
+      const models =
+        page === 1
+          ? [
+              {
+                model: "qwen-live-text",
+                name: "Live text",
+                capabilities: ["TG", "Reasoning"],
+                features: ["function-calling", "cache"],
+                inference_metadata: {
+                  request_modality: ["Text", "Image"],
+                  response_modality: ["Text"],
+                },
+                model_info: { context_window: 32768, max_output_tokens: 8192 },
+              },
+            ]
+          : [{ model: "media-only", inference_metadata: { response_modality: ["Image"] } }];
+      return Response.json({ success: true, output: { total: 2, page_no: page, models } });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const provider = new QwenProvider();
+    await provider.initialize({
+      apiKey: "fixture",
+      baseUrl: "https://fixture.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    });
+    const models = await provider.refreshModels();
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({
+      id: "qwen-live-text",
+      contextWindow: 32768,
+      maxOutputTokens: 8192,
+      supportsTools: true,
+      supportsVision: true,
+      supportsReasoning: true,
+      supportsPromptCache: true,
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the configured OpenAI-compatible inventory for Qwen proxies", async () => {
+    const fetch = vi.fn(async (url: string) => {
+      expect(new URL(url).pathname).toBe("/v1/models");
+      return Response.json({ data: [{ id: "custom-chat" }] });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const provider = new QwenProvider();
+    await provider.initialize({ apiKey: "fixture", baseUrl: "https://proxy.example/v1" });
+    expect(await provider.refreshModels()).toEqual([
+      expect.objectContaining({ id: "custom-chat" }),
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it.each(providers)("cancels an in-flight %s discovery request", async (_name, create) => {
     let requestStarted: (signal: AbortSignal) => void = () => {};
     const started = new Promise<AbortSignal>((resolve) => {

@@ -1,5 +1,6 @@
 /** Refresh the offline shortlist; /model refresh openrouter discovers the complete catalog. */
 import { writeFile } from "node:fs/promises";
+import { DEFAULT_MODEL_IDS } from "../packages/provider/src/models/catalog.js";
 import { normalizeDiscoveredModels } from "../packages/provider/src/models/discovery.js";
 
 const response = await fetch("https://openrouter.ai/api/v1/models", {
@@ -11,11 +12,11 @@ if (!body || typeof body !== "object" || !("data" in body) || !Array.isArray(bod
   throw new Error("OpenRouter catalog is missing its data array");
 }
 const families =
-  /^(openai\/gpt-6|anthropic\/claude-(?:opus|sonnet|haiku)-5|anthropic\/claude-fable-5|google\/gemini-(?:4|3\.8)|deepseek\/deepseek-v4|moonshotai\/kimi-k3|minimax\/minimax-m3|mistralai\/mistral-large-4|qwen\/qwen3\.8|z-ai\/glm-5\.3|x-ai\/grok-4\.[67])/;
+  /^(openai\/gpt-6|anthropic\/claude-(?:opus|sonnet|haiku)-5|anthropic\/claude-fable-5|google\/gemini-(?:4|3\.8)|deepseek\/deepseek-v4|moonshotai\/kimi-k3|minimax\/minimax-m3|mistralai\/mistral-large-4|qwen\/qwen(?:4|3\.8)|z-ai\/glm-5\.3|x-ai\/grok-4\.[67])/;
 const models = normalizeDiscoveredModels("openrouter", body.data).filter((model) =>
   families.test(model.id)
 );
-if (models.length === 0 || !models.some((model) => model.id === "openai/gpt-6.1-sol")) {
+if (!models.some((model) => model.id === DEFAULT_MODEL_IDS.openrouter)) {
   throw new Error(
     "OpenRouter catalog is empty or missing the configured default; keeping the previous snapshot"
   );

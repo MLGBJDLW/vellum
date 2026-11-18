@@ -185,16 +185,17 @@ describe("/model command", () => {
     }
   });
 
-  it("publishes a completed explicit refresh with the command signal", async () => {
+  it("publishes an empty local inventory after a completed explicit refresh", async () => {
     const controller = new AbortController();
     discovery.refresh.mockResolvedValue([]);
     const result = await modelCommand.execute({
-      ...createMockContext(["refresh", "openai"]),
+      ...createMockContext(["refresh", "ollama"]),
       signal: controller.signal,
     });
     expect(isSuccess(result)).toBe(true);
+    if (isSuccess(result)) expect(result.message).toContain("/model refresh ollama");
     expect(discovery.refresh).toHaveBeenCalledExactlyOnceWith(controller.signal);
-    expect(discovery.update).toHaveBeenCalledExactlyOnceWith("openai", []);
+    expect(discovery.update).toHaveBeenCalledExactlyOnceWith("ollama", []);
   });
 
   describe("Scenario 1: /model (no args)", () => {
