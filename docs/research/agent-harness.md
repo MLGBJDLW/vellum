@@ -4,6 +4,16 @@ Source audit: 2026-10-29. The comparison uses upstream source code and first-par
 
 ## Upstream findings
 
+### Interrupting a silent response (November 18, 2026)
+
+Pi polls for steering again after long turn preparation. Codex passes a turn cancellation token through startup and sampling. Vellum takes its message snapshot after budget approval and lets cancellation wake an outstanding provider read. Steering continues the same task. A prompt submitted after Esc waits for the cancelled turn's final checkpoint before starting a fresh one. [Pi loop](https://github.com/earendil-works/pi/blob/main/packages/agent/src/agent-loop.ts) · [Codex regular task](https://github.com/openai/codex/blob/main/codex-rs/core/src/tasks/regular.rs)
+
+Hermes records interruptions while waiting for the model. DeepSeek Harness keeps the cancellation signal with the active turn, and Zed asks the running turn to cancel. OpenHarness routes pane input through a single controller. Vellum keeps input, cancellation and tool receipts in its existing loop. It displays the wait for a response until the provider supplies content. [Hermes conversation loop](https://github.com/NousResearch/hermes-agent/blob/main/agent/conversation_loop.py) · [DeepSeek Harness driver](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/core/agent-loop/src/agent.ts) · [Zed thread](https://github.com/zed-industries/zed/blob/main/crates/agent/src/thread.rs) · [OpenHarness input](https://github.com/autonomous-ai/openharness/blob/main/cli/src/core/input.ts)
+
+In a Windows terminal running the built CLI against a local HTTP fixture, both the first and second tasks received headers followed by silence. Steering closed the first connection and produced an answer to the correction. Esc closed the third connection, and the next prompt received its own answer. The agent-loop regression also exercises an iterator that ignores transport cancellation and delivers its old data late.
+
+### Earlier source audit
+
 | Project and inspected revision | Relevant implementation | Application to Vellum |
 | --- | --- | --- |
 | Pi — `e65b3b88c08412bb8ffbd21fb5dc5756064a6e5a` | Its agent loop has an inner tool/steering loop and an outer follow-up decision. Turn preparation and completion callbacks share the same context and cancellation signal. [Source](https://github.com/earendil-works/pi/blob/e65b3b88c08412bb8ffbd21fb5dc5756064a6e5a/packages/agent/src/agent-loop.ts) | Use one iterative pump for model calls, tool observations, retries and verification feedback. A successful tool batch requests the next iteration without retaining a recursive promise chain. |
