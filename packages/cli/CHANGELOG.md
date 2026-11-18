@@ -1,5 +1,15 @@
 # @butlerw/vellum
 
+## 0.10.0
+
+### Minor Changes
+
+- Steer a silent model request before its first event, or press Esc and send a fresh prompt while the old connection closes. Keep project instructions, tool restrictions and partial responses across interruptions. The terminal shows the wait for a provider separately from received reasoning and draws active tools with a three-cell writing quill. Explicit Unicode, ASCII, reduced motion and monochrome settings are supported.
+
+### Patch Changes
+
+- Refresh the model catalog across all 17 adapters. Add current GPT-6.2, Qwen, GLM and Grok routes, correct legacy identifiers, and use native discovery where the provider exposes an account or local inventory. Request visible Claude adaptive thinking summaries when enabled. Preserve the previous local inventory on discovery failure and clear removed models after a successful empty response. Long-context cost estimates use the published input, output and cache rates for the matching pricing tier.
+
 ## 0.9.0
 
 ### Minor Changes
