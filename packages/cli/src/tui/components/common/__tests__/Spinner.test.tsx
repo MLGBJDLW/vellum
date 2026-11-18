@@ -149,7 +149,7 @@ describe("Vellum activity ink mark", () => {
         </Box>
       </ThemeProvider>
     );
-    expect(screen.lastFrame()).toContain(`${SPINNER_FRAMES[0]} [*] Using read...`);
+    expect(screen.lastFrame()).toContain(`${SPINNER_FRAMES[0]} Using read...`);
     for (const line of (screen.lastFrame() ?? "").split("\n"))
       expect(stringWidth(line)).toBeLessThanOrEqual(24);
   });

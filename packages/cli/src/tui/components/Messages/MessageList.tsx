@@ -94,7 +94,7 @@ export interface MessageListProps {
 
   /**
    * Whether the agent is currently streaming a response.
-   * Shows thinking indicator when true and no content has arrived.
+   * Shows the response wait indicator when true and no content has arrived.
    * @default false
    */
   readonly isStreaming?: boolean;
@@ -152,7 +152,7 @@ export interface MessageListProps {
 
   /**
    * @deprecated Use `isStreaming` instead. This prop is kept for backward compatibility.
-   * Shows thinking indicator when true and no content has arrived.
+   * Shows the response wait indicator when true and no content has arrived.
    */
   readonly isLoading?: boolean;
 
@@ -397,18 +397,18 @@ const InlineToolCall = memo(function InlineToolCall({
 });
 
 /**
- * ThinkingIndicator component.
- * Shows an animated spinner with "Thinking..." text while the agent is processing
- * and before any streaming content has arrived.
+ * WaitingIndicator component.
+ * Shows the wait for a provider response
+ * before any streaming content has arrived.
  *
  * Uses StreamingIndicator for consistent styling across all streaming phases.
  */
-const ThinkingIndicator = memo(function ThinkingIndicator({ startedAt }: { startedAt: number }) {
+const WaitingIndicator = memo(function WaitingIndicator({ startedAt }: { startedAt: number }) {
   // Use StreamingIndicator for consistent styling
   return (
     <Box marginBottom={1} paddingX={1}>
       <StreamingIndicator
-        phase="thinking"
+        phase="waiting_response"
         startedAt={startedAt}
         showPhaseTime
         narrow
@@ -710,12 +710,18 @@ const MessageList = memo(function MessageList({
     return unsubscribe;
   }, []);
 
-  // Determine if we should show the thinking indicator:
+  // Determine if we should show the waiting indicator:
   // - Agent is streaming (processing/waiting)
   // - AND no pending content has arrived yet
   // NOTE: Hoisted here to avoid TDZ error with scrollViewportHeight calculation
-  const hasPendingContent = pendingMessage?.content && pendingMessage.content.length > 0;
-  const showThinkingIndicator = isLoadingInternal && !hasPendingContent;
+  const latest = messages.at(-1);
+  const hasPendingContent =
+    pendingMessage?.content ||
+    pendingMessage?.thinking ||
+    pendingMessage?.toolCalls?.length ||
+    (latest?.role === "tool_group" &&
+      latest.toolCalls?.some((call) => call.status === "pending" || call.status === "running"));
+  const showWaitingIndicator = isLoadingInternal && !hasPendingContent;
   const hasActiveStreaming = Boolean(
     pendingMessage?.isStreaming || messages.some((message) => message.isStreaming)
   );
@@ -785,7 +791,7 @@ const MessageList = memo(function MessageList({
     return undefined;
   }, [effectiveMaxHeight, shouldConstrainHeight, availableHeight]);
 
-  const thinkingIndicatorHeight = showThinkingIndicator ? 3 : 0;
+  const waitingIndicatorHeight = showWaitingIndicator ? 3 : 0;
   const [following, setFollowing] = useState(autoScroll);
   const [unreadCount, setUnreadCount] = useState(0);
   const [thinkingToggle, setThinkingToggle] = useState<{
@@ -1035,7 +1041,7 @@ const MessageList = memo(function MessageList({
   // constrained-height path.
   const listHeight =
     computedMaxHeight !== undefined
-      ? Math.max(1, computedMaxHeight - thinkingIndicatorHeight - (!following ? 1 : 0))
+      ? Math.max(1, computedMaxHeight - waitingIndicatorHeight - (!following ? 1 : 0))
       : undefined;
 
   return (
@@ -1060,8 +1066,8 @@ const MessageList = memo(function MessageList({
           </Box>
         </Box>
 
-        {/* Thinking indicator - shows while agent is processing before first token */}
-        {showThinkingIndicator && <ThinkingIndicator startedAt={taskClock.current.startedAt} />}
+        {/* Waiting for the first visible event */}
+        {showWaitingIndicator && <WaitingIndicator startedAt={taskClock.current.startedAt} />}
 
         {!following && (
           <Box flexShrink={0}>
