@@ -852,11 +852,13 @@ describe("audited model catalog", () => {
     ]);
     const id = "openai/gpt-6.2-sol";
     expect(normalizeDiscoveredModels("openrouter", [{ id }])[0]?.tiers).toHaveLength(2);
-    expect(
-      normalizeDiscoveredModels("openrouter", [
-        { id, pricing: { prompt: "0", completion: "0" } },
-      ])[0]?.tiers
-    ).toBeUndefined();
+    const [flat] = normalizeDiscoveredModels("openrouter", [
+      { id, pricing: { prompt: "0", completion: "0" } },
+    ]);
+    expect(flat).toMatchObject({ inputPrice: 0, outputPrice: 0, supportsPromptCache: false });
+    expect(flat?.tiers).toBeUndefined();
+    expect(flat?.cacheReadsPrice).toBeUndefined();
+    expect(flat?.cacheWritesPrice).toBeUndefined();
   });
 
   it("uses xAI discovery metadata and excludes sparse media generation routes", () => {

@@ -129,6 +129,9 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
     const outputModalities = architecture.output_modalities ?? data.output_modalities;
     const topProvider = record(data.top_provider);
     const pricing = record(data.pricing);
+    const gatewayPriceList =
+      provider === "openrouter" && "prompt" in pricing && "completion" in pricing;
+    const previousPricing = gatewayPriceList ? undefined : known;
     const reasoning = record(data.reasoning);
     const localReasoning = record(capabilities.reasoning);
     const localReasoningOptions = Array.isArray(localReasoning.allowed_options)
@@ -265,7 +268,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
         (price(pricing.input_cache_read) !== undefined ||
           price(pricing.input_cache_write) !== undefined ||
           (provider === "xai" && xaiPrice(data.cached_prompt_text_token_price) !== undefined) ||
-          known?.supportsPromptCache === true),
+          previousPricing?.supportsPromptCache === true),
       ...(Array.isArray(data.supported_parameters)
         ? { supportsSampling: supported.includes("temperature") || supported.includes("top_p") }
         : {}),
@@ -295,23 +298,23 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       inputPrice:
         price(pricing.prompt) ??
         (provider === "xai" ? xaiPrice(data.prompt_text_token_price) : undefined) ??
-        known?.inputPrice,
+        previousPricing?.inputPrice,
       outputPrice:
         price(pricing.completion) ??
         (provider === "xai" ? xaiPrice(data.completion_text_token_price) : undefined) ??
-        known?.outputPrice,
+        previousPricing?.outputPrice,
       cacheReadsPrice:
         price(pricing.input_cache_read) ??
         (provider === "xai" ? xaiPrice(data.cached_prompt_text_token_price) : undefined) ??
-        known?.cacheReadsPrice,
-      cacheWritesPrice: price(pricing.input_cache_write) ?? known?.cacheWritesPrice,
+        previousPricing?.cacheReadsPrice,
+      cacheWritesPrice: price(pricing.input_cache_write) ?? previousPricing?.cacheWritesPrice,
       description:
         known?.description ??
         "Discovered from provider. Unreported capabilities, limits and pricing require provider documentation.",
     };
     // A priced gateway record supplies the current schedule, including routes
     // which removed their old overrides. Sparse proxies can still return IDs only.
-    if (provider === "openrouter" && Object.keys(pricing).length > 0) {
+    if (gatewayPriceList || (provider === "openrouter" && "overrides" in pricing)) {
       model.tiers = openRouterContextTiers(pricing, model);
     }
     result.set(id, model);
