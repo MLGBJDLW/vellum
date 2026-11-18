@@ -241,6 +241,53 @@ describe("AgentLoop Integration (T034)", () => {
       expect(complete).toHaveBeenCalledTimes(1);
     });
 
+    it.each(["steer", "cancel"] as const)(
+      "releases a silent provider read on %s before the first event",
+      async (action) => {
+        const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+        let read!: () => void;
+        const reading = new Promise<void>((resolve) => {
+          read = resolve;
+        });
+        let release!: () => void;
+        const upstream = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        vi.mocked(LLM.stream)
+          .mockImplementationOnce(async function* () {
+            read();
+            await upstream;
+            yield { type: "text", content: "Late original answer" };
+          })
+          .mockImplementationOnce(async function* () {
+            yield { type: "text", content: "Updated answer" };
+            yield { type: "done", stopReason: "end_turn" };
+          });
+        loop.addMessage(createSessionMessage("user", "Original task"));
+        const settled = vi.fn();
+        const run = loop.run().then(settled);
+        await reading;
+        try {
+          if (action === "steer") loop.steer(createSessionMessage("user", "Correction"));
+          else loop.cancel("user_escape");
+          await vi.waitFor(() => expect(settled).toHaveBeenCalledOnce(), { timeout: 1000 });
+        } finally {
+          release();
+          await run;
+        }
+        if (action === "cancel") {
+          loop.addMessage(createSessionMessage("user", "Correction"));
+          await loop.run();
+        }
+        expect(LLM.stream).toHaveBeenCalledTimes(2);
+        expect(JSON.stringify(vi.mocked(LLM.stream).mock.calls[1]?.[0].messages)).toContain(
+          "Correction"
+        );
+        expect(loop.getPendingSteeringCount()).toBe(0);
+        expect(JSON.stringify(loop.getMessages())).not.toContain("Late original answer");
+      }
+    );
+
     it.each([false, true])(
       "interrupts an unfinished thinking stream immediately for steering (processor=%s)",
       async (useStreamProcessor) => {
@@ -390,12 +437,20 @@ describe("AgentLoop Integration (T034)", () => {
             },
           ]) as ReturnType<typeof LLM.stream>
         );
+        const terminated = vi.fn();
         const loop = new AgentLoop({
           ...config,
           useStreamProcessor,
           maxRetries: 0,
           enableEvidencePack: false,
+          onMessagesCheckpoint: async () => {
+            expect(terminated).toHaveBeenCalledWith(
+              "error",
+              expect.objectContaining({ shouldTerminate: true })
+            );
+          },
         });
+        loop.on("terminated", terminated);
         const complete = vi.fn();
         const error = vi.fn();
         loop.on("complete", complete);
@@ -1021,6 +1076,51 @@ describe("AgentLoop Integration (T034)", () => {
   });
 
   describe("Cancellation", () => {
+    it("dismisses an active tool approval and accepts the next prompt", async () => {
+      vi.mocked(mockPermissionChecker.checkPermission).mockResolvedValue("ask");
+      const execute = vi.fn(async () => ({ success: true as const, output: "ok" }));
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "work",
+          description: "Work requiring approval",
+          parameters: z.object({}),
+          kind: "read",
+        },
+        execute,
+      });
+      vi.mocked(LLM.stream)
+        .mockImplementationOnce(async function* () {
+          yield { type: "toolCall", id: "call-approval", name: "work", input: {} };
+          yield { type: "done", stopReason: "tool_use" };
+        })
+        .mockImplementationOnce(async function* () {
+          yield { type: "text", content: "Fresh response" };
+          yield { type: "done", stopReason: "end_turn" };
+        });
+      const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+      const dismissed = vi.fn();
+      loop.on("permissionDenied", dismissed);
+      loop.once("permissionRequired", () => void loop.cancel("user_ctrl_c"));
+
+      loop.addMessage(createSessionMessage("user", "Use the tool"));
+      await loop.run();
+      expect(dismissed).toHaveBeenCalledExactlyOnceWith(
+        "call-approval",
+        "work",
+        "Operation cancelled"
+      );
+      expect(loop.getPendingPermission()).toBeNull();
+      expect(execute).not.toHaveBeenCalled();
+
+      loop.addMessage(createSessionMessage("user", "Respond without tools"));
+      await loop.run();
+      expect(vi.mocked(LLM.stream).mock.calls[1]?.[0].messages.at(-1)).toEqual({
+        role: "user",
+        content: "Respond without tools",
+      });
+      expect(loop.getMessages().at(-1)?.parts).toEqual([{ type: "text", text: "Fresh response" }]);
+    });
+
     it("cancels during streaming", async () => {
       // Using underscore prefix for unused variable to satisfy lint
       let _yieldCount = 0;

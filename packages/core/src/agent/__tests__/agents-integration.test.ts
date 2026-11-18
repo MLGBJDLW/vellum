@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionAgentsIntegration } from "../../context/agents/session-integration.js";
+import { createUserMessage, LLM, SessionParts } from "../../session/index.js";
 import { AgentLoop, type AgentLoopConfig } from "../loop.js";
 import { MODE_CONFIGS } from "../modes.js";
 
@@ -19,7 +20,7 @@ describe("AGENTS.md Integration", () => {
   });
 
   afterEach(async () => {
-    await loop?.cancel("test cleanup");
+    await loop?.cancel("test cleanup", { closeSession: true });
     loop = undefined;
     vi.restoreAllMocks();
     await rm(tempDir, { recursive: true, force: true });
@@ -82,6 +83,30 @@ Test instruction for agents.
     await initialize.mock.results[0]?.value;
     const integration = initialize.mock.contexts[0] as SessionAgentsIntegration | undefined;
     expect(integration?.getConfig()?.instructions).toContain("Test instruction");
+    await loop.cancel("user_escape");
+    expect(integration?.getState()).toBe("ready");
+    expect(integration?.getSystemPromptStrings().join("\n")).toContain("Test instruction");
+    expect(integration?.getToolFilter().isAllowed("unlisted_tool")).toBe(false);
+    const request = vi
+      .spyOn(LLM, "stream")
+      .mockImplementationOnce(async function* () {
+        yield { type: "toolCall", id: "blocked", name: "unlisted_tool", input: {} };
+        yield { type: "done", stopReason: "tool_use" };
+      })
+      .mockImplementation(async function* () {
+        yield { type: "text", content: "Done" };
+        yield { type: "done", stopReason: "end_turn" };
+      });
+    const blocked = vi.fn();
+    loop.on("error", blocked);
+    loop.addMessage(createUserMessage([SessionParts.text("Continue after Esc")]));
+    await loop.run();
+    expect(request.mock.calls[0]?.[0].system).toContain("Test instruction");
+    expect(blocked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining("not allowed by AGENTS.md"),
+      })
+    );
   });
 
   it("should work when cwd is not provided", async () => {

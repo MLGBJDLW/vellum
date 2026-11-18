@@ -26,7 +26,18 @@ const asRecord = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
+function inventoryRecords(value: unknown, idField: string): Record<string, unknown>[] {
+  if (!Array.isArray(value)) throw new Error("Missing model inventory");
+  return value.map((item) => {
+    const record = asRecord(item);
+    const id = record[idField];
+    if (typeof id !== "string" || !id.trim()) throw new Error("Missing model identifier");
+    return record;
+  });
+}
+
 function discoveryDeadline(signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(new DOMException("Model discovery timed out", "TimeoutError")),
@@ -59,7 +70,7 @@ function discoveryDeadline(signal?: AbortSignal) {
  * ```
  */
 export abstract class LocalProvider extends OpenAICompatibleProvider {
-  abstract override listModelsAsync(signal?: AbortSignal): Promise<ModelInfo[]>;
+  abstract override refreshModels(signal?: AbortSignal): Promise<ModelInfo[]>;
 
   private configuredBaseUrl?: string;
   private discoveryHeaders: Record<string, string> = {};
@@ -120,8 +131,14 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
     this.discoveryHeaders = Object.fromEntries(headers);
   }
 
-  override async refreshModels(signal?: AbortSignal): Promise<ModelInfo[]> {
-    return this.listModelsAsync(signal);
+  // Best-effort listing remains useful to callers probing for a local server.
+  // Explicit refresh must distinguish a successful empty inventory from a failure.
+  override async listModelsAsync(signal?: AbortSignal): Promise<ModelInfo[]> {
+    try {
+      return await this.refreshModels(signal);
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -218,24 +235,6 @@ export abstract class LocalProvider extends OpenAICompatibleProvider {
 // =============================================================================
 
 /**
- * Response type for Ollama /api/tags endpoint
- */
-interface OllamaTagsResponse {
-  models: Array<{
-    name: string;
-    model: string;
-    modified_at: string;
-    size: number;
-    digest: string;
-    details?: {
-      parameter_size?: string;
-      quantization_level?: string;
-      family?: string;
-    };
-  }>;
-}
-
-/**
  * Ollama LLM Provider
  *
  * Connects to locally-running Ollama server for inference.
@@ -294,7 +293,7 @@ export class OllamaProvider extends LocalProvider {
    *
    * @returns Promise resolving to array of ModelInfo
    */
-  async listModelsAsync(signal?: AbortSignal): Promise<ModelInfo[]> {
+  async refreshModels(signal?: AbortSignal): Promise<ModelInfo[]> {
     const deadline = discoveryDeadline(signal);
     try {
       // Ollama uses /api/tags for listing models (not OpenAI-compatible)
@@ -305,18 +304,16 @@ export class OllamaProvider extends LocalProvider {
 
       if (!response.ok) {
         await response.body?.cancel();
-        console.warn(
-          `Ollama /api/tags returned status ${response.status}, returning empty model list`
-        );
-        return [];
+        throw new Error(`Ollama /api/tags returned HTTP ${response.status}`);
       }
 
-      const data = (await response.json()) as OllamaTagsResponse;
-
-      const records: Record<string, unknown>[] = data.models.map((model) => ({
-        ...model,
-        id: model.name,
-      }));
+      const data = asRecord(await response.json());
+      const records: Record<string, unknown>[] = inventoryRecords(data.models, "name").map(
+        (model) => ({
+          ...model,
+          id: model.name,
+        })
+      );
       let next = 0;
       // Metadata requests share one deadline and at most four connections, regardless of catalog size.
       await Promise.all(
@@ -356,18 +353,10 @@ export class OllamaProvider extends LocalProvider {
           }
         })
       );
-      deadline.signal.throwIfAborted();
+      // /api/tags has returned the complete inventory. A deadline during
+      // optional inspection leaves unreported capabilities unknown.
+      signal?.throwIfAborted();
       return normalizeDiscoveredModels("ollama", records);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      if (errorMessage.includes("ECONNREFUSED") || errorMessage.includes("fetch failed")) {
-        console.warn("Ollama is not running. Start it with: ollama serve");
-      } else {
-        console.warn(`Failed to list Ollama models: ${errorMessage}`);
-      }
-
-      return [];
     } finally {
       deadline.dispose();
     }
@@ -480,7 +469,7 @@ export class LMStudioProvider extends LocalProvider {
    *
    * @returns Promise resolving to array of ModelInfo
    */
-  async listModelsAsync(signal?: AbortSignal): Promise<ModelInfo[]> {
+  async refreshModels(signal?: AbortSignal): Promise<ModelInfo[]> {
     const deadline = discoveryDeadline(signal);
     try {
       // Native bulk metadata reports tool training, vision and configured instance context.
@@ -493,11 +482,10 @@ export class LMStudioProvider extends LocalProvider {
       );
       if (native.ok) {
         const payload = asRecord(await native.json());
-        if (!Array.isArray(payload.models))
-          throw new Error("LM Studio model response is missing models");
-        const records = payload.models.flatMap((value) => {
-          const model = asRecord(value);
-          if (model.type !== "llm" || typeof model.key !== "string") return [];
+        deadline.signal.throwIfAborted();
+        const records = inventoryRecords(payload.models, "key").flatMap((model) => {
+          if (typeof model.type !== "string") throw new Error("Missing LM Studio model type");
+          if (model.type !== "llm") return [];
           const instances = Array.isArray(model.loaded_instances) ? model.loaded_instances : [];
           const loaded = instances.flatMap((value) => {
             const instance = asRecord(value);
@@ -529,32 +517,12 @@ export class LMStudioProvider extends LocalProvider {
 
       if (!response.ok) {
         await response.body?.cancel();
-        console.warn(
-          `LM Studio /models returned status ${response.status}, returning empty model list`
-        );
-        return [];
+        throw new Error(`LM Studio /models returned HTTP ${response.status}`);
       }
 
-      const data = (await response.json()) as {
-        data: Array<{
-          id: string;
-          object: string;
-          created?: number;
-          owned_by?: string;
-        }>;
-      };
-
-      return normalizeDiscoveredModels("lmstudio", data.data);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      if (errorMessage.includes("ECONNREFUSED") || errorMessage.includes("fetch failed")) {
-        console.warn("LM Studio is not running. Start LM Studio and load a model.");
-      } else {
-        console.warn(`Failed to list LM Studio models: ${errorMessage}`);
-      }
-
-      return [];
+      const data = asRecord(await response.json());
+      deadline.signal.throwIfAborted();
+      return normalizeDiscoveredModels("lmstudio", inventoryRecords(data.data, "id"));
     } finally {
       deadline.dispose();
     }

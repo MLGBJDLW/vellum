@@ -84,7 +84,7 @@ describe("Graceful Shutdown Handler (T024)", () => {
 
       const result = await handler.shutdown("SIGINT");
 
-      expect(mockAgentLoop.cancel).toHaveBeenCalledWith("Received SIGINT");
+      expect(mockAgentLoop.cancel).toHaveBeenCalledWith("Received SIGINT", { closeSession: true });
       expect(result.success).toBe(true);
       expect(result.stateSaved).toBe(true);
       expect(result.exitCode).toBe(0);

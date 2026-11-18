@@ -1,5 +1,12 @@
 # @vellum/sandbox
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [`049d993`]:
+  - @vellum/shared@0.1.2
+
 ## 0.1.2
 
 ### Patch Changes

@@ -624,7 +624,14 @@ export class AnthropicProvider implements Provider {
     const thinkingConfig = this.resolveThinkingConfig(params);
     if (modelInfo.thinkingMode === "adaptive" && (thinkingConfig || modelInfo.requiresThinking)) {
       Object.assign(request, {
-        thinking: { type: "adaptive" },
+        thinking: {
+          type: "adaptive",
+          // Current Claude models omit visible thinking unless the client opts in.
+          display:
+            params.thinking?.enabled === false || params.thinking?.reasoningEffort === "none"
+              ? "omitted"
+              : "summarized",
+        },
         output_config: {
           effort:
             this.resolveReasoningEffort(params, modelInfo) ??

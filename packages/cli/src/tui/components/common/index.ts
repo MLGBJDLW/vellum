@@ -90,7 +90,6 @@ export {
 } from "./Spinner.js";
 // StreamingIndicator (Context-aware streaming phase indicator)
 export {
-  PHASE_ICONS,
   PHASE_LABELS,
   StreamingIndicator,
   type StreamingIndicatorProps,

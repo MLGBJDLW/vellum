@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { BaichuanProvider } from "../baichuan.js";
 import { DeepSeekProvider } from "../deepseek.js";
 import { MistralProvider } from "../mistral.js";
+import {
+  MODEL_CATALOG,
+  normalizeDiscoveredModels,
+  updateDiscoveredModels,
+} from "../models/index.js";
 import { OpenAICompatibleProvider } from "../openai-compat.js";
 import { QwenProvider } from "../qwen.js";
 import type { CompletionMessage, CompletionParams, StreamEvent } from "../types.js";
+import { YiProvider } from "../yi.js";
+import { ZhipuProvider } from "../zhipu.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -64,62 +72,226 @@ const toolHistory: CompletionMessage[] = [
   },
 ];
 
+it.each([
+  {
+    provider: new YiProvider(),
+    inventory: [{ id: "yi-lightning", context_window: 65_536 }, { id: "yi-id-only" }],
+    limits: [
+      ["yi-lightning", 32_768],
+      ["yi-vision-v2", undefined],
+      ["yi-id-only", 32_768],
+      ["yi-private", 32_768],
+    ],
+  },
+  {
+    provider: new BaichuanProvider(),
+    inventory: [
+      { id: "Baichuan4", max_completion_tokens: 4000 },
+      { id: "custom", max_tokens: 3000 },
+    ],
+    limits: [
+      ["Baichuan4", 4000],
+      ["custom", 3000],
+      ["Baichuan4-Turbo", 2048],
+      ["Baichuan-private", 32_768],
+    ],
+  },
+] as const)(
+  "uses refreshed, bundled and custom output limits for $provider.providerName",
+  async ({ provider, inventory, limits }) => {
+    const key = provider.providerName;
+    const original = MODEL_CATALOG.get(key);
+    if (!original) throw new Error(`Missing catalog for ${key}`);
+    const fetch = mockCompletion(false, { role: "assistant", content: "Done" });
+    try {
+      updateDiscoveredModels(key, normalizeDiscoveredModels(key, [...inventory]));
+      await provider.initialize({ apiKey: "fixture" });
+      for (const [model, expected] of limits) {
+        fetch.mockClear();
+        await provider.complete({
+          model,
+          messages: [{ role: "user", content: "Hi" }],
+          maxTokens: 32_768,
+        });
+        expect(requestBody(fetch).max_tokens, model).toBe(expected);
+      }
+    } finally {
+      updateDiscoveredModels(key, original);
+    }
+  }
+);
+
 describe.each([false, true])("real provider wire compatibility (stream=%s)", (stream) => {
-  it.each(["qwen4-max-preview", "qwen3.8-max", "qwen3.8-flash"])(
-    "keeps %s reasoning controls exclusive and retains tool-turn reasoning",
-    async (model) => {
+  it.each([
+    ["qwen-long", new QwenProvider()],
+    ["glm-4.5v", new ZhipuProvider()],
+    ["Baichuan3-Turbo-128k", new BaichuanProvider()],
+  ] as const)(
+    "preserves prior tool turns as text when switching to %s",
+    async (model, provider) => {
       const fetch = mockCompletion(stream, { role: "assistant", content: "Done" });
-      const provider = new QwenProvider();
-      await provider.initialize({
-        apiKey: "fixture",
-        baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+      await invoke(
+        provider,
+        {
+          model,
+          messages: toolHistory,
+          extraBody: { tools: [], tool_choice: "auto", parallel_tool_calls: true },
+        },
+        stream
+      );
+      const request = requestBody(fetch);
+      expect(request).not.toHaveProperty("tools");
+      expect(request).not.toHaveProperty("tool_choice");
+      expect(request).not.toHaveProperty("parallel_tool_calls");
+      expect(request.messages).toContainEqual({
+        role: "user",
+        content: "Tool result (call_sameprefix_two)\nSecond",
       });
-      const params: CompletionParams = {
-        model,
-        messages: [
-          {
-            role: "assistant",
-            content: [{ type: "tool_use", id: "call_a", name: "lookup", input: {} }],
-            providerMetadata: { provider: "qwen", model, reasoningContent: "opaque" },
-          },
-          {
-            role: "user",
-            content: [{ type: "tool_result", toolUseId: "call_a", content: "Found" }],
-          },
-        ],
-        thinking: { enabled: true, reasoningEffort: "low", budgetTokens: 4096 },
-        extraBody: { reasoning_effort: "xhigh" },
-        maxTokens: 65536,
-      };
-      const consume = async (request: CompletionParams) => {
-        if (!stream) return provider.complete(request);
-        for await (const _ of provider.stream(request)) {
-          /* consume */
-        }
-      };
-      await consume(params);
-      expect(requestBody(fetch)).toMatchObject({
-        enable_thinking: true,
-        thinking_budget: 4096,
-        max_tokens: 65536,
-        messages: [{ role: "assistant", reasoning_content: "opaque" }, { role: "tool" }],
+      expect(request.messages).toContainEqual({
+        role: "assistant",
+        content: expect.stringContaining("Tool call lookup (callsamep)\n{}"),
       });
-      expect(requestBody(fetch)).not.toHaveProperty("reasoning_effort");
-      fetch.mockClear();
-      await consume({
-        ...params,
-        thinking: { enabled: true, reasoningEffort: "low" },
-        extraBody: {},
-      });
-      expect(requestBody(fetch)).toMatchObject({ enable_thinking: true, reasoning_effort: "low" });
-      expect(requestBody(fetch)).not.toHaveProperty("thinking_budget");
-      fetch.mockClear();
-      await consume({ ...params, thinking: { enabled: true, reasoningEffort: "none" } });
-      expect(requestBody(fetch)).toMatchObject({ enable_thinking: false });
-      expect(requestBody(fetch)).not.toHaveProperty("reasoning_effort");
-      expect(requestBody(fetch)).not.toHaveProperty("thinking_budget");
+      expect(request.messages).not.toContainEqual(expect.objectContaining({ role: "tool" }));
     }
   );
+
+  it.each([
+    "qwen4-max",
+    "qwen4-max-preview",
+    "qwen3.8-max",
+    "qwen3.8-flash",
+    "qwen3.8-27b",
+    "qwen3.8-2.4t-a95b",
+  ])("keeps %s reasoning controls exclusive and retains tool-turn reasoning", async (model) => {
+    const fetch = mockCompletion(stream, { role: "assistant", content: "Done" });
+    const provider = new QwenProvider();
+    await provider.initialize({
+      apiKey: "fixture",
+      baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    });
+    const params: CompletionParams = {
+      model,
+      messages: [
+        {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "call_a", name: "lookup", input: {} }],
+          providerMetadata: { provider: "qwen", model, reasoningContent: "opaque" },
+        },
+        {
+          role: "user",
+          content: [{ type: "tool_result", toolUseId: "call_a", content: "Found" }],
+        },
+      ],
+      thinking: { enabled: true, reasoningEffort: "low", budgetTokens: 4096 },
+      extraBody: { reasoning_effort: "xhigh" },
+      maxTokens: 65536,
+    };
+    const consume = async (request: CompletionParams) => {
+      if (!stream) return provider.complete(request);
+      for await (const _ of provider.stream(request)) {
+        /* consume */
+      }
+    };
+    await consume(params);
+    expect(requestBody(fetch)).toMatchObject({
+      enable_thinking: true,
+      thinking_budget: 4096,
+      max_tokens: 65536,
+      messages: [{ role: "assistant", reasoning_content: "opaque" }, { role: "tool" }],
+    });
+    expect(requestBody(fetch)).not.toHaveProperty("reasoning_effort");
+    fetch.mockClear();
+    await consume({
+      ...params,
+      thinking: { enabled: true, reasoningEffort: "low" },
+      extraBody: {},
+    });
+    expect(requestBody(fetch)).toMatchObject({ enable_thinking: true, reasoning_effort: "low" });
+    expect(requestBody(fetch)).not.toHaveProperty("thinking_budget");
+    fetch.mockClear();
+    await consume({ ...params, thinking: { enabled: true, reasoningEffort: "none" } });
+    expect(requestBody(fetch)).toMatchObject({ enable_thinking: false });
+    expect(requestBody(fetch)).not.toHaveProperty("reasoning_effort");
+    expect(requestBody(fetch)).not.toHaveProperty("thinking_budget");
+  });
+
+  it("applies output budgets to the selected route and thinking mode", async () => {
+    const fetch = mockCompletion(stream, { role: "assistant", content: "Done" });
+    const messages: CompletionMessage[] = [{ role: "user", content: "Hello" }];
+    await invoke(
+      new ZhipuProvider(),
+      { model: "glm-5.2", messages, thinking: { enabled: false } },
+      stream
+    );
+    expect(requestBody(fetch).thinking).toEqual({ type: "disabled" });
+    fetch.mockClear();
+    await invoke(
+      new ZhipuProvider(),
+      { model: "glm-5.3", messages, thinking: { enabled: false } },
+      stream
+    );
+    expect(requestBody(fetch).thinking).toEqual({ type: "enabled" });
+    fetch.mockClear();
+    await invoke(
+      new QwenProvider(),
+      { model: "qwen4-max", messages, maxTokens: 262_144, thinking: { enabled: false } },
+      stream
+    );
+    expect(requestBody(fetch)).toMatchObject({ enable_thinking: false, max_tokens: 131_072 });
+    fetch.mockClear();
+    await invoke(new YiProvider(), { model: "yi-lightning", messages, maxTokens: 32_768 }, stream);
+    expect(requestBody(fetch)).not.toHaveProperty("max_tokens");
+    fetch.mockClear();
+    await invoke(new BaichuanProvider(), { model: "Baichuan4-Turbo", messages }, stream);
+    expect(requestBody(fetch)).toMatchObject({ max_tokens: 2048 });
+    fetch.mockClear();
+    await invoke(
+      new BaichuanProvider(),
+      {
+        model: "Baichuan-M3",
+        messages,
+        thinking: { enabled: true, budgetTokens: 8192 },
+        maxTokens: 4096,
+      },
+      stream
+    );
+    expect(requestBody(fetch)).toMatchObject({
+      thinking: { budget_tokens: 4095 },
+      max_tokens: 4096,
+    });
+    fetch.mockClear();
+    await invoke(
+      new BaichuanProvider(),
+      {
+        model: "Baichuan-M3-Plus",
+        messages: [{ role: "system", content: "Be concise." }, ...toolHistory],
+        maxTokens: 1024,
+        tools: [
+          {
+            name: "lookup",
+            description: "Look up a result",
+            inputSchema: { type: "object", properties: {} },
+          },
+        ],
+      },
+      stream
+    );
+    const medicalRequest = requestBody(fetch);
+    expect(medicalRequest).not.toHaveProperty("tools");
+    expect(medicalRequest.messages).toEqual([
+      { role: "user", content: "Be concise." },
+      { role: "user", content: "Look up both" },
+      {
+        role: "assistant",
+        content:
+          "Tool call lookup (call_sameprefix_one)\n{}\n\nTool call lookup (call_sameprefix_two)\n{}\n\nTool call lookup (callsamep)\n{}",
+      },
+      { role: "user", content: "Tool result (call_sameprefix_one)\nFirst" },
+      { role: "user", content: "Tool result (call_sameprefix_two)\nSecond" },
+      { role: "user", content: "Tool result (callsamep)\nThird" },
+      { role: "user", content: "Continue" },
+    ]);
+  });
 
   it.each(["deepseek-flash", "deepseek-v4-pro"])(
     "honors the documented low reasoning effort and 384Ki output limit for %s",

@@ -85,7 +85,9 @@ Responses, tool results, and streaming text share one scrollable viewport. PageU
 
 Set `VELLUM_REDUCED_MOTION=1` to disable decorative clock animations and skip the startup transition. Loading states remain visible. Scrollbar feedback only animates while active, and completed tool rows and text inputs do not subscribe to animation frames.
 
-Active tools, thinking, and loading share Vellum's ink mark: `╲·╱ → ╲•╱ → ╲◆╱ → ╲•╱`. Its folded-page V and pulsing ink drop echo the existing parchment and manuscript identity. Only the three-cell mark moves; operation names remain readable in the theme's ink color. All marks use the existing shared clock, with no separate spinner timers or animated label gradients. `VELLUM_ICONS=ascii` selects an equally sized ASCII mark; reduced motion keeps a still mark, and `NO_COLOR` removes its color. The footer keeps each mode and agent level in one theme-owned color.
+Active tool calls use Vellum's writing quill. The nib draws a short ink stroke and lifts inside three fixed terminal cells. The label stays in place on narrow screens. All quills use a shared clock. Set `VELLUM_ICONS=ascii` for the plain-text stroke, `VELLUM_REDUCED_MOTION=1` for a still quill, or `NO_COLOR=1` for monochrome output.
+
+Before the first visible token, the transcript shows **Waiting for response…** and elapsed time. A Thinking block appears when the provider sends reasoning. You can press Enter to steer a silent request, or Esc to stop it and send a fresh message. An already-running tool finishes before steering is applied.
 
 ## Mouse and Thinking controls
 

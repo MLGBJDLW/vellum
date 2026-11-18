@@ -49,6 +49,28 @@ function createMessage(overrides: Partial<Message> = {}): Message {
 }
 
 describe("MessageList", () => {
+  it("shows the response wait until the first reasoning chunk arrives", () => {
+    const messages = [createMessage()];
+    const screen = renderWithTheme(<MessageList messages={messages} isStreaming />);
+    expect(screen.lastFrame()).toContain("Waiting for response");
+    expect(screen.lastFrame()).not.toContain("Thinking");
+    const pending = createMessage({
+      role: "assistant",
+      content: "",
+      thinking: "Inspect the inputs.",
+      isStreaming: true,
+    });
+    act(() =>
+      screen.rerender(
+        <ThemeProvider>
+          <MessageList messages={messages} pendingMessage={pending} isStreaming />
+        </ThemeProvider>
+      )
+    );
+    expect(screen.lastFrame()).toContain("Thinking");
+    expect(screen.lastFrame()).not.toContain("Waiting for response");
+  });
+
   it("keeps a long streaming response inside the viewport", async () => {
     const pendingMessage = createMessage({
       id: "streaming-long",

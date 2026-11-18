@@ -4,7 +4,7 @@
  * T034: Unit tests for streaming utilities
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ProviderError } from "../errors.js";
 import {
   collectStream,
@@ -390,6 +390,36 @@ describe("streamWithTimeout", () => {
 // =============================================================================
 
 describe("streamWithAbort", () => {
+  it("can abort while an early return waits for transport cleanup", async () => {
+    const controller = new AbortController();
+    let release!: () => void;
+    const closed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const close = vi.fn(async () => {
+      await closed;
+      return { done: true as const, value: undefined };
+    });
+    const source = {
+      [Symbol.asyncIterator]: () => ({
+        next: async () => ({ done: false, value: 1 }),
+        return: close,
+      }),
+    };
+    const stream = streamWithAbort(source, controller.signal);
+    await stream.next();
+    const settled = vi.fn();
+    const closing = stream.return().then(settled);
+    try {
+      await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+      controller.abort();
+      await vi.waitFor(() => expect(settled).toHaveBeenCalledOnce());
+    } finally {
+      release();
+      await closing;
+    }
+  });
+
   it("should pass through items when not aborted", async () => {
     const controller = new AbortController();
     const items = [1, 2, 3];

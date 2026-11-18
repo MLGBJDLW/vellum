@@ -150,8 +150,8 @@ describe("OllamaProvider", () => {
         expect(models[0]).toHaveProperty("id");
         expect(models[0]).toHaveProperty("name");
         expect(models[0]).toHaveProperty("provider", "ollama");
-        expect(models[0]).toHaveProperty("inputPrice", 0);
-        expect(models[0]).toHaveProperty("outputPrice", 0);
+        expect(models[0]?.inputPrice).toBeUndefined();
+        expect(models[0]?.outputPrice).toBeUndefined();
       }
     });
 

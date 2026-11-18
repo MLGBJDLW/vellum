@@ -655,7 +655,7 @@ export class OpenAIProvider {
   /**
    * Ensure the provider is initialized before making requests
    */
-  private ensureInitialized(): OpenAI {
+  protected ensureInitialized(): OpenAI {
     if (!this.initialized || !this.client) {
       throw new ProviderError("Provider not initialized. Call initialize() first.", {
         code: ErrorCode.PROVIDER_INITIALIZATION_FAILED,
@@ -839,17 +839,7 @@ export class OpenAIProvider {
       // They are ignored silently
     }
 
-    // Add tools if present (supported by both standard and O-series)
-    if (params.tools && params.tools.length > 0) {
-      request.tools = this.convertTools(params.tools);
-    }
-
-    const extraBody = this.buildExtraBody(params);
-    if (extraBody && Object.keys(extraBody).length > 0) {
-      // The JS SDK expects extension fields in the JSON body itself. `extra_body`
-      // is a Python SDK convention and was silently ignoring provider controls.
-      Object.assign(request, extraBody);
-    }
+    this.applyRequestOptions(request, params);
 
     const reasoningEffort = this.resolveReasoningEffort(params);
     if (reasoningEffort) {
@@ -905,14 +895,7 @@ export class OpenAIProvider {
     if (params.stopSequences && params.stopSequences.length > 0) {
       request.stop = params.stopSequences;
     }
-    if (params.tools && params.tools.length > 0) {
-      request.tools = this.convertTools(params.tools);
-    }
-
-    const extraBody = this.buildExtraBody(params);
-    if (extraBody && Object.keys(extraBody).length > 0) {
-      Object.assign(request, extraBody);
-    }
+    this.applyRequestOptions(request, params);
 
     const reasoningEffort = this.resolveReasoningEffort(params);
     if (reasoningEffort) {
@@ -920,6 +903,24 @@ export class OpenAIProvider {
     }
 
     return request;
+  }
+
+  private applyRequestOptions(
+    request: ChatCompletionCreateParamsNonStreaming | ChatCompletionCreateParamsStreaming,
+    params: CompletionParams
+  ): void {
+    const supportsTools = getModelInfo(
+      this.getProviderTypeForModelInfo(),
+      params.model
+    ).supportsTools;
+    if (supportsTools !== false && params.tools?.length)
+      request.tools = this.convertTools(params.tools);
+    Object.assign(request, this.buildExtraBody(params));
+    if (supportsTools === false) {
+      delete request.tools;
+      delete request.tool_choice;
+      delete request.parallel_tool_calls;
+    }
   }
 
   /**

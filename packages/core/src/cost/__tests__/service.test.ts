@@ -21,6 +21,53 @@ import type { TokenUsage } from "../types.js";
 // =============================================================================
 
 describe("calculateCostBreakdown", () => {
+  it.each([
+    ["gpt-6.2-sol", 272000, 2, 10, 0.1, 2.5],
+    ["gpt-6.2-sol", 272001, 4, 15, 0.2, 5],
+    ["gpt-6.2-astra", 272000, 8, 40, 0.4, 10],
+    ["gpt-6.2-astra", 272001, 16, 60, 0.8, 20],
+  ] as const)(
+    "charges all token classes on %s at %i prompt tokens",
+    (model, inputTokens, input, output, read, write) => {
+      const usage = {
+        inputTokens,
+        outputTokens: 1000,
+        cacheReadTokens: 100000,
+        cacheWriteTokens: 50000,
+      };
+      for (const [provider, id] of [
+        ["openai", model],
+        ["openrouter", `openai/${model}`],
+        ["openrouter", `openai/${model}-pro`],
+      ] as const) {
+        const cost = calculateCostBreakdown({ model: id, provider, usage });
+        expect(cost.input).toBeCloseTo(((inputTokens - 150000) * input) / 1e6, 9);
+        expect(cost.output).toBeCloseTo((1000 * output) / 1e6, 9);
+        expect(cost.cacheRead).toBeCloseTo((100000 * read) / 1e6, 9);
+        expect(cost.cacheWrite).toBeCloseTo((50000 * write) / 1e6, 9);
+      }
+    }
+  );
+
+  it("applies each provider's boundary to the full prompt, including cached tokens", () => {
+    expect(calculateCost(199999, 1000, "grok-4.5", "xai")).toBeCloseTo(0.405998, 9);
+    expect(calculateCost(200000, 1000, "grok-4.5", "xai")).toBeCloseTo(0.812, 9);
+    expect(calculateCost(300000, 1000, "gpt-6.2-sol", "openai")).toBeCloseTo(1.215, 9);
+    const grok = calculateCostBreakdown({
+      provider: "xai",
+      model: "grok-4.5",
+      usage: { inputTokens: 200000, cacheReadTokens: 100000, outputTokens: 0 },
+    });
+    expect(grok.cacheRead).toBeCloseTo(0.06, 9);
+    const haiku = calculateCostBreakdown({
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
+      usage: { inputTokens: 1, cacheReadTokens: 80000, cacheWriteTokens: 20000, outputTokens: 0 },
+    });
+    expect(haiku.cacheRead).toBeCloseTo(0.004, 9);
+    expect(haiku.cacheWrite).toBeCloseTo(0.0125, 9);
+  });
+
   it("does not charge cache-hit prompt tokens twice for DeepSeek", () => {
     const uncached = calculateCostBreakdown({
       provider: "deepseek",
@@ -98,8 +145,8 @@ describe("calculateCostBreakdown", () => {
 
   it("does not invent cache rates when a catalog model leaves them unknown", () => {
     const breakdown = calculateCostBreakdown({
-      model: "claude-sonnet-5-5",
-      provider: "anthropic",
+      model: "voxtral-small-2507",
+      provider: "mistral",
       usage: { inputTokens: 1000, outputTokens: 500, cacheReadTokens: 100 },
     });
     expect(breakdown.input).toBeGreaterThan(0);
@@ -238,7 +285,8 @@ describe("getPricing", () => {
   it("uses refreshed provider-scoped rates and preserves known free versus unknown models", () => {
     const original = MODEL_CATALOG.get("openai");
     const originalRouter = MODEL_CATALOG.get("openrouter");
-    const base = original?.[0] as ModelInfo;
+    // These fixture routes publish a single flat price.
+    const base = { ...(original?.[0] as ModelInfo), tiers: undefined };
     try {
       MODEL_CATALOG.set("openai", [
         { ...base, id: "shared-fixture", inputPrice: 2, outputPrice: 4 },

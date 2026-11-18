@@ -27,6 +27,7 @@ import { Spinner } from "./Spinner.js";
  */
 export type StreamingPhase =
   | "idle"
+  | "waiting_response"
   | "thinking"
   | "generating"
   | "tool_call"
@@ -68,23 +69,12 @@ export interface StreamingIndicatorProps {
  */
 export const PHASE_LABELS: Record<StreamingPhase, string> = {
   idle: "",
+  waiting_response: "Waiting for response…",
   thinking: "Thinking...",
   generating: "Generating...",
   tool_call: "Preparing tool...",
   tool_executing: "Using tool...",
   waiting_confirmation: "Waiting for confirmation...",
-} as const;
-
-/**
- * Icons for each streaming phase (used in narrow mode).
- */
-export const PHASE_ICONS: Record<StreamingPhase, string> = {
-  idle: "",
-  thinking: "[?]",
-  generating: "[>]",
-  tool_call: "[+]",
-  tool_executing: "[*]",
-  waiting_confirmation: "[.]",
 } as const;
 
 // =============================================================================
@@ -238,14 +228,10 @@ function StreamingIndicatorImpl({
   const renderLabel = () => <Text color={phaseColor}> {displayLabel}</Text>;
 
   if (narrow) {
-    // Narrow layout: stack vertically with icon
-    const icon = PHASE_ICONS[phase];
-
     return (
       <Box flexDirection="column">
         <Box>
           <Spinner color={phaseColor} />
-          {icon && <Text> {icon}</Text>}
           {renderLabel()}
         </Box>
         {meta && (

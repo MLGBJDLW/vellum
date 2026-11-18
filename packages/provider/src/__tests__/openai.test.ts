@@ -44,7 +44,9 @@ describe("OpenAIProvider", () => {
     it("should return list of supported models", () => {
       const provider = new OpenAIProvider();
       const models = provider.listModels();
-      expect(models).toContain("gpt-6.1-sol");
+      expect(models).toEqual(
+        expect.arrayContaining(["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-sol", "chat-latest"])
+      );
       expect(models).toContain("gpt-6-luna");
       expect(models).not.toContain("gpt-4-turbo");
       expect(models).not.toContain("o1");
@@ -55,7 +57,7 @@ describe("OpenAIProvider", () => {
   describe("getDefaultModel", () => {
     it("should return default model", () => {
       const provider = new OpenAIProvider();
-      expect(provider.getDefaultModel()).toBe("gpt-6.1-sol");
+      expect(provider.getDefaultModel()).toBe("gpt-6.2-sol");
     });
   });
 

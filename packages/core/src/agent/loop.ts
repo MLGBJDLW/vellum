@@ -5,7 +5,12 @@
 import { EventEmitter } from "node:events";
 import { realpath, stat } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { ReasoningEffort, StreamEvent, ToolDefinition } from "@vellum/provider";
+import {
+  type ReasoningEffort,
+  type StreamEvent,
+  streamWithAbort,
+  type ToolDefinition,
+} from "@vellum/provider";
 import type { TokenUsage } from "@vellum/shared";
 import type { DelegationUpdate } from "../agents/orchestrator/checkpoint.js";
 import type { OrchestratorCore } from "../agents/orchestrator/core.js";
@@ -639,10 +644,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
               evidence: result.evidence,
               confidence: result.confidence,
             });
-            return {
-              detected: this.terminationManager.shouldInterruptOnStreamingLoop(),
-              result,
-            };
+            const interrupt = this.terminationManager.shouldInterruptOnStreamingLoop();
+            if (interrupt) this.abortController?.abort();
+            return { detected: interrupt, result };
           }
           return { detected: false };
         },
@@ -1631,7 +1635,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // and delegated agents, before the first model request.
     systemPrompt += `\n\n${buildEnvironmentInfo({ cwd: this.config.cwd })}`;
 
-    // Append AGENTS.md prompt sections
+    // The first request must observe the same project instructions as later turns.
+    await this.agentsInitialization;
     if (this.agentsIntegration?.getState() === "ready") {
       const agentsSections = this.agentsIntegration.getSystemPromptStrings();
       if (agentsSections.length > 0) {
@@ -1734,11 +1739,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // Copy pending tool calls from result
     for (const toolCall of result.pendingToolCalls) {
       pendingToolCalls.push(toolCall);
-    }
-
-    // Handle abort on interruption
-    if (result.interrupted) {
-      this.abortController?.abort();
     }
 
     return { interrupted: result.interrupted };
@@ -1850,6 +1850,12 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         if (!this.cancellation.isCancelled) this.applySteering();
         try {
           await this.runIteration();
+        } catch (error) {
+          this.emit("terminated", TerminationReason.ERROR, {
+            shouldTerminate: true,
+            reason: TerminationReason.ERROR,
+          });
+          throw error;
         } finally {
           await this.config.onMessagesCheckpoint?.(this.getMessages(), this.iterationCount);
         }
@@ -1951,15 +1957,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           { isRetryable: false }
         );
       }
-      // Instructions typed while preparing context can join the request directly.
-      this.applySteering();
-      const messagesToSend = this.contextIntegration?.enabled
-        ? this.contextIntegration.getApiMessages(this.messages)
-        : this.messages;
-
-      // Convert session messages to provider format
-      const providerMessages = toModelMessages(messagesToSend);
-
       // Get effective thinking config (dynamic if getter provided, static otherwise)
       const effectiveThinking = this.getEffectiveThinkingConfig();
 
@@ -1976,12 +1973,17 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         return;
       }
 
-      // Create base stream from LLM
+      // Budget approval can suspend preparation. Include every instruction
+      // received before dispatch in this request's snapshot.
+      this.applySteering();
+      const messagesToSend = this.contextIntegration?.enabled
+        ? this.contextIntegration.getApiMessages(this.messages)
+        : this.messages;
       this.streamRequestActive = true;
       const baseStream = LLM.stream({
         providerType: this.config.providerType,
         model: this.config.model,
-        messages: providerMessages,
+        messages: toModelMessages(messagesToSend),
         system: systemPrompt,
         tools: this.getFilteredTools(),
         thinking: effectiveThinking,
@@ -2004,7 +2006,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Track and process pending tool calls
       const pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> =
         [];
-      const streamResult = await this.processStreamResponse(stream, pendingToolCalls);
+      const streamResult = await this.processStreamResponse(
+        streamWithAbort(stream, controller.signal),
+        pendingToolCalls
+      );
       this.streamRequestActive = false;
       if (this.steeringInterrupted && !this.cancellation.isCancelled) {
         this.finishSteeredResponse();
@@ -3254,7 +3259,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         this.emit("permissionRequired", callId, name, input);
       });
       this.pendingPermission = null;
-      if (this.cancellation.isCancelled) return false;
+      if (this.cancellation.isCancelled) {
+        this.emit("permissionDenied", callId, name, "Operation cancelled");
+        return false;
+      }
       this.transitionTo("tool_executing");
       if (granted) this.emit("permissionGranted", callId, name);
       else this.emit("permissionDenied", callId, name, "User denied permission");
@@ -3429,7 +3437,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
    *
    * @param reason - Optional reason for cancellation
    */
-  cancel(reason?: string): Promise<void> {
+  cancel(reason?: string, options?: { closeSession?: boolean }): Promise<void> {
     this.cancellation.cancel(reason);
     this.costManager.denyApproval();
     this.pendingPermission?.resolve(false);
@@ -3448,8 +3456,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     // Also emit complete to finalize any pending operations (T038 fix)
     this.emit("complete");
 
-    // Dispose AGENTS.md integration
-    if (this.agentsIntegration) {
+    // A stopped turn can resume in the same workspace with its rules intact.
+    if (options?.closeSession && this.agentsIntegration) {
       return this.agentsIntegration.dispose().catch((error) => {
         this.logger?.warn("Error disposing AGENTS.md integration", { error });
       });

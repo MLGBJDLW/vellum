@@ -42,6 +42,7 @@ import {
   DEFAULT_MODEL_IDS,
   getDefaultModelId,
   getProviderModels,
+  getSupportedProviders,
   getUsageInputTokens,
   getUsageOutputTokens,
 } from "@vellum/provider";
@@ -733,7 +734,7 @@ function AppContent({
   const themeContext = useTheme();
   const { messages, addMessage, clearMessages, setMessages, pendingMessage } = useMessages();
   const [isLoading, setIsLoading] = useState(false);
-  const taskSubmissionRef = useRef(false);
+  const taskSubmissionRef = useRef<{ finished: Promise<void>; closing: boolean } | null>(null);
   const [workingDirectory, setWorkingDirectory] = useState(
     () => agentLoopProp?.getWorkingDirectory() ?? process.cwd()
   );
@@ -2778,10 +2779,8 @@ function AppContent({
   useEffect(() => {
     const previousCleanup = getShutdownCleanup();
     const cleanup = async () => {
-      if (cancellationRef.current) {
-        cancellationRef.current.cancel("shutdown");
-      }
-      agentLoopProp?.cancel("shutdown");
+      if (agentLoopProp) await agentLoopProp.cancel("shutdown", { closeSession: true });
+      else cancellationRef.current?.cancel("shutdown");
       try {
         await getOrchestrator()?.shutdown();
         await saveSession();
@@ -3103,7 +3102,7 @@ function AppContent({
       }
 
       try {
-        const result = await executeTaskCommand(text, taskSubmissionRef.current, () =>
+        const result = await executeTaskCommand(text, !!taskSubmissionRef.current, () =>
           commandExecutor.execute(text)
         );
         await handleCommandResult(result);
@@ -3125,9 +3124,13 @@ function AppContent({
       if (!text.trim()) return;
       // Keep the submitted prompt intact until the selected transcript is ready.
       await sessionTransitionRef.current;
+      // Esc and natural completion can precede the final session checkpoint.
+      // A message typed in that window starts a fresh turn as soon as it closes.
+      if (taskSubmissionRef.current?.closing) await taskSubmissionRef.current.finished;
 
-      if (followupPrompt && agentLoopProp) {
-        const response = resolveFollowupResponse(text, followupPrompt.suggestions);
+      const pendingQuestion = agentLoopProp?.getPendingUserPrompt();
+      if (pendingQuestion && agentLoopProp) {
+        const response = resolveFollowupResponse(text, pendingQuestion.suggestions ?? []);
         setFollowupPrompt(null);
         addToHistory(response);
         addMessage({ role: "user", content: response });
@@ -3144,7 +3147,12 @@ function AppContent({
       }
 
       const earlierSteeringCount = agentLoopProp?.getPendingSteeringCount() ?? 0;
-      taskSubmissionRef.current = true;
+      let finishSubmission!: () => void;
+      const finished = new Promise<void>((resolve) => {
+        finishSubmission = resolve;
+      });
+      const submission = { finished, closing: false };
+      taskSubmissionRef.current = submission;
       try {
         if (agentLoopProp) {
           if (!credentialManager) {
@@ -3294,9 +3302,15 @@ function AppContent({
           // Start the fresh turn before asynchronous preparation so Stop cannot be reset.
           let interrupted = false;
           const observeTermination = (reason: TerminationReason) => {
+            if (reason === TerminationReason.ERROR) submission.closing = true;
             if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
               interrupted = true;
           };
+          const observeComplete = () => {
+            submission.closing = true;
+            setFollowupPrompt(null);
+          };
+          agentLoopProp.on("complete", observeComplete);
           agentLoopProp.on("terminated", observeTermination);
           // Wire cancellation to AgentLoop
           cancellationRef.current = {
@@ -3354,6 +3368,7 @@ function AppContent({
             notifyError(errorMsg);
             addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
           } finally {
+            agentLoopProp.off("complete", observeComplete);
             agentLoopProp.off("terminated", observeTermination);
             setIsLoading(false);
             cancellationRef.current = null;
@@ -3403,7 +3418,8 @@ function AppContent({
         setIsLoading(false);
         cancellationRef.current = null;
       } finally {
-        taskSubmissionRef.current = false;
+        taskSubmissionRef.current = null;
+        finishSubmission();
       }
     },
     [
@@ -3417,7 +3433,6 @@ function AppContent({
       currentProvider,
       credentialManager,
       handleCommandResult,
-      followupPrompt,
       modeManager,
       notifyTaskComplete,
       notifyError,
@@ -3504,6 +3519,21 @@ function AppContent({
   // Get level 3 items for three-level autocomplete (e.g., /model anthropic claude-)
   const getLevel3Items = useCallback(
     (commandName: string, arg1: string, partial: string): AutocompleteOption[] | undefined => {
+      const refreshing = commandName === "model" && arg1 === "refresh";
+      const editingCredential =
+        commandName === "auth" &&
+        ["set", "add", "login", "clear", "remove", "delete", "logout"].includes(arg1);
+      if (refreshing || editingCredential) {
+        const prefix = partial.toLowerCase();
+        return getSupportedProviders()
+          .filter((provider) => provider.startsWith(prefix))
+          .map((provider) => ({
+            name: provider,
+            description: refreshing
+              ? `Refresh ${provider} models`
+              : `Configure ${provider} API key`,
+          }));
+      }
       // /model command: level 3 shows model IDs for the selected provider
       if (commandName === "model") {
         // arg1 is the provider name
@@ -3527,45 +3557,6 @@ function AppContent({
           description: m.name,
           category: arg1,
         }));
-      }
-
-      // /auth command: level 3 shows provider list for set/clear subcommands
-      if (commandName === "auth") {
-        const setAliases = ["set", "add", "login"];
-        const clearAliases = ["clear", "remove", "delete", "logout"];
-
-        // Only show providers for set/clear subcommands (not for status)
-        if (setAliases.includes(arg1) || clearAliases.includes(arg1)) {
-          const providers = [
-            "anthropic",
-            "openai",
-            "google",
-            "azure",
-            "bedrock",
-            "vertex",
-            "ollama",
-            "openrouter",
-            "together",
-            "mistral",
-            "cohere",
-            "groq",
-            "deepseek",
-            "qwen",
-            "xai",
-          ];
-
-          const lowerPartial = partial.toLowerCase();
-          const filtered = lowerPartial
-            ? providers.filter((p) => p.toLowerCase().startsWith(lowerPartial))
-            : providers;
-
-          return filtered.map((p) => ({
-            name: p,
-            description: `Configure ${p} API key`,
-          }));
-        }
-
-        return undefined; // status doesn't need level 3
       }
 
       // /lsp command: level 3 shows server names for specific subcommands
@@ -5457,7 +5448,7 @@ function AppContentView({
   const screenReaderStatus = pendingOperation
     ? pendingOperation.message
     : isLoading
-      ? "Thinking..."
+      ? "Task in progress"
       : "Ready";
 
   const screenReaderContent = (

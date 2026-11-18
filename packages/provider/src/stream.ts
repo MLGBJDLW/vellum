@@ -506,41 +506,37 @@ export async function* streamWithAbort<T>(
   }
 
   const iterator = source[Symbol.asyncIterator]();
-  let aborted = false;
-
-  // Set up abort listener
-  const onAbort = (): void => {
-    aborted = true;
-  };
+  // Keep only the current read reachable, even on very long token streams.
+  let interruptRead: (() => void) | undefined;
+  const onAbort = () => interruptRead?.();
   signal.addEventListener("abort", onAbort, { once: true });
-
+  const waitForIterator = (pending: Promise<IteratorResult<T>>): Promise<IteratorResult<T>> =>
+    new Promise((resolve, reject) => {
+      interruptRead = () => resolve({ done: true, value: undefined });
+      pending.then(resolve, reject);
+      if (signal.aborted) interruptRead();
+    });
+  let exhausted = false;
   try {
-    while (!aborted) {
-      // Create abort promise that resolves (not rejects) on abort
-      const abortPromise = new Promise<{ done: true; value: undefined }>((resolve) => {
-        if (aborted) {
-          resolve({ done: true, value: undefined });
-          return;
-        }
-        const handler = (): void => {
-          resolve({ done: true, value: undefined });
-        };
-        signal.addEventListener("abort", handler, { once: true });
-      });
-
-      const nextPromise = iterator.next();
-      const result = await Promise.race([nextPromise, abortPromise]);
-
-      if (result.done || aborted) {
+    while (!signal.aborted) {
+      const result = await waitForIterator(iterator.next());
+      interruptRead = undefined;
+      if (signal.aborted) return;
+      if (result.done) {
+        exhausted = true;
         return;
       }
 
       yield result.value;
     }
   } finally {
-    signal.removeEventListener("abort", onAbort);
-    // Clean up iterator
-    await iterator.return?.();
+    try {
+      // return() can queue behind a pending read or stall in transport cleanup.
+      if (!exhausted && iterator.return) await waitForIterator(iterator.return());
+    } finally {
+      interruptRead = undefined;
+      signal.removeEventListener("abort", onAbort);
+    }
   }
 }
 

@@ -8,7 +8,12 @@
  * @see REQ-COST-002 - Pricing data management
  */
 
-import { MODEL_CATALOG, type ModelInfo, type ProviderType } from "@vellum/provider";
+import {
+  getContextPricingTier,
+  MODEL_CATALOG,
+  type ModelInfo,
+  type ProviderType,
+} from "@vellum/provider";
 import type { ModelPricing } from "./types.js";
 
 // =============================================================================
@@ -242,6 +247,8 @@ function toPricing(model: ModelInfo): ModelPricing | undefined {
         contextWindow: tier.contextWindow,
         inputPricePerMillion: tier.inputPrice,
         outputPricePerMillion: tier.outputPrice,
+        cacheReadPricePerMillion: tier.cacheReadsPrice,
+        cacheWritePricePerMillion: tier.cacheWritesPrice,
       })),
   };
 }
@@ -276,31 +283,12 @@ export const MODEL_PRICING: Record<string, ModelPricing> = Object.fromEntries(
  * @param contextTokens - Current context size
  * @returns Input and output prices for the applicable tier
  */
-export function getTieredPricing(
-  pricing: ModelPricing,
-  contextTokens: number
-): { inputPrice: number; outputPrice: number } {
-  if (!pricing.tiers || pricing.tiers.length === 0) {
-    return {
-      inputPrice: pricing.inputPricePerMillion,
-      outputPrice: pricing.outputPricePerMillion,
-    };
-  }
-
-  // Find the applicable tier
-  for (const tier of pricing.tiers) {
-    if (contextTokens <= tier.contextWindow) {
-      return {
-        inputPrice: tier.inputPricePerMillion,
-        outputPrice: tier.outputPricePerMillion,
-      };
-    }
-  }
-
-  // If beyond all tiers, use the last tier (guaranteed to exist since we checked length > 0)
-  const lastTier = pricing.tiers[pricing.tiers.length - 1] as (typeof pricing.tiers)[number];
+export function getTieredPricing(pricing: ModelPricing, contextTokens: number) {
+  const tier = getContextPricingTier(pricing.tiers, contextTokens);
   return {
-    inputPrice: lastTier.inputPricePerMillion,
-    outputPrice: lastTier.outputPricePerMillion,
+    inputPrice: tier?.inputPricePerMillion ?? pricing.inputPricePerMillion,
+    outputPrice: tier?.outputPricePerMillion ?? pricing.outputPricePerMillion,
+    cacheReadPrice: tier?.cacheReadPricePerMillion ?? pricing.cacheReadPricePerMillion,
+    cacheWritePrice: tier?.cacheWritePricePerMillion ?? pricing.cacheWritePricePerMillion,
   };
 }

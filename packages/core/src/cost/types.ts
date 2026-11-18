@@ -62,6 +62,9 @@ export interface PricingTier {
 
   /** Output price per million for this tier */
   outputPricePerMillion: number;
+
+  cacheReadPricePerMillion?: number;
+  cacheWritePricePerMillion?: number;
 }
 
 /**

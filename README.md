@@ -1,16 +1,30 @@
 # Vellum
 
+[![CI](https://github.com/MLGBJDLW/vellum/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MLGBJDLW/vellum/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/%40butlerw%2Fvellum?label=npm&color=78532f)](https://www.npmjs.com/package/@butlerw/vellum)
+[![Latest release](https://img.shields.io/github/v/release/MLGBJDLW/vellum?label=release&color=805b3b)](https://github.com/MLGBJDLW/vellum/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-62664b)](LICENSE)
+
 Your personal AI assistant for the terminal. Vellum helps with research, writing,
 analysis, organization, and software work through one adaptive `orch` entry point.
 
+[Get started](#get-started) · [Choose a provider](#providers) · [Terminal controls](docs/tui.md) · [What's new](packages/cli/CHANGELOG.md)
+
 ## Get started
 
-Requires Node.js 22.22.1+ or 24.11.0+.
+Requires Node.js 22.22.1 or later in the 22.x series, or Node.js 24.11.0 and above.
 
 ```bash
 npm install -g @butlerw/vellum
 vellum
 ```
+
+| While Vellum works | What you can do |
+| --- | --- |
+| Waiting for the first response | Type a correction and press **Enter** to steer the current task. |
+| Reading a reasoning block | Press **Alt+E** to expand or collapse the received text. |
+| A tool is running | Follow the writing quill beside its name. Steering takes effect after active tool work finishes. |
+| Starting over after a stop | Press **Esc**, then send the next message in the same session. |
 
 Choose a model with `/model`. Vellum checks environment variables and local
 credential storage. If a cloud provider has no key, a masked input form opens;
@@ -54,7 +68,7 @@ Vellum includes adapters for Anthropic, OpenAI, Google, DeepSeek, Groq, xAI, Qwe
 OpenRouter, Mistral, Moonshot, Zhipu, MiniMax, Doubao, Yi, Baichuan, Ollama, and
 LM Studio. Model defaults and capabilities come from one shared catalog.
 
-See the [provider audit](docs/research/provider-catalog-2026-11-13.md) for exact models,
+See the [provider audit](docs/research/provider-catalog-2026-11-18.md) for exact models,
 official sources, retired-model removals, protocol adaptations, and vendors whose
 public catalogs could not be verified. Unknown pricing is not treated as free.
 Local and aggregator availability depends on the configured endpoint.

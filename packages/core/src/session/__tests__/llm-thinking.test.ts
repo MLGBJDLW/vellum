@@ -141,27 +141,30 @@ describe("LLM.stream thinking gating", () => {
     expect(thinking?.reasoningEffort).toBeUndefined();
   });
 
-  it("forwards cancellation and an explicit output budget up to the model limit", async () => {
-    let captured: CompletionParams | undefined;
-    const provider = createMockProvider((params) => {
-      captured = params;
-    });
-    LLM.initialize({ get: async () => provider } as unknown as ProviderRegistry);
-    const controller = new AbortController();
-    for await (const _ of LLM.stream({
-      providerType: "openai",
-      model: "gpt-6.1-sol",
-      messages: [{ role: "user", content: "Continue" }],
-      maxTokens: 100_000,
-      abortSignal: controller.signal,
-    })) {
-      /* consume */
+  it.each(["gpt-6.1-sol", "account-owned-chat"])(
+    "forwards cancellation and an explicit output budget for %s",
+    async (model) => {
+      let captured: CompletionParams | undefined;
+      const provider = createMockProvider((params) => {
+        captured = params;
+      });
+      LLM.initialize({ get: async () => provider } as unknown as ProviderRegistry);
+      const controller = new AbortController();
+      for await (const _ of LLM.stream({
+        providerType: "openai",
+        model,
+        messages: [{ role: "user", content: "Continue" }],
+        maxTokens: 100_000,
+        abortSignal: controller.signal,
+      })) {
+        /* consume */
+      }
+      expect(captured?.maxTokens).toBe(100_000);
+      expect(captured?.abortSignal).toBe(controller.signal);
     }
-    expect(captured?.maxTokens).toBe(100_000);
-    expect(captured?.abortSignal).toBe(controller.signal);
-  });
+  );
 
-  it("does not advertise external tools to a model without tool-calling support", async () => {
+  it("preserves tool and output limits for a manually selected historical vision model", async () => {
     let captured: CompletionParams | undefined;
     const provider = createMockProvider((params) => {
       captured = params;
@@ -176,5 +179,6 @@ describe("LLM.stream thinking gating", () => {
       /* consume */
     }
     expect(captured?.tools).toBeUndefined();
+    expect(captured?.maxTokens).toBe(4096);
   });
 });

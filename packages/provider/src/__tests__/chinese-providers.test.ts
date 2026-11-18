@@ -387,9 +387,7 @@ describe("YiProvider", () => {
       const provider = new YiProvider();
       const models = provider.listModels();
 
-      expect(models).toContain("yi-large");
-      expect(models).toContain("yi-large-turbo");
-      expect(models).toContain("yi-medium");
+      expect(models).toEqual(["yi-lightning", "yi-vision-v2"]);
     });
   });
 
@@ -398,27 +396,28 @@ describe("YiProvider", () => {
       const provider = new YiProvider();
       const models = await provider.listModelsAsync();
 
-      const yiLarge = models.find((m) => m.id === "yi-large");
-      expect(yiLarge).toBeDefined();
-      expect(yiLarge?.provider).toBe("yi");
-      expect(yiLarge?.contextWindow).toBe(32000);
-      expect(yiLarge?.supportsTools).toBe(true);
+      const lightning = models.find((m) => m.id === "yi-lightning");
+      expect(lightning).toBeDefined();
+      expect(lightning?.provider).toBe("yi");
+      expect(lightning?.contextWindow).toBe(16000);
+      expect(lightning?.supportsTools).toBe(true);
     });
 
-    it("keeps unverified legacy Yi pricing unknown", async () => {
+    it("keeps CNY pricing out of the USD catalog", async () => {
       const provider = new YiProvider();
       const models = await provider.listModelsAsync();
 
-      const yiMedium = models.find((m) => m.id === "yi-medium");
-      expect(yiMedium?.inputPrice).toBeUndefined();
-      expect(yiMedium?.outputPrice).toBeUndefined();
+      const vision = models.find((m) => m.id === "yi-vision-v2");
+      expect(vision?.supportsVision).toBe(true);
+      expect(vision?.inputPrice).toBeUndefined();
+      expect(vision?.outputPrice).toBeUndefined();
     });
   });
 
   describe("getDefaultModel", () => {
-    it("should return yi-large as default", () => {
+    it("uses the documented Yi default", () => {
       const provider = new YiProvider();
-      expect(provider.getDefaultModel()).toBe("yi-large");
+      expect(provider.getDefaultModel()).toBe("yi-lightning");
     });
   });
 
@@ -469,7 +468,8 @@ describe("BaichuanProvider", () => {
       expect(baichuan4).toBeDefined();
       expect(baichuan4?.provider).toBe("baichuan");
       expect(baichuan4?.contextWindow).toBe(32000);
-      expect(baichuan4?.supportsReasoning).toBe(true);
+      expect(baichuan4?.supportsReasoning).toBe(false);
+      expect(baichuan4?.maxOutputTokens).toBe(2048);
     });
 
     it("should have extended context model", async () => {
@@ -482,9 +482,9 @@ describe("BaichuanProvider", () => {
   });
 
   describe("getDefaultModel", () => {
-    it("should return Baichuan4 as default", () => {
+    it("uses the documented general chat default", () => {
       const provider = new BaichuanProvider();
-      expect(provider.getDefaultModel()).toBe("Baichuan4");
+      expect(provider.getDefaultModel()).toBe("Baichuan4-Turbo");
     });
   });
 

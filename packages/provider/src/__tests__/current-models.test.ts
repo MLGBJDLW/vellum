@@ -47,7 +47,7 @@ const responseBody = {
     input_tokens: 12,
     output_tokens: 8,
     total_tokens: 20,
-    input_tokens_details: { cached_tokens: 5 },
+    input_tokens_details: { cached_tokens: 5, cache_write_tokens: 2 },
     output_tokens_details: { reasoning_tokens: 3 },
   },
 };
@@ -487,73 +487,82 @@ describe("current provider contracts", () => {
     });
   });
 
-  it("routes GPT-6 tools through Responses and preserves tool IDs, usage and opaque reasoning", async () => {
-    const fetch = mockJson(responseBody);
-    const provider = new OpenAIProvider();
-    await provider.initialize({ apiKey: "sk-test-fixture" });
-    const params: CompletionParams = {
-      model: "gpt-6.1-sol",
-      messages: [{ role: "user", content: "Find the weather" }],
-      tools: [
-        {
-          name: "lookup",
-          description: "Look up weather",
-          inputSchema: { type: "object", properties: { query: { type: "string" } } },
-        },
-      ],
-      temperature: 0.5,
-      maxTokens: 65_536,
-      thinking: { enabled: true, reasoningEffort: "max" },
-    };
-    const result = await provider.complete(params);
-    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    const body = JSON.parse(String(init.body));
-    expect(url).toContain("/responses");
-    expect(body).toMatchObject({
-      model: params.model,
-      store: false,
-      max_output_tokens: 65_536,
-      reasoning: { effort: "max", summary: "auto" },
-      tools: [{ type: "function", name: "lookup" }],
-    });
-    expect(body).not.toHaveProperty("temperature");
-    expect(body).not.toHaveProperty("max_tokens");
-    expect(result).toMatchObject({
-      stopReason: "tool_use",
-      toolCalls: [{ id: "call_test", name: "lookup", input: { query: "weather" } }],
-      usage: { inputTokens: 12, outputTokens: 8, cacheReadTokens: 5, thinkingTokens: 3 },
-    });
-    const followUp = buildResponsesRequest(
-      {
-        ...params,
-        messages: [
+  it.each(["gpt-6.2-sol", "gpt-6.2-astra"])(
+    "routes %s tools through Responses and preserves tool IDs, usage and opaque reasoning",
+    async (model) => {
+      const fetch = mockJson(responseBody);
+      const provider = new OpenAIProvider();
+      await provider.initialize({ apiKey: "sk-test-fixture" });
+      const params: CompletionParams = {
+        model,
+        messages: [{ role: "user", content: "Find the weather" }],
+        tools: [
           {
-            role: "assistant",
-            content: [
-              { type: "tool_use", id: "call_test", name: "lookup", input: { query: "weather" } },
-            ],
-            providerMetadata: result.providerMetadata,
-          },
-          {
-            role: "user",
-            content: [{ type: "tool_result", toolUseId: "call_test", content: "Sunny" }],
+            name: "lookup",
+            description: "Look up weather",
+            inputSchema: { type: "object", properties: { query: { type: "string" } } },
           },
         ],
-      },
-      "openai",
-      "max"
-    );
-    expect(followUp.input).toEqual([
-      responseBody.output[0],
-      {
-        type: "function_call",
-        call_id: "call_test",
-        name: "lookup",
-        arguments: '{"query":"weather"}',
-      },
-      { type: "function_call_output", call_id: "call_test", output: "Sunny" },
-    ]);
-  });
+        temperature: 0.5,
+        maxTokens: 65_536,
+        thinking: { enabled: true, reasoningEffort: "max" },
+      };
+      const result = await provider.complete(params);
+      const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+      const body = JSON.parse(String(init.body));
+      expect(url).toContain("/responses");
+      expect(body).toMatchObject({
+        model: params.model,
+        store: false,
+        max_output_tokens: 65_536,
+        reasoning: { effort: "max", summary: "auto" },
+        tools: [{ type: "function", name: "lookup" }],
+      });
+      expect(body).not.toHaveProperty("temperature");
+      expect(body).not.toHaveProperty("max_tokens");
+      expect(result).toMatchObject({
+        stopReason: "tool_use",
+        toolCalls: [{ id: "call_test", name: "lookup", input: { query: "weather" } }],
+        usage: {
+          inputTokens: 12,
+          outputTokens: 8,
+          cacheReadTokens: 5,
+          cacheWriteTokens: 2,
+          thinkingTokens: 3,
+        },
+      });
+      const followUp = buildResponsesRequest(
+        {
+          ...params,
+          messages: [
+            {
+              role: "assistant",
+              content: [
+                { type: "tool_use", id: "call_test", name: "lookup", input: { query: "weather" } },
+              ],
+              providerMetadata: result.providerMetadata,
+            },
+            {
+              role: "user",
+              content: [{ type: "tool_result", toolUseId: "call_test", content: "Sunny" }],
+            },
+          ],
+        },
+        "openai",
+        "max"
+      );
+      expect(followUp.input).toEqual([
+        responseBody.output[0],
+        {
+          type: "function_call",
+          call_id: "call_test",
+          name: "lookup",
+          arguments: '{"query":"weather"}',
+        },
+        { type: "function_call_output", call_id: "call_test", output: "Sunny" },
+      ]);
+    }
+  );
 
   it("streams Responses tool events exactly once and rejects interrupted streams", async () => {
     const events = [
@@ -600,7 +609,7 @@ describe("current provider contracts", () => {
     }).rejects.toThrow("without a completion event");
   });
 
-  it.each(["claude-opus-4-7", "claude-opus-5-5", "claude-fable-5-2"])(
+  it.each(["claude-opus-4-7", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-2"])(
     "uses adaptive thinking without invalid sampling or manual budget on %s",
     async (model) => {
       const fetch = mockJson({
@@ -624,7 +633,7 @@ describe("current provider contracts", () => {
       const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
       const body = JSON.parse(String(init.body));
       expect(body).toMatchObject({
-        thinking: { type: "adaptive" },
+        thinking: { type: "adaptive", display: "summarized" },
         output_config: { effort: "xhigh" },
       });
       expect(body).not.toHaveProperty("temperature");
@@ -741,6 +750,57 @@ describe("current provider contracts", () => {
 });
 
 describe("audited model catalog", () => {
+  it("keeps conversational aliases and excludes unsupported Google and OpenAI media routes", () => {
+    expect(
+      normalizeDiscoveredModels("openai", [
+        { id: "chat-latest" },
+        { id: "gpt-rosalind-research" },
+        { id: "chatgpt-image-latest" },
+        { id: "o3-pro" },
+      ]).map(({ id, api, deprecated }) => ({ id, api, deprecated }))
+    ).toEqual([
+      { id: "chat-latest", api: "responses", deprecated: false },
+      { id: "gpt-rosalind-research", api: "responses", deprecated: false },
+      { id: "o3-pro", api: "responses", deprecated: true },
+    ]);
+    const records = [
+      "gemini-4-hydrogen",
+      "gemini-3.8-flash-tts",
+      "gemini-3.1-flash-image",
+      "gemini-nano-banana-2.1",
+    ].map((id) => ({
+      name: `models/${id}`,
+      supportedActions: ["generateContent"],
+    }));
+    expect(normalizeDiscoveredModels("google", records).map((model) => model.id)).toEqual([
+      "gemini-4-hydrogen",
+    ]);
+  });
+
+  it("applies the Grok multi-agent transport restrictions even for its rolling alias", () => {
+    const request = buildResponsesRequest(
+      {
+        model: "grok-4.20-multi-agent-latest",
+        messages: [{ role: "user", content: "Compare these results" }],
+        maxTokens: 8192,
+        tools: [
+          {
+            name: "lookup",
+            description: "Search",
+            inputSchema: { type: "object", properties: {} },
+          },
+        ],
+      },
+      "xai"
+    );
+    expect(request).not.toHaveProperty("tools");
+    expect(request).not.toHaveProperty("max_output_tokens");
+    expect(getModelInfo("xai", "grok-4.20-multi-agent-latest")).toMatchObject({
+      api: "responses",
+      supportsTools: false,
+    });
+  });
+
   it("keeps account-owned fine-tunes selectable without borrowing base-model prices or lifecycle", () => {
     const id = "ft:gpt-4.1-2025-04-14:organization:custom:id";
     const models = normalizeDiscoveredModels("openai", [
@@ -766,6 +826,39 @@ describe("audited model catalog", () => {
     expect(unknown?.outputPrice).toBeUndefined();
     expect(unknown?.supportsPromptCache).toBe(false);
     expect(free).toMatchObject({ inputPrice: 0, outputPrice: 0 });
+  });
+
+  it("preserves OpenRouter's per-field override order and excludes clock-based discounts from context tiers", () => {
+    const [model] = normalizeDiscoveredModels("openrouter", [
+      {
+        id: "router/tiered",
+        context_length: 1_000_000,
+        pricing: {
+          prompt: "0.000002",
+          completion: "0.000010",
+          input_cache_read: "0.0000001",
+          overrides: [
+            { min_prompt_tokens: 400000, prompt: "0.000006", completion: "0.000020" },
+            { min_prompt_tokens: 272000, prompt: "0.000004", input_cache_read: "0.0000002" },
+            { min_prompt_tokens: 100000, utc_start: 0, utc_end: 400, completion: "0" },
+          ],
+        },
+      },
+    ]);
+    expect(model?.tiers).toMatchObject([
+      { contextWindow: 272000, inputPrice: 2, outputPrice: 10, cacheReadsPrice: 0.1 },
+      { contextWindow: 400000, inputPrice: 4, outputPrice: 10, cacheReadsPrice: 0.2 },
+      { contextWindow: 1000000, inputPrice: 4, outputPrice: 20, cacheReadsPrice: 0.2 },
+    ]);
+    const id = "openai/gpt-6.2-sol";
+    expect(normalizeDiscoveredModels("openrouter", [{ id }])[0]?.tiers).toHaveLength(2);
+    const [flat] = normalizeDiscoveredModels("openrouter", [
+      { id, pricing: { prompt: "0", completion: "0" } },
+    ]);
+    expect(flat).toMatchObject({ inputPrice: 0, outputPrice: 0, supportsPromptCache: false });
+    expect(flat?.tiers).toBeUndefined();
+    expect(flat?.cacheReadsPrice).toBeUndefined();
+    expect(flat?.cacheWritesPrice).toBeUndefined();
   });
 
   it("uses xAI discovery metadata and excludes sparse media generation routes", () => {
@@ -887,6 +980,11 @@ describe("audited model catalog", () => {
   });
 
   it("includes published text routes with their provider-specific limits", () => {
+    expect(getModelReplacement("mistral", "ministral-3-14b-2512")).toBe("ministral-14b-2512");
+    expect(getModelInfo("mistral", "ministral-14b-latest")).toMatchObject({
+      id: "ministral-14b-2512",
+      contextWindow: 256000,
+    });
     expect(getModelInfo("openai", "gpt-5.5")).toMatchObject({
       api: "responses",
       contextWindow: 1050000,

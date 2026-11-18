@@ -1,4 +1,4 @@
-/** Vellum's ink mark: a quiet pulse inside a folded-page V. */
+/** Vellum's writing quill, drawn on a six-by-four dot grid. */
 import { getIconSupport } from "@vellum/shared";
 import { Text } from "ink";
 import type React from "react";
@@ -32,18 +32,29 @@ export interface LoadingIndicatorProps {
   readonly dimmed?: boolean;
 }
 
-// Eight shared-clock ticks form one quiet breath (960 ms by default). The fixed
-// page edges anchor the mark while its ink drop grows, settles, and recedes.
-export const SPINNER_FRAMES = ["╲·╱", "╲·╱", "╲•╱", "╲◆╱", "╲◆╱", "╲•╱", "╲·╱", "╲·╱"] as const;
+// The nib touches down, draws a short ink stroke, then lifts to begin again.
+// Holding the two resting poses gives the stroke rhythm on slower terminals.
+export const SPINNER_FRAMES = [
+  "⡠⠺⠋",
+  "⡠⠺⠋",
+  "⣀⠴⠋",
+  "⡀⡴⠛",
+  "⢀⣠⠟",
+  "⢀⣠⠟",
+  "⢀⣴⠋",
+  "⢀⡞⠋",
+  "⢠⠞⠁",
+] as const;
 export const ASCII_SPINNER_FRAMES = [
-  "\\./",
-  "\\./",
-  "\\o/",
-  "\\O/",
-  "\\O/",
-  "\\o/",
-  "\\./",
-  "\\./",
+  ",/'",
+  ",/'",
+  "_/'",
+  "._/",
+  "__/",
+  "__/",
+  "_/'",
+  ",/'",
+  " /'",
 ] as const;
 
 /** Uses the existing shared clock; mounting more indicators creates no timers. */
@@ -51,12 +62,10 @@ export function Spinner({ color, label, frames }: SpinnerProps): React.JSX.Eleme
   const { theme } = useTheme();
   const ascii = getIconSupport() === "ascii";
   const effectiveFrames = useMemo(() => {
-    const requested = frames?.length ? frames : ascii ? ASCII_SPINNER_FRAMES : SPINNER_FRAMES;
+    if (!frames?.length) return ascii ? ASCII_SPINNER_FRAMES : SPINNER_FRAMES;
     // The configured ASCII fallback also applies to custom Unicode sequences.
     const supported =
-      ascii && requested.some((frame) => /[^\x20-\x7e]/u.test(frame))
-        ? ASCII_SPINNER_FRAMES
-        : requested;
+      ascii && frames.some((frame) => /[^\x20-\x7e]/u.test(frame)) ? ASCII_SPINNER_FRAMES : frames;
     const width = Math.max(...supported.map((frame) => stringWidth(frame)));
     return supported.map((frame) => frame + " ".repeat(width - stringWidth(frame)));
   }, [ascii, frames]);
