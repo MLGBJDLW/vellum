@@ -506,32 +506,19 @@ export async function* streamWithAbort<T>(
   }
 
   const iterator = source[Symbol.asyncIterator]();
-  let aborted = false;
-
-  // Set up abort listener
-  const onAbort = (): void => {
-    aborted = true;
-  };
+  // Keep only the current read reachable, even on very long token streams.
+  let interruptRead: (() => void) | undefined;
+  const onAbort = () => interruptRead?.();
   signal.addEventListener("abort", onAbort, { once: true });
 
   try {
-    while (!aborted) {
-      // Create abort promise that resolves (not rejects) on abort
-      const abortPromise = new Promise<{ done: true; value: undefined }>((resolve) => {
-        if (aborted) {
-          resolve({ done: true, value: undefined });
-          return;
-        }
-        const handler = (): void => {
-          resolve({ done: true, value: undefined });
-        };
-        signal.addEventListener("abort", handler, { once: true });
+    while (!signal.aborted) {
+      const result = await new Promise<IteratorResult<T>>((resolve, reject) => {
+        interruptRead = () => resolve({ done: true, value: undefined });
+        iterator.next().then(resolve, reject);
       });
-
-      const nextPromise = iterator.next();
-      const result = await Promise.race([nextPromise, abortPromise]);
-
-      if (result.done || aborted) {
+      interruptRead = undefined;
+      if (result.done || signal.aborted) {
         return;
       }
 
@@ -539,8 +526,11 @@ export async function* streamWithAbort<T>(
     }
   } finally {
     signal.removeEventListener("abort", onAbort);
-    // Clean up iterator
-    await iterator.return?.();
+    // Async generators queue return() behind any outstanding next(). A stalled
+    // transport must not retain ownership of the turn while it winds down.
+    const closing = iterator.return?.();
+    if (signal.aborted) void closing?.catch(() => {});
+    else await closing;
   }
 }
 

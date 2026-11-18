@@ -5,7 +5,12 @@
 import { EventEmitter } from "node:events";
 import { realpath, stat } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { ReasoningEffort, StreamEvent, ToolDefinition } from "@vellum/provider";
+import {
+  type ReasoningEffort,
+  type StreamEvent,
+  streamWithAbort,
+  type ToolDefinition,
+} from "@vellum/provider";
 import type { TokenUsage } from "@vellum/shared";
 import type { DelegationUpdate } from "../agents/orchestrator/checkpoint.js";
 import type { OrchestratorCore } from "../agents/orchestrator/core.js";
@@ -1951,15 +1956,6 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
           { isRetryable: false }
         );
       }
-      // Instructions typed while preparing context can join the request directly.
-      this.applySteering();
-      const messagesToSend = this.contextIntegration?.enabled
-        ? this.contextIntegration.getApiMessages(this.messages)
-        : this.messages;
-
-      // Convert session messages to provider format
-      const providerMessages = toModelMessages(messagesToSend);
-
       // Get effective thinking config (dynamic if getter provided, static otherwise)
       const effectiveThinking = this.getEffectiveThinkingConfig();
 
@@ -1976,12 +1972,17 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         return;
       }
 
-      // Create base stream from LLM
+      // Budget approval can suspend preparation. Include every instruction
+      // received before dispatch in this request's snapshot.
+      this.applySteering();
+      const messagesToSend = this.contextIntegration?.enabled
+        ? this.contextIntegration.getApiMessages(this.messages)
+        : this.messages;
       this.streamRequestActive = true;
       const baseStream = LLM.stream({
         providerType: this.config.providerType,
         model: this.config.model,
-        messages: providerMessages,
+        messages: toModelMessages(messagesToSend),
         system: systemPrompt,
         tools: this.getFilteredTools(),
         thinking: effectiveThinking,
@@ -2004,7 +2005,10 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Track and process pending tool calls
       const pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> =
         [];
-      const streamResult = await this.processStreamResponse(stream, pendingToolCalls);
+      const streamResult = await this.processStreamResponse(
+        streamWithAbort(stream, controller.signal),
+        pendingToolCalls
+      );
       this.streamRequestActive = false;
       if (this.steeringInterrupted && !this.cancellation.isCancelled) {
         this.finishSteeredResponse();

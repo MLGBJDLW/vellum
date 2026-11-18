@@ -733,7 +733,7 @@ function AppContent({
   const themeContext = useTheme();
   const { messages, addMessage, clearMessages, setMessages, pendingMessage } = useMessages();
   const [isLoading, setIsLoading] = useState(false);
-  const taskSubmissionRef = useRef(false);
+  const taskSubmissionRef = useRef<{ finished: Promise<void>; closing: boolean } | null>(null);
   const [workingDirectory, setWorkingDirectory] = useState(
     () => agentLoopProp?.getWorkingDirectory() ?? process.cwd()
   );
@@ -3103,7 +3103,7 @@ function AppContent({
       }
 
       try {
-        const result = await executeTaskCommand(text, taskSubmissionRef.current, () =>
+        const result = await executeTaskCommand(text, !!taskSubmissionRef.current, () =>
           commandExecutor.execute(text)
         );
         await handleCommandResult(result);
@@ -3125,6 +3125,9 @@ function AppContent({
       if (!text.trim()) return;
       // Keep the submitted prompt intact until the selected transcript is ready.
       await sessionTransitionRef.current;
+      // Esc and natural completion can precede the final session checkpoint.
+      // A message typed in that window starts a fresh turn as soon as it closes.
+      if (taskSubmissionRef.current?.closing) await taskSubmissionRef.current.finished;
 
       if (followupPrompt && agentLoopProp) {
         const response = resolveFollowupResponse(text, followupPrompt.suggestions);
@@ -3144,7 +3147,12 @@ function AppContent({
       }
 
       const earlierSteeringCount = agentLoopProp?.getPendingSteeringCount() ?? 0;
-      taskSubmissionRef.current = true;
+      let finishSubmission!: () => void;
+      const finished = new Promise<void>((resolve) => {
+        finishSubmission = resolve;
+      });
+      const submission = { finished, closing: false };
+      taskSubmissionRef.current = submission;
       try {
         if (agentLoopProp) {
           if (!credentialManager) {
@@ -3297,6 +3305,10 @@ function AppContent({
             if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
               interrupted = true;
           };
+          const observeComplete = () => {
+            submission.closing = true;
+          };
+          agentLoopProp.on("complete", observeComplete);
           agentLoopProp.on("terminated", observeTermination);
           // Wire cancellation to AgentLoop
           cancellationRef.current = {
@@ -3354,6 +3366,7 @@ function AppContent({
             notifyError(errorMsg);
             addMessage({ role: "assistant", content: `[x] Error: ${errorMsg}` });
           } finally {
+            agentLoopProp.off("complete", observeComplete);
             agentLoopProp.off("terminated", observeTermination);
             setIsLoading(false);
             cancellationRef.current = null;
@@ -3403,7 +3416,8 @@ function AppContent({
         setIsLoading(false);
         cancellationRef.current = null;
       } finally {
-        taskSubmissionRef.current = false;
+        taskSubmissionRef.current = null;
+        finishSubmission();
       }
     },
     [
@@ -5457,7 +5471,7 @@ function AppContentView({
   const screenReaderStatus = pendingOperation
     ? pendingOperation.message
     : isLoading
-      ? "Thinking..."
+      ? "Task in progress"
       : "Ready";
 
   const screenReaderContent = (

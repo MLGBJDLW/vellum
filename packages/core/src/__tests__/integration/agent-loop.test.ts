@@ -241,6 +241,53 @@ describe("AgentLoop Integration (T034)", () => {
       expect(complete).toHaveBeenCalledTimes(1);
     });
 
+    it.each(["steer", "cancel"] as const)(
+      "releases a silent provider read on %s before the first event",
+      async (action) => {
+        const loop = new AgentLoop({ ...config, enableEvidencePack: false });
+        let read!: () => void;
+        const reading = new Promise<void>((resolve) => {
+          read = resolve;
+        });
+        let release!: () => void;
+        const upstream = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        vi.mocked(LLM.stream)
+          .mockImplementationOnce(async function* () {
+            read();
+            await upstream;
+            yield { type: "text", content: "Late original answer" };
+          })
+          .mockImplementationOnce(async function* () {
+            yield { type: "text", content: "Updated answer" };
+            yield { type: "done", stopReason: "end_turn" };
+          });
+        loop.addMessage(createSessionMessage("user", "Original task"));
+        const settled = vi.fn();
+        const run = loop.run().then(settled);
+        await reading;
+        try {
+          if (action === "steer") loop.steer(createSessionMessage("user", "Correction"));
+          else loop.cancel("user_escape");
+          await vi.waitFor(() => expect(settled).toHaveBeenCalledOnce(), { timeout: 1000 });
+        } finally {
+          release();
+          await run;
+        }
+        if (action === "cancel") {
+          loop.addMessage(createSessionMessage("user", "Correction"));
+          await loop.run();
+        }
+        expect(LLM.stream).toHaveBeenCalledTimes(2);
+        expect(JSON.stringify(vi.mocked(LLM.stream).mock.calls[1]?.[0].messages)).toContain(
+          "Correction"
+        );
+        expect(loop.getPendingSteeringCount()).toBe(0);
+        expect(JSON.stringify(loop.getMessages())).not.toContain("Late original answer");
+      }
+    );
+
     it.each([false, true])(
       "interrupts an unfinished thinking stream immediately for steering (processor=%s)",
       async (useStreamProcessor) => {
