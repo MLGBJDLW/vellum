@@ -27,3 +27,32 @@ export const YI_MODELS: ModelInfo[] = [
     deprecated: false,
   },
 ];
+
+// Saved sessions and private deployments can still select these historical IDs.
+// Keep their wire capabilities available without listing them as public routes.
+export const YI_MODEL_METADATA: ModelInfo[] = [
+  ...YI_MODELS,
+  ...(
+    [
+      ["yi-large", "Yi Large", 32_000],
+      ["yi-large-turbo", "Yi Large Turbo", 16_000],
+      ["yi-medium", "Yi Medium", 16_000],
+      ["yi-medium-200k", "Yi Medium 200K", 200_000],
+      ["yi-vision", "Yi Vision", 16_000],
+    ] as const
+  ).map(
+    ([id, name, contextWindow]): ModelInfo => ({
+      id,
+      name,
+      provider: "yi",
+      contextWindow,
+      maxOutputTokens: 4096,
+      supportsTools: id !== "yi-vision",
+      supportsVision: id === "yi-vision",
+      supportsReasoning: false,
+      supportsStreaming: true,
+      supportsPromptCache: false,
+      deprecated: false,
+    })
+  ),
+];

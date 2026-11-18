@@ -1,5 +1,5 @@
 /** Hosted Baichuan general and medical Chat Completions. */
-import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+import { DEFAULT_MODEL_IDS, findModelInfo } from "./models/index.js";
 import { BAICHUAN_MODELS } from "./models/providers/baichuan.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { OpenAIMessage } from "./transforms/openai.js";
@@ -20,7 +20,7 @@ export class BaichuanProvider extends OpenAICompatibleProvider {
 
   protected override buildExtraBody(params: CompletionParams): Record<string, unknown> {
     const body = { ...params.extraBody };
-    const model = BAICHUAN_MODELS.find((entry) => entry.id === params.model);
+    const model = findModelInfo(this.providerName, params.model);
     if (!model?.maxOutputTokens) return body;
     const requested = typeof body.max_tokens === "number" ? body.max_tokens : params.maxTokens;
     const maxTokens = Math.min(requested ?? 4096, model.maxOutputTokens);

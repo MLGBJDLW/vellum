@@ -24,6 +24,7 @@ import {
   YI_MODELS,
   ZHIPU_MODELS,
 } from "./providers/index.js";
+import { YI_MODEL_METADATA } from "./providers/yi.js";
 import type { ModelInfo } from "./types.js";
 
 /**
@@ -51,9 +52,11 @@ const bundledCatalog: ReadonlyArray<readonly [ProviderType, ModelInfo[]]> = [
 
 // Refresh replaces a provider's available view, not its bundled metadata.
 export const MODEL_CATALOG = new Map<ProviderType, ModelInfo[]>(bundledCatalog);
+const bundledMetadata = new Map(bundledCatalog);
+bundledMetadata.set("yi", YI_MODEL_METADATA);
 
 export function getBundledModelMetadata(provider: ProviderType): ModelInfo[] {
-  return bundledCatalog.find(([key]) => key === provider)?.[1] ?? [];
+  return bundledMetadata.get(provider) ?? [];
 }
 
 /**

@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BaichuanProvider } from "../baichuan.js";
 import { DeepSeekProvider } from "../deepseek.js";
 import { MistralProvider } from "../mistral.js";
+import {
+  MODEL_CATALOG,
+  normalizeDiscoveredModels,
+  updateDiscoveredModels,
+} from "../models/index.js";
 import { OpenAICompatibleProvider } from "../openai-compat.js";
 import { QwenProvider } from "../qwen.js";
 import type { CompletionMessage, CompletionParams, StreamEvent } from "../types.js";
@@ -66,6 +71,55 @@ const toolHistory: CompletionMessage[] = [
     ],
   },
 ];
+
+it.each([
+  {
+    provider: new YiProvider(),
+    inventory: [{ id: "yi-lightning", context_window: 65_536 }, { id: "yi-id-only" }],
+    limits: [
+      ["yi-lightning", 32_768],
+      ["yi-vision-v2", undefined],
+      ["yi-id-only", 32_768],
+      ["yi-private", 32_768],
+    ],
+  },
+  {
+    provider: new BaichuanProvider(),
+    inventory: [
+      { id: "Baichuan4", max_completion_tokens: 4000 },
+      { id: "custom", max_tokens: 3000 },
+    ],
+    limits: [
+      ["Baichuan4", 4000],
+      ["custom", 3000],
+      ["Baichuan4-Turbo", 2048],
+      ["Baichuan-private", 32_768],
+    ],
+  },
+] as const)(
+  "uses refreshed, bundled and custom output limits for $provider.providerName",
+  async ({ provider, inventory, limits }) => {
+    const key = provider.providerName;
+    const original = MODEL_CATALOG.get(key);
+    if (!original) throw new Error(`Missing catalog for ${key}`);
+    const fetch = mockCompletion(false, { role: "assistant", content: "Done" });
+    try {
+      updateDiscoveredModels(key, normalizeDiscoveredModels(key, [...inventory]));
+      await provider.initialize({ apiKey: "fixture" });
+      for (const [model, expected] of limits) {
+        fetch.mockClear();
+        await provider.complete({
+          model,
+          messages: [{ role: "user", content: "Hi" }],
+          maxTokens: 32_768,
+        });
+        expect(requestBody(fetch).max_tokens, model).toBe(expected);
+      }
+    } finally {
+      updateDiscoveredModels(key, original);
+    }
+  }
+);
 
 describe.each([false, true])("real provider wire compatibility (stream=%s)", (stream) => {
   it.each([

@@ -8,6 +8,7 @@
 
 ### Patch Changes
 
+- Cancel a pending tool approval and immediately send the next prompt. Saved model selections retain their documented limits and tool support when absent from an account's current model list.
 - Refresh the model catalog across all 17 adapters. Add current GPT-6.2, Qwen, GLM and Grok routes, correct legacy identifiers, and use native discovery where the provider exposes an account or local inventory. Request visible Claude adaptive thinking summaries when enabled. Preserve the previous local inventory on discovery failure and clear removed models after a successful empty response. Long-context cost estimates use the published input, output and cache rates for the matching pricing tier.
 
 ## 0.9.0

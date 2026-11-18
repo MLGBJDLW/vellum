@@ -4,7 +4,7 @@
  */
 
 import type { ProviderType } from "../types.js";
-import { MODEL_CATALOG } from "./catalog.js";
+import { getBundledModelMetadata, MODEL_CATALOG } from "./catalog.js";
 import type { ModelInfo } from "./types.js";
 
 // Catalog
@@ -96,33 +96,44 @@ const DEFAULT_MODEL_INFO: ModelInfo = {
  * @returns Model info, or default if not found
  */
 export function getModelInfo(provider: string, modelId: string): ModelInfo {
-  // Resolve provider alias
-  const normalizedProvider = provider.toLowerCase();
-  const canonicalProvider = (PROVIDER_ALIASES[normalizedProvider] ??
-    normalizedProvider) as ProviderType;
+  return (
+    findModelInfo(provider, modelId) ?? {
+      ...DEFAULT_MODEL_INFO,
+      id: modelId,
+      provider: canonicalProviderType(provider),
+    }
+  );
+}
+
+function canonicalProviderType(provider: string): ProviderType {
+  const normalized = provider.toLowerCase();
+  return (PROVIDER_ALIASES[normalized] ?? normalized) as ProviderType;
+}
+
+/** Look up wire capabilities without synthesizing limits for an unknown model. */
+export function findModelInfo(provider: string, modelId: string): ModelInfo | undefined {
+  const canonicalProvider = canonicalProviderType(provider);
   const providerModels = MODEL_CATALOG.get(canonicalProvider);
 
-  if (!providerModels) {
-    return { ...DEFAULT_MODEL_INFO, id: modelId, provider: canonicalProvider };
-  }
+  if (!providerModels) return undefined;
 
-  // Try exact match
-  const exactMatch = providerModels.find((m) => m.id === modelId || m.aliases?.includes(modelId));
+  // Live metadata wins. A saved or manual ID may be absent from this account's list.
+  const bundled = getBundledModelMetadata(canonicalProvider);
+  const matchesId = (model: ModelInfo) => model.id === modelId || model.aliases?.includes(modelId);
+  const exactMatch =
+    providerModels.find(matchesId) ?? (providerModels !== bundled && bundled.find(matchesId));
   if (exactMatch) {
     return exactMatch;
   }
 
   // Allow dated snapshots of a known model, never arbitrary prefix matches
   // (e.g. "gpt-6" must not borrow the capabilities of "gpt-6.1-sol").
-  const partialMatch = providerModels.find(
-    (m) =>
-      modelId.startsWith(`${m.id}-`) && /^\d{4}-?\d{2}-?\d{2}$/.test(modelId.slice(m.id.length + 1))
-  );
-  if (partialMatch) {
-    return { ...partialMatch, id: modelId };
-  }
-
-  return { ...DEFAULT_MODEL_INFO, id: modelId, provider: canonicalProvider };
+  const isSnapshot = (model: ModelInfo) =>
+    modelId.startsWith(`${model.id}-`) &&
+    /^\d{4}-?\d{2}-?\d{2}$/.test(modelId.slice(model.id.length + 1));
+  const partialMatch =
+    providerModels.find(isSnapshot) ?? (providerModels !== bundled && bundled.find(isSnapshot));
+  return partialMatch ? { ...partialMatch, id: modelId } : undefined;
 }
 
 /**

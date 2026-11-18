@@ -18,6 +18,7 @@ import {
   type CompletionMessage,
   type CompletionParams,
   classifyProviderError,
+  findModelInfo,
   getModelInfo,
   type LLMProvider,
   type ProviderRegistry,
@@ -337,9 +338,10 @@ export namespace LLM {
 
     // Honor explicit generation budgets up to the selected model's actual limit.
     // Keep a practical default without truncating every modern model at 32K.
-    const modelInfo = getModelInfo(validated.providerType, validated.model);
+    const lookupModel = validated.maxTokens === undefined ? getModelInfo : findModelInfo;
+    const modelInfo = lookupModel(validated.providerType, validated.model);
     const requestedMaxTokens = validated.maxTokens ?? MAX_OUTPUT_TOKENS;
-    const maxTokens = modelInfo.maxOutputTokens
+    const maxTokens = modelInfo?.maxOutputTokens
       ? Math.min(requestedMaxTokens, modelInfo.maxOutputTokens)
       : requestedMaxTokens;
 
@@ -379,7 +381,7 @@ export namespace LLM {
       temperature: validated.temperature,
       maxTokens,
       // Unknown metadata must not silently disable tools explicitly requested by the agent.
-      tools: modelInfo.supportsTools !== false ? wire.tools : undefined,
+      tools: modelInfo?.supportsTools !== false ? wire.tools : undefined,
       thinking: resolvedThinking,
       extraBody: wire.extraBody,
       abortSignal: validated.abortSignal,
