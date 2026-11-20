@@ -351,7 +351,7 @@ export function toSessionMessage(uiMessage: Message): SessionMessage {
  * ```
  */
 export function toSessionMessages(uiMessages: readonly Message[]): readonly SessionMessage[] {
-  return uiMessages.map(toSessionMessage);
+  return uiMessages.filter((message) => !message.localOnly).map(toSessionMessage);
 }
 
 // =============================================================================

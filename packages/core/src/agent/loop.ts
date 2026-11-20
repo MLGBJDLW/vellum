@@ -2062,7 +2062,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       if (
         !this.cancellation.isCancelled &&
         pendingToolCalls.length === 0 &&
-        !streamState.hasText &&
+        !streamState.accumulatedText.trim() &&
         !streamState.hasToolCalls
       ) {
         const hasThinkingOnly = streamState.hasThinking;
@@ -2685,6 +2685,18 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       return;
     }
 
+    // The orchestrator's accepted completion already contains the final answer.
+    // Publish it on the normal assistant channel and preserve it on session replay.
+    if (this.completionAttempted) {
+      const summary = toolResults.find(
+        (entry) => entry.name === "attempt_completion" && !entry.isError
+      )?.result;
+      if (summary?.trim()) {
+        this.messages.push(createAssistantMessage([SessionParts.text(summary)]));
+        this.emit("text", summary);
+      }
+    }
+
     // No continuation - complete the loop
     if (this.state === "tool_executing") {
       this.transitionTo("idle");
@@ -3146,7 +3158,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     });
 
     // Verification failure is feedback for the next repair iteration, never success.
-    this.completionAttempted = output.completed && output.verificationPassed !== false;
+    this.completionAttempted =
+      output.completed && output.result.trim().length > 0 && output.verificationPassed !== false;
 
     // Set termination flags for the termination checker
     this.terminationManager.setNaturalStop(this.completionAttempted);
@@ -3219,8 +3232,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         : JSON.stringify({
             ...output,
             completed: false,
-            nextAction:
-              "Inspect the verification evidence, repair the remaining issue, and verify again. If blocked, report the blocker accurately.",
+            nextAction: !output.result.trim()
+              ? "Provide a final answer that summarizes the outcome and verification."
+              : "Inspect the verification evidence, repair the remaining issue, and verify again. If blocked, report the blocker accurately.",
           });
     }
 

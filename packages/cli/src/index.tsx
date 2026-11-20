@@ -230,6 +230,18 @@ function parseProvider(value: string): string {
 
 program.name("vellum").description("Your personal AI assistant").version(version);
 
+program
+  .command("update")
+  .alias("upgrade")
+  .description("Check for a new Vellum release and update the installed CLI")
+  .option("--check", "Only report update availability")
+  .option("--force", "Skip the installation confirmation")
+  .action(async (options: { check?: boolean; force?: boolean }) => {
+    const { executeUpdateCommand } = await import("./commands/update.js");
+    const result = await executeUpdateCommand(version, options);
+    process.exitCode = result.exitCode;
+  });
+
 // =============================================================================
 // T037-T040: Chat Command with Mode Flags
 // =============================================================================

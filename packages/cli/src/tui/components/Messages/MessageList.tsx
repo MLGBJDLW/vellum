@@ -469,8 +469,6 @@ interface MessageItemProps {
   readonly roleColor: string;
   readonly mutedColor: string;
   readonly accentColor: string;
-  /** Color for thinking/reasoning content */
-  readonly thinkingColor: string;
   /** Color for success indicators */
   readonly successColor: string;
   /** Color for error indicators */
@@ -503,7 +501,6 @@ const MessageItem = memo(function MessageItem({
   roleColor,
   mutedColor,
   accentColor,
-  thinkingColor: _thinkingColor, // ThinkingBlock handles its own theming
   successColor,
   errorColor,
   showToolCalls = true,
@@ -520,6 +517,10 @@ const MessageItem = memo(function MessageItem({
   const label = getRoleLabel(message.role, t);
   const timestamp = formatTimestamp(message.timestamp);
   const hasThinking = message.thinking && message.thinking.length > 0;
+
+  const streamingThinking = Boolean(
+    message.isStreaming && hasThinking && !message.isThinkingComplete && !message.content
+  );
 
   return (
     <Box flexDirection="column" marginBottom={1}>
@@ -549,7 +550,7 @@ const MessageItem = memo(function MessageItem({
         <ThinkingBlock
           content={message.thinking ?? ""}
           durationMs={message.thinkingDuration}
-          isStreaming={message.isStreaming && !message.isThinkingComplete}
+          isStreaming={streamingThinking}
           isThinkingComplete={message.isThinkingComplete}
           initialCollapsed={!thinkingExpandedByDefault}
           expandedByDefault={thinkingExpandedByDefault}
@@ -565,17 +566,20 @@ const MessageItem = memo(function MessageItem({
       )}
 
       {/* Message content */}
-      <Box marginLeft={2} marginTop={0}>
-        <MarkdownRenderer
-          content={
-            message.content ||
-            (message.isStreaming || message.thinking || message.toolCalls?.length ? "" : "(empty)")
-          }
-          compact
-          textColor={roleColor}
-          isStreaming={message.isStreaming}
-        />
-      </Box>
+      {(Boolean(message.content) || (!hasThinking && !message.toolCalls?.length)) && (
+        <Box marginLeft={2}>
+          {message.localOnly ? (
+            <Text>{message.content}</Text>
+          ) : (
+            <MarkdownRenderer
+              content={message.content || (message.isStreaming ? "" : "(empty)")}
+              compact
+              textColor={message.role === "assistant" ? undefined : roleColor}
+              isStreaming={message.isStreaming && !streamingThinking}
+            />
+          )}
+        </Box>
+      )}
 
       {/* Tool calls, if any - Gemini-style inline with status icons */}
       {showToolCalls && message.toolCalls && message.toolCalls.length > 0 && (
@@ -884,8 +888,6 @@ const MessageList = memo(function MessageList({
   const accentColor = theme.semantic.text.secondary;
   const successColor = theme.colors.success;
   const errorColor = theme.colors.error;
-  // Use muted color for thinking/reasoning content (dimmed appearance)
-  const thinkingColor = theme.semantic.text.secondary ?? mutedColor;
 
   const getThinkingToggleInfo = useCallback(
     (message: Message) => {
@@ -927,7 +929,6 @@ const MessageList = memo(function MessageList({
           roleColor={roleColors[item.role]}
           mutedColor={mutedColor}
           accentColor={accentColor}
-          thinkingColor={thinkingColor}
           successColor={successColor}
           errorColor={errorColor}
           showToolCalls
@@ -945,7 +946,6 @@ const MessageList = memo(function MessageList({
       roleColors,
       mutedColor,
       accentColor,
-      thinkingColor,
       successColor,
       errorColor,
       thinkingDisplayMode,

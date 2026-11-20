@@ -163,6 +163,13 @@ export class QwenProvider extends OpenAICompatibleProvider {
         ? false
         : (params.thinking?.enabled ?? body.enable_thinking ?? supportsEffort);
     body.enable_thinking = enabled;
+    if (
+      enabled &&
+      params.model.startsWith("mindlab/macaron-") &&
+      body.preserve_thinking === undefined
+    ) {
+      body.preserve_thinking = true;
+    }
     if (params.thinking?.budgetTokens !== undefined && enabled) {
       body.thinking_budget = params.thinking.budgetTokens;
     }
@@ -183,6 +190,7 @@ export class QwenProvider extends OpenAICompatibleProvider {
 
   protected override resolveReasoningEffort(params: CompletionParams): ReasoningEffort | undefined {
     if (
+      (params.model.startsWith("mindlab/macaron-") && !params.thinking?.reasoningEffort) ||
       params.thinking?.budgetTokens !== undefined ||
       params.extraBody?.thinking_budget !== undefined ||
       params.thinking?.reasoningEffort === "none"

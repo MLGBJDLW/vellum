@@ -309,4 +309,34 @@ export const QWEN_MODELS: ModelInfo[] = [
     id,
     name: id,
   })),
+  ...(
+    [
+      ["mindlab/macaron-v1.1-venti", 1_048_576, 131_072, false, 1.19, 3.74, 0.22],
+      ["mindlab/macaron-v1.1-coding-venti", 1_048_576, 131_072, true, 1.19, 3.74, 0.22],
+      ["mindlab/macaron-v1-tall", 262_144, 65_536, false, 0.45, 2.6, 0.08],
+    ] as const
+  ).map(
+    ([
+      id,
+      contextWindow,
+      maxOutputTokens,
+      supportsVision,
+      inputPrice,
+      outputPrice,
+      cacheReadsPrice,
+    ]): ModelInfo => ({
+      ...openQwen,
+      id,
+      name: id,
+      contextWindow,
+      maxOutputTokens,
+      supportsVision,
+      inputPrice,
+      outputPrice,
+      cacheReadsPrice,
+      reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+      description:
+        "Requires MindLab activation on a Model Studio Singapore workspace endpoint. Prices are Singapore list rates.",
+    })
+  ),
 ];

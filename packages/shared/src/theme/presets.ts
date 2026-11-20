@@ -573,32 +573,32 @@ export const parchmentTheme: VellumTheme = {
   colors: {
     primary: "#8B7355", // Warm brown
     secondary: "#A69076", // Lighter brown
-    success: "#6B8E23", // Olive green
-    error: "#CD5C5C", // Indian red
-    warning: "#DAA520", // Goldenrod
-    info: "#5F9EA0", // Cadet blue
-    muted: "#9E9689", // Muted taupe
-    accent: "#C4956A", // Golden accent
+    success: "#526A27", // Olive green
+    error: "#9C4243", // Indian red
+    warning: "#805811", // Goldenrod
+    info: "#38656A", // Cadet blue
+    muted: "#706556", // Muted taupe
+    accent: "#87522F", // Golden accent
   },
   brand: sharedBrand,
   semantic: {
     text: {
       primary: "#4A3F2F", // Dark brown
       secondary: "#5D4E3C", // Medium brown
-      muted: "#9E9689", // Muted taupe
+      muted: "#706556", // Muted taupe
       inverted: "#F5F0E6", // Warm cream
       role: {
-        user: "#5F9EA0", // Cadet blue
+        user: "#38656A", // Cadet blue
         assistant: "#8B7355", // Warm brown
-        system: "#9E9689", // Muted taupe
-        tool: "#6B8E23", // Olive green
+        system: "#706556", // Muted taupe
+        tool: "#526A27", // Olive green
       },
     },
     background: {
       primary: "#F5F0E6", // Warm cream
       secondary: "#EDE4D4", // Slightly darker cream
       elevated: "#E5D9C3", // Light tan
-      code: "#FDF8EF", // Very light cream
+      code: "#EDE4D4", // Very light cream
     },
     border: {
       default: "#D4C4A8", // Light tan border
@@ -606,23 +606,23 @@ export const parchmentTheme: VellumTheme = {
       muted: "#E5D9C3", // Light tan
     },
     status: {
-      pending: "#9E9689", // Muted taupe
-      running: "#5F9EA0", // Cadet blue
-      complete: "#6B8E23", // Olive green
-      error: "#CD5C5C", // Indian red
-      approved: "#6B8E23", // Olive green
-      rejected: "#CD5C5C", // Indian red
+      pending: "#706556", // Muted taupe
+      running: "#38656A", // Cadet blue
+      complete: "#526A27", // Olive green
+      error: "#9C4243", // Indian red
+      approved: "#526A27", // Olive green
+      rejected: "#9C4243", // Indian red
     },
     syntax: {
       keyword: "#8B4513", // Saddle brown
-      string: "#6B8E23", // Olive green
-      number: "#B8860B", // Dark goldenrod
-      comment: "#9E9689", // Muted taupe
-      function: "#5F9EA0", // Cadet blue
+      string: "#526A27", // Olive green
+      number: "#815A16", // Dark goldenrod
+      comment: "#706556", // Muted taupe
+      function: "#38656A", // Cadet blue
       variable: "#4A3F2F", // Dark brown
-      type: "#708090", // Slate gray
-      operator: "#CD5C5C", // Indian red
-      punctuation: "#9E9689", // Muted taupe
+      type: "#485F70", // Slate gray
+      operator: "#9C4243", // Indian red
+      punctuation: "#706556", // Muted taupe
     },
     diff: {
       added: "#D4EDDA", // Light green

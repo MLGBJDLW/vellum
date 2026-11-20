@@ -10,8 +10,8 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { useCallback, useId, useRef, useState } from "react";
-import { useInput } from "../hooks/useTerminalInput.js";
 import { useTUITranslation } from "../i18n/index.js";
+import { useTheme } from "../theme/index.js";
 import { Clickable } from "./common/Clickable.js";
 
 // =============================================================================
@@ -31,6 +31,7 @@ export interface UpdateBannerProps {
   /** Whether the banner can be dismissed */
   readonly dismissible?: boolean;
   /** Callback when banner is dismissed */
+  readonly onUpgrade?: () => void;
   readonly onDismiss?: () => void;
   /** Whether to show in compact mode */
   readonly compact?: boolean;
@@ -59,8 +60,10 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
   releaseNotesUrl,
   dismissible = true,
   onDismiss,
+  onUpgrade,
   compact = false,
 }) => {
+  const { theme } = useTheme();
   const { t } = useTUITranslation();
   const [dismissed, setDismissed] = useState(false);
   const bannerId = useId();
@@ -72,16 +75,6 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
     onDismiss?.();
   }, [dismissible, onDismiss]);
 
-  // Handle dismiss key press
-  useInput(
-    (input, key) => {
-      if (dismissible && (input === "d" || input === "D" || key.escape)) {
-        dismiss();
-      }
-    },
-    { isActive: dismissible && !dismissed }
-  );
-
   // Don't render if dismissed
   if (dismissed) {
     return null;
@@ -91,7 +84,16 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
   if (compact) {
     return (
       <Box>
-        <Text color="yellow">⬆ v{latestVersion} available</Text>
+        <Clickable
+          id={`${bannerId}-upgrade`}
+          width="auto"
+          enabled={Boolean(onUpgrade)}
+          onClick={() => onUpgrade?.()}
+        >
+          <Text color={theme.colors.info} wrap="truncate-end">
+            ↑ {t("update.availableVersion", { version: latestVersion })} · /upgrade
+          </Text>
+        </Clickable>
         {dismissible && (
           <Clickable id={`${bannerId}-dismiss`} width="auto" onClick={dismiss}>
             <Text color="gray"> {t("update.dismissHint")}</Text>
@@ -122,7 +124,14 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
       </Box>
 
       <Box marginTop={1}>
-        <Text color="cyan">{t("update.upgradeHint")}</Text>
+        <Clickable
+          id={`${bannerId}-upgrade`}
+          width="auto"
+          enabled={Boolean(onUpgrade)}
+          onClick={() => onUpgrade?.()}
+        >
+          <Text color={theme.colors.info}>/upgrade</Text>
+        </Clickable>
       </Box>
 
       {releaseNotesUrl && (
@@ -137,7 +146,7 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
         <Box marginTop={1}>
           <Clickable id={`${bannerId}-dismiss`} width="auto" onClick={dismiss}>
             <Text color="gray" dimColor>
-              {t("update.dismissInstructions")}
+              {t("update.dismissHint")}
             </Text>
           </Clickable>
         </Box>

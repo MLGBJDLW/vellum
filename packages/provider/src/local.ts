@@ -337,10 +337,25 @@ export class OllamaProvider extends LocalProvider {
               const architecture = info["general.architecture"];
               const configuredContext =
                 typeof details.parameters === "string"
-                  ? /^num_ctx\s+(\d+)\s*$/m.exec(details.parameters)?.[1]
+                  ? /^[ \t]*num_ctx[ \t]+(\d+)[ \t]*\r?$/m.exec(details.parameters)?.[1]
                   : undefined;
+              const thinking = asRecord(details.thinking);
+              // Ollama's OpenAI endpoint maps "none" to false and a named
+              // effort to true on models advertising only a boolean switch.
+              const effort = (value: unknown) =>
+                value === false ? "none" : value === true ? "medium" : value;
               Object.assign(record, {
                 capabilities: details.capabilities,
+                reasoning:
+                  Array.isArray(thinking.values) && thinking.values.length
+                    ? {
+                        supported_efforts: [...new Set(thinking.values.map(effort))],
+                        default_effort: effort(thinking.default),
+                        mandatory: !thinking.values.some(
+                          (value) => value === false || value === "none"
+                        ),
+                      }
+                    : undefined,
                 context_length: configuredContext
                   ? Number(configuredContext)
                   : typeof architecture === "string"

@@ -8,9 +8,12 @@
  */
 
 import { spawn } from "node:child_process";
-
+import { existsSync, realpathSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
+import { killProcessTree } from "@vellum/sandbox";
 import type { UpdateConfig, UpdateResult } from "./types.js";
 import { DEFAULT_UPDATE_CONFIG } from "./types.js";
+import { parseSemVer } from "./version-checker.js";
 
 // =============================================================================
 // Types
@@ -25,6 +28,7 @@ export type PackageManager = "npm" | "bun" | "pnpm";
  * Update options
  */
 export interface UpdateOptions {
+  readonly signal?: AbortSignal;
   /** Target version to update to (default: latest) */
   readonly targetVersion?: string;
   /** Whether to install globally */
@@ -43,21 +47,33 @@ export interface UpdateOptions {
  * Detect the package manager used to install the CLI
  */
 export function detectPackageManager(): PackageManager {
-  // Check environment variable set by package managers
-  const execPath = process.env.npm_execpath ?? "";
-
-  if (execPath.includes("bun")) {
+  let executable = process.argv[1] ?? "";
+  try {
+    executable = realpathSync.native(executable);
+  } catch {
+    // Embedded callers may supply a virtual executable path.
+  }
+  const path = executable.replaceAll("\\", "/");
+  const entry = path.toLowerCase();
+  if (entry.includes("/pnpm/global/") || entry.includes("/.pnpm/")) return "pnpm";
+  if (entry.includes("/.bun/install/global/") || entry.includes("/node_modules/.bun/"))
     return "bun";
+  const modules = path.lastIndexOf("/node_modules/");
+  if (modules !== -1) {
+    const root = resolve(path.slice(0, modules + 1));
+    const configuredRoot = process.env.BUN_INSTALL_GLOBAL_DIR;
+    if (existsSync(join(root, "bun.lock")) || existsSync(join(root, "bun.lockb"))) return "bun";
+    if (configuredRoot) {
+      try {
+        if (relative(realpathSync.native(configuredRoot), root) === "") return "bun";
+      } catch {
+        // A moved or unavailable Bun directory cannot establish install ownership.
+      }
+    }
   }
-  if (execPath.includes("pnpm")) {
-    return "pnpm";
-  }
-
-  // Check if bun is available
-  const bunPath = process.env.BUN_INSTALL;
-  if (bunPath) {
-    return "bun";
-  }
+  const execPath = process.env.npm_execpath?.toLowerCase() ?? "";
+  if (execPath.includes("pnpm")) return "pnpm";
+  if (execPath.includes("bun")) return "bun";
 
   // Default to npm
   return "npm";
@@ -99,27 +115,46 @@ function buildUpdateCommand(
  */
 function executeCommand(
   command: string,
-  args: string[]
+  args: string[],
+  signal?: AbortSignal
 ): Promise<{ success: boolean; output: string; error?: string }> {
   return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve({ success: false, output: "", error: "Installation cancelled." });
+      return;
+    }
     const proc = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      detached: Boolean(signal) && process.platform !== "win32",
       shell: process.platform === "win32",
     });
 
+    const abort = () => {
+      if (proc.pid)
+        void killProcessTree(proc.pid).catch(() => {
+          proc.kill("SIGKILL");
+          proc.stdout?.destroy();
+          proc.stderr?.destroy();
+        });
+    };
+    signal?.addEventListener("abort", abort, { once: true });
     let stdout = "";
     let stderr = "";
 
     proc.stdout?.on("data", (data: Buffer) => {
-      stdout += data.toString();
+      stdout = (stdout + data.toString()).slice(-8192);
     });
 
     proc.stderr?.on("data", (data: Buffer) => {
-      stderr += data.toString();
+      stderr = (stderr + data.toString()).slice(-8192);
     });
 
     proc.on("close", (code) => {
-      if (code === 0) {
+      signal?.removeEventListener("abort", abort);
+      if (signal?.aborted) {
+        resolve({ success: false, output: stdout, error: "Installation cancelled." });
+      } else if (code === 0) {
         resolve({ success: true, output: stdout });
       } else {
         resolve({
@@ -131,6 +166,7 @@ function executeCommand(
     });
 
     proc.on("error", (err) => {
+      signal?.removeEventListener("abort", abort);
       resolve({
         success: false,
         output: stdout,
@@ -167,6 +203,20 @@ export class Updater {
    * @returns Update result
    */
   async update(currentVersion: string, options: UpdateOptions = {}): Promise<UpdateResult> {
+    const target = options.targetVersion ?? "latest";
+    // Windows package-manager shims run in cmd.exe. Only pass package specs,
+    // versions and dist-tags which are safe as a single argument on every OS.
+    if (
+      !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i.test(this.config.packageName) ||
+      !(parseSemVer(target) || /^[a-z][a-z0-9._-]*$/i.test(target))
+    ) {
+      return {
+        success: false,
+        previousVersion: currentVersion,
+        requiresRestart: false,
+        error: "Invalid package name or version",
+      };
+    }
     const pm = options.packageManager ?? detectPackageManager();
     const { command, args } = buildUpdateCommand(pm, this.config.packageName, {
       ...options,
@@ -183,7 +233,7 @@ export class Updater {
       };
     }
 
-    const result = await executeCommand(command, args);
+    const result = await executeCommand(command, args, options.signal);
 
     if (!result.success) {
       return {

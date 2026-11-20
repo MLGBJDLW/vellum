@@ -1,5 +1,13 @@
 # @vellum/mcp
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies:
+  - @vellum/core@0.4.4
+  - @vellum/shared@0.1.3
+
 ## 0.2.1
 
 ### Patch Changes

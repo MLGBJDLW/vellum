@@ -163,6 +163,7 @@ describe("sidepanel mouse actions", () => {
     async (compact) => {
       const dismissTip = vi.fn();
       const dismissUpdate = vi.fn();
+      const upgrade = vi.fn();
       const context = harness();
       let screen!: ReturnType<typeof render>;
       await act(async () => {
@@ -194,6 +195,7 @@ describe("sidepanel mouse actions", () => {
             <UpdateBanner
               currentVersion="1.0.0"
               latestVersion="2.0.0"
+              onUpgrade={upgrade}
               onDismiss={dismissUpdate}
               compact={compact}
             />
@@ -201,8 +203,10 @@ describe("sidepanel mouse actions", () => {
         );
       });
       await act(async () => {
+        click(screen, "/upgrade");
         click(screen, "dismiss");
       });
+      expect(upgrade).toHaveBeenCalledTimes(1);
       expect(dismissUpdate).toHaveBeenCalledTimes(1);
       expect(screen.lastFrame()).not.toContain("2.0.0");
     }

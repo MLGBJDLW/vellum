@@ -1,5 +1,15 @@
 # @vellum/core
 
+## 0.4.4
+
+### Patch Changes
+
+- Publish accepted completion summaries as assistant messages and repair empty summaries. Check the published CLI package, detect its package manager through symlinks, and support cancellable updates.
+- Updated dependencies:
+  - @vellum/shared@0.1.3
+  - @vellum/provider@0.7.0
+  - @vellum/sandbox@0.1.4
+
 ## 0.4.3
 
 ### Patch Changes

@@ -5,7 +5,7 @@ import type {
   ResponseInput,
   ResponseStreamEvent,
 } from "openai/resources/responses/responses";
-import { getModelInfo } from "./models/index.js";
+import { findModelInfo } from "./models/index.js";
 import type { ReasoningEffort } from "./models/types.js";
 import { stripSchemaMetaFields } from "./transforms/schema-sanitizer.js";
 import type {
@@ -75,15 +75,14 @@ export function buildResponsesRequest(
       }
     }
   }
-  const modelInfo = getModelInfo(provider, params.model);
+  const modelInfo = findModelInfo(provider, params.model);
   const grokMultiAgent = provider === "xai" && params.model.startsWith("grok-4.20-multi-agent");
   const request: ResponseCreateParamsNonStreaming = {
     model: params.model,
     input,
     store: false,
     include: ["reasoning.encrypted_content"],
-    ...(grokMultiAgent ? {} : { max_output_tokens: params.maxTokens ?? 32_768 }),
-    ...(params.tools?.length && !grokMultiAgent && modelInfo.supportsTools !== false
+    ...(params.tools?.length && !grokMultiAgent && modelInfo?.supportsTools !== false
       ? {
           tools: params.tools.map((tool) => ({
             type: "function" as const,
@@ -95,11 +94,17 @@ export function buildResponsesRequest(
         }
       : {}),
   };
+  if (params.maxTokens !== undefined && !grokMultiAgent) {
+    request.max_output_tokens = Math.min(
+      params.maxTokens,
+      modelInfo?.maxOutputTokens ?? params.maxTokens
+    );
+  }
   // New API effort values are valid wire values even when the installed SDK's
   // generated TypeScript union predates the model (e.g. GPT-6's "max").
   const includeSummary =
     provider === "openai" &&
-    modelInfo.api === "responses" &&
+    modelInfo?.api === "responses" &&
     modelInfo.supportsReasoning &&
     effort !== "none" &&
     params.thinking?.enabled !== false;

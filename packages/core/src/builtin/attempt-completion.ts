@@ -16,7 +16,11 @@ import { executeShell, getSandboxOptions } from "./utils/index.js";
  */
 export const attemptCompletionParamsSchema = z.object({
   /** Summary of the completed task */
-  result: z.string().describe("Summary of the completed task and what was accomplished"),
+  result: z
+    .string()
+    .trim()
+    .min(1)
+    .describe("Summary of the completed task and what was accomplished"),
   /** Optional command to verify completion */
   command: z
     .string()

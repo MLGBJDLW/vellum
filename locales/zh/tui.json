@@ -257,9 +257,13 @@
     "available": "有可用更新",
     "current": "当前版本：",
     "latest": "最新版本：",
-    "upgradeHint": "运行 vellum update 升级",
-    "dismissHint": "(按 d 关闭)",
-    "dismissInstructions": "按 d 或 Esc 关闭"
+    "upgradeHint": "点击版本或输入 /upgrade 升级",
+    "dismissHint": "关闭",
+    "dismissInstructions": "点击关闭",
+    "availableVersion": "发现 v{{version}}",
+    "upToDate": "v{{version}} · 已是最新版本",
+    "restart": "已安装 v{{version}} · 请重启 Vellum",
+    "unavailable": "v{{version}} · 检查更新失败 · 输入 /upgrade 重试"
   },
   "todo": {
     "title": "任务列表",

@@ -1,5 +1,15 @@
 # @butlerw/vellum
 
+## 0.11.0
+
+### Minor Changes
+
+- [#102](https://github.com/MLGBJDLW/vellum/pull/102) [`aef2940`](https://github.com/MLGBJDLW/vellum/commit/aef2940a5eeae56c9ac3b8b3b637067d2bfc1177) Thanks [@MLGBJDLW](https://github.com/MLGBJDLW)! - Stream reasoning with a single stable cursor, distinguish reasoning and inline code from answers, and show how each turn ended. Verified orchestrator summaries now appear in the transcript and survive session replay.
+
+  Press `~` in an empty composer to run local shell commands. Check release status at startup, then click an available update or use `/upgrade` to confirm installation.
+
+  Refresh provider catalogs, retired model mappings, reasoning controls and output limits. OpenRouter refresh respects the configured account and endpoint, and local discovery reads the deployment's reported capabilities.
+
 ## 0.10.0
 
 ### Minor Changes

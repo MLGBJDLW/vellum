@@ -11,7 +11,7 @@ import type { SessionMessage } from "@vellum/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Message } from "../context/MessagesContext.js";
 import { useMessages } from "../context/MessagesContext.js";
-import { toSessionMessage, toUIMessages } from "./message-adapter.js";
+import { toSessionMessages, toUIMessages } from "./message-adapter.js";
 
 // =============================================================================
 // Types
@@ -187,7 +187,7 @@ export function createSessionAdapter(sessionId: string, storage: SessionStorage)
 }
 
 function toStoredMessages(messages: readonly Message[]): SessionMessage[] {
-  return messages.map(toSessionMessage);
+  return [...toSessionMessages(messages)];
 }
 
 // =============================================================================

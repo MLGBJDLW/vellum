@@ -1,5 +1,11 @@
 # @vellum/shared
 
+## 0.1.3
+
+### Patch Changes
+
+- Improve parchment contrast for links, reasoning, inline code, and status labels.
+
 ## 0.1.2
 
 ### Patch Changes

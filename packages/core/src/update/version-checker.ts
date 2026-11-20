@@ -7,7 +7,9 @@
  * @module core/update/version-checker
  */
 
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fetchWithPool } from "@vellum/shared";
 
@@ -30,7 +32,7 @@ import { DEFAULT_UPDATE_CONFIG, VersionCheckCacheSchema } from "./types.js";
  */
 export function parseSemVer(version: string): SemVer | null {
   // Match: major.minor.patch[-prerelease]
-  const match = version.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/);
+  const match = version.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
   if (!match || !match[1] || !match[2] || !match[3]) {
     return null;
   }
@@ -120,14 +122,19 @@ export class VersionChecker {
    */
   constructor(config: Partial<UpdateConfig> = {}, cacheDir?: string) {
     this.config = { ...DEFAULT_UPDATE_CONFIG, ...config };
-    this.cacheDir = cacheDir ?? join(process.env.HOME ?? process.cwd(), ".vellum", "cache");
+    this.cacheDir = cacheDir ?? join(homedir(), ".vellum", "cache");
   }
 
   /**
    * Get the cache file path
    */
   private get cacheFilePath(): string {
-    return join(this.cacheDir, "version-check.json");
+    const { registryUrl, packageName, channel } = this.config;
+    const key = createHash("sha256")
+      .update(JSON.stringify([registryUrl, packageName, channel]))
+      .digest("hex")
+      .slice(0, 16);
+    return join(this.cacheDir, `version-check-${key}.json`);
   }
 
   /**
@@ -307,7 +314,7 @@ export class VersionChecker {
         hasUpdate,
         channel: this.config.channel,
         releaseDate: latest.releaseDate,
-        releaseNotesUrl: `https://github.com/vellum-ai/vellum/releases/tag/v${latest.version}`,
+        releaseNotesUrl: `https://github.com/MLGBJDLW/vellum/releases/tag/v${latest.version}`,
         tarballUrl: latest.tarballUrl,
       };
 

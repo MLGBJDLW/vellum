@@ -7,8 +7,12 @@
  * @module core/update/__tests__/version-checker.test
  */
 
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
+import { detectPackageManager } from "../updater.js";
 import {
   compareSemVer,
   isNewerVersion,
@@ -28,6 +32,29 @@ vi.mock("@vellum/shared", async (importOriginal) => {
 import { fetchWithPool } from "@vellum/shared";
 
 const mockFetchWithPool = fetchWithPool as Mock;
+
+it("identifies a custom Bun global install by its configured root or lockfile", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vellum-update-owner-"));
+  const argv = process.argv;
+  try {
+    const pkg = join(root, "node_modules", "@butlerw", "vellum");
+    await mkdir(pkg, { recursive: true });
+    const entry = join(pkg, "index.mjs");
+    await writeFile(entry, "");
+    process.argv = [argv[0] ?? "node", entry];
+    vi.stubEnv("npm_execpath", "");
+    vi.stubEnv("BUN_INSTALL_GLOBAL_DIR", root);
+    expect(detectPackageManager()).toBe("bun");
+    vi.stubEnv("BUN_INSTALL_GLOBAL_DIR", "");
+    expect(detectPackageManager()).toBe("npm");
+    await writeFile(join(root, "bun.lock"), "{}");
+    expect(detectPackageManager()).toBe("bun");
+  } finally {
+    process.argv = argv;
+    vi.unstubAllEnvs();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 // =============================================================================
 // Semver Parsing Tests
@@ -221,7 +248,6 @@ describe("VersionChecker", () => {
 
   beforeEach(() => {
     checker = new VersionChecker({
-      packageName: "@vellum/cli",
       registryUrl: "https://registry.npmjs.org",
       timeoutMs: 5000,
     });
@@ -235,7 +261,7 @@ describe("VersionChecker", () => {
     it("should return success with update info on successful fetch", async () => {
       // Mock fetch response
       const mockMetadata = {
-        name: "@vellum/cli",
+        name: "@butlerw/vellum",
         "dist-tags": {
           latest: "1.1.0",
           next: "2.0.0-beta.1",
@@ -262,11 +288,18 @@ describe("VersionChecker", () => {
       expect(result.updateInfo?.hasUpdate).toBe(true);
       expect(result.updateInfo?.currentVersion).toBe("1.0.0");
       expect(result.updateInfo?.latestVersion).toBe("1.1.0");
+      expect(mockFetchWithPool).toHaveBeenCalledWith(
+        "https://registry.npmjs.org/@butlerw/vellum",
+        expect.anything()
+      );
+      expect(result.updateInfo?.releaseNotesUrl).toBe(
+        "https://github.com/MLGBJDLW/vellum/releases/tag/v1.1.0"
+      );
     });
 
     it("should return no update when already on latest", async () => {
       const mockMetadata = {
-        name: "@vellum/cli",
+        name: "@butlerw/vellum",
         "dist-tags": { latest: "1.0.0" },
         versions: {
           "1.0.0": { version: "1.0.0", dist: { tarball: "url", shasum: "sha" } },

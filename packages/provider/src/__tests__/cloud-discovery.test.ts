@@ -3,6 +3,7 @@ import { AnthropicProvider } from "../anthropic.js";
 import { GoogleProvider } from "../google.js";
 import { GroqProvider } from "../groq.js";
 import { OpenAIProvider } from "../openai.js";
+import { OpenRouterProvider } from "../openrouter.js";
 import { QwenProvider } from "../qwen.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -12,10 +13,43 @@ const providers = [
   ["anthropic", () => new AnthropicProvider()],
   ["google", () => new GoogleProvider()],
   ["groq", () => new GroqProvider()],
+  ["openrouter", () => new OpenRouterProvider()],
   ["qwen", () => new QwenProvider()],
 ] as const;
 
 describe("cloud model discovery", () => {
+  it.each([
+    ["https://openrouter.ai/api/v1", "/api/v1/models/user"],
+    ["https://eu.openrouter.ai/api/v1/", "/api/v1/models/user"],
+    ["https://proxy.example/v1", "/v1/models"],
+  ])("refreshes the OpenRouter inventory on its configured host %s", async (baseUrl, path) => {
+    const fetch = vi.fn(async (url: string, init: RequestInit) => {
+      expect(new URL(url).host).toBe(new URL(baseUrl).host);
+      expect(new URL(url).pathname).toBe(path);
+      expect(new Headers(init.headers).get("authorization")).toBe("Bearer fixture");
+      return Response.json({ data: [{ id: "vendor/private" }, { id: "vendor/private:batch" }] });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const provider = new OpenRouterProvider();
+    await provider.initialize({ apiKey: "fixture", baseUrl });
+    expect((await provider.refreshModels()).map((model) => model.id)).toEqual(["vendor/private"]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("distinguishes an empty account inventory from a malformed response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ data: [] }))
+        .mockResolvedValueOnce(Response.json({ data: [{}] }))
+    );
+    const provider = new OpenRouterProvider();
+    await provider.initialize({ apiKey: "fixture" });
+    expect(await provider.refreshModels()).toEqual([]);
+    await expect(provider.refreshModels()).rejects.toThrow();
+  });
+
   it("reads each native Model Studio page and keeps text-generating chat routes", async () => {
     const fetch = vi.fn(async (url: string) => {
       const request = new URL(url);

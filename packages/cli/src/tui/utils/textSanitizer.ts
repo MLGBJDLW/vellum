@@ -152,7 +152,7 @@ export function sanitizeText(text: string, options?: SanitizeOptions): string {
 export function sanitizeAnsi(text: string, options?: SanitizeOptions): string {
   if (options?.stripAllAnsi) {
     // Remove ALL ANSI sequences
-    return text.replace(CSI_PATTERN, "").replace(OSC_PATTERN, "");
+    return text.replace(CSI_PATTERN, "").replace(OSC_PATTERN, "").replaceAll("\x1b", "");
   }
 
   // Collect safe SGR sequences and their positions

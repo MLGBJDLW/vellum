@@ -52,6 +52,10 @@ export interface TextInputProps {
   /** Callback when value changes */
   readonly onChange: (value: string) => void;
   /** Callback when input is submitted */
+  /** Handle an explicit key before editing. Bracketed paste bypasses shortcuts. */
+  readonly onEditorKey?: (input: string, key: Key, value: string) => boolean;
+  /** One-cell prompt symbol. */
+  readonly promptSymbol?: string;
   readonly onSubmit?: (value: string) => void;
   /** Placeholder text shown when value is empty */
   readonly placeholder?: string;
@@ -165,6 +169,8 @@ function TextInputComponent({
   value,
   onChange: onValueChange,
   onSubmit,
+  onEditorKey,
+  promptSymbol = "❯",
   placeholder = "",
   suggestion,
   multiline = false,
@@ -776,6 +782,7 @@ function TextInputComponent({
         handleEnd();
         return;
       }
+      if (onEditorKey?.(input, key, valueRef.current)) return;
       if (processKeyEvent(input, key)) return;
       if (input && !key.ctrl && !key.meta) handleInput(input);
     },
@@ -865,7 +872,7 @@ function TextInputComponent({
         minHeight={effectiveMinHeight + 2} // +2 for top/bottom border
       >
         <Box flexDirection="row">
-          <Text color={theme.semantic.text.primary}>{"❯ "}</Text>
+          <Text color={theme.semantic.text.primary}>{promptSymbol} </Text>
           <Text color={theme.semantic.text.muted}>
             {focused ? (
               <>
@@ -902,7 +909,9 @@ function TextInputComponent({
         <Box key={start} flexDirection="row" height={1}>
           {/* Show prompt prefix on first line only */}
           {index === 0 ? (
-            <Text color={theme.semantic.text.primary}>{visibleStart > 0 ? "↑ " : "❯ "}</Text>
+            <Text color={theme.semantic.text.primary}>
+              {visibleStart > 0 ? "↑ " : `${promptSymbol} `}
+            </Text>
           ) : (
             <Text>
               {index === visibleRows.length - 1 &&

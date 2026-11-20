@@ -168,7 +168,10 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
     if (
       provider === "google" &&
       (/^gemini-(?:.*-)?(?:tts|image|live|transcribe|native-audio)(?:-|$)/.test(id) ||
-        /^(?:gemini-(?:nano-banana|omni)|imagen|veo|lyria)(?:-|$)/.test(id))
+        /^(?:gemini-(?:nano-banana|omni|decision|embedding)|genie|imagen|veo|lyria|deep-research|antigravity)(?:-|$)/.test(
+          id
+        ) ||
+        id === "gemini-robotics-er-2-streaming-preview")
     )
       continue;
     // xAI's sparse /models response includes image generation products without
@@ -191,6 +194,17 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       positive(data.inputTokenLimit) ??
       positive(data.max_context_length);
     const contextWindow = reportedContextWindow ?? known?.contextWindow ?? 8_192;
+    let maxOutputTokens =
+      positive(topProvider.max_completion_tokens) ??
+      positive(data.max_completion_tokens) ??
+      positive(data.max_tokens) ??
+      positive(data.outputTokenLimit) ??
+      known?.maxOutputTokens;
+    // The native inventory can report long-decode capacity. Each synchronous
+    // generateContent call is limited to one hop on these Gemini 4 models.
+    if (provider === "google" && /^gemini-4-(?:argon|carbon|hydrogen|neon)$/.test(id)) {
+      maxOutputTokens = Math.min(maxOutputTokens ?? 65_536, 65_536);
+    }
     const reportedEfforts =
       reasoning.supported_efforts ??
       (provider === "xai" ? capabilities.reasoning_effort : undefined) ??
@@ -230,12 +244,7 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
       contextWindow,
       contextWindowKnown:
         reportedContextWindow !== undefined || (!!known && known.contextWindowKnown !== false),
-      maxOutputTokens:
-        positive(topProvider.max_completion_tokens) ??
-        positive(data.max_completion_tokens) ??
-        positive(data.max_tokens) ??
-        positive(data.outputTokenLimit) ??
-        known?.maxOutputTokens,
+      maxOutputTokens,
       supportsTools:
         boolean(capabilities.function_calling) ??
         boolean(capabilities.trained_for_tool_use) ??
@@ -324,8 +333,8 @@ export function normalizeDiscoveredModels(provider: ProviderType, records: unkno
 
 /** Replace the current provider view after an explicit successful refresh. */
 export function updateDiscoveredModels(provider: ProviderType, models: ModelInfo[]): void {
-  // Local servers legitimately become empty after a user removes their last model.
-  if (models.length === 0 && provider !== "ollama" && provider !== "lmstudio") {
+  // Local installations and OpenRouter's account-filtered catalog can legitimately be empty.
+  if (models.length === 0 && !["ollama", "lmstudio", "openrouter"].includes(provider)) {
     throw new Error(`No chat models were returned by ${provider}`);
   }
   MODEL_CATALOG.set(provider, models);

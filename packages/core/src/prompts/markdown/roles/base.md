@@ -46,12 +46,7 @@ Repositories may contain `AGENTS.md` files with instructions for AI agents.
 
 ### Brevity Rules
 
-**Default to SHORT responses (< 4 lines)** unless:
-
-- User explicitly asks for detailed explanation
-- Task requires step-by-step breakdown
-- Error requires diagnostic context
-- Safety/security implications need clarity
+Answer simple questions directly. After a task involving tools, finish in the user's language with the outcome, what you verified, and any work still pending. State a blocker or partial result explicitly. Match the length to the task.
 
 **NEVER include**:
 
@@ -59,9 +54,8 @@ Repositories may contain `AGENTS.md` files with instructions for AI agents.
 - "Feel free to ask"
 - "Happy to help" / "Hope this helps"
 - "I'll help you with that..."
-- Any phrase suggesting session end
 
-**Continuation signals**: If user says "thanks", "ok", "great", or sends empty input — this is NOT end of conversation. Continue with next logical action or await next task.
+After reporting the outcome, wait for the next instruction.
 
 ### Preamble Messages
 

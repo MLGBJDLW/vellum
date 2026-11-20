@@ -10,7 +10,7 @@
 
 import type { PersistenceManager, Session, SessionMessage } from "@vellum/core";
 import type { Message } from "../context/MessagesContext.js";
-import { toSessionMessage, toUIMessages } from "./message-adapter.js";
+import { toSessionMessage, toSessionMessages, toUIMessages } from "./message-adapter.js";
 
 // =============================================================================
 // Types
@@ -153,7 +153,7 @@ export class PersistenceBridge {
    * @returns Array of session messages
    */
   toSessionMessages(messages: readonly Message[]): SessionMessage[] {
-    return messages.map(toSessionMessage);
+    return [...toSessionMessages(messages)];
   }
 
   /**
@@ -210,8 +210,11 @@ export class PersistenceBridge {
     }
 
     // Get new messages since last sync
-    const newMessages = messages.slice(this.syncState.lastSyncedIndex);
+    const newMessages = messages
+      .slice(this.syncState.lastSyncedIndex)
+      .filter((message) => !message.localOnly);
     if (newMessages.length === 0) {
+      this.syncState.lastSyncedIndex = messages.length;
       return {
         success: true,
         syncedCount: 0,

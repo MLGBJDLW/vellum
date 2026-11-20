@@ -11,6 +11,7 @@
 
 import { Text } from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
+import stringWidth from "string-width";
 import { useAnimation } from "../../context/AnimationContext.js";
 import { sanitize } from "../../utils/textSanitizer.js";
 
@@ -60,6 +61,14 @@ const CHARS_PER_TICK = 3;
 // =============================================================================
 // Main Component
 // =============================================================================
+
+/** Only the live cursor subscribes to animation ticks. Keep its terminal cells
+ * occupied while hidden so Ink wraps and measures both frames identically. */
+export function StreamingCursor({ glyph, blink }: { glyph: string; blink: boolean }) {
+  const { frame, isPaused } = useAnimation();
+  const visible = !blink || isPaused || Math.floor(frame / 4) % 2 === 0;
+  return <Text>{visible ? glyph : "\u2800".repeat(stringWidth(glyph))}</Text>;
+}
 
 /**
  * StreamingText displays text with an animated cursor while streaming.
@@ -114,23 +123,20 @@ export function StreamingText({
   typewriterSpeed = DEFAULT_TYPEWRITER_SPEED_MS,
   formatFn,
 }: StreamingTextProps): React.JSX.Element {
-  // Track cursor visibility for blinking effect
-  const [cursorVisible, setCursorVisible] = useState(true);
-
   // Track previous streaming state to detect completion
   const prevIsStreamingRef = useRef<boolean | null>(null);
-
-  // Track if this is the initial mount (for immediate display when not streaming)
-  const isInitialMountRef = useRef(true);
 
   // Typewriter effect state - initialize to full length if not streaming on mount
   const [displayedLength, setDisplayedLength] = useState(() => (isStreaming ? 0 : content.length));
   const prevContentLengthRef = useRef(content.length);
+  const wasTypewriter = useRef(typewriterEffect);
 
   // Handle typewriter effect - gradually reveal characters
   useEffect(() => {
-    // Skip typewriter if disabled
-    if (!typewriterEffect) {
+    const resumed = typewriterEffect && !wasTypewriter.current;
+    wasTypewriter.current = typewriterEffect;
+    if (!typewriterEffect) return;
+    if (resumed) {
       setDisplayedLength(content.length);
       return;
     }
@@ -140,9 +146,6 @@ export function StreamingText({
       setDisplayedLength(content.length);
       return;
     }
-
-    // Mark initial mount as complete
-    isInitialMountRef.current = false;
 
     // If we're caught up, nothing to do
     if (displayedLength >= content.length) {
@@ -164,31 +167,12 @@ export function StreamingText({
 
   // Reset displayed length when content is cleared (new message)
   useEffect(() => {
-    if (content.length < prevContentLengthRef.current) {
+    if (typewriterEffect && isStreaming && content.length < prevContentLengthRef.current) {
       // Content was reset (new message started)
       setDisplayedLength(0);
     }
     prevContentLengthRef.current = content.length;
-  }, [content.length]);
-
-  // Use global animation context for cursor blink to prevent flickering
-  const { frame, isPaused } = useAnimation();
-
-  // Derive cursor visibility from animation frame instead of independent timer
-  // This prevents competing setIntervals from causing flicker
-  const derivedCursorVisible = useMemo(() => {
-    // Always show cursor when not streaming or blink disabled
-    if (!isStreaming || !cursorBlink) return true;
-    // Show cursor when animation is paused (e.g., input focused)
-    if (isPaused) return true;
-    // Toggle every ~4 frames (~500ms blink cycle at 120ms/200ms tick rate)
-    return Math.floor(frame / 4) % 2 === 0;
-  }, [frame, isPaused, isStreaming, cursorBlink]);
-
-  // Sync local state with derived value for compatibility with existing logic
-  useEffect(() => {
-    setCursorVisible(derivedCursorVisible);
-  }, [derivedCursorVisible]);
+  }, [content.length, typewriterEffect, isStreaming]);
 
   // Handle streaming completion callback
   useEffect(() => {
@@ -212,7 +196,6 @@ export function StreamingText({
 
   // Determine cursor to display (show cursor while typewriter is still catching up)
   const showCursor = isStreaming || (typewriterEffect && displayedLength < sanitizedContent.length);
-  const cursor = showCursor && cursorVisible ? cursorChar : "";
 
   // Apply formatting function if provided, otherwise render plain text
   const formattedContent = useMemo(
@@ -223,7 +206,7 @@ export function StreamingText({
   return (
     <Text wrap="wrap">
       {formattedContent}
-      {cursor}
+      {showCursor && <StreamingCursor glyph={cursorChar} blink={cursorBlink} />}
     </Text>
   );
 }

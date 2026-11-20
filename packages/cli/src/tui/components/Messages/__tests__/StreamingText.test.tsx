@@ -7,6 +7,7 @@
  * @module tui/components/Messages/__tests__/StreamingText.test
  */
 
+import { Box } from "ink";
 import { render } from "ink-testing-library";
 import { act, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -108,23 +109,27 @@ describe("StreamingText", () => {
     it("blinks cursor when animation frames advance", async () => {
       const { lastFrame } = await renderStreamingText(
         <AnimationProvider tickInterval={100}>
-          <StreamingText
-            content="Blinking"
-            isStreaming={true}
-            cursorBlink={true}
-            typewriterEffect={false}
-          />
+          <Box width={8}>
+            <StreamingText
+              content="12345678"
+              isStreaming={true}
+              cursorBlink={true}
+              typewriterEffect={false}
+            />
+          </Box>
         </AnimationProvider>
       );
 
       // Initially cursor is visible
       expect(lastFrame()).toContain("▊");
 
+      const height = lastFrame()?.split("\n").length;
       // After 4 ticks (frame=4), cursor should be hidden
       await act(async () => {
         vi.advanceTimersByTime(400);
       });
       expect(lastFrame()).not.toContain("▊");
+      expect(lastFrame()?.split("\n")).toHaveLength(height ?? 0);
 
       // After 4 more ticks (frame=8), cursor should be visible again
       await act(async () => {

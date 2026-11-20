@@ -8,11 +8,12 @@
  * @module tui/components/Input/EnhancedCommandInput
  */
 
-import { Box } from "ink";
+import { Box, type Key } from "ink";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useInputHistory } from "../../hooks/useInputHistory.js";
 import { useMentionAutocomplete } from "../../hooks/useMentionAutocomplete.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
+import { translate } from "../../i18n/tui-namespace.js";
 import type { AutocompleteOption } from "./Autocomplete.js";
 import { Autocomplete } from "./Autocomplete.js";
 import { MentionAutocomplete } from "./MentionAutocomplete.js";
@@ -28,6 +29,7 @@ import { TextInput, type TextInputHandle } from "./TextInput.js";
  */
 export interface EnhancedCommandInputProps {
   /** Callback when regular text message is submitted */
+  readonly onShell?: (command: string) => void;
   readonly onMessage: (text: string) => void;
   /** Callback when a slash command is submitted */
   readonly onCommand: (command: SlashCommand) => void;
@@ -103,6 +105,7 @@ function isSlashCommand(input: string): boolean {
  */
 export function EnhancedCommandInput({
   onMessage,
+  onShell,
   onCommand,
   commands,
   getSubcommands,
@@ -119,6 +122,8 @@ export function EnhancedCommandInput({
   cwd = process.cwd(),
   enableMentions = true,
 }: EnhancedCommandInputProps): React.ReactElement {
+  const [shellMode, setShellMode] = useState(false);
+  const shellModeRef = useRef(false);
   const [value, setValue] = useState("");
 
   const [dismissedAutocompleteValue, setDismissedAutocompleteValue] = useState<string | null>(null);
@@ -143,7 +148,7 @@ export function EnhancedCommandInput({
 
   // Slash autocomplete state
   const slashAutocomplete = useMemo(() => {
-    if (!value.startsWith("/")) {
+    if (shellMode || !value.startsWith("/")) {
       return {
         visible: false,
         active: false,
@@ -205,10 +210,10 @@ export function EnhancedCommandInput({
       commandName,
       arg1,
     };
-  }, [value]);
+  }, [value, shellMode]);
 
   // @ Mention autocomplete state
-  const mentionAutocomplete = useMentionAutocomplete(value, { cwd });
+  const mentionAutocomplete = useMentionAutocomplete(shellMode ? "" : value, { cwd });
 
   // Slash autocomplete options (computed early for activeAutocomplete check)
   const slashOptions = useMemo(() => {
@@ -271,10 +276,23 @@ export function EnhancedCommandInput({
 
   // History navigation
   const restoringHistoryRef = useRef(false);
-  const { navigateHistory, addToHistory, resetNavigation } = useInputHistory({
+  const chatHistory = useInputHistory({
     maxItems: 100,
     persistKey: historyKey,
   });
+
+  const shellHistory = useInputHistory();
+  const { navigateHistory, resetNavigation } = shellMode ? shellHistory : chatHistory;
+  const handleEditorKey = (input: string, key: Key, draft: string) => {
+    const toggle = onShell && !draft && input === "~" && !key.ctrl && !key.meta;
+    if (!toggle && !(shellModeRef.current && key.escape)) return false;
+    shellModeRef.current = Boolean(toggle && !shellModeRef.current);
+    setShellMode(shellModeRef.current);
+    inputRef.current?.replaceValue("");
+    shellHistory.resetNavigation();
+    chatHistory.resetNavigation();
+    return true;
+  };
 
   const handleHistory = useCallback(
     (direction: "up" | "down") => {
@@ -303,7 +321,13 @@ export function EnhancedCommandInput({
         return;
       }
 
-      addToHistory(trimmed);
+      if (shellModeRef.current) {
+        shellHistory.addToHistory(trimmed);
+        inputRef.current?.replaceValue("");
+        onShell?.(submittedValue);
+        return;
+      }
+      chatHistory.addToHistory(trimmed);
 
       // Commit the empty editor before dispatch. A command may change sessions
       // or start asynchronous work; neither should retain the submitted text or
@@ -318,7 +342,7 @@ export function EnhancedCommandInput({
         onMessage(trimmed);
       }
     },
-    [addToHistory, onCommand, onMessage]
+    [chatHistory.addToHistory, shellHistory.addToHistory, onShell, onCommand, onMessage]
   );
 
   // History navigation only when no autocomplete is active
@@ -430,8 +454,10 @@ export function EnhancedCommandInput({
         value={value}
         onChange={handleChange}
         onSubmit={handleSubmit}
-        placeholder={placeholder}
-        suggestion={activeAutocomplete === null ? suggestion : undefined}
+        onEditorKey={handleEditorKey}
+        promptSymbol={shellMode ? "$" : undefined}
+        placeholder={shellMode ? translate("input.shell") : placeholder}
+        suggestion={!shellMode && activeAutocomplete === null ? suggestion : undefined}
         disabled={disabled}
         focused={focused}
         multiline={multiline}

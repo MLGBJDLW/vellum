@@ -9,7 +9,10 @@ import type { SlashCommand } from "../slash-command-utils.js";
 
 afterEach(() => act(() => cleanup()));
 
-function renderInput(onCommand: (command: SlashCommand) => void) {
+function renderInput(
+  onCommand: (command: SlashCommand) => void,
+  onShell?: (command: string) => void
+) {
   const onMessage = vi.fn();
   let screen!: ReturnType<typeof render>;
   act(() => {
@@ -22,6 +25,7 @@ function renderInput(onCommand: (command: SlashCommand) => void) {
               getSubcommands={(command) =>
                 command === "session" ? [{ name: "list" }, { name: "new" }] : undefined
               }
+              onShell={onShell}
               onCommand={onCommand}
               onMessage={onMessage}
               placeholder="Write a message"
@@ -43,6 +47,31 @@ async function write(stdin: { write: (data: string) => void }, data: string) {
 }
 
 describe("EnhancedCommandInput terminal submission", () => {
+  it("keeps typed tildes in chat when the host shell is unavailable", async () => {
+    const screen = renderInput(vi.fn());
+    await write(screen.stdin, "~");
+    await write(screen.stdin, "/notes\r");
+    expect(screen.onMessage).toHaveBeenCalledExactlyOnceWith("~/notes");
+  });
+
+  it("routes only explicitly entered shell mode to local execution and keeps pasted tildes literal", async () => {
+    const shell = vi.fn();
+    const slash = vi.fn();
+    const screen = renderInput(slash, shell);
+    await write(screen.stdin, "\x1b[200~~/notes\x1b[201~");
+    await write(screen.stdin, "\r");
+    expect(screen.onMessage).toHaveBeenCalledExactlyOnceWith("~/notes");
+    await write(screen.stdin, "~");
+    expect(screen.lastFrame()).toContain("Shell command");
+    await write(screen.stdin, "ls\r");
+    await write(screen.stdin, "/bin/pwd\r");
+    expect(shell.mock.calls).toEqual([["ls"], ["/bin/pwd"]]);
+    expect(slash).not.toHaveBeenCalled();
+    await write(screen.stdin, "~");
+    await write(screen.stdin, "\x1b[A");
+    expect(screen.lastFrame()).toContain("~/notes");
+  });
+
   it("restores the draft on the first Down and handles coalesced history keys and edits", async () => {
     const screen = renderInput(vi.fn());
     await write(screen.stdin, "first\rsecond\r");

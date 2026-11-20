@@ -23,6 +23,7 @@ import {
   createSession,
   createToolRegistry,
   createUserMessage,
+  executeShell,
   getTextContent,
   loadSessionTodos,
   ProjectMemoryService,
@@ -129,7 +130,11 @@ import { mouseSlashCommands } from "./commands/mouse.js";
 import { roleSlashCommands } from "./commands/role.js";
 import { getThinkingEffortOptions } from "./commands/think.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
-import { checkUpdateOnStartup } from "./commands/update.js";
+import {
+  checkUpdateOnStartup,
+  createUpgradeCommand,
+  type ReleaseStatus,
+} from "./commands/update.js";
 import { getOrchestrator } from "./orchestrator-singleton.js";
 import { getShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
 import { useAgentAdapter } from "./tui/adapters/agent-adapter.js";
@@ -228,6 +233,7 @@ import { useToolApprovalController } from "./tui/hooks/useToolApprovalController
 import type { VimMode } from "./tui/hooks/useVim.js";
 import { useVim } from "./tui/hooks/useVim.js";
 import { useWorkspace } from "./tui/hooks/useWorkspace.js";
+import { translate } from "./tui/i18n/index.js";
 import {
   getAlternateBufferEnabled,
   getBannerSeen,
@@ -255,6 +261,7 @@ import { type ThemeName, useTheme } from "./tui/theme/index.js";
 import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
 // Cursor management utilities
 import { CursorManager } from "./tui/utils/cursor-manager.js";
+import { sanitize } from "./tui/utils/textSanitizer.js";
 import { calculateCost, getContextWindow, getModelInfo } from "./utils/index.js";
 import { version } from "./version.js";
 
@@ -733,6 +740,7 @@ function AppContent({
   const { state: applicationState, dispatch: dispatchApplication } = useApplicationState();
   const themeContext = useTheme();
   const { messages, addMessage, clearMessages, setMessages, pendingMessage } = useMessages();
+  const [turnStatus, setTurnStatus] = useState<string>();
   const [isLoading, setIsLoading] = useState(false);
   const taskSubmissionRef = useRef<{ finished: Promise<void>; closing: boolean } | null>(null);
   const [workingDirectory, setWorkingDirectory] = useState(
@@ -1371,11 +1379,12 @@ function AppContent({
   const previousTokenUsageRef = useRef({ inputTokens: 0, outputTokens: 0 });
   const saveCurrentSessionRef = useRef<(() => Promise<void>) | null>(null);
   const sessionSelectionRequestRef = useRef(0);
+  const shellRun = useRef<AbortController | null>(null);
   const sessionTransitionRef = useRef<Promise<void> | null>(null);
 
   const switchToSession = useCallback(
     async (sessionId: string, session?: Session): Promise<boolean> => {
-      if (sessionTransitionRef.current) return false;
+      if (sessionTransitionRef.current || shellRun.current) return false;
       if (taskSubmissionRef.current) {
         addMessage({
           role: "assistant",
@@ -1431,6 +1440,7 @@ function AppContent({
           cacheWriteTokens: 0,
         });
         setActiveSessionId(sessionId);
+        setTurnStatus(undefined);
         return true;
       } catch (error) {
         notifyError(
@@ -1970,28 +1980,20 @@ function AppContent({
 
   const hasActiveApproval = activeApproval !== null;
 
-  // Update banner state
-  const [updateAvailable, setUpdateAvailable] = useState<{
-    current: string;
-    latest: string;
-  } | null>(null);
-
-  // Check for updates on startup (non-blocking)
+  const [releaseStatus, setReleaseStatus] = useState<ReleaseStatus | null>(null);
   useEffect(() => {
-    const checkUpdate = async () => {
-      try {
-        const result = await checkUpdateOnStartup(version);
-        if (result) {
-          setUpdateAvailable({
-            current: version,
-            latest: result.latestVersion,
-          });
-        }
-      } catch {
-        // Silently ignore update check failures
+    let active = true;
+    void checkUpdateOnStartup(version).then(
+      (status) => {
+        if (active) setReleaseStatus((previous) => previous ?? status);
+      },
+      () => {
+        if (active) setReleaseStatus((previous) => previous ?? { kind: "unknown" });
       }
+    );
+    return () => {
+      active = false;
     };
-    checkUpdate();
   }, []);
 
   // ==========================================================================
@@ -2504,7 +2506,11 @@ function AppContent({
     () => setCommandRegistryVersion((prev) => prev + 1),
     []
   );
-  const commandRegistry = useMemo(() => createCommandRegistry(), []);
+  const commandRegistry = useMemo(() => {
+    const registry = createCommandRegistry();
+    registry.register(createUpgradeCommand(version, setReleaseStatus));
+    return registry;
+  }, []);
 
   // ==========================================================================
   //: Plugin System Integration
@@ -2964,9 +2970,8 @@ function AppContent({
     }
 
     if (pendingOperation) {
-      if (key.escape && pendingOperation.cancel) {
+      if ((key.escape || (key.ctrl && inputChar === "c")) && pendingOperation.cancel) {
         pendingOperation.cancel();
-        setPendingOperation(null);
       }
       return;
     }
@@ -3293,6 +3298,7 @@ function AppContent({
           }
         }
 
+        setTurnStatus(undefined);
         setIsLoading(true);
         // Thinking content is now integrated into the streaming message
         // via the agent-adapter's handleThinking function.
@@ -3303,8 +3309,15 @@ function AppContent({
           let interrupted = false;
           const observeTermination = (reason: TerminationReason) => {
             if (reason === TerminationReason.ERROR) submission.closing = true;
-            if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
+            if (
+              reason !== TerminationReason.NATURAL_STOP &&
+              reason !== TerminationReason.TEXT_ONLY
+            ) {
               interrupted = true;
+              setTurnStatus(
+                translate("turn.stopped", { reason: translate(`turn.reason.${reason}`) })
+              );
+            }
           };
           const observeComplete = () => {
             submission.closing = true;
@@ -3351,12 +3364,20 @@ function AppContent({
               await agentLoopProp.run();
             }
 
-            // Messages are synced via AgentLoop adapter event handlers (handleText)
-            // User message was already added via addMessage() above
-            // Notify on completion
             if (!interrupted) {
-              notifyTaskComplete("Response received");
-              announce("Response received");
+              const stop = agentLoopProp.getStreamHandler().getState().stopReason;
+              const last = agentLoopProp.getMessages().at(-1);
+              const hasAnswer =
+                last?.role === "assistant" &&
+                last.parts.some((part) => part.type === "text" && part.text.trim());
+              const stopped =
+                stop === "max_tokens" || stop === "content_filter" || stop === "error";
+              const status = stopped
+                ? translate("turn.stopped", { reason: translate(`turn.reason.${stop}`) })
+                : translate(hasAnswer ? "turn.complete" : "turn.unanswered");
+              setTurnStatus(status);
+              if (hasAnswer && !stopped) notifyTaskComplete(status);
+              announce(status);
             }
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
@@ -3439,6 +3460,49 @@ function AppContent({
       resolveFollowupResponse,
       resilientProvider,
     ]
+  );
+
+  useEffect(() => () => shellRun.current?.abort(), []);
+  const handleShell = useCallback(
+    async (command: string) => {
+      if (
+        shellRun.current ||
+        taskSubmissionRef.current ||
+        sessionTransitionRef.current ||
+        pendingOperation ||
+        interactivePrompt
+      )
+        return;
+      const controller = new AbortController();
+      shellRun.current = controller;
+      const promise = executeShell(command, {
+        cwd: workingDirectory,
+        abortSignal: controller.signal,
+        maxBuffer: 16 * 1024,
+      }).then((result): CommandResult => {
+        const status = controller.signal.aborted
+          ? "Cancelled"
+          : `Exit ${result.exitCode ?? result.signal ?? "unknown"}`;
+        const output = sanitize([result.stdout, result.stderr].filter(Boolean).join("\n"), {
+          stripAllAnsi: true,
+        }).trimEnd();
+        addMessage({
+          role: "tool",
+          localOnly: true,
+          content: [`$ ${command}`, output, status].filter(Boolean).join("\n"),
+        });
+        return { kind: "success" };
+      });
+      try {
+        await handleCommandResult({
+          kind: "pending",
+          operation: { message: `Running $ ${command}`, promise, cancel: () => controller.abort() },
+        });
+      } finally {
+        shellRun.current = null;
+      }
+    },
+    [addMessage, workingDirectory, handleCommandResult, interactivePrompt, pendingOperation]
   );
 
   // Handle slash command submission (for CommandInput onCommand)
@@ -3876,10 +3940,6 @@ function AppContent({
   // Calculate total tokens for StatusBar
   const totalTokens = tokenUsage.inputTokens + tokenUsage.outputTokens;
 
-  const dismissUpdateBanner = useCallback(() => {
-    setUpdateAvailable(null);
-  }, []);
-
   const cancelOnboarding = useCallback(() => {
     setShowOnboarding(false);
   }, []);
@@ -4025,12 +4085,13 @@ function AppContent({
       currentProvider={currentProvider}
       currentTip={currentTip}
       dismissTip={dismissTip}
-      dismissUpdateBanner={dismissUpdateBanner}
       handleApprove={handleApprove}
       handleApproveAlways={handleApproveAlways}
       handleBannerComplete={handleBannerComplete}
       handleCommand={handleCommand}
       handleCreateBacktrackBranch={handleCreateBacktrackBranch}
+      turnStatus={turnStatus}
+      handleShell={!_sandbox || _sandbox === "full-access" ? handleShell : undefined}
       handleMessage={handleMessage}
       handleModeSelect={handleModeSelect}
       handleModelSelect={handleModelSelect}
@@ -4088,7 +4149,7 @@ function AppContent({
       totalTokens={totalTokens}
       trustMode={trustMode}
       undoBacktrack={undoBacktrack}
-      updateAvailable={updateAvailable}
+      releaseStatus={releaseStatus}
       redoBacktrack={redoBacktrack}
       workspace={workspaceName}
       workingDirectory={workingDirectory}
@@ -4169,12 +4230,13 @@ interface AppContentViewProps {
   readonly currentProvider: string;
   readonly currentTip: TipValue;
   readonly dismissTip: () => void;
-  readonly dismissUpdateBanner: () => void;
   readonly handleApprove: () => void;
   readonly handleApproveAlways: () => void;
   readonly handleBannerComplete: () => void;
   readonly handleCommand: (command: SlashCommand) => void;
   readonly handleCreateBacktrackBranch: () => void;
+  readonly turnStatus?: string;
+  readonly handleShell?: (command: string) => void;
   readonly handleMessage: (text: string) => void;
   readonly handleModeSelect: (mode: CodingMode) => void;
   readonly handleModelSelect: (selectedProvider: string, selectedModel: string) => void;
@@ -4249,7 +4311,7 @@ interface AppContentViewProps {
   readonly trustMode: TrustMode;
   readonly undoBacktrack: () => void;
   readonly redoBacktrack: () => void;
-  readonly updateAvailable: { current: string; latest: string } | null;
+  readonly releaseStatus: ReleaseStatus | null;
   /** Workspace name for header separator */
   readonly workspace: string;
   /** Git branch for header separator */
@@ -5002,12 +5064,13 @@ function AppContentView({
   currentProvider,
   currentTip,
   dismissTip,
-  dismissUpdateBanner,
   handleApprove,
   handleApproveAlways,
   handleBannerComplete,
   handleCommand,
   handleCreateBacktrackBranch,
+  turnStatus,
+  handleShell,
   handleMessage,
   handleModeSelect,
   handleModelSelect,
@@ -5062,7 +5125,7 @@ function AppContentView({
   trustMode,
   undoBacktrack,
   redoBacktrack,
-  updateAvailable,
+  releaseStatus,
   workspace,
   branch,
   changedFiles,
@@ -5226,10 +5289,12 @@ function AppContentView({
   const showMainView = !showOnboarding && !showBannerView;
 
   const commandPlaceholder = followupPrompt
-    ? "Reply to follow-up..."
+    ? translate("input.followup")
     : isLoading
-      ? "Add an instruction… Enter to steer"
-      : "Type a message or /command...";
+      ? translate("input.steer")
+      : handleShell
+        ? translate("input.messageOrShell")
+        : translate("input.sandbox");
 
   const commandInputDisabled = !!interactivePrompt || !!pendingOperation;
 
@@ -5261,6 +5326,29 @@ function AppContentView({
     <>
       <Box flexDirection="column" flexGrow={1}>
         {/* Thinking content is now integrated into messages via the `thinking` field */}
+        {releaseStatus?.kind === "available" ? (
+          <UpdateBanner
+            currentVersion={version}
+            latestVersion={releaseStatus.version}
+            compact
+            dismissible={false}
+            onUpgrade={
+              !hasBlockingOverlay && !isLoading
+                ? () => handleCommand({ name: "upgrade", args: [], raw: "/upgrade" })
+                : undefined
+            }
+          />
+        ) : (
+          releaseStatus && (
+            <Text wrap="truncate-end" color={themeContext.theme.semantic.text.muted}>
+              {releaseStatus.kind === "installed"
+                ? translate("update.restart", { version: releaseStatus.version })
+                : releaseStatus.kind === "current"
+                  ? translate("update.upToDate", { version })
+                  : translate("update.unavailable", { version })}
+            </Text>
+          )
+        )}
         <MessageList
           messages={messages}
           pendingMessage={pendingMessage}
@@ -5400,6 +5488,9 @@ function AppContentView({
           interactivePrompt={interactivePrompt}
           pendingOperation={pendingOperation}
         />
+        {turnStatus && !isLoading && (
+          <Text color={themeContext.theme.semantic.text.secondary}>{turnStatus}</Text>
+        )}
         {/* Vim mode indicator (shown above input when vim mode is enabled) */}
         {vimEnabled && (
           <Box marginBottom={0}>
@@ -5418,6 +5509,7 @@ function AppContentView({
                 ? getNextStepSuggestion(messages)
                 : undefined
             }
+            onShell={!isLoading && !followupPrompt ? handleShell : undefined}
             onMessage={handleMessage}
             onCommand={handleCommand}
             commands={commandOptions}
@@ -5494,16 +5586,6 @@ function AppContentView({
 
       {showMainView && (
         <>
-          {updateAvailable && (
-            <UpdateBanner
-              currentVersion={updateAvailable.current}
-              latestVersion={updateAvailable.latest}
-              dismissible
-              onDismiss={dismissUpdateBanner}
-              compact
-            />
-          )}
-
           <AdaptiveLayout
             regularLayout={
               <Layout

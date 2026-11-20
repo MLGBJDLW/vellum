@@ -87,6 +87,12 @@ it("preserves provider replay, part ordering and thinking timestamps across UI r
   ];
   const ui = toUIMessages(history);
   expect(ui[1]?.toolCalls?.[0]).toMatchObject({ name: "shell", arguments: { command: "pwd" } });
+  const localReceipt = {
+    ...toUIMessage(history[0] as SessionMessage),
+    localOnly: true,
+    content: "private terminal output",
+  };
+  expect(toSessionMessages([...ui, localReceipt])).toEqual(history);
   expect(toSessionMessages(ui)).toEqual(history);
 });
 
