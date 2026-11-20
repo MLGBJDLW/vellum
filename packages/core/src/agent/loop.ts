@@ -3158,7 +3158,8 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
     });
 
     // Verification failure is feedback for the next repair iteration, never success.
-    this.completionAttempted = output.completed && output.verificationPassed !== false;
+    this.completionAttempted =
+      output.completed && output.result.trim().length > 0 && output.verificationPassed !== false;
 
     // Set termination flags for the termination checker
     this.terminationManager.setNaturalStop(this.completionAttempted);
@@ -3231,8 +3232,9 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
         : JSON.stringify({
             ...output,
             completed: false,
-            nextAction:
-              "Inspect the verification evidence, repair the remaining issue, and verify again. If blocked, report the blocker accurately.",
+            nextAction: !output.result.trim()
+              ? "Provide a final answer that summarizes the outcome and verification."
+              : "Inspect the verification evidence, repair the remaining issue, and verify again. If blocked, report the blocker accurately.",
           });
     }
 

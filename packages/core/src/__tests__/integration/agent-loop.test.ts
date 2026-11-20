@@ -775,6 +775,44 @@ describe("AgentLoop Integration (T034)", () => {
       expect(JSON.stringify(loop.getMessages())).toContain("Assertion failed: expected 2");
     });
 
+    it("repairs an empty completion and publishes the accepted summary once", async () => {
+      let attempt = 0;
+      vi.mocked(LLM.stream).mockImplementation(
+        () =>
+          createMockStream([
+            { type: "toolCall", id: `verify-${++attempt}`, name: "attempt_completion", input: {} },
+            { type: "done", stopReason: "tool_use" },
+          ]) as ReturnType<typeof LLM.stream>
+      );
+      mockToolExecutor.registerTool({
+        definition: {
+          name: "attempt_completion",
+          description: "Verify",
+          parameters: z.object({}),
+          kind: "agent",
+        },
+        execute: async () => ({
+          success: true as const,
+          output: {
+            result: attempt === 1 ? "  " : "Fixed the layout. The terminal check passed.",
+            verified: true,
+            verificationPassed: true,
+            completed: true,
+          },
+        }),
+      });
+      const loop = new AgentLoop({ ...config, maxIterations: 3, enableEvidencePack: false });
+      const text = vi.fn();
+      loop.on("text", text);
+      await loop.run();
+      expect(attempt).toBe(2);
+      expect(text).toHaveBeenCalledExactlyOnceWith("Fixed the layout. The terminal check passed.");
+      expect(loop.getMessages().at(-1)).toMatchObject({
+        role: "assistant",
+        parts: [{ type: "text", text: "Fixed the layout. The terminal check passed." }],
+      });
+    });
+
     it("offers the registered verification tool only to the orch workflow", async () => {
       const container = new UnifiedToolContainer();
       container.registerBuiltins();
