@@ -423,6 +423,9 @@ import { saveMemoryTool } from "./save-memory.js";
 import { searchAndReplaceTool } from "./search-and-replace.js";
 import { searchFilesTool } from "./search-files.js";
 import { shellTool } from "./shell.js";
+
+export { executeShell } from "./utils/shell-helpers.js";
+
 import { skillTool } from "./skill-tool.js";
 import { smartEditTool } from "./smart-edit-tool.js";
 import { switchWorkspaceTool } from "./switch-workspace.js";

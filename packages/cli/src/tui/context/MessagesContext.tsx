@@ -96,6 +96,8 @@ export interface Message {
   readonly thinkingDuration?: number;
   /** Whether thinking phase is complete (false during streaming) */
   readonly isThinkingComplete?: boolean;
+  /** Local terminal output is excluded from model history and session storage. */
+  readonly localOnly?: boolean;
   /** Original persisted message, retained by reference for lossless session replay. */
   readonly sourceMessage?: SessionMessage;
 }

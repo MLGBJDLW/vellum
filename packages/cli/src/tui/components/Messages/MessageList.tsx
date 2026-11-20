@@ -571,12 +571,16 @@ const MessageItem = memo(function MessageItem({
       {/* Message content */}
       {(Boolean(message.content) || (!hasThinking && !message.toolCalls?.length)) && (
         <Box marginLeft={2}>
-          <MarkdownRenderer
-            content={message.content || (message.isStreaming ? "" : "(empty)")}
-            compact
-            textColor={roleColor}
-            isStreaming={message.isStreaming && !streamingThinking}
-          />
+          {message.localOnly ? (
+            <Text>{message.content}</Text>
+          ) : (
+            <MarkdownRenderer
+              content={message.content || (message.isStreaming ? "" : "(empty)")}
+              compact
+              textColor={roleColor}
+              isStreaming={message.isStreaming && !streamingThinking}
+            />
+          )}
         </Box>
       )}
 

@@ -23,6 +23,7 @@ import {
   createSession,
   createToolRegistry,
   createUserMessage,
+  executeShell,
   getTextContent,
   loadSessionTodos,
   ProjectMemoryService,
@@ -255,6 +256,7 @@ import { type ThemeName, useTheme } from "./tui/theme/index.js";
 import { buildTipContext, useTipEngine } from "./tui/tip-integration.js";
 // Cursor management utilities
 import { CursorManager } from "./tui/utils/cursor-manager.js";
+import { sanitize } from "./tui/utils/textSanitizer.js";
 import { calculateCost, getContextWindow, getModelInfo } from "./utils/index.js";
 import { version } from "./version.js";
 
@@ -1372,11 +1374,12 @@ function AppContent({
   const previousTokenUsageRef = useRef({ inputTokens: 0, outputTokens: 0 });
   const saveCurrentSessionRef = useRef<(() => Promise<void>) | null>(null);
   const sessionSelectionRequestRef = useRef(0);
+  const shellRun = useRef<AbortController | null>(null);
   const sessionTransitionRef = useRef<Promise<void> | null>(null);
 
   const switchToSession = useCallback(
     async (sessionId: string, session?: Session): Promise<boolean> => {
-      if (sessionTransitionRef.current) return false;
+      if (sessionTransitionRef.current || shellRun.current) return false;
       if (taskSubmissionRef.current) {
         addMessage({
           role: "assistant",
@@ -2966,9 +2969,8 @@ function AppContent({
     }
 
     if (pendingOperation) {
-      if (key.escape && pendingOperation.cancel) {
+      if ((key.escape || (key.ctrl && inputChar === "c")) && pendingOperation.cancel) {
         pendingOperation.cancel();
-        setPendingOperation(null);
       }
       return;
     }
@@ -3456,6 +3458,49 @@ function AppContent({
       resolveFollowupResponse,
       resilientProvider,
     ]
+  );
+
+  useEffect(() => () => shellRun.current?.abort(), []);
+  const handleShell = useCallback(
+    async (command: string) => {
+      if (
+        shellRun.current ||
+        taskSubmissionRef.current ||
+        sessionTransitionRef.current ||
+        pendingOperation ||
+        interactivePrompt
+      )
+        return;
+      const controller = new AbortController();
+      shellRun.current = controller;
+      const promise = executeShell(command, {
+        cwd: workingDirectory,
+        abortSignal: controller.signal,
+        maxBuffer: 16 * 1024,
+      }).then((result): CommandResult => {
+        const status = controller.signal.aborted
+          ? "Cancelled"
+          : `Exit ${result.exitCode ?? result.signal ?? "unknown"}`;
+        const output = sanitize([result.stdout, result.stderr].filter(Boolean).join("\n"), {
+          stripAllAnsi: true,
+        }).trimEnd();
+        addMessage({
+          role: "tool",
+          localOnly: true,
+          content: [`$ ${command}`, output, status].filter(Boolean).join("\n"),
+        });
+        return { kind: "success" };
+      });
+      try {
+        await handleCommandResult({
+          kind: "pending",
+          operation: { message: `Running $ ${command}`, promise, cancel: () => controller.abort() },
+        });
+      } finally {
+        shellRun.current = null;
+      }
+    },
+    [addMessage, workingDirectory, handleCommandResult, interactivePrompt, pendingOperation]
   );
 
   // Handle slash command submission (for CommandInput onCommand)
@@ -4049,6 +4094,7 @@ function AppContent({
       handleCommand={handleCommand}
       handleCreateBacktrackBranch={handleCreateBacktrackBranch}
       turnStatus={turnStatus}
+      handleShell={handleShell}
       handleMessage={handleMessage}
       handleModeSelect={handleModeSelect}
       handleModelSelect={handleModelSelect}
@@ -4194,6 +4240,7 @@ interface AppContentViewProps {
   readonly handleCommand: (command: SlashCommand) => void;
   readonly handleCreateBacktrackBranch: () => void;
   readonly turnStatus?: string;
+  readonly handleShell: (command: string) => void;
   readonly handleMessage: (text: string) => void;
   readonly handleModeSelect: (mode: CodingMode) => void;
   readonly handleModelSelect: (selectedProvider: string, selectedModel: string) => void;
@@ -5028,6 +5075,7 @@ function AppContentView({
   handleCommand,
   handleCreateBacktrackBranch,
   turnStatus,
+  handleShell,
   handleMessage,
   handleModeSelect,
   handleModelSelect,
@@ -5249,7 +5297,7 @@ function AppContentView({
     ? "Reply to follow-up..."
     : isLoading
       ? "Add an instruction… Enter to steer"
-      : "Type a message or /command...";
+      : "Message, /command, or ~ for shell";
 
   const commandInputDisabled = !!interactivePrompt || !!pendingOperation;
 
@@ -5441,6 +5489,7 @@ function AppContentView({
                 ? getNextStepSuggestion(messages)
                 : undefined
             }
+            onShell={!isLoading && !followupPrompt ? handleShell : undefined}
             onMessage={handleMessage}
             onCommand={handleCommand}
             commands={commandOptions}
