@@ -2062,7 +2062,7 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       if (
         !this.cancellation.isCancelled &&
         pendingToolCalls.length === 0 &&
-        !streamState.hasText &&
+        !streamState.accumulatedText.trim() &&
         !streamState.hasToolCalls
       ) {
         const hasThinkingOnly = streamState.hasThinking;
@@ -2683,6 +2683,18 @@ export class AgentLoop extends EventEmitter<AgentLoopEvents> {
       // Auto-continue: re-invoke the LLM to continue reasoning
       this.nextIterationRequested = true;
       return;
+    }
+
+    // The orchestrator's accepted completion already contains the final answer.
+    // Publish it on the normal assistant channel and preserve it on session replay.
+    if (this.completionAttempted) {
+      const summary = toolResults.find(
+        (entry) => entry.name === "attempt_completion" && !entry.isError
+      )?.result;
+      if (summary?.trim()) {
+        this.messages.push(createAssistantMessage([SessionParts.text(summary)]));
+        this.emit("text", summary);
+      }
     }
 
     // No continuation - complete the loop

@@ -733,6 +733,7 @@ function AppContent({
   const { state: applicationState, dispatch: dispatchApplication } = useApplicationState();
   const themeContext = useTheme();
   const { messages, addMessage, clearMessages, setMessages, pendingMessage } = useMessages();
+  const [turnStatus, setTurnStatus] = useState<string>();
   const [isLoading, setIsLoading] = useState(false);
   const taskSubmissionRef = useRef<{ finished: Promise<void>; closing: boolean } | null>(null);
   const [workingDirectory, setWorkingDirectory] = useState(
@@ -1431,6 +1432,7 @@ function AppContent({
           cacheWriteTokens: 0,
         });
         setActiveSessionId(sessionId);
+        setTurnStatus(undefined);
         return true;
       } catch (error) {
         notifyError(
@@ -3293,6 +3295,7 @@ function AppContent({
           }
         }
 
+        setTurnStatus(undefined);
         setIsLoading(true);
         // Thinking content is now integrated into the streaming message
         // via the agent-adapter's handleThinking function.
@@ -3303,8 +3306,13 @@ function AppContent({
           let interrupted = false;
           const observeTermination = (reason: TerminationReason) => {
             if (reason === TerminationReason.ERROR) submission.closing = true;
-            if (reason !== TerminationReason.NATURAL_STOP && reason !== TerminationReason.TEXT_ONLY)
+            if (
+              reason !== TerminationReason.NATURAL_STOP &&
+              reason !== TerminationReason.TEXT_ONLY
+            ) {
               interrupted = true;
+              setTurnStatus(`Turn stopped · ${reason.replaceAll("_", " ")}`);
+            }
           };
           const observeComplete = () => {
             submission.closing = true;
@@ -3351,12 +3359,21 @@ function AppContent({
               await agentLoopProp.run();
             }
 
-            // Messages are synced via AgentLoop adapter event handlers (handleText)
-            // User message was already added via addMessage() above
-            // Notify on completion
             if (!interrupted) {
-              notifyTaskComplete("Response received");
-              announce("Response received");
+              const stop = agentLoopProp.getStreamHandler().getState().stopReason;
+              const last = agentLoopProp.getMessages().at(-1);
+              const hasAnswer =
+                last?.role === "assistant" &&
+                last.parts.some((part) => part.type === "text" && part.text.trim());
+              const status =
+                stop === "max_tokens" || stop === "content_filter" || stop === "error"
+                  ? `Turn stopped · ${stop.replaceAll("_", " ")}`
+                  : hasAnswer
+                    ? "Turn complete"
+                    : "Turn stopped without a final answer";
+              setTurnStatus(status);
+              if (status === "Turn complete") notifyTaskComplete(status);
+              announce(status);
             }
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
@@ -4031,6 +4048,7 @@ function AppContent({
       handleBannerComplete={handleBannerComplete}
       handleCommand={handleCommand}
       handleCreateBacktrackBranch={handleCreateBacktrackBranch}
+      turnStatus={turnStatus}
       handleMessage={handleMessage}
       handleModeSelect={handleModeSelect}
       handleModelSelect={handleModelSelect}
@@ -4175,6 +4193,7 @@ interface AppContentViewProps {
   readonly handleBannerComplete: () => void;
   readonly handleCommand: (command: SlashCommand) => void;
   readonly handleCreateBacktrackBranch: () => void;
+  readonly turnStatus?: string;
   readonly handleMessage: (text: string) => void;
   readonly handleModeSelect: (mode: CodingMode) => void;
   readonly handleModelSelect: (selectedProvider: string, selectedModel: string) => void;
@@ -5008,6 +5027,7 @@ function AppContentView({
   handleBannerComplete,
   handleCommand,
   handleCreateBacktrackBranch,
+  turnStatus,
   handleMessage,
   handleModeSelect,
   handleModelSelect,
@@ -5400,6 +5420,9 @@ function AppContentView({
           interactivePrompt={interactivePrompt}
           pendingOperation={pendingOperation}
         />
+        {turnStatus && !isLoading && (
+          <Text color={themeContext.theme.semantic.text.secondary}>{turnStatus}</Text>
+        )}
         {/* Vim mode indicator (shown above input when vim mode is enabled) */}
         {vimEnabled && (
           <Box marginBottom={0}>
