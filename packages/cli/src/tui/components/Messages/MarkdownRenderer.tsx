@@ -10,13 +10,13 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { memo, useId, useMemo } from "react";
-import { useAnimation } from "../../context/AnimationContext.js";
 import { useDiffMode } from "../../hooks/useDiffMode.js";
 import { useTheme } from "../../theme/index.js";
 import { openUrl } from "../../utils/open-url.js";
 import { sanitize } from "../../utils/textSanitizer.js";
 import { Clickable } from "../common/Clickable.js";
 import { DiffView } from "./DiffView.js";
+import { StreamingCursor } from "./StreamingText.js";
 
 // =============================================================================
 // Types
@@ -376,7 +376,6 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
 }: MarkdownRendererProps): React.JSX.Element {
   const { theme } = useTheme();
   const { mode: diffMode } = useDiffMode();
-  const { frame, isPaused } = useAnimation();
   const componentId = useId();
 
   // Theme colors
@@ -392,13 +391,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   // Parse markdown content
   const nodes = useMemo(() => parseMarkdown(sanitizedContent), [sanitizedContent]);
 
-  const cursorVisible = useMemo(() => {
-    if (!isStreaming || !cursorBlink) return true;
-    if (isPaused) return true;
-    return Math.floor(frame / 4) % 2 === 0;
-  }, [frame, isPaused, isStreaming, cursorBlink]);
-
-  const cursor = isStreaming && cursorVisible ? cursorChar : "";
+  const cursor = isStreaming ? <StreamingCursor glyph={cursorChar} blink={cursorBlink} /> : null;
   const lastNodeIndex = nodes.length - 1;
 
   if (nodes.length === 0) {

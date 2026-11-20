@@ -68,6 +68,7 @@ describe("MessageList", () => {
       )
     );
     expect(screen.lastFrame()).toContain("Thinking");
+    expect(screen.lastFrame()?.match(/▊/g)).toHaveLength(1);
     expect(screen.lastFrame()).not.toContain("Waiting for response");
   });
 

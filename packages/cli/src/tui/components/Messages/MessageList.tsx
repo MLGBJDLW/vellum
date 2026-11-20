@@ -521,6 +521,10 @@ const MessageItem = memo(function MessageItem({
   const timestamp = formatTimestamp(message.timestamp);
   const hasThinking = message.thinking && message.thinking.length > 0;
 
+  const streamingThinking = Boolean(
+    message.isStreaming && hasThinking && !message.isThinkingComplete && !message.content
+  );
+
   return (
     <Box flexDirection="column" marginBottom={1}>
       {/* Message header: role icon, label, and timestamp (or minimal for continuations) */}
@@ -549,7 +553,7 @@ const MessageItem = memo(function MessageItem({
         <ThinkingBlock
           content={message.thinking ?? ""}
           durationMs={message.thinkingDuration}
-          isStreaming={message.isStreaming && !message.isThinkingComplete}
+          isStreaming={streamingThinking}
           isThinkingComplete={message.isThinkingComplete}
           initialCollapsed={!thinkingExpandedByDefault}
           expandedByDefault={thinkingExpandedByDefault}
@@ -565,17 +569,16 @@ const MessageItem = memo(function MessageItem({
       )}
 
       {/* Message content */}
-      <Box marginLeft={2} marginTop={0}>
-        <MarkdownRenderer
-          content={
-            message.content ||
-            (message.isStreaming || message.thinking || message.toolCalls?.length ? "" : "(empty)")
-          }
-          compact
-          textColor={roleColor}
-          isStreaming={message.isStreaming}
-        />
-      </Box>
+      {(Boolean(message.content) || (!hasThinking && !message.toolCalls?.length)) && (
+        <Box marginLeft={2}>
+          <MarkdownRenderer
+            content={message.content || (message.isStreaming ? "" : "(empty)")}
+            compact
+            textColor={roleColor}
+            isStreaming={message.isStreaming && !streamingThinking}
+          />
+        </Box>
+      )}
 
       {/* Tool calls, if any - Gemini-style inline with status icons */}
       {showToolCalls && message.toolCalls && message.toolCalls.length > 0 && (
