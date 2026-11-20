@@ -8,7 +8,8 @@
  */
 
 import { spawn } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { killProcessTree } from "@vellum/sandbox";
 import type { UpdateConfig, UpdateResult } from "./types.js";
 import { DEFAULT_UPDATE_CONFIG } from "./types.js";
@@ -52,9 +53,24 @@ export function detectPackageManager(): PackageManager {
   } catch {
     // Embedded callers may supply a virtual executable path.
   }
-  const entry = executable.replaceAll("\\", "/").toLowerCase();
+  const path = executable.replaceAll("\\", "/");
+  const entry = path.toLowerCase();
   if (entry.includes("/pnpm/global/") || entry.includes("/.pnpm/")) return "pnpm";
-  if (entry.includes("/.bun/install/global/")) return "bun";
+  if (entry.includes("/.bun/install/global/") || entry.includes("/node_modules/.bun/"))
+    return "bun";
+  const modules = path.lastIndexOf("/node_modules/");
+  if (modules !== -1) {
+    const root = resolve(path.slice(0, modules + 1));
+    const configuredRoot = process.env.BUN_INSTALL_GLOBAL_DIR;
+    if (existsSync(join(root, "bun.lock")) || existsSync(join(root, "bun.lockb"))) return "bun";
+    if (configuredRoot) {
+      try {
+        if (relative(realpathSync.native(configuredRoot), root) === "") return "bun";
+      } catch {
+        // A moved or unavailable Bun directory cannot establish install ownership.
+      }
+    }
+  }
   const execPath = process.env.npm_execpath?.toLowerCase() ?? "";
   if (execPath.includes("pnpm")) return "pnpm";
   if (execPath.includes("bun")) return "bun";
