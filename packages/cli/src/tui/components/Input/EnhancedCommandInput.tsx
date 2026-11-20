@@ -13,6 +13,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useInputHistory } from "../../hooks/useInputHistory.js";
 import { useMentionAutocomplete } from "../../hooks/useMentionAutocomplete.js";
 import { useInput } from "../../hooks/useTerminalInput.js";
+import { translate } from "../../i18n/tui-namespace.js";
 import type { AutocompleteOption } from "./Autocomplete.js";
 import { Autocomplete } from "./Autocomplete.js";
 import { MentionAutocomplete } from "./MentionAutocomplete.js";
@@ -455,7 +456,7 @@ export function EnhancedCommandInput({
         onSubmit={handleSubmit}
         onEditorKey={handleEditorKey}
         promptSymbol={shellMode ? "$" : undefined}
-        placeholder={shellMode ? "Shell command (local) · Esc to chat" : placeholder}
+        placeholder={shellMode ? translate("input.shell") : placeholder}
         suggestion={!shellMode && activeAutocomplete === null ? suggestion : undefined}
         disabled={disabled}
         focused={focused}

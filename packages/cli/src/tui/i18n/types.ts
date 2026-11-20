@@ -29,6 +29,11 @@ export interface TUITranslations {
     noInfo: string;
   };
   input: {
+    shell: string;
+    followup: string;
+    steer: string;
+    messageOrShell: string;
+    sandbox: string;
     placeholder: string;
     multilinePlaceholder: string;
     commandHint: string;
@@ -153,6 +158,13 @@ export interface TUITranslations {
     };
   };
   update: {
+    action: string;
+    confirm: string;
+    checking: string;
+    installing: string;
+    cancelled: string;
+    failed: string;
+    description: string;
     available: string;
     current: string;
     latest: string;
@@ -163,6 +175,12 @@ export interface TUITranslations {
     upgradeHint: string;
     dismissHint: string;
     dismissInstructions: string;
+  };
+  turn: {
+    complete: string;
+    unanswered: string;
+    stopped: string;
+    reason: Record<string, string>;
   };
   todo: {
     title: string;

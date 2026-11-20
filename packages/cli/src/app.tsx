@@ -3314,7 +3314,9 @@ function AppContent({
               reason !== TerminationReason.TEXT_ONLY
             ) {
               interrupted = true;
-              setTurnStatus(`Turn stopped · ${reason.replaceAll("_", " ")}`);
+              setTurnStatus(
+                translate("turn.stopped", { reason: translate(`turn.reason.${reason}`) })
+              );
             }
           };
           const observeComplete = () => {
@@ -3368,14 +3370,13 @@ function AppContent({
               const hasAnswer =
                 last?.role === "assistant" &&
                 last.parts.some((part) => part.type === "text" && part.text.trim());
-              const status =
-                stop === "max_tokens" || stop === "content_filter" || stop === "error"
-                  ? `Turn stopped · ${stop.replaceAll("_", " ")}`
-                  : hasAnswer
-                    ? "Turn complete"
-                    : "Turn stopped without a final answer";
+              const stopped =
+                stop === "max_tokens" || stop === "content_filter" || stop === "error";
+              const status = stopped
+                ? translate("turn.stopped", { reason: translate(`turn.reason.${stop}`) })
+                : translate(hasAnswer ? "turn.complete" : "turn.unanswered");
               setTurnStatus(status);
-              if (status === "Turn complete") notifyTaskComplete(status);
+              if (hasAnswer && !stopped) notifyTaskComplete(status);
               announce(status);
             }
           } catch (err) {
@@ -5288,12 +5289,12 @@ function AppContentView({
   const showMainView = !showOnboarding && !showBannerView;
 
   const commandPlaceholder = followupPrompt
-    ? "Reply to follow-up..."
+    ? translate("input.followup")
     : isLoading
-      ? "Add an instruction… Enter to steer"
+      ? translate("input.steer")
       : handleShell
-        ? "Message, /command, or ~ for shell"
-        : "Message or /command · sandbox active";
+        ? translate("input.messageOrShell")
+        : translate("input.sandbox");
 
   const commandInputDisabled = !!interactivePrompt || !!pendingOperation;
 

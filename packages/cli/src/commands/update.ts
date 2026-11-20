@@ -23,6 +23,7 @@ import {
 } from "@vellum/core";
 import chalk from "chalk";
 
+import { translate } from "../tui/i18n/tui-namespace.js";
 import { ICONS } from "../utils/icons.js";
 import { EXIT_CODES } from "./exit-codes.js";
 import { type CommandResult, error, pending, type SlashCommand, success } from "./types.js";
@@ -274,11 +275,12 @@ export function createUpgradeCommand(
     installing = true;
     try {
       const result = await performUpdate(current, { targetVersion: target, global: true, signal });
-      if (signal.aborted) return success("Installation cancelled. Run /upgrade to check again.");
-      if (!result.success) return error("INTERNAL_ERROR", result.error ?? "Update failed.");
+      if (signal.aborted) return success(translate("update.cancelled"));
+      if (!result.success)
+        return error("INTERNAL_ERROR", result.error ?? translate("update.failed"));
       installed = target;
       onStatus({ kind: "installed", version: target });
-      return success(`Installed v${target}. Restart Vellum to use it.`);
+      return success(translate("update.restart", { version: target }));
     } finally {
       installing = false;
     }
@@ -290,20 +292,25 @@ export function createUpgradeCommand(
       const status = releaseStatus(result);
       onStatus(status);
       if (status.kind === "unknown")
-        return error("NETWORK_ERROR", result.error ?? "Update check failed.");
-      if (status.kind !== "available") return success(`Vellum v${current} is up to date.`);
+        return error(
+          "NETWORK_ERROR",
+          result.error ?? translate("update.unavailable", { version: current })
+        );
+      if (status.kind !== "available")
+        return success(translate("update.upToDate", { version: current }));
       const target = status.version;
+      const action = translate("update.action");
       return {
         kind: "interactive",
         prompt: {
           inputType: "select",
-          message: `Update Vellum v${current} → v${target}?`,
-          options: ["Update", "Cancel"],
+          message: translate("update.confirm", { current, version: target }),
+          options: [action, translate("input.cancel")],
           handler: async (choice) => {
-            if (choice !== "Update" || installing || installed) return success();
+            if (choice !== action || installing || installed) return success();
             const controller = new AbortController();
             return pending({
-              message: `Installing Vellum v${target}…`,
+              message: translate("update.installing", { version: target }),
               promise: install(target, controller.signal),
               cancel: () => controller.abort(),
             });
@@ -318,11 +325,13 @@ export function createUpgradeCommand(
     name: "upgrade",
     kind: "builtin",
     category: "system",
-    description: "Check for a new Vellum release and install it",
+    get description() {
+      return translate("update.description");
+    },
     execute: async () => {
-      if (installed) return success(`v${installed} is installed. Restart Vellum to use it.`);
+      if (installed) return success(translate("update.restart", { version: installed }));
       if (installing || checking) return success();
-      return pending({ message: "Checking for updates…", promise: check() });
+      return pending({ message: translate("update.checking"), promise: check() });
     },
   };
 }

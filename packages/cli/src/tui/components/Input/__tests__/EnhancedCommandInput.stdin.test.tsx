@@ -47,6 +47,13 @@ async function write(stdin: { write: (data: string) => void }, data: string) {
 }
 
 describe("EnhancedCommandInput terminal submission", () => {
+  it("keeps typed tildes in chat when the host shell is unavailable", async () => {
+    const screen = renderInput(vi.fn());
+    await write(screen.stdin, "~");
+    await write(screen.stdin, "/notes\r");
+    expect(screen.onMessage).toHaveBeenCalledExactlyOnceWith("~/notes");
+  });
+
   it("routes only explicitly entered shell mode to local execution and keeps pasted tildes literal", async () => {
     const shell = vi.fn();
     const slash = vi.fn();

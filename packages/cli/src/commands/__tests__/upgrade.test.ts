@@ -1,5 +1,6 @@
 import { performUpdate, Updater, VersionChecker } from "@vellum/core";
 import { expect, it, vi } from "vitest";
+import { getGlobalLocale, setGlobalLocale } from "../../tui/i18n/tui-namespace.js";
 import type { CommandContext } from "../types.js";
 import { createUpgradeCommand } from "../update.js";
 
@@ -8,7 +9,13 @@ vi.mock("@vellum/core", async (load) => ({
   performUpdate: vi.fn(),
 }));
 
-it("checks on demand, installs exactly the confirmed version once and requests a restart", async () => {
+it.each([
+  ["en", "Update", "Cancel"],
+  ["zh", "更新", "取消"],
+])("checks, confirms and installs exactly once in %s", async (locale, action, cancel) => {
+  const originalLocale = getGlobalLocale();
+  setGlobalLocale(locale);
+  vi.mocked(performUpdate).mockClear();
   const onStatus = vi.fn();
   const check = vi.spyOn(VersionChecker.prototype, "check").mockResolvedValue({
     success: true,
@@ -33,9 +40,10 @@ it("checks on demand, installs exactly the confirmed version once and requests a
     if (start.kind !== "pending") throw new Error("Expected update check");
     const prompt = await start.operation.promise;
     if (prompt.kind !== "interactive") throw new Error("Expected confirmation");
-    await prompt.prompt.handler("Cancel");
+    expect(prompt.prompt.options).toEqual([action, cancel]);
+    await prompt.prompt.handler(cancel);
     expect(performUpdate).not.toHaveBeenCalled();
-    const update = await prompt.prompt.handler("Update");
+    const update = await prompt.prompt.handler(action);
     if (update.kind !== "pending") throw new Error("Expected installation");
     expect((await update.operation.promise).kind).toBe("success");
     await command.execute(ctx);
@@ -47,6 +55,7 @@ it("checks on demand, installs exactly the confirmed version once and requests a
     });
     expect(onStatus).toHaveBeenLastCalledWith({ kind: "installed", version: "1.1.0" });
   } finally {
+    setGlobalLocale(originalLocale);
     check.mockRestore();
   }
 });
