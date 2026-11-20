@@ -221,7 +221,6 @@ describe("VersionChecker", () => {
 
   beforeEach(() => {
     checker = new VersionChecker({
-      packageName: "@vellum/cli",
       registryUrl: "https://registry.npmjs.org",
       timeoutMs: 5000,
     });
@@ -235,7 +234,7 @@ describe("VersionChecker", () => {
     it("should return success with update info on successful fetch", async () => {
       // Mock fetch response
       const mockMetadata = {
-        name: "@vellum/cli",
+        name: "@butlerw/vellum",
         "dist-tags": {
           latest: "1.1.0",
           next: "2.0.0-beta.1",
@@ -262,11 +261,18 @@ describe("VersionChecker", () => {
       expect(result.updateInfo?.hasUpdate).toBe(true);
       expect(result.updateInfo?.currentVersion).toBe("1.0.0");
       expect(result.updateInfo?.latestVersion).toBe("1.1.0");
+      expect(mockFetchWithPool).toHaveBeenCalledWith(
+        "https://registry.npmjs.org/@butlerw/vellum",
+        expect.anything()
+      );
+      expect(result.updateInfo?.releaseNotesUrl).toBe(
+        "https://github.com/MLGBJDLW/vellum/releases/tag/v1.1.0"
+      );
     });
 
     it("should return no update when already on latest", async () => {
       const mockMetadata = {
-        name: "@vellum/cli",
+        name: "@butlerw/vellum",
         "dist-tags": { latest: "1.0.0" },
         versions: {
           "1.0.0": { version: "1.0.0", dist: { tarball: "url", shasum: "sha" } },

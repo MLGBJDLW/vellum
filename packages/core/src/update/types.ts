@@ -208,7 +208,7 @@ export const UpdateConfigSchema = z.object({
   cacheDurationMs: z.number().default(24 * 60 * 60 * 1000), // 24 hours
   autoCheck: z.boolean().default(true),
   registryUrl: z.string().url().default("https://registry.npmjs.org"),
-  packageName: z.string().default("@vellum/cli"),
+  packageName: z.string().default("@butlerw/vellum"),
   timeoutMs: z.number().default(10000), // 10 seconds
 });
 
@@ -220,7 +220,7 @@ export const DEFAULT_UPDATE_CONFIG: UpdateConfig = {
   cacheDurationMs: 24 * 60 * 60 * 1000, // 24 hours
   autoCheck: true,
   registryUrl: "https://registry.npmjs.org",
-  packageName: "@vellum/cli",
+  packageName: "@butlerw/vellum",
   timeoutMs: 10000,
 };
 

@@ -8,9 +8,9 @@
  */
 
 import { spawn } from "node:child_process";
-
 import type { UpdateConfig, UpdateResult } from "./types.js";
 import { DEFAULT_UPDATE_CONFIG } from "./types.js";
+import { parseSemVer } from "./version-checker.js";
 
 // =============================================================================
 // Types
@@ -43,21 +43,12 @@ export interface UpdateOptions {
  * Detect the package manager used to install the CLI
  */
 export function detectPackageManager(): PackageManager {
-  // Check environment variable set by package managers
-  const execPath = process.env.npm_execpath ?? "";
-
-  if (execPath.includes("bun")) {
-    return "bun";
-  }
-  if (execPath.includes("pnpm")) {
-    return "pnpm";
-  }
-
-  // Check if bun is available
-  const bunPath = process.env.BUN_INSTALL;
-  if (bunPath) {
-    return "bun";
-  }
+  const entry = (process.argv[1] ?? "").replaceAll("\\", "/").toLowerCase();
+  if (entry.includes("/pnpm/global/") || entry.includes("/.pnpm/")) return "pnpm";
+  if (entry.includes("/.bun/install/global/")) return "bun";
+  const execPath = process.env.npm_execpath?.toLowerCase() ?? "";
+  if (execPath.includes("pnpm")) return "pnpm";
+  if (execPath.includes("bun")) return "bun";
 
   // Default to npm
   return "npm";
@@ -104,6 +95,7 @@ function executeCommand(
   return new Promise((resolve) => {
     const proc = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
       shell: process.platform === "win32",
     });
 
@@ -111,11 +103,11 @@ function executeCommand(
     let stderr = "";
 
     proc.stdout?.on("data", (data: Buffer) => {
-      stdout += data.toString();
+      stdout = (stdout + data.toString()).slice(-8192);
     });
 
     proc.stderr?.on("data", (data: Buffer) => {
-      stderr += data.toString();
+      stderr = (stderr + data.toString()).slice(-8192);
     });
 
     proc.on("close", (code) => {
@@ -167,6 +159,20 @@ export class Updater {
    * @returns Update result
    */
   async update(currentVersion: string, options: UpdateOptions = {}): Promise<UpdateResult> {
+    const target = options.targetVersion ?? "latest";
+    // Windows package-manager shims run in cmd.exe. Only pass package specs,
+    // versions and dist-tags which are safe as a single argument on every OS.
+    if (
+      !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i.test(this.config.packageName) ||
+      !(parseSemVer(target) || /^[a-z][a-z0-9._-]*$/i.test(target))
+    ) {
+      return {
+        success: false,
+        previousVersion: currentVersion,
+        requiresRestart: false,
+        error: "Invalid package name or version",
+      };
+    }
     const pm = options.packageManager ?? detectPackageManager();
     const { command, args } = buildUpdateCommand(pm, this.config.packageName, {
       ...options,

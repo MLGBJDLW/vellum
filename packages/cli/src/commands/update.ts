@@ -18,12 +18,14 @@ import {
   type PackageManager,
   performUpdate,
   type UpdateOptions,
+  VersionChecker,
   type VersionCheckResult,
 } from "@vellum/core";
 import chalk from "chalk";
 
 import { ICONS } from "../utils/icons.js";
 import { EXIT_CODES } from "./exit-codes.js";
+import { type CommandResult, error, pending, type SlashCommand, success } from "./types.js";
 
 // =============================================================================
 // Types
@@ -123,7 +125,7 @@ export async function executeUpdateCommand(
   // Step 1: Check for updates
   console.log(chalk.blue("⟳ Checking for updates...\n"));
 
-  const checkResult = await checkForUpdates(currentVersion);
+  const checkResult = await new VersionChecker().check(currentVersion, true);
 
   // Display check result
   console.log(formatCheckResult(checkResult));
@@ -208,7 +210,7 @@ export async function executeUpdateCommand(
   if (!updateResult.success) {
     console.log(chalk.red(`\n✗ Update failed: ${updateResult.error}`));
     console.log(chalk.dim("\nYou can try updating manually:"));
-    console.log(chalk.dim(`  ${pm} install -g @vellum/cli@${targetVersion}`));
+    console.log(chalk.dim(`  ${pm} install -g @butlerw/vellum@${targetVersion}`));
 
     return {
       success: false,
@@ -243,32 +245,78 @@ export async function executeUpdateCommand(
 }
 
 // =============================================================================
-// Startup Check
+// Interactive terminal updates
 // =============================================================================
 
-/**
- * Check for updates on startup (silent, non-blocking)
- * Returns update info if available, null otherwise
- *
- * @param currentVersion - Current installed version
- * @returns Update info if update available
- */
-export async function checkUpdateOnStartup(
-  currentVersion: string
-): Promise<{ latestVersion: string; releaseNotesUrl?: string } | null> {
-  try {
-    const result = await checkForUpdates(currentVersion);
+export type ReleaseStatus =
+  | { kind: "current" | "unknown" }
+  | { kind: "available" | "installed"; version: string };
 
-    if (result.success && result.updateInfo?.hasUpdate) {
-      return {
-        latestVersion: result.updateInfo.latestVersion,
-        releaseNotesUrl: result.updateInfo.releaseNotesUrl,
-      };
+function releaseStatus(result: VersionCheckResult): ReleaseStatus {
+  if (!result.success || !result.updateInfo) return { kind: "unknown" };
+  return result.updateInfo.hasUpdate
+    ? { kind: "available", version: result.updateInfo.latestVersion }
+    : { kind: "current" };
+}
+
+export async function checkUpdateOnStartup(current: string): Promise<ReleaseStatus> {
+  return releaseStatus(await checkForUpdates(current));
+}
+
+export function createUpgradeCommand(
+  current: string,
+  onStatus: (status: ReleaseStatus) => void
+): SlashCommand {
+  let installed: string | undefined;
+  let installing = false;
+  let checking = false;
+  async function install(target: string): Promise<CommandResult> {
+    installing = true;
+    try {
+      const result = await performUpdate(current, { targetVersion: target, global: true });
+      if (!result.success) return error("INTERNAL_ERROR", result.error ?? "Update failed.");
+      installed = target;
+      onStatus({ kind: "installed", version: target });
+      return success(`Installed v${target}. Restart Vellum to use it.`);
+    } finally {
+      installing = false;
     }
-
-    return null;
-  } catch {
-    // Silently fail on startup check
-    return null;
   }
+  async function check(): Promise<CommandResult> {
+    checking = true;
+    try {
+      const result = await new VersionChecker().check(current, true);
+      const status = releaseStatus(result);
+      onStatus(status);
+      if (status.kind === "unknown")
+        return error("NETWORK_ERROR", result.error ?? "Update check failed.");
+      if (status.kind !== "available") return success(`Vellum v${current} is up to date.`);
+      const target = status.version;
+      return {
+        kind: "interactive",
+        prompt: {
+          inputType: "select",
+          message: `Update Vellum v${current} → v${target}?`,
+          options: ["Update", "Cancel"],
+          handler: async (choice) =>
+            choice === "Update" && !installing && !installed
+              ? pending({ message: `Installing Vellum v${target}…`, promise: install(target) })
+              : success(),
+        },
+      };
+    } finally {
+      checking = false;
+    }
+  }
+  return {
+    name: "upgrade",
+    kind: "builtin",
+    category: "system",
+    description: "Check for a new Vellum release and install it",
+    execute: async () => {
+      if (installed) return success(`v${installed} is installed. Restart Vellum to use it.`);
+      if (installing || checking) return success();
+      return pending({ message: "Checking for updates…", promise: check() });
+    },
+  };
 }

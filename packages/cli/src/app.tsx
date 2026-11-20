@@ -130,7 +130,11 @@ import { mouseSlashCommands } from "./commands/mouse.js";
 import { roleSlashCommands } from "./commands/role.js";
 import { getThinkingEffortOptions } from "./commands/think.js";
 import type { AsyncOperation, CommandResult, InteractivePrompt } from "./commands/types.js";
-import { checkUpdateOnStartup } from "./commands/update.js";
+import {
+  checkUpdateOnStartup,
+  createUpgradeCommand,
+  type ReleaseStatus,
+} from "./commands/update.js";
 import { getOrchestrator } from "./orchestrator-singleton.js";
 import { getShutdownCleanup, setShutdownCleanup } from "./shutdown.js";
 import { useAgentAdapter } from "./tui/adapters/agent-adapter.js";
@@ -1975,28 +1979,20 @@ function AppContent({
 
   const hasActiveApproval = activeApproval !== null;
 
-  // Update banner state
-  const [updateAvailable, setUpdateAvailable] = useState<{
-    current: string;
-    latest: string;
-  } | null>(null);
-
-  // Check for updates on startup (non-blocking)
+  const [releaseStatus, setReleaseStatus] = useState<ReleaseStatus | null>(null);
   useEffect(() => {
-    const checkUpdate = async () => {
-      try {
-        const result = await checkUpdateOnStartup(version);
-        if (result) {
-          setUpdateAvailable({
-            current: version,
-            latest: result.latestVersion,
-          });
-        }
-      } catch {
-        // Silently ignore update check failures
+    let active = true;
+    void checkUpdateOnStartup(version).then(
+      (status) => {
+        if (active) setReleaseStatus((previous) => previous ?? status);
+      },
+      () => {
+        if (active) setReleaseStatus((previous) => previous ?? { kind: "unknown" });
       }
+    );
+    return () => {
+      active = false;
     };
-    checkUpdate();
   }, []);
 
   // ==========================================================================
@@ -2509,7 +2505,11 @@ function AppContent({
     () => setCommandRegistryVersion((prev) => prev + 1),
     []
   );
-  const commandRegistry = useMemo(() => createCommandRegistry(), []);
+  const commandRegistry = useMemo(() => {
+    const registry = createCommandRegistry();
+    registry.register(createUpgradeCommand(version, setReleaseStatus));
+    return registry;
+  }, []);
 
   // ==========================================================================
   //: Plugin System Integration
@@ -3938,10 +3938,6 @@ function AppContent({
   // Calculate total tokens for StatusBar
   const totalTokens = tokenUsage.inputTokens + tokenUsage.outputTokens;
 
-  const dismissUpdateBanner = useCallback(() => {
-    setUpdateAvailable(null);
-  }, []);
-
   const cancelOnboarding = useCallback(() => {
     setShowOnboarding(false);
   }, []);
@@ -4087,7 +4083,6 @@ function AppContent({
       currentProvider={currentProvider}
       currentTip={currentTip}
       dismissTip={dismissTip}
-      dismissUpdateBanner={dismissUpdateBanner}
       handleApprove={handleApprove}
       handleApproveAlways={handleApproveAlways}
       handleBannerComplete={handleBannerComplete}
@@ -4152,7 +4147,7 @@ function AppContent({
       totalTokens={totalTokens}
       trustMode={trustMode}
       undoBacktrack={undoBacktrack}
-      updateAvailable={updateAvailable}
+      releaseStatus={releaseStatus}
       redoBacktrack={redoBacktrack}
       workspace={workspaceName}
       workingDirectory={workingDirectory}
@@ -4233,7 +4228,6 @@ interface AppContentViewProps {
   readonly currentProvider: string;
   readonly currentTip: TipValue;
   readonly dismissTip: () => void;
-  readonly dismissUpdateBanner: () => void;
   readonly handleApprove: () => void;
   readonly handleApproveAlways: () => void;
   readonly handleBannerComplete: () => void;
@@ -4315,7 +4309,7 @@ interface AppContentViewProps {
   readonly trustMode: TrustMode;
   readonly undoBacktrack: () => void;
   readonly redoBacktrack: () => void;
-  readonly updateAvailable: { current: string; latest: string } | null;
+  readonly releaseStatus: ReleaseStatus | null;
   /** Workspace name for header separator */
   readonly workspace: string;
   /** Git branch for header separator */
@@ -5068,7 +5062,6 @@ function AppContentView({
   currentProvider,
   currentTip,
   dismissTip,
-  dismissUpdateBanner,
   handleApprove,
   handleApproveAlways,
   handleBannerComplete,
@@ -5130,7 +5123,7 @@ function AppContentView({
   trustMode,
   undoBacktrack,
   redoBacktrack,
-  updateAvailable,
+  releaseStatus,
   workspace,
   branch,
   changedFiles,
@@ -5329,6 +5322,29 @@ function AppContentView({
     <>
       <Box flexDirection="column" flexGrow={1}>
         {/* Thinking content is now integrated into messages via the `thinking` field */}
+        {releaseStatus?.kind === "available" ? (
+          <UpdateBanner
+            currentVersion={version}
+            latestVersion={releaseStatus.version}
+            compact
+            dismissible={false}
+            onUpgrade={
+              !hasBlockingOverlay && !isLoading
+                ? () => handleCommand({ name: "upgrade", args: [], raw: "/upgrade" })
+                : undefined
+            }
+          />
+        ) : (
+          releaseStatus && (
+            <Text wrap="truncate-end" color={themeContext.theme.semantic.text.muted}>
+              {releaseStatus.kind === "installed"
+                ? `v${releaseStatus.version} installed · restart Vellum`
+                : releaseStatus.kind === "current"
+                  ? `v${version} · up to date`
+                  : `v${version} · update check unavailable · /upgrade to retry`}
+            </Text>
+          )
+        )}
         <MessageList
           messages={messages}
           pendingMessage={pendingMessage}
@@ -5566,16 +5582,6 @@ function AppContentView({
 
       {showMainView && (
         <>
-          {updateAvailable && (
-            <UpdateBanner
-              currentVersion={updateAvailable.current}
-              latestVersion={updateAvailable.latest}
-              dismissible
-              onDismiss={dismissUpdateBanner}
-              compact
-            />
-          )}
-
           <AdaptiveLayout
             regularLayout={
               <Layout
