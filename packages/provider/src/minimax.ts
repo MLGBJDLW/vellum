@@ -3,14 +3,16 @@ import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
  * MiniMax Provider
  *
  * Implements support for MiniMax's OpenAI-compatible API, including
- * reasoning split mode for M2 reasoning models.
+ * reasoning split mode for M3 reasoning models.
  *
  * @module @vellum/provider/minimax
  */
 
+import { findModelInfo } from "./models/index.js";
 import { MINIMAX_MODELS } from "./models/providers/minimax.js";
+import type { ModelInfo, ReasoningEffort } from "./models/types.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
-import type { CompletionParams, ModelInfo } from "./types.js";
+import type { CompletionParams } from "./types.js";
 
 // =============================================================================
 // MiniMax Provider Implementation
@@ -19,7 +21,7 @@ import type { CompletionParams, ModelInfo } from "./types.js";
 /**
  * MiniMax LLM Provider
  *
- * Supports MiniMax's M2 models with reasoning split mode.
+ * Supports MiniMax's M3 models with reasoning split mode.
  */
 export class MiniMaxProvider extends OpenAICompatibleProvider {
   /**
@@ -51,16 +53,27 @@ export class MiniMaxProvider extends OpenAICompatibleProvider {
   }
 
   protected override buildExtraBody(params: CompletionParams): Record<string, unknown> | undefined {
-    const baseExtra = super.buildExtraBody(params) ?? {};
-    const modelInfo = this.getModelCatalog().find((model) => model.id === params.model);
-
-    if (modelInfo?.supportsReasoning) {
-      return {
-        ...baseExtra,
-        reasoning_split: true,
-      };
+    const modelInfo = findModelInfo("minimax", params.model);
+    if (!modelInfo?.supportsReasoning) return params.extraBody;
+    const body: Record<string, unknown> = { ...params.extraBody, reasoning_split: true };
+    if (modelInfo.requiresThinking) {
+      // Always on. An explicit disabled value returns a provider error.
+      delete body.thinking;
+    } else if (modelInfo.id === "MiniMax-M3") {
+      delete body.reasoning_effort;
+      if (params.thinking !== undefined) {
+        body.thinking = {
+          type:
+            params.thinking.enabled && params.thinking.reasoningEffort !== "none"
+              ? "adaptive"
+              : "disabled",
+        };
+      }
     }
+    return body;
+  }
 
-    return Object.keys(baseExtra).length > 0 ? baseExtra : undefined;
+  protected override resolveReasoningEffort(params: CompletionParams): ReasoningEffort | undefined {
+    return params.model === "MiniMax-M3" ? undefined : super.resolveReasoningEffort(params);
   }
 }

@@ -8,9 +8,11 @@ import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
  * @module @vellum/provider/moonshot
  */
 
+import { getModelInfo } from "./models/index.js";
 import { MOONSHOT_MODELS } from "./models/providers/moonshot.js";
+import type { ReasoningEffort } from "./models/types.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
-import type { ModelInfo } from "./types.js";
+import type { CompletionParams, ModelInfo } from "./types.js";
 
 // =============================================================================
 // Moonshot Provider Implementation
@@ -19,18 +21,13 @@ import type { ModelInfo } from "./types.js";
 /**
  * Moonshot AI LLM Provider (月之暗面/Kimi)
  *
- * Supports Moonshot's model family with varying context windows:
- * - moonshot-v1-8k: Standard context (8K tokens)
- * - moonshot-v1-32k: Extended context (32K tokens)
- * - moonshot-v1-128k: Long context (128K tokens)
- *
  * @example
  * ```typescript
  * const provider = new MoonshotProvider();
  * await provider.initialize({ apiKey: 'sk-...' });
  *
  * const result = await provider.complete({
- *   model: 'moonshot-v1-128k',
+ *   model: 'kimi-k3.1-pro',
  *   messages: [{ role: 'user', content: 'Hello!' }],
  * });
  * ```
@@ -60,6 +57,40 @@ export class MoonshotProvider extends OpenAICompatibleProvider {
    */
   protected override supportsReasoningContent(): boolean {
     return true;
+  }
+
+  protected override buildExtraBody(params: CompletionParams): Record<string, unknown> | undefined {
+    const model = getModelInfo("moonshot", params.model);
+    if (model.supportsSampling !== false) return params.extraBody;
+    // Kimi fixes these parameters server-side. Undefined values also remove
+    // fields populated by the common builder before the SDK serializes JSON.
+    const body: Record<string, unknown> = {
+      ...params.extraBody,
+      temperature: undefined,
+      top_p: undefined,
+      presence_penalty: undefined,
+      frequency_penalty: undefined,
+      n: undefined,
+    };
+    if (params.model === "kimi-k2.6" && params.thinking !== undefined) {
+      body.thinking = {
+        ...(typeof body.thinking === "object" && body.thinking),
+        type:
+          params.thinking.enabled && params.thinking.reasoningEffort !== "none"
+            ? "enabled"
+            : "disabled",
+      };
+    } else if (model.requiresThinking) {
+      // K3 uses effort alone. K2.7 enables thinking and preservation by default.
+      delete body.thinking;
+    }
+    if (params.model === "kimi-k2.6" || !model.reasoningEfforts?.length)
+      delete body.reasoning_effort;
+    return body;
+  }
+
+  protected override resolveReasoningEffort(params: CompletionParams): ReasoningEffort | undefined {
+    return params.model === "kimi-k2.6" ? undefined : super.resolveReasoningEffort(params);
   }
 
   /**

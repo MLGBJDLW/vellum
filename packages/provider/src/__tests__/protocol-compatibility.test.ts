@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BaichuanProvider } from "../baichuan.js";
 import { DeepSeekProvider } from "../deepseek.js";
+import { MiniMaxProvider } from "../minimax.js";
 import { MistralProvider } from "../mistral.js";
 import {
   MODEL_CATALOG,
   normalizeDiscoveredModels,
   updateDiscoveredModels,
 } from "../models/index.js";
+import { MoonshotProvider } from "../moonshot.js";
 import { OpenAICompatibleProvider } from "../openai-compat.js";
 import { QwenProvider } from "../qwen.js";
 import type { CompletionMessage, CompletionParams, StreamEvent } from "../types.js";
@@ -122,6 +124,58 @@ it.each([
 );
 
 describe.each([false, true])("real provider wire compatibility (stream=%s)", (stream) => {
+  it.each(["kimi-k2.6", "kimi-k2.7-code", "kimi-k3.1-pro"])(
+    "omits fixed sampling and uses the supported thinking switch for %s",
+    async (model) => {
+      const fetch = mockCompletion(stream, { role: "assistant", content: "Done" });
+      await invoke(
+        new MoonshotProvider(),
+        {
+          model,
+          messages: [{ role: "user", content: "Hello" }],
+          temperature: 0.4,
+          topP: 0.8,
+          frequencyPenalty: 0.25,
+          presencePenalty: 0.5,
+          extraBody: { n: 2, top_p: 0.7, thinking: { keep: "all", type: "disabled" } },
+          thinking: { enabled: true, reasoningEffort: "none" },
+        },
+        stream
+      );
+      const body = requestBody(fetch);
+      for (const field of ["temperature", "top_p", "presence_penalty", "frequency_penalty", "n"]) {
+        expect(body).not.toHaveProperty(field);
+      }
+      if (model === "kimi-k2.6") {
+        expect(body.thinking).toEqual({ type: "disabled", keep: "all" });
+        expect(body).not.toHaveProperty("reasoning_effort");
+      } else {
+        expect(body).not.toHaveProperty("thinking");
+      }
+    }
+  );
+
+  it.each(["MiniMax-M3", "MiniMax-M3.1-Flash"])(
+    "honors the thinking switch on %s when supported",
+    async (model) => {
+      const fetch = mockCompletion(stream, { role: "assistant", content: "Done" });
+      await invoke(
+        new MiniMaxProvider(),
+        {
+          model,
+          messages: [{ role: "user", content: "Hello" }],
+          thinking: { enabled: true, reasoningEffort: "none" },
+          extraBody: { thinking: { type: "disabled" }, reasoning_split: false },
+        },
+        stream
+      );
+      const body = requestBody(fetch);
+      expect(body.reasoning_split).toBe(true);
+      expect(body.thinking).toEqual(model === "MiniMax-M3" ? { type: "disabled" } : undefined);
+      if (model === "MiniMax-M3") expect(body).not.toHaveProperty("reasoning_effort");
+    }
+  );
+
   it.each([
     ["qwen-long", new QwenProvider()],
     ["glm-4.5v", new ZhipuProvider()],
@@ -162,6 +216,7 @@ describe.each([false, true])("real provider wire compatibility (stream=%s)", (st
     "qwen3.8-flash",
     "qwen3.8-27b",
     "qwen3.8-2.4t-a95b",
+    "mindlab/macaron-v1.1-coding-venti",
   ])("keeps %s reasoning controls exclusive and retains tool-turn reasoning", async (model) => {
     const fetch = mockCompletion(stream, { role: "assistant", content: "Done" });
     const provider = new QwenProvider();
@@ -200,6 +255,7 @@ describe.each([false, true])("real provider wire compatibility (stream=%s)", (st
       messages: [{ role: "assistant", reasoning_content: "opaque" }, { role: "tool" }],
     });
     expect(requestBody(fetch)).not.toHaveProperty("reasoning_effort");
+    if (model.startsWith("mindlab/")) expect(requestBody(fetch).preserve_thinking).toBe(true);
     fetch.mockClear();
     await consume({
       ...params,

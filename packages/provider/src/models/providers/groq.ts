@@ -1,4 +1,4 @@
-/** groq catalog audited 2026-11-06. Sources: docs/research/provider-catalog-2026-11-06.md. */
+/** Conversational models on GroqCloud: https://console.groq.com/docs/models */
 import type { ModelInfo } from "../types.js";
 export const GROQ_MODELS: ModelInfo[] = [
   {
@@ -62,8 +62,9 @@ export const GROQ_MODELS: ModelInfo[] = [
     reasoningEfforts: ["low", "medium", "high"],
     defaultReasoningEffort: "medium",
     supportsStreaming: true,
-    supportsPromptCache: false,
+    supportsPromptCache: true,
     inputPrice: 0.15,
+    cacheReadsPrice: 0.075,
     outputPrice: 0.6,
     deprecated: false,
   },
@@ -79,8 +80,9 @@ export const GROQ_MODELS: ModelInfo[] = [
     reasoningEfforts: ["low", "medium", "high"],
     defaultReasoningEffort: "medium",
     supportsStreaming: true,
-    supportsPromptCache: false,
+    supportsPromptCache: true,
     inputPrice: 0.075,
+    cacheReadsPrice: 0.0375,
     outputPrice: 0.3,
     deprecated: false,
   },

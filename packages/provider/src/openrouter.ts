@@ -7,10 +7,16 @@
  * @module @vellum/provider/openrouter
  */
 
+import { z } from "zod";
 import { DEFAULT_MODEL_IDS } from "./models/catalog.js";
+import { normalizeDiscoveredModels } from "./models/discovery.js";
 import { OPENROUTER_MODELS } from "./models/providers/openrouter.js";
 import { OpenAICompatibleProvider } from "./openai-compat.js";
 import type { ModelInfo, ProviderOptions } from "./types.js";
+
+const userInventory = z.object({
+  data: z.array(z.looseObject({ id: z.string().min(1) })),
+});
 
 // =============================================================================
 // OpenRouter Provider Options
@@ -101,11 +107,27 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
     return super.initialize(finalOptions);
   }
 
+  override async refreshModels(signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    const client = this.ensureInitialized();
+    const endpoint = client.baseURL.replace(/\/$/, "");
+    if (!/^https:\/\/(?:(?:eu|us)\.)?openrouter\.ai\/api\/v1$/.test(endpoint)) {
+      const models = await super.refreshModels(signal);
+      if (!models.length) throw new Error("No chat models were returned by the OpenRouter proxy");
+      return models;
+    }
+    // The user inventory includes account preferences, guardrails and regional routing.
+    // Omitting limit/offset asks OpenRouter for the complete inventory.
+    const response = await client.get<unknown>("/models/user", { signal });
+    signal?.throwIfAborted();
+    return normalizeDiscoveredModels("openrouter", userInventory.parse(response).data);
+  }
+
   /**
    * Get the model catalog for OpenRouter
    *
    * Note: OpenRouter provides access to many models. This is a curated
-   * list of popular models. Use listModelsAsync() for the full catalog.
+   * list of popular models. Use refreshModels() for the account's live catalog.
    *
    * @returns Array of popular OpenRouter models
    */

@@ -15,6 +15,39 @@ afterEach(() => {
 });
 
 describe("local provider discovery", () => {
+  it("reads Ollama's configured context and model-specific thinking controls", async () => {
+    vi.mocked(fetchWithPool).mockImplementation(async (url, options) => {
+      if (String(url).endsWith("/api/tags")) {
+        return Response.json({ models: [{ name: "switch" }, { name: "levels" }] });
+      }
+      const isSwitch = JSON.parse(String(options?.body)).model === "switch";
+      return Response.json({
+        parameters: "temperature 0.7\r\n num_ctx 2048\r\n",
+        model_info: { "general.architecture": "fixture", "fixture.context_length": 131_072 },
+        capabilities: ["completion", "thinking"],
+        thinking: isSwitch
+          ? { values: [false, true], default: true }
+          : { values: ["low", "high"], default: "high" },
+      });
+    });
+    const provider = new OllamaProvider();
+    await provider.initialize({});
+    expect(await provider.refreshModels()).toMatchObject([
+      {
+        contextWindow: 2048,
+        reasoningEfforts: ["none", "medium"],
+        defaultReasoningEffort: "medium",
+        requiresThinking: false,
+      },
+      {
+        contextWindow: 2048,
+        reasoningEfforts: ["low", "high"],
+        defaultReasoningEffort: "high",
+        requiresThinking: true,
+      },
+    ]);
+  });
+
   it.each([
     ["ollama", () => new OllamaProvider(), "/api/tags", { models: [{ name: "custom-vision" }] }],
     [

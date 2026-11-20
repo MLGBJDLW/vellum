@@ -58,7 +58,7 @@ describe("AnthropicProvider Integration", () => {
       await provider.initialize({ apiKey: process.env.ANTHROPIC_API_KEY });
 
       const result = await provider.complete({
-        model: "claude-3-5-haiku-20241022",
+        model: "claude-haiku-4-5-20251001",
         messages: [{ role: "user", content: "Say hello in exactly 3 words." }],
         maxTokens: 50,
       });
@@ -78,7 +78,7 @@ describe("AnthropicProvider Integration", () => {
       await provider.initialize({ apiKey: process.env.ANTHROPIC_API_KEY });
 
       const stream = provider.stream({
-        model: "claude-3-5-haiku-20241022",
+        model: "claude-haiku-4-5-20251001",
         messages: [{ role: "user", content: "Count from 1 to 5." }],
         maxTokens: 100,
       });
@@ -107,7 +107,7 @@ describe("AnthropicProvider Integration", () => {
       await provider.initialize({ apiKey: process.env.ANTHROPIC_API_KEY });
 
       const result = await provider.complete({
-        model: "claude-3-5-haiku-20241022",
+        model: "claude-haiku-4-5-20251001",
         messages: [{ role: "user", content: "What is the weather in Tokyo?" }],
         tools: [
           {
@@ -276,32 +276,6 @@ describe("OpenAIProvider Integration", () => {
     },
     15000
   );
-
-  // O-series model test (if available and allowed)
-  it.skipIf(!hasKey)(
-    "should handle O-series model (non-streaming fallback)",
-    async () => {
-      const provider = new OpenAIProvider();
-      await provider.initialize({ apiKey: process.env.OPENAI_API_KEY });
-
-      // O-series streaming falls back to non-streaming and yields result
-      const stream = provider.stream({
-        model: "o1-mini",
-        messages: [{ role: "user", content: "What is 2+2?" }],
-        maxTokens: 100,
-      });
-
-      const events = await collectStreamEvents(stream);
-
-      // Should still get text and done events even with fallback
-      const textEvents = events.filter((e) => e.type === "text");
-      expect(textEvents.length).toBeGreaterThan(0);
-
-      const doneEvent = events.find((e) => e.type === "done");
-      expect(doneEvent).toBeDefined();
-    },
-    60000
-  ); // O-series can take longer
 });
 
 // =============================================================================
@@ -320,7 +294,7 @@ describe("GoogleProvider Integration", () => {
       });
 
       const result = await provider.complete({
-        model: "gemini-1.5-flash-8b",
+        model: "gemini-3.5-flash-lite",
         messages: [{ role: "user", content: "Say hello in exactly 3 words." }],
         maxTokens: 50,
       });
@@ -342,7 +316,7 @@ describe("GoogleProvider Integration", () => {
       });
 
       const stream = provider.stream({
-        model: "gemini-1.5-flash-8b",
+        model: "gemini-3.5-flash-lite",
         messages: [{ role: "user", content: "Count from 1 to 5." }],
         maxTokens: 100,
       });
@@ -369,7 +343,7 @@ describe("GoogleProvider Integration", () => {
       });
 
       const result = await provider.complete({
-        model: "gemini-1.5-flash-8b",
+        model: "gemini-3.5-flash-lite",
         messages: [{ role: "user", content: "What is the weather in Tokyo?" }],
         tools: [
           {
@@ -449,7 +423,7 @@ describe("Cross-Provider Consistency", () => {
         await p.initialize({ apiKey: process.env.ANTHROPIC_API_KEY });
         return p;
       },
-      model: "claude-3-5-haiku-20241022",
+      model: "claude-haiku-4-5-20251001",
     },
     {
       name: "OpenAI",
@@ -471,7 +445,7 @@ describe("Cross-Provider Consistency", () => {
         });
         return p;
       },
-      model: "gemini-1.5-flash-8b",
+      model: "gemini-3.5-flash-lite",
     },
   ];
 

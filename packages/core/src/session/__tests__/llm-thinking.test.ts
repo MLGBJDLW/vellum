@@ -47,6 +47,27 @@ function createMockProvider(onParams: (params: CompletionParams) => void): LLMPr
 }
 
 describe("LLM.stream thinking gating", () => {
+  it.each([undefined, "none"] as const)(
+    "preserves the user's opt-out on a toggle-only model (effort=%s)",
+    async (reasoningEffort) => {
+      let captured: CompletionParams | undefined;
+      const provider = createMockProvider((params) => {
+        captured = params;
+      });
+      LLM.initialize({ get: async () => provider } as unknown as ProviderRegistry);
+      for await (const _ of LLM.stream({
+        providerType: "minimax",
+        model: "MiniMax-M3",
+        messages: [{ role: "user", content: "Hello" }],
+        thinking: { enabled: true, reasoningEffort },
+      })) {
+        /* consume */
+      }
+      expect(captured?.thinking?.enabled).toBe(true);
+      expect(captured?.thinking?.reasoningEffort).toBe(reasoningEffort);
+    }
+  );
+
   it("should disable thinking for models without reasoning support", async () => {
     let captured: CapturedParams | null = null;
     const provider = createMockProvider((params) => {

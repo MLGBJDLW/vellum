@@ -112,7 +112,11 @@ function resolveThinkingConfig(
 
   const supportedEfforts = modelInfo.reasoningEfforts ?? [];
   const requestedEffort = thinking.reasoningEffort;
-  const fallbackEffort = modelInfo.defaultReasoningEffort ?? supportedEfforts[0];
+  // A listed opt-out is not the default. Leave auto to the provider when
+  // it offers "none" first without declaring a default effort.
+  const fallbackEffort =
+    modelInfo.defaultReasoningEffort ??
+    (supportedEfforts[0] === "none" ? undefined : supportedEfforts[0]);
   const allowedEfforts =
     supportedEfforts.length > 0 ? supportedEfforts : fallbackEffort ? [fallbackEffort] : [];
 

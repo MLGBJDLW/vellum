@@ -378,7 +378,9 @@ async function refreshModels(
     updateDiscoveredModels(type as ProviderType, models);
     if (models.length === 0) {
       return success(
-        `No chat models found on ${type}. Install a chat model on that server, then run /model refresh ${type}.`
+        type === "openrouter"
+          ? "No chat models available from this OpenRouter endpoint. Check your provider preferences and guardrails, then run /model refresh openrouter."
+          : `No chat models found on ${type}. Install a chat model on that server, then run /model refresh ${type}.`
       );
     }
     return success(

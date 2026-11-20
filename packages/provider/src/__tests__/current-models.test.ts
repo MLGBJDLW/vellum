@@ -187,6 +187,14 @@ describe("current provider contracts", () => {
       messages: [{ role: "user" as const, content: "Inspect" }],
     };
     expect(buildResponsesRequest(params, "openai").reasoning).toEqual({ summary: "auto" });
+    expect(buildResponsesRequest(params, "openai")).not.toHaveProperty("max_output_tokens");
+    expect(
+      buildResponsesRequest({ ...params, maxTokens: 200_000 }, "openai").max_output_tokens
+    ).toBe(128_000);
+    expect(
+      buildResponsesRequest({ ...params, model: "account-model", maxTokens: 200_000 }, "openai")
+        .max_output_tokens
+    ).toBe(200_000);
     expect(
       buildResponsesRequest({ ...params, model: "gpt-6.1-terra" }, "openai", "none").reasoning
     ).toEqual({ effort: "none" });
@@ -730,6 +738,11 @@ describe("current provider contracts", () => {
     ["gemini-4-argon", "high", "HIGH"],
     ["gemini-4-carbon", "xhigh", "MEDIUM"],
     ["gemini-4-hydrogen", "xhigh", "XHIGH"],
+    ["gemini-4-neon", "xhigh", "XHIGH"],
+    ["gemini-3.1-pro-preview-customtools", "medium", "MEDIUM"],
+    ["gemini-robotics-er-2-preview", "medium", "MEDIUM"],
+    ["gemma-4-26b-a4b-it", "minimal", "MINIMAL"],
+    ["gemma-4-31b-it", "high", "HIGH"],
   ] as const)("configures supported thinking levels for %s", async (model, effort, wireLevel) => {
     const fetch = mockJson({
       candidates: [{ content: { role: "model", parts: [{ text: "Done" }] }, finishReason: "STOP" }],
@@ -739,11 +752,14 @@ describe("current provider contracts", () => {
     await provider.initialize({ apiKey: "AIzaSyFixtureKey123" });
     await provider.complete({
       model,
+      maxTokens: model === "gemini-4-neon" ? 100_000 : undefined,
       messages: [{ role: "user", content: "Hi" }],
       thinking: { enabled: true, reasoningEffort: effort },
     });
     const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(JSON.parse(String(init.body)).generationConfig.thinkingConfig).toMatchObject({
+    const generation = JSON.parse(String(init.body)).generationConfig;
+    expect(generation.maxOutputTokens).toBe(model === "gemini-4-neon" ? 65_536 : undefined);
+    expect(generation.thinkingConfig).toMatchObject({
       thinkingLevel: wireLevel,
     });
   });
@@ -768,6 +784,10 @@ describe("audited model catalog", () => {
       "gemini-3.8-flash-tts",
       "gemini-3.1-flash-image",
       "gemini-nano-banana-2.1",
+      "gemini-decision-1",
+      "genie-4",
+      "gemini-robotics-er-2-streaming-preview",
+      "gemini-robotics-er-1.6-preview",
     ].map((id) => ({
       name: `models/${id}`,
       supportedActions: ["generateContent"],
@@ -775,6 +795,12 @@ describe("audited model catalog", () => {
     expect(normalizeDiscoveredModels("google", records).map((model) => model.id)).toEqual([
       "gemini-4-hydrogen",
     ]);
+    expect(
+      normalizeDiscoveredModels("google", [
+        { name: "models/gemini-4-neon", outputTokenLimit: 1_048_576 },
+        { name: "models/gemini-4-carbon", outputTokenLimit: 32_768 },
+      ]).map((model) => model.maxOutputTokens)
+    ).toEqual([65_536, 32_768]);
   });
 
   it("applies the Grok multi-agent transport restrictions even for its rolling alias", () => {
@@ -1003,6 +1029,14 @@ describe("audited model catalog", () => {
       supportsVision: true,
       maxOutputTokens: 393216,
     });
+    expect(getModelInfo("qwen", "mindlab/macaron-v1.1-coding-venti")).toMatchObject({
+      contextWindow: 1_048_576,
+      maxOutputTokens: 131_072,
+      supportsTools: true,
+      supportsVision: true,
+    });
+    expect(getModelInfo("qwen", "mindlab/macaron-v1.1-venti").supportsVision).toBe(false);
+    expect(calculateCost("minimax", "MiniMax-M3", 512_001, 1_000)).toBeCloseTo(0.3096006);
   });
 
   it("marks missing discovery capacity as an internal fallback", () => {
@@ -1174,8 +1208,9 @@ describe("audited model catalog", () => {
         supportsVision: true,
       });
       expect(calculateCost("openrouter", "vendor/new-model", 100, 100)).toBeUndefined();
-      expect(() => updateDiscoveredModels("openrouter", [])).toThrow("No chat models");
-      expect(getProviderModels("openrouter")).toHaveLength(1);
+      updateDiscoveredModels("openrouter", []);
+      expect(getProviderModels("openrouter")).toHaveLength(0);
+      expect(() => updateDiscoveredModels("openai", [])).toThrow("No chat models");
     } finally {
       if (previous) updateDiscoveredModels("openrouter", previous);
     }

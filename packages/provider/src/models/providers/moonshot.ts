@@ -57,6 +57,8 @@ export const MOONSHOT_MODELS: ModelInfo[] = [
   {
     id: "kimi-k2.7-code",
     name: "kimi-k2.7-code",
+    supportsSampling: false,
+    requiresThinking: true,
     provider: "moonshot",
     contextWindow: 262144,
     supportsTools: true,
@@ -71,6 +73,8 @@ export const MOONSHOT_MODELS: ModelInfo[] = [
   {
     id: "kimi-k2.7-code-highspeed",
     name: "kimi-k2.7-code-highspeed",
+    supportsSampling: false,
+    requiresThinking: true,
     provider: "moonshot",
     contextWindow: 262144,
     supportsTools: true,
@@ -85,6 +89,8 @@ export const MOONSHOT_MODELS: ModelInfo[] = [
   {
     id: "kimi-k2.6",
     name: "kimi-k2.6",
+    supportsSampling: false,
+    reasoningEfforts: ["none"],
     provider: "moonshot",
     contextWindow: 262144,
     supportsTools: true,

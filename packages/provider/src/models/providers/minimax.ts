@@ -28,6 +28,7 @@ export const MINIMAX_MODELS: ModelInfo[] = [
   {
     id: "MiniMax-M3",
     name: "MiniMax M3",
+    reasoningEfforts: ["none"],
     provider: "minimax",
     contextWindow: 1000000,
     supportsTools: true,
@@ -39,6 +40,10 @@ export const MINIMAX_MODELS: ModelInfo[] = [
     inputPrice: 0.3,
     outputPrice: 1.2,
     cacheReadsPrice: 0.06,
+    tiers: [
+      { contextWindow: 512_000, inputPrice: 0.3, outputPrice: 1.2, cacheReadsPrice: 0.06 },
+      { contextWindow: 1_000_000, inputPrice: 0.6, outputPrice: 2.4, cacheReadsPrice: 0.12 },
+    ],
     supportsSampling: false,
   },
 ];

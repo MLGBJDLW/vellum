@@ -26,7 +26,7 @@ import { ErrorCode } from "@vellum/shared";
 import { getCredentialEnvVars } from "./credential-env.js";
 import { createProviderError, ProviderError } from "./errors.js";
 import type { ReasoningEffort } from "./models/index.js";
-import { getModelInfo } from "./models/index.js";
+import { findModelInfo, getModelInfo } from "./models/index.js";
 import { validateToolArguments } from "./tool-arguments.js";
 import { googleTransform } from "./transforms/google.js";
 import type { TransformConfig } from "./transforms/types.js";
@@ -88,11 +88,6 @@ function normalizeGoogleUsage(
     }),
   };
 }
-
-/**
- * Default maximum tokens for completions
- */
-const DEFAULT_MAX_TOKENS = 8192;
 
 const THINKING_BUDGET_BY_EFFORT: Partial<Record<ReasoningEffort, number>> = {
   minimal: 128,
@@ -380,14 +375,14 @@ export class GoogleProvider implements Provider {
    * Count tokens in the given input
    *
    * @param input - Text or messages to count
-   * @param model - Optional model ID (defaults to gemini-2.5-flash)
+   * @param model - Optional model ID (defaults to the provider default)
    * @returns Promise resolving to token count
    */
   async countTokens(input: string | CompletionMessage[], model?: string): Promise<number> {
     this.ensureInitialized();
 
     try {
-      const modelId = model ?? "gemini-3.1-flash-preview";
+      const modelId = model ?? this.getDefaultModel();
 
       // Convert input to contents format
       const contents: Content[] =
@@ -617,10 +612,6 @@ export class GoogleProvider implements Provider {
     return THINKING_LEVEL_BY_EFFORT[effort];
   }
 
-  private isGemini3Model(modelId: string): boolean {
-    return /^gemini-[34]/.test(modelId.toLowerCase());
-  }
-
   private isGemini25Model(modelId: string): boolean {
     return modelId.toLowerCase().startsWith("gemini-2.5");
   }
@@ -659,7 +650,7 @@ export class GoogleProvider implements Provider {
     }
 
     const modelId = modelInfo.id || params.model;
-    if (this.isGemini3Model(modelId)) {
+    if (/^(?:gemini-[34]|gemma-4-|gemini-robotics-er-2-preview$)/i.test(modelId)) {
       const thinkingLevel = this.resolveThinkingLevel(params, modelInfo);
       if (!thinkingLevel) {
         return undefined;
@@ -706,7 +697,6 @@ export class GoogleProvider implements Provider {
     // Build config
     const config: GenerateContentConfig = {
       ...(params.abortSignal && { abortSignal: params.abortSignal }),
-      maxOutputTokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
       ...(systemInstruction && { systemInstruction }),
       ...(params.temperature !== undefined && { temperature: params.temperature }),
       ...(params.topP !== undefined && { topP: params.topP }),
@@ -715,7 +705,12 @@ export class GoogleProvider implements Provider {
       ...(params.frequencyPenalty !== undefined && { frequencyPenalty: params.frequencyPenalty }),
     };
 
-    // Add thinking configuration for Gemini 2.5/3 models
+    // Omission preserves the model's server default and the remaining context budget.
+    if (params.maxTokens !== undefined) {
+      const maxOutput = findModelInfo(this.name, params.model)?.maxOutputTokens;
+      config.maxOutputTokens = Math.min(params.maxTokens, maxOutput ?? params.maxTokens);
+    }
+
     const thinkingConfig = this.buildThinkingConfig(params);
     if (thinkingConfig) {
       config.thinkingConfig = thinkingConfig;
