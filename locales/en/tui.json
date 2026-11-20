@@ -257,9 +257,13 @@
     "available": "Update Available",
     "current": "Current: ",
     "latest": "Latest: ",
-    "upgradeHint": "Run vellum update to upgrade",
-    "dismissHint": "(d to dismiss)",
-    "dismissInstructions": "Press d or Esc to dismiss"
+    "upgradeHint": "Click the version or enter /upgrade",
+    "dismissHint": "dismiss",
+    "dismissInstructions": "Click to dismiss",
+    "availableVersion": "v{{version}} available",
+    "upToDate": "v{{version}} · up to date",
+    "restart": "v{{version}} installed · restart Vellum",
+    "unavailable": "v{{version}} · update check unavailable · /upgrade to retry"
   },
   "todo": {
     "title": "Todo List",

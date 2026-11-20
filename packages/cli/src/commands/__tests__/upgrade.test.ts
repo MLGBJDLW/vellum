@@ -1,4 +1,4 @@
-import { performUpdate, VersionChecker } from "@vellum/core";
+import { performUpdate, Updater, VersionChecker } from "@vellum/core";
 import { expect, it, vi } from "vitest";
 import type { CommandContext } from "../types.js";
 import { createUpgradeCommand } from "../update.js";
@@ -43,9 +43,22 @@ it("checks on demand, installs exactly the confirmed version once and requests a
     expect(performUpdate).toHaveBeenCalledExactlyOnceWith("1.0.0", {
       targetVersion: "1.1.0",
       global: true,
+      signal: expect.any(AbortSignal),
     });
     expect(onStatus).toHaveBeenLastCalledWith({ kind: "installed", version: "1.1.0" });
   } finally {
     check.mockRestore();
   }
+});
+
+it("skips process creation for an already cancelled installation", async () => {
+  const result = await new Updater().update("1.0.0", {
+    targetVersion: "1.1.0",
+    signal: AbortSignal.abort(),
+  });
+  expect(result).toMatchObject({
+    success: false,
+    requiresRestart: false,
+    error: "Installation cancelled.",
+  });
 });

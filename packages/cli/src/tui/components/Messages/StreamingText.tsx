@@ -129,11 +129,14 @@ export function StreamingText({
   // Typewriter effect state - initialize to full length if not streaming on mount
   const [displayedLength, setDisplayedLength] = useState(() => (isStreaming ? 0 : content.length));
   const prevContentLengthRef = useRef(content.length);
+  const wasTypewriter = useRef(typewriterEffect);
 
   // Handle typewriter effect - gradually reveal characters
   useEffect(() => {
-    // Skip typewriter if disabled
-    if (!typewriterEffect) {
+    const resumed = typewriterEffect && !wasTypewriter.current;
+    wasTypewriter.current = typewriterEffect;
+    if (!typewriterEffect) return;
+    if (resumed) {
       setDisplayedLength(content.length);
       return;
     }
@@ -164,12 +167,12 @@ export function StreamingText({
 
   // Reset displayed length when content is cleared (new message)
   useEffect(() => {
-    if (content.length < prevContentLengthRef.current) {
+    if (typewriterEffect && isStreaming && content.length < prevContentLengthRef.current) {
       // Content was reset (new message started)
       setDisplayedLength(0);
     }
     prevContentLengthRef.current = content.length;
-  }, [content.length]);
+  }, [content.length, typewriterEffect, isStreaming]);
 
   // Handle streaming completion callback
   useEffect(() => {

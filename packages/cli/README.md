@@ -21,7 +21,7 @@ vellum run "Summarize these research notes"
 vellum chat --provider openai
 ```
 
-In an empty composer, press `~` to enter local shell mode. The prompt changes to `$`. Enter runs a command in the current workspace with the platform shell (PowerShell on Windows). Each command starts a fresh process. Esc cancels a running command or returns to chat when idle. Shell history and output stay local to the current UI session.
+In an empty composer, press `~` to enter local shell mode. The prompt changes to `$`. Enter runs a command in the current workspace with the platform shell (PowerShell on Windows). Each command starts a fresh process under your user account. Explicit restricted sandbox launches disable this host-shell shortcut. Esc cancels a running command or returns to chat when idle. Shell history and output stay local to the current UI session.
 
 Vellum checks for new releases in the background on startup. Click the available version or enter `/upgrade` to check again and confirm installation. Restart Vellum after it reports that installation succeeded. From a terminal, `vellum update --check` reports availability.
 

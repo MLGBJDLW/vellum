@@ -156,6 +156,10 @@ export interface TUITranslations {
     available: string;
     current: string;
     latest: string;
+    availableVersion: string;
+    upToDate: string;
+    restart: string;
+    unavailable: string;
     upgradeHint: string;
     dismissHint: string;
     dismissInstructions: string;

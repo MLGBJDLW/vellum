@@ -455,7 +455,7 @@ export function EnhancedCommandInput({
         onSubmit={handleSubmit}
         onEditorKey={handleEditorKey}
         promptSymbol={shellMode ? "$" : undefined}
-        placeholder={shellMode ? "Shell command · Esc to chat" : placeholder}
+        placeholder={shellMode ? "Shell command (local) · Esc to chat" : placeholder}
         suggestion={!shellMode && activeAutocomplete === null ? suggestion : undefined}
         disabled={disabled}
         focused={focused}

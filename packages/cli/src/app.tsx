@@ -233,6 +233,7 @@ import { useToolApprovalController } from "./tui/hooks/useToolApprovalController
 import type { VimMode } from "./tui/hooks/useVim.js";
 import { useVim } from "./tui/hooks/useVim.js";
 import { useWorkspace } from "./tui/hooks/useWorkspace.js";
+import { translate } from "./tui/i18n/index.js";
 import {
   getAlternateBufferEnabled,
   getBannerSeen,
@@ -4089,7 +4090,7 @@ function AppContent({
       handleCommand={handleCommand}
       handleCreateBacktrackBranch={handleCreateBacktrackBranch}
       turnStatus={turnStatus}
-      handleShell={handleShell}
+      handleShell={!_sandbox || _sandbox === "full-access" ? handleShell : undefined}
       handleMessage={handleMessage}
       handleModeSelect={handleModeSelect}
       handleModelSelect={handleModelSelect}
@@ -4234,7 +4235,7 @@ interface AppContentViewProps {
   readonly handleCommand: (command: SlashCommand) => void;
   readonly handleCreateBacktrackBranch: () => void;
   readonly turnStatus?: string;
-  readonly handleShell: (command: string) => void;
+  readonly handleShell?: (command: string) => void;
   readonly handleMessage: (text: string) => void;
   readonly handleModeSelect: (mode: CodingMode) => void;
   readonly handleModelSelect: (selectedProvider: string, selectedModel: string) => void;
@@ -5290,7 +5291,9 @@ function AppContentView({
     ? "Reply to follow-up..."
     : isLoading
       ? "Add an instruction… Enter to steer"
-      : "Message, /command, or ~ for shell";
+      : handleShell
+        ? "Message, /command, or ~ for shell"
+        : "Message or /command · sandbox active";
 
   const commandInputDisabled = !!interactivePrompt || !!pendingOperation;
 
@@ -5338,10 +5341,10 @@ function AppContentView({
           releaseStatus && (
             <Text wrap="truncate-end" color={themeContext.theme.semantic.text.muted}>
               {releaseStatus.kind === "installed"
-                ? `v${releaseStatus.version} installed · restart Vellum`
+                ? translate("update.restart", { version: releaseStatus.version })
                 : releaseStatus.kind === "current"
-                  ? `v${version} · up to date`
-                  : `v${version} · update check unavailable · /upgrade to retry`}
+                  ? translate("update.upToDate", { version })
+                  : translate("update.unavailable", { version })}
             </Text>
           )
         )}

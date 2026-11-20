@@ -91,12 +91,12 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
           onClick={() => onUpgrade?.()}
         >
           <Text color={theme.colors.info} wrap="truncate-end">
-            ↑ v{latestVersion} available · /upgrade
+            ↑ {t("update.availableVersion", { version: latestVersion })} · /upgrade
           </Text>
         </Clickable>
         {dismissible && (
           <Clickable id={`${bannerId}-dismiss`} width="auto" onClick={dismiss}>
-            <Text color="gray"> dismiss</Text>
+            <Text color="gray"> {t("update.dismissHint")}</Text>
           </Clickable>
         )}
       </Box>
@@ -146,7 +146,7 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({
         <Box marginTop={1}>
           <Clickable id={`${bannerId}-dismiss`} width="auto" onClick={dismiss}>
             <Text color="gray" dimColor>
-              dismiss
+              {t("update.dismissHint")}
             </Text>
           </Clickable>
         </Box>

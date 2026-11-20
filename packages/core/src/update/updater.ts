@@ -8,6 +8,8 @@
  */
 
 import { spawn } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { killProcessTree } from "@vellum/sandbox";
 import type { UpdateConfig, UpdateResult } from "./types.js";
 import { DEFAULT_UPDATE_CONFIG } from "./types.js";
 import { parseSemVer } from "./version-checker.js";
@@ -25,6 +27,7 @@ export type PackageManager = "npm" | "bun" | "pnpm";
  * Update options
  */
 export interface UpdateOptions {
+  readonly signal?: AbortSignal;
   /** Target version to update to (default: latest) */
   readonly targetVersion?: string;
   /** Whether to install globally */
@@ -43,7 +46,13 @@ export interface UpdateOptions {
  * Detect the package manager used to install the CLI
  */
 export function detectPackageManager(): PackageManager {
-  const entry = (process.argv[1] ?? "").replaceAll("\\", "/").toLowerCase();
+  let executable = process.argv[1] ?? "";
+  try {
+    executable = realpathSync.native(executable);
+  } catch {
+    // Embedded callers may supply a virtual executable path.
+  }
+  const entry = executable.replaceAll("\\", "/").toLowerCase();
   if (entry.includes("/pnpm/global/") || entry.includes("/.pnpm/")) return "pnpm";
   if (entry.includes("/.bun/install/global/")) return "bun";
   const execPath = process.env.npm_execpath?.toLowerCase() ?? "";
@@ -90,15 +99,30 @@ function buildUpdateCommand(
  */
 function executeCommand(
   command: string,
-  args: string[]
+  args: string[],
+  signal?: AbortSignal
 ): Promise<{ success: boolean; output: string; error?: string }> {
   return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve({ success: false, output: "", error: "Installation cancelled." });
+      return;
+    }
     const proc = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
+      detached: Boolean(signal) && process.platform !== "win32",
       shell: process.platform === "win32",
     });
 
+    const abort = () => {
+      if (proc.pid)
+        void killProcessTree(proc.pid).catch(() => {
+          proc.kill("SIGKILL");
+          proc.stdout?.destroy();
+          proc.stderr?.destroy();
+        });
+    };
+    signal?.addEventListener("abort", abort, { once: true });
     let stdout = "";
     let stderr = "";
 
@@ -111,7 +135,10 @@ function executeCommand(
     });
 
     proc.on("close", (code) => {
-      if (code === 0) {
+      signal?.removeEventListener("abort", abort);
+      if (signal?.aborted) {
+        resolve({ success: false, output: stdout, error: "Installation cancelled." });
+      } else if (code === 0) {
         resolve({ success: true, output: stdout });
       } else {
         resolve({
@@ -123,6 +150,7 @@ function executeCommand(
     });
 
     proc.on("error", (err) => {
+      signal?.removeEventListener("abort", abort);
       resolve({
         success: false,
         output: stdout,
@@ -189,7 +217,7 @@ export class Updater {
       };
     }
 
-    const result = await executeCommand(command, args);
+    const result = await executeCommand(command, args, options.signal);
 
     if (!result.success) {
       return {

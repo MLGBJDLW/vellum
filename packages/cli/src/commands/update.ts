@@ -270,10 +270,11 @@ export function createUpgradeCommand(
   let installed: string | undefined;
   let installing = false;
   let checking = false;
-  async function install(target: string): Promise<CommandResult> {
+  async function install(target: string, signal: AbortSignal): Promise<CommandResult> {
     installing = true;
     try {
-      const result = await performUpdate(current, { targetVersion: target, global: true });
+      const result = await performUpdate(current, { targetVersion: target, global: true, signal });
+      if (signal.aborted) return success("Installation cancelled. Run /upgrade to check again.");
       if (!result.success) return error("INTERNAL_ERROR", result.error ?? "Update failed.");
       installed = target;
       onStatus({ kind: "installed", version: target });
@@ -298,10 +299,15 @@ export function createUpgradeCommand(
           inputType: "select",
           message: `Update Vellum v${current} → v${target}?`,
           options: ["Update", "Cancel"],
-          handler: async (choice) =>
-            choice === "Update" && !installing && !installed
-              ? pending({ message: `Installing Vellum v${target}…`, promise: install(target) })
-              : success(),
+          handler: async (choice) => {
+            if (choice !== "Update" || installing || installed) return success();
+            const controller = new AbortController();
+            return pending({
+              message: `Installing Vellum v${target}…`,
+              promise: install(target, controller.signal),
+              cancel: () => controller.abort(),
+            });
+          },
         },
       };
     } finally {
