@@ -1,5 +1,13 @@
 # @vellum/plugin
 
+## 0.1.13
+
+### Patch Changes
+
+- Updated dependencies:
+  - @vellum/core@0.4.4
+  - @vellum/shared@0.1.3
+
 ## 0.1.12
 
 ### Patch Changes

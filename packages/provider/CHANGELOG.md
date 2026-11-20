@@ -1,5 +1,16 @@
 # @vellum/provider
 
+## 0.7.0
+
+### Minor Changes
+
+- Add verified Google and Macaron chat models, migrate retired Google and Kimi IDs, and align reasoning controls and output budgets with provider limits. OpenRouter refresh uses the configured endpoint and account preferences. Ollama discovery respects local context and reasoning settings.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @vellum/shared@0.1.3
+
 ## 0.6.0
 
 ### Minor Changes
