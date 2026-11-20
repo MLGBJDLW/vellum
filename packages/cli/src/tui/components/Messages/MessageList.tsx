@@ -469,8 +469,6 @@ interface MessageItemProps {
   readonly roleColor: string;
   readonly mutedColor: string;
   readonly accentColor: string;
-  /** Color for thinking/reasoning content */
-  readonly thinkingColor: string;
   /** Color for success indicators */
   readonly successColor: string;
   /** Color for error indicators */
@@ -503,7 +501,6 @@ const MessageItem = memo(function MessageItem({
   roleColor,
   mutedColor,
   accentColor,
-  thinkingColor: _thinkingColor, // ThinkingBlock handles its own theming
   successColor,
   errorColor,
   showToolCalls = true,
@@ -577,7 +574,7 @@ const MessageItem = memo(function MessageItem({
             <MarkdownRenderer
               content={message.content || (message.isStreaming ? "" : "(empty)")}
               compact
-              textColor={roleColor}
+              textColor={message.role === "assistant" ? undefined : roleColor}
               isStreaming={message.isStreaming && !streamingThinking}
             />
           )}
@@ -891,8 +888,6 @@ const MessageList = memo(function MessageList({
   const accentColor = theme.semantic.text.secondary;
   const successColor = theme.colors.success;
   const errorColor = theme.colors.error;
-  // Use muted color for thinking/reasoning content (dimmed appearance)
-  const thinkingColor = theme.semantic.text.secondary ?? mutedColor;
 
   const getThinkingToggleInfo = useCallback(
     (message: Message) => {
@@ -934,7 +929,6 @@ const MessageList = memo(function MessageList({
           roleColor={roleColors[item.role]}
           mutedColor={mutedColor}
           accentColor={accentColor}
-          thinkingColor={thinkingColor}
           successColor={successColor}
           errorColor={errorColor}
           showToolCalls
@@ -952,7 +946,6 @@ const MessageList = memo(function MessageList({
       roleColors,
       mutedColor,
       accentColor,
-      thinkingColor,
       successColor,
       errorColor,
       thinkingDisplayMode,

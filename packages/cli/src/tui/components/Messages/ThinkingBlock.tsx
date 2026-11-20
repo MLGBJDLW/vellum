@@ -302,12 +302,14 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   }, [isCollapsed, content, onHeightChange]);
 
   // Theme colors
-  const thinkingColor = theme.semantic.text.primary;
+  const thinkingColor = theme.semantic.syntax.type;
   const mutedColor = theme.semantic.text.muted;
-  const borderColor = theme.colors.primary;
+  const borderColor = thinkingColor;
   const accentColor = theme.semantic.text.secondary;
   const successColor = theme.colors.success ?? "green";
   const errorColor = theme.colors.error ?? "red";
+
+  const codeColor = theme.semantic.syntax.keyword;
 
   // Inline formatter for thinking content - memoized to avoid re-creation
   const formatInlineThinking = useCallback(
@@ -324,8 +326,8 @@ export const ThinkingBlock = memo(function ThinkingBlock({
         switch (el.type) {
           case "code":
             return (
-              <Text key={key} inverse>
-                {` ${el.content} `}
+              <Text key={key} color={codeColor}>
+                {el.content}
               </Text>
             );
           case "bold":
@@ -339,7 +341,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
         }
       });
     },
-    [] // No dependencies - parseInlineFormat is stable
+    [codeColor]
   );
 
   // Memoized values
@@ -410,7 +412,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
       {/* Render all received content immediately on expansion, including mid-stream. */}
       {!isCollapsed && (
         <Box marginLeft={2} marginTop={0} flexDirection="column">
-          <Text color={thinkingColor} dimColor>
+          <Text color={thinkingColor} italic>
             <StreamingText
               content={content}
               isStreaming={isStreaming}
@@ -507,7 +509,7 @@ export function CompactThinkingIndicator({
   charCount,
 }: CompactThinkingIndicatorProps): React.JSX.Element {
   const { theme } = useTheme();
-  const thinkingColor = theme.semantic.text.primary;
+  const thinkingColor = theme.semantic.syntax.type;
 
   const parts: string[] = ["[...]"];
 
@@ -531,7 +533,7 @@ export function CompactThinkingIndicator({
           <Text> </Text>
         </>
       )}
-      <Text color={thinkingColor} dimColor italic>
+      <Text color={thinkingColor} italic>
         {parts.join(" ")}
       </Text>
     </Box>
